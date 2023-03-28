@@ -19,8 +19,8 @@ COPY . .
 RUN rm -fr ./drawBoard \
   && sed -i 's#http://localhost:3500#https://tie-lukioplus.rd.tuni.fi/drawboard#' src/components/ArtBoards/Frame.tsx \
   && sed -i 's#http://localhost:3500#https://tie-lukioplus.rd.tuni.fi/drawboard#' src/components/ArtBoards/Drawboard/Drawboard.tsx \
-  && echo LOCAL_TESTING_URL="https://tie-lukioplus.rd.tuni.fi/css-artist1/" >./.env \
-  && echo LOCAL_TESTING_URL="https://tie-lukioplus.rd.tuni.fi/css-artist1/" >./.env.example \
+  && echo LOCAL_TESTING_URL="https://tie-lukioplus.rd.tuni.fi" >./.env \
+  && echo LOCAL_TESTING_URL="https://tie-lukioplus.rd.tuni.fi" >./.env.example \
   && npm run build \
   && npx import-meta-env -x .env.example -p dist/index.html
 
