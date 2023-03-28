@@ -56,7 +56,6 @@ export const InfoPictures = () => {
 	const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 	const [open, setOpen] = useState(false);
 	const handleOpen = (event: React.MouseEvent<HTMLElement>) => {
-		console.log('handleOpen: keepOpen = ', keepOpen, '');
 		if (keepOpen == null) setKeepOpen(false);
 		setOpen(true);
 	};
