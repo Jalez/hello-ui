@@ -7,6 +7,20 @@ import Easy1 from '../../assets/Easy1.png';
 import Easy2 from '../../assets/Easy2.png';
 import Medium2 from '../../assets/Medium2.png';
 import Hard3 from '../../assets/Hard3.png';
+import placeholder from '../../assets/Placeholder.svg';
+import button from '../../assets/button.png';
+import card from '../../assets/card.png';
+import cardWithImage from '../../assets/cardWithImage.png';
+import couple from '../../assets/PictureGallery/couple.jpg';
+import desert from '../../assets/PictureGallery/desert.jpg';
+import dog from '../../assets/PictureGallery/dog.jpg';
+import oldartist from '../../assets/PictureGallery/oldartist.jpg';
+import me from '../../assets/PictureGallery/me.jpg';
+import PictureGallery from '../../assets/PictureGallery.png';
+
+const port = import.meta.env.PORT;
+const url = import.meta.env.LOCAL_TESTING_URL;
+console.log('url: ', url);
 
 import confetti from 'canvas-confetti';
 
@@ -20,12 +34,18 @@ interface Level {
 	name: string;
 	completed: string;
 	accuracy: string;
-	primaryColor: string;
-	secondaryColor: string;
+	buildingBlocks?: {
+		pictures?: Array<string>;
+		colors?: Array<string>;
+	};
 	code: {
 		html: string;
 		css: string;
 	};
+	// solution: {
+	// 	html: string;
+	// 	css: string;
+	// };
 	image: string;
 	diff: string;
 	difficulty: string;
@@ -36,6 +56,10 @@ interface Level {
 		images: string[];
 		usefullCSSProperties: string[];
 	};
+	drawingUrl: string;
+	solutionUrl: string;
+	drawnEvalUrl: string;
+	solEvalUrl: string;
 }
 
 const initialHtml: string = `<div></div>`;
@@ -61,10 +85,15 @@ const initialDefaults = {
 	points: 0,
 	maxPoints: 5,
 	diff: '',
+	drawingUrl: '',
+	solutionUrl: '',
+	drawnEvalUrl: '',
+	solEvalUrl: '',
 };
 // Get initial state from local storage
-let initialState: Level[] = JSON.parse(localStorage.getItem('levels') || '[]');
-console.log('initialState', initialState);
+let initialState: Level[] = JSON.parse(
+	localStorage.getItem('css-artist-1-levels') || '[]'
+);
 // if there is no initial state, set it to the default state
 if (initialState.length === 0) {
 	console.log("There's no initial state, setting it to default state");
@@ -72,11 +101,15 @@ if (initialState.length === 0) {
 		{
 			id: 1,
 			name: 'Level 1',
-			primaryColor: '#B5E0BA',
-			secondaryColor: '#5D3A3A',
+
+			buildingBlocks: {
+				pictures: [],
+				colors: ['#1e88e5', '#f5f5f5'],
+			},
 			...initialDefaults,
-			image: Easy1,
-			difficulty: 'easy 1',
+
+			image: button,
+			difficulty: 'button',
 			help: {
 				description: 'This is the first level',
 				images: [],
@@ -86,11 +119,15 @@ if (initialState.length === 0) {
 		{
 			id: 2,
 			name: 'Level 2',
-			primaryColor: '#62374E',
-			secondaryColor: '#FDC57B',
+
+			buildingBlocks: {
+				pictures: [],
+				colors: ['#1e88e5', '#f5f5f5'],
+			},
 			...initialDefaults,
-			image: Easy2,
-			difficulty: 'easy 2',
+
+			image: card,
+			difficulty: 'card',
 			help: {
 				description: 'This is the first level',
 				images: [],
@@ -100,13 +137,16 @@ if (initialState.length === 0) {
 		{
 			id: 3,
 			name: 'Level 3',
-			primaryColor: '#D25B70',
-			secondaryColor: '#F2E09F',
+
+			buildingBlocks: {
+				pictures: [placeholder],
+				colors: ['#1e88e5', '#f5f5f5'],
+			},
 			...initialDefaults,
-			image: Medium2,
-			difficulty: 'medium',
+			image: cardWithImage,
+			difficulty: 'card with image',
 			help: {
-				description: 'This is the second level',
+				description: 'This is the first level',
 				images: [],
 				usefullCSSProperties: [],
 			},
@@ -114,13 +154,16 @@ if (initialState.length === 0) {
 		{
 			id: 4,
 			name: 'Level 4',
-			primaryColor: '#F5D6B4',
-			secondaryColor: '#D86F45',
 			...initialDefaults,
-			image: Hard3,
-			difficulty: 'hard',
+			image: PictureGallery,
+			buildingBlocks: {
+				pictures: [couple, desert, dog, oldartist, me],
+				colors: ['#62374E', '#FDC57B'],
+			},
+
+			difficulty: 'Picture Gallery',
 			help: {
-				description: 'This is the third level',
+				description: 'This is the first level',
 				images: [],
 				usefullCSSProperties: [],
 			},
@@ -130,6 +173,7 @@ if (initialState.length === 0) {
 	// if there is an initial state, set the code to the initial code
 	initialState.forEach((level) => {
 		level.points = 0;
+		level.accuracy = '0';
 	});
 }
 
@@ -147,11 +191,8 @@ const levelsSlice = createSlice({
 			let percentage = 100 - (accuracy / (width * height)) * 100;
 
 			// if percentage is over 90, use confetti
-			console.log('percentage', percentage);
 			if (percentage > 90) {
-				confetti({
-					particleCount: 100,
-				});
+				if (percentage == 100) confetti({ particleCount: 100 });
 				// Calculate the points based on the last 10 percent
 				const lastTenPercent = percentage - 90;
 				const lastTenPercentPercentage = lastTenPercent / 10;
@@ -168,7 +209,7 @@ const levelsSlice = createSlice({
 			level.accuracy = percentage.toFixed(2);
 			level.diff = diff;
 			// update the level in local storage
-			localStorage.setItem('levels', JSON.stringify(state));
+			localStorage.setItem('css-artist-1-levels', JSON.stringify(state));
 		},
 		updateCode(state, action) {
 			const { id, code } = action.payload;
@@ -176,11 +217,37 @@ const levelsSlice = createSlice({
 			if (!level) return;
 			level.code = code;
 			// update the code for the level in local storage
-			localStorage.setItem('levels', JSON.stringify(state));
+			localStorage.setItem('css-artist-1-levels', JSON.stringify(state));
+		},
+		updateSolution(state, action) {
+			const { id, solution } = action.payload;
+			const level = state.find((level) => level.id === id);
+			if (!level) return;
+			// level.solution = solution;
+			// update the code for the level in local storage
+			localStorage.setItem('css-artist-1-levels', JSON.stringify(state));
+		},
+		updateUrl(state, action) {
+			if (!action.payload) return;
+
+			const { id, dataURL, name } = action.payload;
+			if (name === 'drawing') state[id - 1].drawingUrl = dataURL;
+			else if (name === 'solution') state[id - 1].solutionUrl = dataURL;
+			// update the code for the level in local storage
+			localStorage.setItem('css-artist-1-levels', JSON.stringify(state));
+		},
+		updateEvaluationUrl(state, action) {
+			const { id, dataUrl, name } = action.payload;
+			if (name === 'drawing') state[id - 1].drawnEvalUrl = dataUrl;
+			if (name === 'solution') state[id - 1].solEvalUrl = dataUrl;
+
+			// update the code for the level in local storage
+			localStorage.setItem('css-artist-1-levels', JSON.stringify(state));
 		},
 	},
 });
 
-export const { updateLevel, updateCode } = levelsSlice.actions;
+export const { updateLevel, updateCode, updateUrl, updateEvaluationUrl } =
+	levelsSlice.actions;
 
 export default levelsSlice.reducer;

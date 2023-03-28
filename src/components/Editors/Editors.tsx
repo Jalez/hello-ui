@@ -4,19 +4,47 @@ import { Button, ButtonGroup } from '@mui/material';
 import CodeEditor from './CodeEditor/CodeEditor';
 import { css } from '@codemirror/lang-css';
 import { html } from '@codemirror/lang-html';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useAppDispatch, useAppSelector } from '../../store/hooks/hooks';
+import { updateCode } from '../../store/slices/levels.slice';
+import { useSelector } from 'react-redux';
 
-interface EditorsProps {
-	codeUpdater: (data: { html?: string; css?: string }) => void;
-	htmlCode: string;
-	cssCode: string;
-}
+// interface EditorsProps {
+// 	codeUpdater: (data: { html?: string; css?: string }) => void;
+// 	htmlCode: string;
+// 	cssCode: string;
+// }
 
-export const Editors = ({ codeUpdater, htmlCode, cssCode }: EditorsProps) => {
-	const buttonClickHandler = () => {
-		console.log('CSS', cssCode);
-		console.log('HTML', htmlCode);
-		// Send the code to the iframe
+export const Editors = () => {
+	const dispatch = useAppDispatch();
+	const { currentLevel } = useAppSelector((state) => state.currentLevel);
+	const levels = useAppSelector((state: any) => state.levels);
+	const [htmlCode, setHTMLCode] = useState<string>(
+		levels[currentLevel - 1].code.html
+	);
+	const [cssCode, setCSSCode] = useState<string>(
+		levels[currentLevel - 1].code.css
+	);
+
+	useEffect(() => {
+		console.log('current level: ', currentLevel);
+		setHTMLCode(levels[currentLevel - 1].code.html);
+		setCSSCode(levels[currentLevel - 1].code.css);
+	}, [currentLevel]);
+	const codeUpdater = (data: { html?: string; css?: string }) => {
+		console.log('Gets called');
+		dispatch(
+			updateCode({
+				id: currentLevel,
+				code: { ...levels[currentLevel - 1].code, ...data },
+			})
+		);
+		if (data.html) {
+			setHTMLCode(data.html);
+		}
+		if (data.css) {
+			setCSSCode(data.css);
+		}
 	};
 
 	return (
@@ -27,7 +55,8 @@ export const Editors = ({ codeUpdater, htmlCode, cssCode }: EditorsProps) => {
 				flexDirection: 'row',
 				alignContent: 'center',
 				justifyContent: 'space-between',
-				// flexWrap: 'wrap',
+				maxWidth: '840px',
+				flexWrap: 'wrap',
 			}}>
 			<CodeEditor
 				lang={css()}

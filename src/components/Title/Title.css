@@ -1,0 +1,22 @@
+#main-title {
+
+  /* Use a font where you can use a background clip */
+  /* font-family: 'Lobster', cursive; */
+    margin: 0px;
+    font-size: 100px;
+    font-weight: 900px;
+    /* text-shadow: 1px 0px 0px #000; */
+    text-align: center;
+    user-select: none;
+    z-index: 1;
+    -webkit-background-clip: text;
+    background-clip: text;
+    background-image: url('https://media.discordapp.net/attachments/1005451926147694632/1088590807763787806/TheSheep_artist_at_work_photo_2236d806-fb26-4610-9e7b-35f5f44c66e5.png?width=702&height=702');
+    color: transparent;
+    background-repeat: no-repeat;
+    /* background-size: 100%; */
+    background-position: center;
+    /* make background fit the whole text but dont ruin it*/
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.089);
+
+  }

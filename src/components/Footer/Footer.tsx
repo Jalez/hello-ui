@@ -14,7 +14,21 @@ export const Footer = () => {
 				// give a shadow to the text
 				textShadow: '2px 1px 1px #000',
 			}}>
-			Creating art with the magic of your mind and the power of HTML and CSS
+			Creating art with the magic of your mind and the power of HTML and CSS.
+			Inspired by
+			<a
+				href='https://cssbattle.dev/'
+				target='_blank'
+				rel='noreferrer'
+				style={{
+					color: 'yellow',
+					textDecoration: 'none',
+					margin: 5,
+				}}>
+				{' '}
+				CSS Battle
+			</a>
+			.
 		</footer>
 	);
 };

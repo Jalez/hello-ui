@@ -16,6 +16,7 @@
 .codeEditor {
   background: #2b2b2e;
   color: #d3caca;
+  min-width: 50%;
 }
 
 #title {
@@ -23,3 +24,9 @@
   padding: 5px;
   border: 2px solid #28282b;
 }
+/* .cm-content {
+  white-space: pre;
+}
+.CodeMirror-wrap pre {
+  word-break: break-word;
+} */

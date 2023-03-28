@@ -12,11 +12,13 @@
   "dependencies": {
     "finalhandler": "^1.2.0",
     "html2canvas": "^1.4.1",
+    "modern-screenshot": "^4.4.9",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "serve-static": "^1.15.0"
   },
   "devDependencies": {
+    "@import-meta-env/unplugin": "^0.4.7",
     "@types/react": "^18.0.27",
     "@types/react-dom": "^18.0.10",
     "@vitejs/plugin-react": "^3.1.0",

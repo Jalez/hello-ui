@@ -1,22 +1,10 @@
 
 
 .board {
-  /* position: absolute; */
-  /* left: 10%; */
-  /* top: 25%; */
   background-color: #282c34;
   margin: 5px;
   padding: 0px;
   width: 400px;
   height: fit-content;
   overflow: hidden;
-  /* box-shadow: -5px 5px 2px #000;   */
-  /* transform: rotate3d(0, 0, 1, 0.5deg); */
-  /* transform: matrix3d(
-    1, 0.03, 0, 0.0001, 
-    0, 1, 0, 0, 
-    0, 0, 1, 0, 
-    0, 0, 0, 1);
-transform-origin: 0px 0px 0px; */
-
 }

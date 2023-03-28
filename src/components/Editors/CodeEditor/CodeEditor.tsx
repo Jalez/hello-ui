@@ -3,14 +3,16 @@
 import { html } from '@codemirror/lang-html';
 import { oneDark } from '@codemirror/theme-one-dark';
 import CodeMirror from '@uiw/react-codemirror';
-import { useEffect, useState } from 'react';
-// import { materialLight, materialDark } from '@uiw/codemirror-theme-material';
+import { EditorView, ViewUpdate } from '@codemirror/view';
+
+import { useEffect, useState, useRef } from 'react';
 import { vscodeDark, vscodeDarkInit } from '@uiw/codemirror-theme-vscode';
+import {
+	ReactCodeMirrorProps,
+	ReactCodeMirrorRef,
+} from '@uiw/react-codemirror';
 
 import './CodeEditor.css';
-import { indentWithTab } from '@codemirror/commands';
-
-// add the CodeEditor components props types here
 interface CodeEditorProps {
 	lang: any;
 	title: string;
@@ -18,24 +20,56 @@ interface CodeEditorProps {
 	codeUpdater: (data: { html?: string; css?: string }) => void;
 }
 
-// use the CodeEditorProps interface to type the CodeEditor component
+interface CodeMirrorProps extends ReactCodeMirrorProps {
+	options: {
+		lineWrapping?: boolean;
+		lineNumbers?: boolean;
+		viewportMargin?: number;
+		// add any other CodeMirror options you need here
+	};
+}
+
 export default function CodeEditor({
 	lang = html(),
 	title = 'HTML',
 	template = '',
 	codeUpdater,
 }: CodeEditorProps) {
+	const editorRef = useRef<ReactCodeMirrorRef>(null);
+
 	const [code, setCode] = useState<string>(template);
 
 	useEffect(() => {
 		codeUpdater({ [title.toLowerCase()]: code });
 	}, [code]);
 
-	// Get the users system theme
-	// const editorTheme = window.matchMedia('(prefers-color-scheme: dark)').matches
-	// 	? materialDark
-	// 	: materialLight;
+	useEffect(() => {
+		setCode(template);
+	}, [template]);
+
 	const editorTheme = vscodeDark;
+
+	const cmProps: CodeMirrorProps = {
+		options: {
+			lineWrapping: true,
+			lineNumbers: true,
+			viewportMargin: Infinity,
+			// add any other CodeMirror options you need here
+		},
+		value: code,
+		extensions: [lang],
+		theme: editorTheme,
+		placeholder: `Write your ${title} here...`,
+		style: {
+			textAlign: 'left',
+			// maxWidth: '840px',
+		},
+		maxHeight: '200px',
+		onChange: (value: string, viewUpdate: ViewUpdate) => {
+			setCode(value);
+		},
+	};
+
 	return (
 		<div
 			className='codeEditor'
@@ -45,28 +79,14 @@ export default function CodeEditor({
 			}}>
 			<h2
 				style={{
-					// add shadow to the text
 					textShadow: '2px 5px 1px #000',
 					marginTop: 10,
-					// Dont allow selection of the text
 					userSelect: 'none',
 				}}
 				id='title'>
 				{title}
 			</h2>
-			<CodeMirror
-				style={{
-					textAlign: 'left',
-				}}
-				theme={editorTheme}
-				value={code}
-				placeholder={`Write your ${title} here...`}
-				maxHeight='200px'
-				extensions={[lang]}
-				onChange={(value, viewUpdate) => {
-					setCode(value);
-				}}
-			/>
+			<CodeMirror {...cmProps} />
 		</div>
 	);
 }
