@@ -18,9 +18,7 @@ import oldartist from '../../assets/PictureGallery/oldartist.jpg';
 import me from '../../assets/PictureGallery/me.jpg';
 import PictureGallery from '../../assets/PictureGallery.png';
 
-const port = import.meta.env.PORT;
 const url = import.meta.env.LOCAL_TESTING_URL;
-console.log('url: ', url);
 
 import confetti from 'canvas-confetti';
 
