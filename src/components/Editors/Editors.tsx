@@ -27,12 +27,10 @@ export const Editors = () => {
 	);
 
 	useEffect(() => {
-		console.log('current level: ', currentLevel);
 		setHTMLCode(levels[currentLevel - 1].code.html);
 		setCSSCode(levels[currentLevel - 1].code.css);
 	}, [currentLevel]);
 	const codeUpdater = (data: { html?: string; css?: string }) => {
-		console.log('Gets called');
 		dispatch(
 			updateCode({
 				id: currentLevel,

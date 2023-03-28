@@ -19,6 +19,7 @@ export const InfoBoard = ({ children }: InfoBoardProps) => {
 				color: 'white',
 				boxShadow: '0 0 0.5em #444',
 				padding: '0.5em',
+				height: '70px',
 			}}>
 			<div
 				id='info-board-container'
@@ -27,22 +28,24 @@ export const InfoBoard = ({ children }: InfoBoardProps) => {
 					flexDirection: 'row',
 					justifyContent: 'space-between',
 					alignItems: 'space-between',
+					width: '100%',
+					height: '100%',
 				}}>
 				{/* map through children */}
 				{children
 					? children.map((child: any, index: number) => (
 							<div
 								key={index}
-								style={
-									{
-										// flex: 1,
-										// display: 'flex',
-										// flexDirection: 'row',
-										// justifyContent: 'center',
-										// alignItems: 'center',
-										// border: '0.1em solid #444',
-									}
-								}>
+								style={{
+									width: '100%',
+									height: '100%',
+									// flex: 1,
+									display: 'flex',
+									flexDirection: 'row',
+									// justifyContent: 'center',
+									alignItems: 'center',
+									// border: '0.1em solid #444',
+								}}>
 								{child}
 							</div>
 					  ))
