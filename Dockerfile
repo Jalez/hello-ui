@@ -18,6 +18,7 @@ RUN npm install -g npm@latest \
 COPY . .
 RUN rm -fr ./drawBoard \
   && sed -i 's#http://localhost:3500#https://tie-lukioplus.rd.tuni.fi/drawboard#' src/components/ArtBoards/Frame.tsx \
+  && sed -i 's#http://localhost:3500#https://tie-lukioplus.rd.tuni.fi/drawboard#' src/components/ArtBoards/Drawboard/Drawboard.tsx \
   && echo LOCAL_TESTING_URL="https://tie-lukioplus.rd.tuni.fi/css-artist1/" >./.env \
   && echo LOCAL_TESTING_URL="https://tie-lukioplus.rd.tuni.fi/css-artist1/" >./.env.example \
   && npm run build \
