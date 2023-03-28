@@ -25,6 +25,7 @@ import confetti from 'canvas-confetti';
 // Remove these static width and height values
 const width = 400;
 const height = 300;
+const maxCodeLength = 100000;
 
 // interface for initial state
 interface Level {
@@ -212,6 +213,21 @@ const levelsSlice = createSlice({
 		updateCode(state, action) {
 			const { id, code } = action.payload;
 			const level = state.find((level) => level.id === id);
+			// check that code doesnt contain level solution in it
+			//check if html or css length is over 100000, do nothing
+			if (
+				(code.html && code.html.length > maxCodeLength) ||
+				(code.css && code.css.length > maxCodeLength)
+			) {
+				console.log('Code is too long!');
+				return;
+			}
+
+			if (code.css.includes(level?.image) || code.html.includes(level?.image)) {
+				console.log("Using the solutions own image url isn't allowed!");
+				return;
+			}
+
 			if (!level) return;
 			level.code = code;
 			// update the code for the level in local storage
