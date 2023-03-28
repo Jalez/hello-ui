@@ -62,7 +62,7 @@ export default function CodeEditor({
 		placeholder: `Write your ${title} here...`,
 		style: {
 			textAlign: 'left',
-			// maxWidth: '840px',
+			maxWidth: '830px',
 		},
 		maxHeight: '200px',
 		onChange: (value: string, viewUpdate: ViewUpdate) => {

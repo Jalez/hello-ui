@@ -228,6 +228,12 @@ const levelsSlice = createSlice({
 				return;
 			}
 
+			// cant include "script" in code
+			if (code.html.includes('script')) {
+				console.log("Using scripts isn't allowed!");
+				return;
+			}
+
 			if (!level) return;
 			level.code = code;
 			// update the code for the level in local storage
