@@ -1,20 +1,23 @@
-<form enctype="multipart/form-data" method="post" id="regex">
+<!-- This is an example of how to use the iframe to get the points from the CSS Artist exercise -->
+
+<form enctype="multipart/form-data" method="post" id="css-artist">
   {% csrf_token %}
 
-  <iframe name="regex" src="http://localhost:5173/" width="100%" height="100%"
+  <iframe name="regex" src="http://localhost:5173/" width="1000vw" height="1000vh"
     allow="clipboard-read; clipboard-write"></iframe>
   <input type="hidden" name="points" id="points" value="0" />
   <input type="hidden" name="maxPoints" id="maxPoints" value="15" />
-  <button id="submit" class="btn btn-primary">Submit to Plussa</button>
+  <button id="submit" class="btn btn-primary">Submit to Grader</button>
 </form>
 
 <script>
   window.addEventListener('message', receiveMessage, false);
-
   function receiveMessage(event) {
     const points = event.data.points;
     document.querySelector('#points').value = points;
     const maxPoints = event.data.maxPoints;
     document.querySelector('#maxPoints').value = maxPoints;
+    console.log('points', points);
+    console.log('maxPoints', maxPoints);
   }
 </script>

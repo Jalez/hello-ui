@@ -1,15 +1,8 @@
 #model-board {
-  /* border: 10px solid #ccc; */
   margin: 0px;
   padding: 0px;
   transform-origin: 0px 0px 0px;
   height: fit-content;
-  /* height: 300px; */
   width: 400px;
   margin: 5px;
-
-  /* box-shadow: 5px 5px 2px #000; */
-  /* position: absolute;
-  right: 10%;
-  top: 25%; */
 }

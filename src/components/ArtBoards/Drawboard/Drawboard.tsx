@@ -1,34 +1,22 @@
 /** @format */
 
-import { useRef, useState } from 'react';
+import zIndex from '@mui/material/styles/zIndex';
+import { useAppSelector } from '../../../store/hooks/hooks';
+import { Image } from '../../General/Image/Image';
+
 import { InfoBoard } from '../../InfoBoard/InfoBoard';
 import { InfoText } from '../../InfoBoard/InfoText';
 import { LevelData } from '../../InfoBoard/LevelData';
+import ScreenshotWithRedux from '../../Specific/ScreenshotWithRedux/ScreenshotWithRedux';
+import { ArtContainer } from '../ArtContainer';
 import { Frame } from '../Frame';
-import { Model } from '../ModelBoard/Model/Model';
 import './Drawboard.css';
+import { SlideShower } from './ImageContainer/SlideShower';
 
-interface DrawboardProps {
-	htmlCode: string;
-	cssCode: string;
-}
+export const Drawboard = () => {
+	const { currentLevel } = useAppSelector((state) => state.currentLevel);
+	const level = useAppSelector((state) => state.levels[currentLevel - 1]);
 
-export const Drawboard = ({ htmlCode, cssCode }: DrawboardProps) => {
-	const [sliderValue, setSliderValue] = useState(100);
-	const imgRef = useRef<HTMLImageElement>(null);
-	const boardRef = useRef<HTMLDivElement>(null);
-
-	const imgStyle = {
-		clipPath: `polygon(0 0, ${sliderValue}% 0, ${sliderValue}% 100%, 0 100%)`,
-	};
-
-	const dragSlider = (e: any) => {
-		setSliderValue(e.target.value);
-		// Use the slider value to change how much of the image is shown horizontally
-		if (imgRef.current) {
-			imgRef.current.style.clipPath = `polygon(0 0, ${e.target.value}% 0, ${e.target.value}% 100%, 0 100%)`;
-		}
-	};
 	return (
 		<div className='board'>
 			<InfoBoard>
@@ -44,29 +32,38 @@ export const Drawboard = ({ htmlCode, cssCode }: DrawboardProps) => {
 					<LevelData reduxState='accuracy' />
 				</InfoText>
 			</InfoBoard>
-			<div
-				className='img-container'
-				style={{
-					position: 'relative',
-					height: '300px',
-				}}>
-				<div className='slidecontainer'>
-					<input
-						type='range'
-						min='1'
-						max='100'
-						value={sliderValue}
-						className='slider'
-						id='myRange'
-						onInput={dragSlider}
-					/>
-				</div>
-
-				<Model />
-				<div id='img1' style={imgStyle} ref={boardRef}>
-					<Frame newCss={cssCode} newHtml={htmlCode} />
-				</div>
-			</div>
+			<ArtContainer>
+				<SlideShower
+					staticComponent={<Image imageUrl={level.image} name='solution' />}
+					slidingComponent={
+						<div
+							style={{
+								height: '300px',
+								width: '400px',
+								overflow: 'hidden',
+							}}>
+							<Frame
+								id='DrawBoard'
+								newCss={level.code.css}
+								newHtml={level.code.html}
+								frameUrl={'http://localhost:3500/'}
+							/>
+							<div
+								style={{
+									position: 'absolute',
+									// hide the screenshot
+									// visibility: 'hidden',
+									bottom: 0,
+									// zIndex: 0,
+								}}>
+								<ScreenshotWithRedux imageUrl={level.drawingUrl} name='drawing'>
+									<Image imageUrl={level.drawingUrl} name='drawing' />
+								</ScreenshotWithRedux>
+							</div>
+						</div>
+					}
+				/>
+			</ArtContainer>
 		</div>
 	);
 };

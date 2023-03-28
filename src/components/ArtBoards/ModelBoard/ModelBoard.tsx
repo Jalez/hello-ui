@@ -2,13 +2,26 @@
 
 import { Button, FormControlLabel, Switch, Typography } from '@mui/material';
 import { useState } from 'react';
+import { useAppSelector } from '../../../store/hooks/hooks';
 import { InfoBoard } from '../../InfoBoard/InfoBoard';
 import { InfoColor } from '../../InfoBoard/InfoColor';
+import { Frame } from '../Frame';
 import { Diff } from './Diff/Diff';
-import { Model } from './Model/Model';
+import { Image } from '../../General/Image/Image';
 import './ModelBoard.css';
+import ScreenshotWithRedux from '../../Specific/ScreenshotWithRedux/ScreenshotWithRedux';
+import { ArtContainer } from '../ArtContainer';
+import { InfoPicture } from '../../InfoBoard/InfoPicture';
+import { InfoPictures } from '../../InfoBoard/InfoPictures';
 
-export const ModelBoard = () => {
+// interface DrawboardProps {
+// 	htmlCode: string;
+// 	cssCode: string;
+// }
+
+export const ModelBoard = (): JSX.Element => {
+	const { currentLevel } = useAppSelector((state) => state.currentLevel);
+	const level = useAppSelector((state) => state.levels[currentLevel - 1]);
 	const [showModel, setShowModel] = useState(true);
 
 	return (
@@ -19,9 +32,11 @@ export const ModelBoard = () => {
 						display: 'flex',
 						flexDirection: 'column',
 					}}>
-					<InfoColor significance='primaryColor' />
-					<InfoColor significance='secondaryColor' />
+					{level.buildingBlocks?.colors?.map((color, index) => (
+						<InfoColor key={index} color={color} />
+					))}
 				</div>
+				<InfoPictures />
 				<FormControlLabel
 					control={
 						<Switch
@@ -41,13 +56,13 @@ export const ModelBoard = () => {
 					labelPlacement='start'
 				/>
 			</InfoBoard>
-			<div
-				className='img-container'
-				style={{
-					height: '300px',
-				}}>
-				{showModel ? <Model /> : <Diff />}
-			</div>
+			<ArtContainer>
+				{showModel ? (
+					<Image imageUrl={level.image} name='solution' />
+				) : (
+					<Diff />
+				)}
+			</ArtContainer>
 		</div>
 	);
 };
