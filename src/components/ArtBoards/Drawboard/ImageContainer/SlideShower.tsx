@@ -39,11 +39,11 @@ export const SlideShower = ({
 
 	return (
 		<>
-			{/* <Slider
+			<Slider
 				sliderValue={sliderValue}
 				dragSlider={dragSlider}
 				resetSlider={resetSlider}
-			/> */}
+			/>
 			{staticComponent}
 			<div style={slidingStyle}>{slidingComponent}</div>
 		</>
