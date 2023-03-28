@@ -20,7 +20,8 @@ RUN rm -fr ./drawBoard \
   && sed -i 's#http://localhost:3500#https://tie-lukioplus.rd.tuni.fi/drawboard#' src/components/ArtBoards/Frame.tsx \
   && echo LOCAL_TESTING_URL="https://tie-lukioplus.rd.tuni.fi/css-artist1/" >./.env \
   && echo LOCAL_TESTING_URL="https://tie-lukioplus.rd.tuni.fi/css-artist1/" >./.env.example \
-  && npm run build
+  && npm run build \
+  && npx import-meta-env -x .env.example -p dist/index.html
 
 EXPOSE 3000
 CMD [ "npm", "start" ]
