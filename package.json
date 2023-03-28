@@ -37,6 +37,8 @@
     "serve-static": "^1.15.0"
   },
   "devDependencies": {
+    "@import-meta-env/cli": "^0.5.5",
+    "@import-meta-env/unplugin": "^0.4.7",
     "@types/canvas-confetti": "^1.6.0",
     "@types/d3": "^7.4.0",
     "@types/d3-cloud": "^1.2.5",
