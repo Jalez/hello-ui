@@ -191,7 +191,7 @@ const levelsSlice = createSlice({
 
 			// if percentage is over 90, use confetti
 			if (percentage > 90) {
-				if (percentage == 100) confetti({ particleCount: 100 });
+				if (percentage > 98) confetti({ particleCount: 100 });
 				// Calculate the points based on the last 10 percent
 				const lastTenPercent = percentage - 90;
 				const lastTenPercentPercentage = lastTenPercent / 10;
