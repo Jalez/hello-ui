@@ -229,7 +229,7 @@ const levelsSlice = createSlice({
 			}
 
 			// cant include "script" in code
-			if (code.html.includes('script')) {
+			if (code.html.includes('<script>')) {
 				console.log("Using scripts isn't allowed!");
 				return;
 			}
