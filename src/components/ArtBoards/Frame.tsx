@@ -12,12 +12,11 @@ import { useAppDispatch, useAppSelector } from '../../store/hooks/hooks';
 interface FrameProps {
 	newHtml: string;
 	newCss: string;
-	frameUrl: string;
 	id: string;
 	name: string;
 }
 
-export const Frame = ({ id, newHtml, newCss, frameUrl, name }: FrameProps) => {
+export const Frame = ({ id, newHtml, newCss, name }: FrameProps) => {
 	// create a ref for the iframe
 	const iframeRef = useRef<HTMLIFrameElement>(null);
 	const dispatch = useAppDispatch();
@@ -49,7 +48,7 @@ export const Frame = ({ id, newHtml, newCss, frameUrl, name }: FrameProps) => {
 
 	useEffect(() => {
 		const handleDataFromIframe = async (event: MessageEvent) => {
-			if (event.origin !== frameUrl) return;
+			// if (event.origin !== frameUrl) return;
 			// Check the src of the message
 
 			if (!event.data.dataURL) return;
