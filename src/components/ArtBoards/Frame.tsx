@@ -22,7 +22,8 @@ export const Frame = ({
 	newHtml,
 	newCss,
 	name,
-	frameUrl = 'http://localhost:3500',
+	frameUrl = 'http://localhost:3500/' ||
+		'https://tie-lukioplus.rd.tuni.fi/drawboard/',
 }: FrameProps) => {
 	// create a ref for the iframe
 	const iframeRef = useRef<HTMLIFrameElement>(null);
