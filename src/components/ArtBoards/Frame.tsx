@@ -14,9 +14,16 @@ interface FrameProps {
 	newCss: string;
 	id: string;
 	name: string;
+	frameUrl?: string;
 }
 
-export const Frame = ({ id, newHtml, newCss, name }: FrameProps) => {
+export const Frame = ({
+	id,
+	newHtml,
+	newCss,
+	name,
+	frameUrl = 'http://localhost:3500',
+}: FrameProps) => {
 	// create a ref for the iframe
 	const iframeRef = useRef<HTMLIFrameElement>(null);
 	const dispatch = useAppDispatch();
