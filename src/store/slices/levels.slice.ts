@@ -8,6 +8,7 @@ const url = import.meta.env.LOCAL_TESTING_URL;
 import confetti from 'canvas-confetti';
 import { generateGridLevel } from '../../utils/generators/gridMaker';
 import { flexboxMaker } from '../../utils/generators/flexboxMaker';
+import { obfuscate } from '../../utils/obfuscators/obfuscate';
 
 // Remove these static width and height values
 const width = 400;
@@ -80,27 +81,24 @@ const initialDefaults = {
 		css: '',
 	},
 };
+const storage = obfuscate('ui-designer-layout-levels');
+const timerStorage = obfuscate('ui-designer-start-time');
+
 // Get initial state from local storage
-let initialState: Level[] = JSON.parse(
-	localStorage.getItem('ui-designer-layout-levels') || '[]'
-);
+let initialState: Level[] = JSON.parse(storage.getItem(storage.key) || '[]');
 // get current time in milliseconds
 const currentTime = new Date().getTime();
 // get the time the user started the game
-const lastUpdated = localStorage.getItem(
-	'ui-designer-layout-levels-start-time'
-);
+const lastUpdated = timerStorage.getItem(timerStorage.key);
 // if the user started the game more than 12 hours ago, reset the state
-// const twhours = 43200000;
+const twhours = 43200000;
 // for testing purposes, set the time to 1 second
-const twhours = 1000;
+// const twhours = 1000;
 if (lastUpdated && currentTime - parseInt(lastUpdated) > twhours) {
-	console.log('Resetting timer');
 	initialState = [];
-	localStorage.setItem(
-		'ui-designer-layout-levels-start-time',
-		currentTime.toString()
-	);
+	timerStorage.setItem(timerStorage.key, currentTime.toString());
+} else if (!lastUpdated) {
+	timerStorage.setItem(timerStorage.key, currentTime.toString());
 }
 
 // if there is no initial state, set it to the default state
@@ -202,7 +200,7 @@ const levelsSlice = createSlice({
 			level.accuracy = percentage.toFixed(2);
 			level.diff = diff;
 			// update the level in local storage
-			localStorage.setItem('ui-designer-layout-levels', JSON.stringify(state));
+			storage.setItem(storage.key, JSON.stringify(state));
 		},
 		updateCode(state, action) {
 			const { id, code } = action.payload;
@@ -231,7 +229,7 @@ const levelsSlice = createSlice({
 			if (!level) return;
 			level.code = code;
 			// update the code for the level in local storage
-			localStorage.setItem('ui-designer-layout-levels', JSON.stringify(state));
+			storage.setItem(storage.key, JSON.stringify(state));
 		},
 		updateSolution(state, action) {
 			const { id, solution } = action.payload;
@@ -239,7 +237,7 @@ const levelsSlice = createSlice({
 			if (!level) return;
 			// level.solution = solution;
 			// update the code for the level in local storage
-			localStorage.setItem('ui-designer-layout-levels', JSON.stringify(state));
+			storage.setItem(storage.key, JSON.stringify(state));
 		},
 		updateUrl(state, action) {
 			if (!action.payload) return;
@@ -252,7 +250,7 @@ const levelsSlice = createSlice({
 				state[id - 1].image = dataURL;
 			}
 			// update the code for the level in local storage
-			localStorage.setItem('ui-designer-layout-levels', JSON.stringify(state));
+			storage.setItem(storage.key, JSON.stringify(state));
 		},
 		updateEvaluationUrl(state, action) {
 			const { id, dataUrl, name } = action.payload;
@@ -260,7 +258,7 @@ const levelsSlice = createSlice({
 			if (name === 'solution') state[id - 1].solEvalUrl = dataUrl;
 
 			// update the code for the level in local storage
-			localStorage.setItem('ui-designer-layout-levels', JSON.stringify(state));
+			storage.setItem(storage.key, JSON.stringify(state));
 		},
 	},
 });
