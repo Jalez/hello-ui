@@ -33,36 +33,37 @@ export const Drawboard = () => {
 				</InfoText>
 			</InfoBoard>
 			<ArtContainer>
-				<SlideShower
+				{/* <SlideShower
 					staticComponent={<Image imageUrl={level.image} name='solution' />}
-					slidingComponent={
-						<div
-							style={{
-								height: '300px',
-								width: '400px',
-								overflow: 'hidden',
-							}}>
-							<Frame
-								id='DrawBoard'
-								newCss={level.code.css}
-								newHtml={level.code.html}
-								frameUrl={'http://localhost:3500/'}
-							/>
-							<div
-								style={{
-									position: 'absolute',
-									// hide the screenshot
-									// visibility: 'hidden',
-									bottom: 0,
-									// zIndex: 0,
-								}}>
-								<ScreenshotWithRedux imageUrl={level.drawingUrl} name='drawing'>
-									<Image imageUrl={level.drawingUrl} name='drawing' />
-								</ScreenshotWithRedux>
-							</div>
-						</div>
-					}
-				/>
+					slidingComponent={ */}
+				<div
+					style={{
+						height: '300px',
+						width: '400px',
+						overflow: 'hidden',
+					}}>
+					<Frame
+						id='DrawBoard'
+						newCss={level.code.css}
+						newHtml={level.code.html}
+						frameUrl={'http://localhost:3500'}
+						name='drawingUrl'
+					/>
+					<div
+						style={{
+							position: 'absolute',
+							// hide the screenshot
+							// visibility: 'hidden',
+							bottom: 0,
+							// zIndex: 0,
+						}}>
+						<ScreenshotWithRedux imageUrl={level.drawingUrl} name='drawing'>
+							<Image imageUrl={level.drawingUrl} name='drawing' />
+						</ScreenshotWithRedux>
+					</div>
+				</div>
+				{/* } */}
+				{/* /> */}
 			</ArtContainer>
 		</div>
 	);

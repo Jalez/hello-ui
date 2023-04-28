@@ -4,12 +4,14 @@ import { Action, configureStore, ThunkAction } from '@reduxjs/toolkit';
 import levelsReducer from './slices/levels.slice';
 import currentLevelReducer from './slices/currentLevel.slice';
 import scoreReducer from './slices/score.slice';
+import roomReducer from './slices/room.slice';
 
 export const store = configureStore({
 	reducer: {
 		levels: levelsReducer,
 		currentLevel: currentLevelReducer,
 		score: scoreReducer,
+		room: roomReducer,
 	},
 });
 

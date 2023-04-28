@@ -4,7 +4,16 @@ import { html } from '@codemirror/lang-html';
 import { oneDark } from '@codemirror/theme-one-dark';
 import CodeMirror from '@uiw/react-codemirror';
 import { EditorView, ViewUpdate } from '@codemirror/view';
-
+import { EditorState } from '@codemirror/state';
+import {
+	Box,
+	Button,
+	Typography,
+	Modal,
+	Backdrop,
+	Fade,
+	Paper,
+} from '@mui/material';
 import { useEffect, useState, useRef } from 'react';
 import { vscodeDark, vscodeDarkInit } from '@uiw/codemirror-theme-vscode';
 import {
@@ -13,11 +22,13 @@ import {
 } from '@uiw/react-codemirror';
 
 import './CodeEditor.css';
+
 interface CodeEditorProps {
 	lang: any;
 	title: string;
 	template?: string;
 	codeUpdater: (data: { html?: string; css?: string }) => void;
+	locked?: boolean;
 }
 
 interface CodeMirrorProps extends ReactCodeMirrorProps {
@@ -25,6 +36,9 @@ interface CodeMirrorProps extends ReactCodeMirrorProps {
 		lineWrapping?: boolean;
 		lineNumbers?: boolean;
 		viewportMargin?: number;
+		readOnly?: boolean;
+		className?: string;
+
 		// add any other CodeMirror options you need here
 	};
 }
@@ -34,6 +48,7 @@ export default function CodeEditor({
 	title = 'HTML',
 	template = '',
 	codeUpdater,
+	locked = false,
 }: CodeEditorProps) {
 	const editorRef = useRef<ReactCodeMirrorRef>(null);
 
@@ -54,18 +69,33 @@ export default function CodeEditor({
 			lineWrapping: true,
 			lineNumbers: true,
 			viewportMargin: Infinity,
+			readOnly: true,
+			className: 'readOnly',
 			// add any other CodeMirror options you need here
 		},
 		value: code,
-		extensions: [lang],
+		extensions: [
+			lang,
+			EditorState.readOnly.of(locked),
+			EditorView.editable.of(!locked),
+		],
 		theme: editorTheme,
 		placeholder: `Write your ${title} here...`,
 		style: {
 			textAlign: 'left',
-			maxWidth: '830px',
+			// maxWidth: '400%',
+			height: '250px',
+			overflow: 'auto',
+
+			// take border width into account
+			boxSizing: 'border-box',
 		},
-		maxHeight: '200px',
+		// maxHeight: '2',
 		onChange: (value: string, viewUpdate: ViewUpdate) => {
+			if (locked) {
+				console.log('changed', value);
+				setCode(code);
+			}
 			setCode(value);
 		},
 	};
@@ -74,18 +104,20 @@ export default function CodeEditor({
 		<div
 			className='codeEditor'
 			style={{
-				flex: '1 1 100px',
-				border: '1px solid #35393C',
-			}}>
-			<h2
-				style={{
-					textShadow: '2px 5px 1px #000',
-					marginTop: 10,
-					userSelect: 'none',
-				}}
+				flex: '1 1 20px',
+				maxWidth: '50%',
+			}}
+			title={
+				locked ? "You can't edit this code" : ' Click on the code to edit it'
+			}>
+			<Typography
+				variant='h3'
+				// Make it h2
+
+				color='primary'
 				id='title'>
-				{title}
-			</h2>
+				{title} {locked ? '(Locked)' : ''}
+			</Typography>
 			<CodeMirror {...cmProps} />
 		</div>
 	);

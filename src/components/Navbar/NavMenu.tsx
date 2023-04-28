@@ -47,22 +47,18 @@ export default function NavMenu({
 				style={{
 					fontFamily: 'Kontakt',
 					flex: 1,
-					color: 'black',
+					color: '#D4AF37',
+					backdropFilter: 'blur(1px)',
+					fontSize: 30,
+					// make it stronger
+					fontWeight: 'bold',
 				}}
 				id='fade-button'
 				aria-controls={open ? 'fade-menu' : undefined}
 				aria-haspopup='true'
 				aria-expanded={open ? 'true' : undefined}
 				onClick={handleClick}>
-				<span
-					style={{
-						backdropFilter: 'blur(1px)',
-						fontSize: 30,
-						// make it stronger
-						fontWeight: 'bold',
-					}}>
-					{children}
-				</span>
+				{children}
 			</Button>
 			<Menu
 				style={{

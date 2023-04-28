@@ -54,7 +54,11 @@ export const Editors = () => {
 				alignContent: 'center',
 				justifyContent: 'space-between',
 				maxWidth: '840px',
-				flexWrap: 'wrap',
+				flex: '1 1 auto',
+				position: 'relative',
+				width: '100%',
+				backgroundColor: '#1E1E1E',
+				// flexWrap: 'wrap',
 			}}>
 			<CodeEditor
 				lang={css()}
@@ -67,6 +71,7 @@ export const Editors = () => {
 				title='HTML'
 				codeUpdater={codeUpdater}
 				template={htmlCode}
+				locked={true}
 			/>
 
 			{/* <ButtonGroup

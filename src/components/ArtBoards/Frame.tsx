@@ -14,9 +14,10 @@ interface FrameProps {
 	newCss: string;
 	frameUrl: string;
 	id: string;
+	name: string;
 }
 
-export const Frame = ({ id, newHtml, newCss, frameUrl }: FrameProps) => {
+export const Frame = ({ id, newHtml, newCss, frameUrl, name }: FrameProps) => {
 	// create a ref for the iframe
 	const iframeRef = useRef<HTMLIFrameElement>(null);
 	const dispatch = useAppDispatch();
@@ -30,6 +31,7 @@ export const Frame = ({ id, newHtml, newCss, frameUrl }: FrameProps) => {
 					{
 						html: newHtml,
 						css: newCss,
+						name,
 					},
 					'*'
 				);
@@ -47,7 +49,8 @@ export const Frame = ({ id, newHtml, newCss, frameUrl }: FrameProps) => {
 
 	useEffect(() => {
 		const handleDataFromIframe = async (event: MessageEvent) => {
-			// console.log('Data from iframe: ', event.data);
+			if (event.origin !== frameUrl) return;
+			// Check the src of the message
 
 			if (!event.data.dataURL) return;
 			// What is the type of event.data.dataurl?
@@ -76,6 +79,7 @@ export const Frame = ({ id, newHtml, newCss, frameUrl }: FrameProps) => {
 				{
 					html: newHtml,
 					css: newCss,
+					name,
 				},
 				'*'
 			);

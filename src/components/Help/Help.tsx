@@ -7,17 +7,21 @@ import Typography from '@mui/material/Typography';
 import Modal from '@mui/material/Modal';
 import { NavButton } from '../Navbar/NavButton';
 import { HelpContent } from './HelpContent';
+import { useAppDispatch } from '../../store/hooks/hooks';
+import { updateRoom } from '../../store/slices/room.slice';
 
 export default function Help() {
 	const [open, setOpen] = React.useState(false);
-	const handleOpen = () => setOpen(true);
+	const dispatch = useAppDispatch();
+	const handleOpen = () => {
+		dispatch(updateRoom('introduction'));
+		// setOpen(true);
+	};
 	const handleClose = () => setOpen(false);
 
 	return (
 		<>
-			<NavButton clickHandler={handleOpen} disabled={true}>
-				Help
-			</NavButton>
+			<NavButton clickHandler={handleOpen}>Instructions</NavButton>
 
 			{/* <Modal
 				open={open}

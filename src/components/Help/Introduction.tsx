@@ -11,17 +11,23 @@ import {
 	Paper,
 } from '@mui/material';
 import { CSSWordCloud } from '../CSSWordCloud/CSSWordCloud';
+import { Title } from '../Title/Title';
+import DynamicTabs from '../General/DynamicTabs/DynamicTabs';
+import { useAppDispatch, useAppSelector } from '../../store/hooks/hooks';
+import { updateRoom } from '../../store/slices/room.slice';
+import { useEffect } from 'react';
 
 const style = {
 	position: 'absolute' as 'absolute',
 	top: '50%',
 	left: '50%',
 	transform: 'translate(-50%, -50%)',
-	width: 600,
-	height: 600,
-	overflow: 'auto',
+	width: '800px',
+	height: 800,
+	padding: 0,
+	overflow: 'none',
 	// bgcolor: '#222',
-	// bgcolor: 'background.paper',
+	bgcolor: 'white',
 	// border: '2px solid #000',
 	border: 'none',
 	boxShadow: 24,
@@ -39,9 +45,28 @@ const wordCloud = {
 };
 
 export default function Introduction() {
-	const [open, setOpen] = React.useState(true);
+	const dispatch = useAppDispatch();
+	// Get current room
+	const room = useAppSelector((state) => state.room);
+	const [open, setOpen] = React.useState(false);
 	// const handleOpen = () => setOpen(true);
-	const handleClose = () => setOpen(false);
+	const handleClose = () => {
+		setOpen(false);
+		setTimeout(() => {
+			dispatch(updateRoom('game'));
+		}, 400);
+	};
+	useEffect(() => {
+		if (open) {
+			dispatch(updateRoom('introduction'));
+		}
+	}, [open]);
+
+	useEffect(() => {
+		if (room.currentRoom === 'introduction') {
+			setOpen(true);
+		}
+	}, [room.currentRoom]);
 
 	return (
 		<>
@@ -51,6 +76,7 @@ export default function Introduction() {
 				</Paper>
 			</Fade> */}
 			<Modal
+				hideBackdrop={room.currentRoom === 'introduction'}
 				aria-labelledby='transition-modal-title'
 				aria-describedby='transition-modal-description'
 				open={open}
@@ -63,124 +89,143 @@ export default function Introduction() {
 					},
 				}}>
 				<Fade in={open}>
-					<Paper sx={style}>
-						<Typography id='transition-modal-title' variant='h4' component='h4'>
-							Introduction
-						</Typography>
-						<Typography id='transition-modal-description' sx={{ mt: 2 }}>
-							Welcome to the UI Designer! This game is where you practice and
-							sharpen your HTML and CSS problem solving skills by recreating UI
-							components provided as images. Please read the following
-							instructions before you begin.
-						</Typography>
-						<section>
-							<article>
-								<header>
-									<Typography
-										id='transition-modal-title'
-										variant='h5'
-										component='h5'>
-										Objective:
-									</Typography>
-								</header>
-								<Typography id='transition-modal-description' sx={{ mt: 2 }}>
-									Recreate the UI components provided as images using HTML and
-									CSS in the provided editors. The game has four levels:{' '}
-									<em>Button, Card, Card with Image, and Picture Gallery.</em>{' '}
-									You can switch between the 4 levels using the{' '}
-									<strong>LEVELS</strong> - button. Use the{' '}
-									<strong>EVALUATE</strong>-button to evaluate the precision of
-									your HTML and CSS code. You can also use the{' '}
-									<strong>HELP</strong>-button to access the help section (This
-									feature is not yet fully implemented).
-								</Typography>
-								<Typography id='transition-modal-description' sx={{ mt: 2 }}>
-									The pictures have been taken from working components in
-									Chrome, not all browsers will render them identically, ie. you
-									may not be able to recreate the exact same look in all
-									browsers. The goal is to recreate the look as close as
-									possible. Over 98% accuracy earns you the full points, but you
-									need to get more than 90% accuracy to get points at all.
-								</Typography>
-
-								<section>
-									<article>
-										<header>
-											<Typography
-												id='transition-modal-title'
-												variant='h6'
-												component='h6'>
-												Levels
-											</Typography>
-										</header>
-										<Typography
-											id='transition-modal-description'
-											sx={{ mt: 2 }}>
-											Each level has a set of UI components that you need to
-											recreate. The levels are: Button, Card, Card with Image,
-											and Picture Gallery. We recommend the following steps in
-											designing your UI components:
-										</Typography>
-										<Paper
-											style={{
-												fontFamily: 'monospace',
-												fontSize: '1rem',
-												margin: '1rem',
-												padding: '1rem',
-											}}>
-											<ol>
-												<li>
-													<strong>Analyze the image:</strong> The first step is
-													to analyze the image and identify its key components
-													such as colors, shapes, and text. This will help the
-													designer to determine the appropriate HTML tags and
-													CSS properties to use when recreating the image.
-												</li>
-												<li>
-													<strong>
-														Use appropriate HTML and CSS techniques:{' '}
-													</strong>
-													After analyzing the image, the designer (meaning you)
-													should use appropriate HTML and CSS techniques to
-													recreate the component as closely to the original as
-													possible. Use the appropriate HTML elements, such as
-													&lt;button&gt; or &lt;img&gt;. Pay attention to the
-													elements's size, color, font, and border effects.{' '}
-													<strong>Use flexbox and grid when needed</strong>. The
-													20 most common CSS properties should be sufficient to
-													recreate any of the images presented in the game.
-												</li>
-												<li>
-													<strong>Test your code:</strong> After you are
-													finished, use the EVALUATE- button to test your code.
-													If you get a score of 90% or more, you will get points
-													for the level. If you get a score of 98% or more, you
-													will get full points for the level. If you get a score
-													of less than 90%, you will not get any points for the
-													level. You may need to make adjustments to the HTML
-													and CSS code to fix any layout or styling issues.
-												</li>
-											</ol>
-										</Paper>
-										<Typography
-											id='transition-modal-description'
-											sx={{ mt: 2 }}>
-											Once you are finished with the game, remember to Submit
-											the score to plussa by clicking the "Submit" button.
-										</Typography>
-									</article>
-								</section>
-								<section
+					<Paper
+						sx={style}
+						style={{
+							padding: 0,
+							display: 'flex',
+							flexDirection: 'column',
+							justifyContent: 'space-between',
+						}}>
+						<Title />
+						<div
+							style={{
+								display: 'flex',
+								flexDirection: 'column',
+								justifyContent: 'space-between',
+								flexGrow: 1,
+							}}>
+							<article style={{ padding: 30 }}>
+								<DynamicTabs
 									style={{
-										display: 'flex',
-										justifyContent: 'center',
-									}}>
-									<Button onClick={handleClose}>
-										<strong>That's it. let's start designing!</strong>
-									</Button>
-								</section>
+										padding: 0,
+										maxHeight: 400,
+										// white grey background
+										backgroundColor: '#F5F5F5',
+										overflow: 'auto',
+										boxShadow: '0px 2px 1px rgba(0, 0, 0, 0.25)',
+									}}
+									tabs={[
+										{
+											label: 'Introduction',
+											content: (
+												<Typography sx={{ mt: 2 }} variant='body2'>
+													Welcome to the UI Designer - layout edition. In these
+													tasks, we'll test your skills in using CSS to create
+													layouts .
+												</Typography>
+											),
+										},
+										{
+											label: 'Objective:',
+											content: (
+												<>
+													<Typography sx={{ mt: 2 }} variant='body2'>
+														Recreate the layouts provided as images using HTML
+														and CSS in the provided CSS editor. The game has two
+														tasks: <em>Task 1 and Task 2</em> You can switch
+														between the levels using the <strong>LEVELS</strong>{' '}
+														- button. Use the <strong>EVALUATE</strong>-button
+														to evaluate the precision of your HTML and CSS code.
+														You can also use the <strong>INSTRUCTIONS</strong>
+														-button to come back to this page.
+													</Typography>
+													<Typography sx={{ mt: 2 }} variant='body2'>
+														Use whatever HTML and CSS techniques you know in
+														order to recreate the image on the{' '}
+														<strong>right</strong> as closely as possible with
+														the image on the <strong>left</strong>.
+														<strong>
+															{' '}
+															It is highly advisable to use flexbox and grid
+														</strong>
+														, but you can also use other techniques if they are
+														more suitable for the task.
+													</Typography>
+												</>
+											),
+										},
+										{
+											label: 'General advice',
+											content: (
+												<>
+													<Typography variant='body2'>
+														<ol>
+															<li>
+																<strong>Use the provided CSS template:</strong>{' '}
+																We strongly advise using the existing CSS
+																template provided, as it contains CSS rules that
+																are suitable for your task. This should be used
+																as a starting point for your work.
+															</li>
+															<li>
+																<strong>HTML code is fixed:</strong> You are not
+																allowed to change the HTML code for this exam.
+																The HTML is fixed and cannot be altered. Your
+																solution should be compatible with the HTML code
+																provided to you.
+															</li>
+															<li>
+																<strong>Evaluate your code:</strong> Upon
+																completing your work, evaluate your code using
+																the EVALUATE button. If your accuracy is 91% or
+																above, you will receive points for the level. If
+																you accuracy 98% or above, you will receive full
+																points for the level. Accuracy below 90% will
+																result in a zero point score for the level. If
+																you refresh the page, your progress will be
+																lost, in which case you will need to evaluate
+																your code again.
+															</li>
+															<li>
+																<strong>Submit your points to plussa:</strong>{' '}
+																After completing the exam, ensure that you
+																Submit the points to plussa by clicking the
+																"Submit" button located beneath the game.
+															</li>
+														</ol>
+													</Typography>
+												</>
+											),
+										},
+										{
+											label: 'Remember: Evaluate & Submit',
+											content: (
+												<>
+													<Typography sx={{ mt: 2 }} variant='body2'>
+														Once you are finished with the game, remember to
+														Submit the score to plussa by clicking the "Submit"
+														button. If you refreshed the page at any moment in
+														time, make sure you received the points for the
+														tasks. Good luck!
+													</Typography>
+												</>
+											),
+										},
+									]}
+								/>
 							</article>
-						</section>
+							<section
+								style={{
+									display: 'flex',
+									justifyContent: 'center',
+									padding: 30,
+								}}>
+								<Button onClick={handleClose} variant='contained'>
+									<strong>To the tasks</strong>
+								</Button>
+							</section>
+						</div>
 					</Paper>
 				</Fade>
 			</Modal>

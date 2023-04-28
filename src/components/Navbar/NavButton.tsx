@@ -20,18 +20,14 @@ export const NavButton = ({
 			style={{
 				fontFamily: 'Kontakt',
 				flex: 1,
-				color: disabled ? 'grey' : 'black',
+				color: disabled ? 'grey' : '#D4AF37',
+				backdropFilter: 'blur(1px)',
+				fontSize: 30,
+				// make it stronger
+				fontWeight: 'bold',
 			}}
 			disabled={disabled}>
-			<span
-				style={{
-					backdropFilter: 'blur(1px)',
-					fontSize: 30,
-					// make it stronger
-					fontWeight: 'bold',
-				}}>
-				{children}
-			</span>
+			{children}
 		</Button>
 	);
 };

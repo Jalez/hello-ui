@@ -1,26 +1,13 @@
 /** @format */
 
 import { createSlice } from '@reduxjs/toolkit';
-
-// Get from assets
-import Easy1 from '../../assets/Easy1.png';
-import Easy2 from '../../assets/Easy2.png';
-import Medium2 from '../../assets/Medium2.png';
-import Hard3 from '../../assets/Hard3.png';
 import placeholder from '../../assets/Placeholder.svg';
-import button from '../../assets/button.png';
-import card from '../../assets/card.png';
-import cardWithImage from '../../assets/cardWithImage.png';
-import couple from '../../assets/PictureGallery/couple.jpg';
-import desert from '../../assets/PictureGallery/desert.jpg';
-import dog from '../../assets/PictureGallery/dog.jpg';
-import oldartist from '../../assets/PictureGallery/oldartist.jpg';
-import me from '../../assets/PictureGallery/me.jpg';
-import PictureGallery from '../../assets/PictureGallery.png';
 
 const url = import.meta.env.LOCAL_TESTING_URL;
 
 import confetti from 'canvas-confetti';
+import { generateGridLevel } from '../../utils/generators/gridMaker';
+import { flexboxMaker } from '../../utils/generators/flexboxMaker';
 
 // Remove these static width and height values
 const width = 400;
@@ -41,10 +28,10 @@ interface Level {
 		html: string;
 		css: string;
 	};
-	// solution: {
-	// 	html: string;
-	// 	css: string;
-	// };
+	solution: {
+		html: string;
+		css: string;
+	};
 	image: string;
 	diff: string;
 	difficulty: string;
@@ -60,17 +47,17 @@ interface Level {
 	drawnEvalUrl: string;
 	solEvalUrl: string;
 }
-
+const primaryColor = '#D4AF37';
+const secondaryColor = '#222';
 const initialHtml: string = `<div></div>`;
-const initialCss: string = `
-body {
+const initialCss: string = `body {
 	margin: 0px;
-	background-color: #222;
+	background-color: ${secondaryColor};
 }
 div {
 	width: 100px;
-	height: 100px;
-	background-color: yellow;
+	height: 50px;
+	background-color: ${primaryColor};
 }`;
 const initialCode = {
 	html: initialHtml,
@@ -88,86 +75,93 @@ const initialDefaults = {
 	solutionUrl: '',
 	drawnEvalUrl: '',
 	solEvalUrl: '',
+	solution: {
+		html: '',
+		css: '',
+	},
 };
 // Get initial state from local storage
 let initialState: Level[] = JSON.parse(
-	localStorage.getItem('css-artist-1-levels') || '[]'
+	localStorage.getItem('ui-designer-layout-levels') || '[]'
 );
+// get current time in milliseconds
+const currentTime = new Date().getTime();
+// get the time the user started the game
+const lastUpdated = localStorage.getItem(
+	'ui-designer-layout-levels-start-time'
+);
+// if the user started the game more than 12 hours ago, reset the state
+// const twhours = 43200000;
+// for testing purposes, set the time to 1 second
+const twhours = 1000;
+if (lastUpdated && currentTime - parseInt(lastUpdated) > twhours) {
+	console.log('Resetting timer');
+	initialState = [];
+	localStorage.setItem(
+		'ui-designer-layout-levels-start-time',
+		currentTime.toString()
+	);
+}
+
 // if there is no initial state, set it to the default state
 if (initialState.length === 0) {
-	console.log("There's no initial state, setting it to default state");
-	initialState = [
-		{
-			id: 1,
-			name: 'Level 1',
+	console.log("There's no initial state, setting it to default");
 
-			buildingBlocks: {
+	const createLevels = () => {
+		for (let i = 1; i <= 2; i++) {
+			let randomLevel = {
+				image: placeholder,
+				colors: ['#fff'],
 				pictures: [],
-				colors: ['#1e88e5', '#f5f5f5'],
-			},
-			...initialDefaults,
+			};
+			let difficulty = i === 1 ? 'Task 1' : 2 === 2 ? 'Task 2' : 'Task 3';
 
-			image: button,
-			difficulty: 'button',
-			help: {
-				description: 'This is the first level',
-				images: [],
-				usefullCSSProperties: [],
-			},
-		},
-		{
-			id: 2,
-			name: 'Level 2',
+			// // If the level is 1, get random easy level and set difficulty to easy
+			// if (i === 1) {
+			// 	randomLevel = levels[i][Math.floor(Math.random() * levels[i].length)];
+			// 	difficulty = 1 === 1 ? 'easy' : 2 === 2 ? 'medium' : 'hard';
+			// }
 
-			buildingBlocks: {
-				pictures: [],
-				colors: ['#1e88e5', '#f5f5f5'],
-			},
-			...initialDefaults,
+			let generatedLevelDetails;
+			// If the level is one, lets give them flexbox
+			if (i === 1) {
+				generatedLevelDetails = flexboxMaker(primaryColor, secondaryColor);
+			}
+			// if the level is 2, lets give them grid
+			else {
+				generatedLevelDetails = generateGridLevel(primaryColor, secondaryColor);
+			}
 
-			image: card,
-			difficulty: 'card',
-			help: {
-				description: 'This is the first level',
-				images: [],
-				usefullCSSProperties: [],
-			},
-		},
-		{
-			id: 3,
-			name: 'Level 3',
+			const level = {
+				id: i,
+				name: `Level ${i}`,
 
-			buildingBlocks: {
-				pictures: [placeholder],
-				colors: ['#1e88e5', '#f5f5f5'],
-			},
-			...initialDefaults,
-			image: cardWithImage,
-			difficulty: 'card with image',
-			help: {
-				description: 'This is the first level',
-				images: [],
-				usefullCSSProperties: [],
-			},
-		},
-		{
-			id: 4,
-			name: 'Level 4',
-			...initialDefaults,
-			image: PictureGallery,
-			buildingBlocks: {
-				pictures: [couple, desert, dog, oldartist, me],
-				colors: ['#62374E', '#FDC57B'],
-			},
+				buildingBlocks: {
+					pictures: randomLevel.pictures,
+					colors: [primaryColor, secondaryColor],
+				},
+				...initialDefaults,
+				code: {
+					html: generatedLevelDetails.HTML,
+					css: generatedLevelDetails.TCSS,
+				},
+				image: '',
+				difficulty,
+				help: {
+					description: 'NO help available',
+					images: [],
+					usefullCSSProperties: [],
+				},
+				solution: {
+					html: generatedLevelDetails.HTML,
+					css: generatedLevelDetails.SCSS + generatedLevelDetails.TCSS,
+				},
+			};
+			initialState.push(level);
+		}
+	};
 
-			difficulty: 'Picture Gallery',
-			help: {
-				description: 'This is the first level',
-				images: [],
-				usefullCSSProperties: [],
-			},
-		},
-	];
+	createLevels();
 } else {
 	// if there is an initial state, set the code to the initial code
 	initialState.forEach((level) => {
@@ -208,7 +202,7 @@ const levelsSlice = createSlice({
 			level.accuracy = percentage.toFixed(2);
 			level.diff = diff;
 			// update the level in local storage
-			localStorage.setItem('css-artist-1-levels', JSON.stringify(state));
+			localStorage.setItem('ui-designer-layout-levels', JSON.stringify(state));
 		},
 		updateCode(state, action) {
 			const { id, code } = action.payload;
@@ -237,7 +231,7 @@ const levelsSlice = createSlice({
 			if (!level) return;
 			level.code = code;
 			// update the code for the level in local storage
-			localStorage.setItem('css-artist-1-levels', JSON.stringify(state));
+			localStorage.setItem('ui-designer-layout-levels', JSON.stringify(state));
 		},
 		updateSolution(state, action) {
 			const { id, solution } = action.payload;
@@ -245,16 +239,20 @@ const levelsSlice = createSlice({
 			if (!level) return;
 			// level.solution = solution;
 			// update the code for the level in local storage
-			localStorage.setItem('css-artist-1-levels', JSON.stringify(state));
+			localStorage.setItem('ui-designer-layout-levels', JSON.stringify(state));
 		},
 		updateUrl(state, action) {
 			if (!action.payload) return;
 
-			const { id, dataURL, name } = action.payload;
-			if (name === 'drawing') state[id - 1].drawingUrl = dataURL;
-			else if (name === 'solution') state[id - 1].solutionUrl = dataURL;
+			const { id, dataURL, urlName } = action.payload;
+			if (urlName === 'drawingUrl') state[id - 1].drawingUrl = dataURL;
+			else if (urlName === 'solutionUrl') {
+				state[id - 1].solutionUrl = dataURL;
+				// set image
+				state[id - 1].image = dataURL;
+			}
 			// update the code for the level in local storage
-			localStorage.setItem('css-artist-1-levels', JSON.stringify(state));
+			localStorage.setItem('ui-designer-layout-levels', JSON.stringify(state));
 		},
 		updateEvaluationUrl(state, action) {
 			const { id, dataUrl, name } = action.payload;
@@ -262,7 +260,7 @@ const levelsSlice = createSlice({
 			if (name === 'solution') state[id - 1].solEvalUrl = dataUrl;
 
 			// update the code for the level in local storage
-			localStorage.setItem('css-artist-1-levels', JSON.stringify(state));
+			localStorage.setItem('ui-designer-layout-levels', JSON.stringify(state));
 		},
 	},
 });

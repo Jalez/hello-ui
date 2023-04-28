@@ -10,12 +10,16 @@ function App() {
 	const [html, setHtml] = useState<ReactElement>();
 	const [css, setCss] = useState<string>();
 
+	const [urlName, setUrlName] = useState<string>();
 	useEffect(() => {
 		const handlePostMessage = (event: MessageEvent) => {
 			// if (event.data === 'reload') {
 			// 	window.location.reload();
 			// }
 			// If it countains new data, update the state
+			if (event.data.name) {
+				setUrlName(event.data.name);
+			}
 			if (event.data.html) {
 				// turn the string into a ReactNode element and set it as the state of the component
 				setHtml(<kbd dangerouslySetInnerHTML={{ __html: event.data.html }} />);
@@ -46,7 +50,7 @@ function App() {
 		if (board) {
 			domToPng(board).then((dataURL: string) => {
 				if (counter > 0) {
-					window.parent.postMessage({ dataURL, name: 'drawing' }, '*');
+					window.parent.postMessage({ dataURL, urlName }, '*');
 				}
 				counter++;
 				// window.parent.postMessage(dataURL, '*');

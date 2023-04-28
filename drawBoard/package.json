@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port 3500",
+    "dev1": "vite --port 3600",
     "start": "node server.cjs",
     "build": "tsc && vite build --base '/drawboard' ",
     "preview": "vite preview"

@@ -25,7 +25,7 @@ export const ModelBoard = (): JSX.Element => {
 	const [showModel, setShowModel] = useState(true);
 
 	return (
-		<div id='model-board'>
+		<div className='board'>
 			<InfoBoard>
 				<div
 					style={{
@@ -40,6 +40,8 @@ export const ModelBoard = (): JSX.Element => {
 				<FormControlLabel
 					control={
 						<Switch
+							// Change color to #D4AF37
+							color='primary'
 							defaultChecked
 							// fire when switch is clicked
 							onChange={() => setShowModel(!showModel)}
@@ -47,6 +49,7 @@ export const ModelBoard = (): JSX.Element => {
 					}
 					style={{
 						userSelect: 'none',
+						// color: '#D4AF37',
 					}}
 					label={
 						<Typography variant='body1'>
@@ -57,11 +60,28 @@ export const ModelBoard = (): JSX.Element => {
 				/>
 			</InfoBoard>
 			<ArtContainer>
-				{showModel ? (
-					<Image imageUrl={level.image} name='solution' />
-				) : (
-					<Diff />
+				{!level.solutionUrl && (
+					<Frame
+						id='DrawBoard'
+						newCss={level.solution.css}
+						newHtml={level.solution.html}
+						frameUrl={'http://localhost:3600'}
+						name='solutionUrl'
+					/>
 				)}
+				<div
+					style={{
+						position: 'absolute',
+						bottom: 0,
+					}}>
+					<ScreenshotWithRedux imageUrl={level.solutionUrl} name='solution'>
+						{showModel ? (
+							<Image imageUrl={level.solutionUrl} name='solution' />
+						) : (
+							<Diff />
+						)}
+					</ScreenshotWithRedux>
+				</div>
 			</ArtContainer>
 		</div>
 	);

@@ -14,10 +14,10 @@ export const InfoBoard = ({ children }: InfoBoardProps) => {
 				// position: 'absolute',
 				zIndex: 100,
 				top: '5%',
-				backgroundColor: '#2b2b2e',
+				backgroundColor: '#1E1E1E',
 				// border: '0.5em solid #444',
 				color: 'white',
-				boxShadow: '0 0 0.5em #444',
+				width: '100%',
 				padding: '0.5em',
 				height: '70px',
 			}}>

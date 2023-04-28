@@ -110,9 +110,18 @@ export const ThreeNavs = () => {
 	};
 
 	return (
-		<div id='three-navs'>
+		<div
+			id='three-navs'
+			style={{
+				borderBottom: '1px solid #111',
+			}}>
 			<HelpModal />
 			<NavButton clickHandler={beginEvaluation}>Evaluate</NavButton>
+			<div
+				style={{
+					width: '0px',
+					border: '1px solid #111',
+				}}></div>
 			<NavMenu clickHandler={levelChanger} menuItems={difficulties}>
 				Levels
 			</NavMenu>
