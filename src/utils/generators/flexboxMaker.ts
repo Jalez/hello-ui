@@ -58,7 +58,7 @@ export const flexboxMaker = (primaryColor: string, secondaryColor: string) => {
   <div class="six">Six</div>
 </div>`;
 
-	const tcss = `.wrapper {
+	const tcss = `body {
 	height: 300px;
 	width: 400px;
 	margin: 0;
@@ -84,6 +84,8 @@ div>div:before {
 	`;
 	const scss = `
 .wrapper {
+	height: 300px;
+	width: 400px;
 display: flex;
 flex-wrap: ${randomFlexWrap};
 justify-content: ${randomJustifyContent};
