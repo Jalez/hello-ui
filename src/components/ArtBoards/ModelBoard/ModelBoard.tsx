@@ -65,7 +65,6 @@ export const ModelBoard = (): JSX.Element => {
 						id='DrawBoard'
 						newCss={level.solution.css}
 						newHtml={level.solution.html}
-						frameUrl={'http://localhost:3500'}
 						name='solutionUrl'
 					/>
 				)}

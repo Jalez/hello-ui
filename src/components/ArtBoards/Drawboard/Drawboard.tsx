@@ -46,7 +46,6 @@ export const Drawboard = () => {
 						id='DrawBoard'
 						newCss={level.code.css}
 						newHtml={level.code.html}
-						frameUrl={'http://localhost:3500'}
 						name='drawingUrl'
 					/>
 					<div
