@@ -25,63 +25,93 @@ export const ModelBoard = (): JSX.Element => {
 	const [showModel, setShowModel] = useState(true);
 
 	return (
-		<div className='board'>
-			<InfoBoard>
-				<div
-					style={{
-						display: 'flex',
-						flexDirection: 'column',
-					}}>
-					{level.buildingBlocks?.colors?.map((color, index) => (
-						<InfoColor key={index} color={color} />
-					))}
-				</div>
-				<InfoPictures />
-				<FormControlLabel
-					control={
-						<Switch
-							// Change color to #D4AF37
-							color='primary'
-							defaultChecked
-							// fire when switch is clicked
-							onChange={() => setShowModel(!showModel)}
-						/>
-					}
-					style={{
-						userSelect: 'none',
-						// color: '#D4AF37',
-					}}
-					label={
-						<Typography variant='body1'>
-							{showModel ? 'Model' : 'Diff'}
-						</Typography>
-					}
-					labelPlacement='start'
-				/>
-			</InfoBoard>
-			<ArtContainer>
-				{!level.solutionUrl && (
-					<Frame
-						id='DrawBoard'
-						newCss={level.solution.css}
-						newHtml={level.solution.html}
-						name='solutionUrl'
+		<div
+			style={{
+				display: 'flex',
+				flexDirection: 'row',
+				justifyContent: 'center',
+				alignItems: 'center',
+			}}>
+			<div
+				style={{
+					// Put the text sideways
+					writingMode: 'vertical-rl',
+					textOrientation: 'upright',
+					// Make it look like a title
+					fontSize: '2rem',
+					// center it
+					display: 'flex',
+					justifyContent: 'center',
+					zIndex: 2,
+					backgroundColor: '#333',
+					height: 'fit-content',
+					margin: '0px',
+					borderBottom: '5px solid #111',
+					borderTop: '5px solid #111',
+					borderLeft: '5px solid #111',
+				}}>
+				<Typography color='primary' variant='h3'>
+					Model version
+				</Typography>
+			</div>
+			<div className='board'>
+				<InfoBoard>
+					<div
+						style={{
+							display: 'flex',
+							flexDirection: 'column',
+						}}>
+						{level.buildingBlocks?.colors?.map((color, index) => (
+							<InfoColor key={index} color={color} />
+						))}
+					</div>
+					<InfoPictures />
+					<FormControlLabel
+						control={
+							<Switch
+								// Change color to #D4AF37
+								color='primary'
+								defaultChecked
+								// fire when switch is clicked
+								onChange={() => setShowModel(!showModel)}
+							/>
+						}
+						style={{
+							userSelect: 'none',
+							// color: '#D4AF37',
+						}}
+						label={
+							<Typography variant='body1'>
+								{showModel ? 'Model' : 'Diff'}
+							</Typography>
+						}
+						labelPlacement='start'
 					/>
-				)}
-				<div
-					style={{
-						position: 'absolute',
-						bottom: 0,
-					}}>
-					<ScreenshotWithRedux imageUrl={level.solutionUrl} name='solution'>
-						{showModel ? (
-							<Image imageUrl={level.solutionUrl} name='solution' />
-						) : (
-							<Diff />
-						)}
-					</ScreenshotWithRedux>
-				</div>
-			</ArtContainer>
+				</InfoBoard>
+				<ArtContainer>
+					{!level.solutionUrl && (
+						<Frame
+							id='DrawBoard'
+							newCss={level.solution.css}
+							newHtml={level.solution.html}
+							name='solutionUrl'
+						/>
+					)}
+					<div
+						style={{
+							position: 'absolute',
+							bottom: 0,
+						}}>
+						<ScreenshotWithRedux imageUrl={level.solutionUrl} name='solution'>
+							{showModel ? (
+								<Image imageUrl={level.solutionUrl} name='solution' />
+							) : (
+								<Diff />
+							)}
+						</ScreenshotWithRedux>
+					</div>
+				</ArtContainer>
+			</div>
 		</div>
 	);
 };
