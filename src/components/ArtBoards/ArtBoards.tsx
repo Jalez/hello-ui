@@ -8,7 +8,7 @@ import { ModelBoard } from './ModelBoard/ModelBoard';
 export const ArtBoards = () => {
 	return (
 		<div id='artBoard'>
-			{/* <CSSWordCloud /> */}
+			<CSSWordCloud />
 			<Drawboard />
 			<ModelBoard />
 		</div>
