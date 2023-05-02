@@ -49,6 +49,7 @@ interface Level {
 	solutionUrl: string;
 	drawnEvalUrl: string;
 	solEvalUrl: string;
+	confettiSprinkled: boolean;
 }
 const primaryColor = '#D4AF37';
 const secondaryColor = '#222';
@@ -82,6 +83,7 @@ const initialDefaults = {
 		html: '',
 		css: '',
 	},
+	confettiSprinkled: false,
 };
 const storage = obfuscate('ui-designer-layout-levels');
 const timerStorage = obfuscate('ui-designer-start-time');
@@ -228,7 +230,10 @@ const levelsSlice = createSlice({
 
 				// if percentage is over 90, use confetti
 				if (percentage > 90) {
-					if (percentage > 98) confetti({ particleCount: 100 });
+					if (percentage > 98 && !level.confettiSprinkled) {
+						confetti({ particleCount: 100 });
+						level.confettiSprinkled = true;
+					}
 					// Calculate the points based on the last 10 percent
 					const lastTenPercent = percentage - 90;
 					const lastTenPercentPercentage = lastTenPercent / 10;

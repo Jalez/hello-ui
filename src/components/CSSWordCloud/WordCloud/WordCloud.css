@@ -4,11 +4,14 @@ text {
   -moz-user-select: none;
   -ms-user-select: none;
   user-select: none;
-  fill: rgb(77, 72, 72);
+  fill:rgb(39, 39, 39);
+  /* fill: white; */
   z-index: 0;
-  font-family: Impact;
+  /* font-family: Impact; */
   /* remove shadow */
   text-shadow: none;
+  /* remove bold */
+  /* font-weight: normal; */
 }
 
 /* Add a transform to whenever the fill changes */

@@ -19,17 +19,5 @@ export default function Help() {
 	};
 	const handleClose = () => setOpen(false);
 
-	return (
-		<>
-			<NavButton clickHandler={handleOpen}>Instructions</NavButton>
-
-			{/* <Modal
-				open={open}
-				onClose={handleClose}
-				aria-labelledby='help-modal-title'
-				aria-describedby='help-modal-description'>
-				<HelpContent />
-			</Modal> */}
-		</>
-	);
+	return <NavButton clickHandler={handleOpen}>Instructions</NavButton>;
 }

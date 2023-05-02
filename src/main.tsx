@@ -12,7 +12,7 @@ const theme = createTheme({
 	typography: {
 		h1: {
 			fontFamily: 'Kontakt',
-			fontSize: 100,
+			fontSize: 75,
 			color: '#D4AF37',
 
 			textShadow: '10px 0px 0px #222',

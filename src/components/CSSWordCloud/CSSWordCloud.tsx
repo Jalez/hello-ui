@@ -8,7 +8,9 @@ export const CSSWordCloud = () => {
 		<div
 			style={{
 				position: 'absolute',
-				zIndex: 0,
+				zIndex: 1,
+				top: '0%',
+				left: '0%',
 				padding: '0px',
 				margin: '0px',
 			}}>
