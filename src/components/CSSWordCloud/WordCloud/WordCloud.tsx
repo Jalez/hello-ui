@@ -2,12 +2,12 @@
 
 import { useEffect, useState } from 'react';
 // import d3
-import * as d3Cloud_ from 'd3-cloud';
+import * as d3Cloud from 'd3-cloud';
 import * as d3 from 'd3';
 import './WordCloud.css';
-const d3Cloud = d3Cloud_ as any;
+// const as = d3Cloud_ as any;
 // include namespace for d3-cloud
-// import { d3Cloud } from 'd3-cloud';
+// import { d3 } from 'd3-cloud';
 
 const loremIpsum = `Lorem ipsum
 `;
