@@ -9,14 +9,6 @@ export const Navbar = () => {
 	return (
 		<div className='navbar' style={{ fontSize: '1.5em' }}>
 			<ThreeNavs />
-			{/* <Grid container>
-				<Grid item xs={6}>
-					<LeftNav></LeftNav>
-				</Grid>
-				<Grid item xs={6}>
-					<RightNav></RightNav>
-				</Grid>
-			</Grid> */}
 		</div>
 	);
 };
