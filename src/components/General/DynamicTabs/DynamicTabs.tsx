@@ -55,6 +55,9 @@ export default function DynamicTabs({ style, tabs }: TabProps) {
 		<Box>
 			<Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
 				<Tabs
+					variant='scrollable'
+					scrollButtons
+					allowScrollButtonsMobile
 					value={value}
 					onChange={handleChange}
 					aria-label='basic tabs example'>

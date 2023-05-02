@@ -1,11 +1,9 @@
 /** @format */
 
 import { useEffect, useRef } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
-import { updateLevel, updateUrl } from '../../store/slices/levels.slice';
-
-import { updatePointsThunk } from '../../store/actions/score.actions';
-import { useAppDispatch, useAppSelector } from '../../store/hooks/hooks';
+import { useSelector } from 'react-redux';
+import { updateUrl } from '../../store/slices/levels.slice';
+import { useAppDispatch } from '../../store/hooks/hooks';
 // import my redux store
 
 // prop types

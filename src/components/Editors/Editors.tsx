@@ -53,12 +53,14 @@ export const Editors = () => {
 				flexDirection: 'row',
 				alignContent: 'center',
 				justifyContent: 'space-between',
-				maxWidth: '840px',
-				flex: '1 1 auto',
+				// maxWidth: '840px',
+				flex: '1 1 100%',
 				position: 'relative',
-				width: '100%',
+				// width: '100%',
 				backgroundColor: '#1E1E1E',
-				// flexWrap: 'wrap',
+				margin: '1em',
+				flexWrap: 'wrap',
+				zIndex: 1,
 			}}>
 			<CodeEditor
 				lang={css()}

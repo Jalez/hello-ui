@@ -9,6 +9,8 @@ import confetti from 'canvas-confetti';
 import { generateGridLevel } from '../../utils/generators/gridMaker';
 import { flexboxMaker } from '../../utils/generators/flexboxMaker';
 import { obfuscate } from '../../utils/obfuscators/obfuscate';
+import Pixelmatch from 'pixelmatch';
+import { Buffer } from 'buffer';
 
 // Remove these static width and height values
 const width = 400;
@@ -47,6 +49,7 @@ interface Level {
 	solutionUrl: string;
 	drawnEvalUrl: string;
 	solEvalUrl: string;
+	confettiSprinkled: boolean;
 }
 const primaryColor = '#D4AF37';
 const secondaryColor = '#222';
@@ -80,6 +83,7 @@ const initialDefaults = {
 		html: '',
 		css: '',
 	},
+	confettiSprinkled: false,
 };
 const storage = obfuscate('ui-designer-layout-levels');
 const timerStorage = obfuscate('ui-designer-start-time');
@@ -173,34 +177,80 @@ const levelsSlice = createSlice({
 	initialState: initialState as Level[],
 
 	reducers: {
-		updateLevel(state, action) {
-			const { id, accuracy, diff } = action.payload;
-			const level = state.find((level) => level.id === id);
-			if (!level) return;
-			level.accuracy = accuracy;
-			// Get the percentage of pixels that are different
-			let percentage = 100 - (accuracy / (width * height)) * 100;
+		evaluateLevel(state, action) {
+			const getPixelData = (img = new Image()) => {
+				// return new Promise((resolve, reject) => {
+				// Create a canvas element
+				const canvas = document.createElement('canvas');
+				// Set the width and height of the canvas to the width and height of the image
+				canvas.width = img.width;
+				canvas.height = img.height;
+				// Get the 2D context of the canvas
+				const ctx = canvas.getContext('2d');
+				// Draw the image on the canvas
+				ctx?.drawImage(img, 0, 0);
+				// Get the image data from the canvas
+				const imgData = ctx?.getImageData(0, 0, 400, 300);
+				// Resolve the promise with the image data
+				return imgData;
+				// });
+			};
+			// get the image urls from the current level
 
-			// if percentage is over 90, use confetti
-			if (percentage > 90) {
-				if (percentage > 98) confetti({ particleCount: 100 });
-				// Calculate the points based on the last 10 percent
-				const lastTenPercent = percentage - 90;
-				const lastTenPercentPercentage = lastTenPercent / 10;
-				level.points = Math.ceil(lastTenPercentPercentage * level.maxPoints);
-				// set level completed to yes
-				level.completed = 'yes';
-			}
-			// If percentage is less than 90, set points to 0
-			else {
-				level.points = 0;
-			}
+			const loadAndMatch = (
+				currentLevel: Number,
+				drawnImage: HTMLImageElement,
+				solutionImage: HTMLImageElement
+			) => {
+				// console.log('COMPARING IMAGES: ', level?.solutionUrl, level?.drawingUrl);
+				// set the src of the image to the data url
+				const img1Data = getPixelData(drawnImage) as ImageData;
+				const img2Data = getPixelData(solutionImage) as ImageData;
 
-			// Round the percentage to 2 decimal places
-			level.accuracy = percentage.toFixed(2);
-			level.diff = diff;
-			// update the level in local storage
-			storage.setItem(storage.key, JSON.stringify(state));
+				// Create a diff image with the same dimensions as img1
+				const diff = Buffer.alloc(img2Data.data.length as number) as Buffer;
+				const width = img1Data?.width;
+				const height = img1Data?.height;
+				const accuracy = Pixelmatch(
+					img2Data?.data,
+					img1Data?.data,
+					diff,
+					width,
+					height,
+					{
+						threshold: 0.1,
+					}
+				);
+				// Update the current level with the accuracy and diff
+				const level = state.find((level) => level.id === currentLevel);
+				if (!level) return;
+				const percentage = 100 - (accuracy / (width * height)) * 100;
+				level.diff = diff.toString('base64');
+				level.accuracy = percentage.toFixed(2);
+
+				// if percentage is over 90, use confetti
+				if (percentage > 90) {
+					if (percentage > 98 && !level.confettiSprinkled) {
+						confetti({ particleCount: 100 });
+						level.confettiSprinkled = true;
+					}
+					// Calculate the points based on the last 10 percent
+					const lastTenPercent = percentage - 90;
+					const lastTenPercentPercentage = lastTenPercent / 10;
+					level.points = Math.ceil(lastTenPercentPercentage * level.maxPoints);
+					// set level completed to yes
+					level.completed = 'yes';
+				}
+				// If percentage is less than 90, set points to 0
+				else {
+					level.points = 0;
+				}
+
+				storage.setItem(storage.key, JSON.stringify(state));
+			};
+			// allImagesLoaded();
+			const { currentLevel, drawnImage, solutionImage } = action.payload;
+			loadAndMatch(currentLevel, drawnImage, solutionImage);
 		},
 		updateCode(state, action) {
 			const { id, code } = action.payload;
@@ -263,7 +313,7 @@ const levelsSlice = createSlice({
 	},
 });
 
-export const { updateLevel, updateCode, updateUrl, updateEvaluationUrl } =
+export const { updateCode, updateUrl, updateEvaluationUrl, evaluateLevel } =
 	levelsSlice.actions;
 
 export default levelsSlice.reducer;

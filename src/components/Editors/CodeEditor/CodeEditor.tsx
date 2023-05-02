@@ -84,9 +84,8 @@ export default function CodeEditor({
 		style: {
 			textAlign: 'left',
 			// maxWidth: '400%',
-			height: '250px',
+			height: '100%',
 			overflow: 'auto',
-
 			// take border width into account
 			boxSizing: 'border-box',
 		},
@@ -105,7 +104,8 @@ export default function CodeEditor({
 			className='codeEditor'
 			style={{
 				flex: '1 1 20px',
-				maxWidth: '50%',
+				// maxWidth: '50%',
+				borderLeft: '3px solid #222',
 			}}
 			title={
 				locked ? "You can't edit this code" : ' Click on the code to edit it'

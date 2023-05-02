@@ -3,7 +3,7 @@
 <form enctype="multipart/form-data" method="post" id="css-artist">
   {% csrf_token %}
 
-  <iframe name="regex" src="http://localhost:5173/" width="1000vw" height="1000vh"
+  <iframe name="regex" src="http://localhost:5173/" width="100%" height="850px" style="min-width: 500px;"
     allow="clipboard-read; clipboard-write"></iframe>
   <input type="hidden" name="points" id="points" value="0" />
   <input type="hidden" name="maxPoints" id="maxPoints" value="15" />

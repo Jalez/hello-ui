@@ -16,6 +16,7 @@ import { useState } from 'react';
 import { useAppSelector } from './store/hooks/hooks';
 import { Paper } from '@mui/material';
 import { useEffect } from 'react';
+import { LevelUpdater } from './LevelUpdater';
 
 function App() {
 	const [checked, setChecked] = useState(false);
@@ -31,20 +32,26 @@ function App() {
 	}, [room.currentRoom]);
 
 	return (
-		<>
-			<Introduction />
+		<div
+			id='App'
+			style={{
+				display: 'flex',
+				flexDirection: 'column',
+				justifyContent: 'space-between',
+				alignItems: 'center',
+				height: '100%', // "90%
+				// overflow: 'auto',
+				position: 'relative',
+			}}>
+			<LevelUpdater />
+			{!open && <Introduction />}
 			{open && (
-				<Grow in={open} {...(checked ? { timeout: 2000 } : {})}>
+				<Grow in={open} {...(checked ? { timeout: 200 } : {})}>
 					<Paper
 						elevation={10}
-						sx={{}}
 						style={{
-							position: 'absolute' as 'absolute',
-							top: '50%',
-							left: '50%',
-							transform: 'translate(-50%, -50%)',
-							width: '850px',
-							height: 800,
+							width: '100%',
+							//height: 800,
 							padding: 10,
 							overflow: 'none',
 							backgroundColor: '#222',
@@ -53,8 +60,9 @@ function App() {
 							// border: '2px solid #000',
 							border: 'none',
 							display: 'flex',
-							flexDirection: 'column',
+							flexDirection: 'row',
 							justifyContent: 'space-between',
+							flexWrap: 'wrap',
 						}}>
 						<Navbar />
 						{/* <CSSWordCloud /> */}
@@ -64,7 +72,7 @@ function App() {
 					</Paper>
 				</Grow>
 			)}
-		</>
+		</div>
 	);
 }
 

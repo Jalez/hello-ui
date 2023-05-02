@@ -39,16 +39,14 @@ export default function NavMenu({
 				flex: 1,
 				color: 'black',
 				display: 'flex',
-				width: '100%',
 				justifyContent: 'center',
 				alignItems: 'center',
 			}}>
 			<Button
 				style={{
+					border: '2px solid #111',
 					fontFamily: 'Kontakt',
-					flex: 1,
-					color: '#D4AF37',
-					backdropFilter: 'blur(1px)',
+					flex: '1 0 100%',
 					fontSize: 30,
 					// make it stronger
 					fontWeight: 'bold',

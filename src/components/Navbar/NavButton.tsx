@@ -21,8 +21,10 @@ export const NavButton = ({
 				fontFamily: 'Kontakt',
 				flex: 1,
 				color: disabled ? 'grey' : '#D4AF37',
-				backdropFilter: 'blur(1px)',
+				border: '2px solid #111',
 				fontSize: 30,
+				minWidth: 'fit-content',
+
 				// make it stronger
 				fontWeight: 'bold',
 			}}
