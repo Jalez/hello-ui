@@ -13,6 +13,12 @@ export const store = configureStore({
 		score: scoreReducer,
 		room: roomReducer,
 	},
+	middleware: (getDefaultMiddleware) =>
+		getDefaultMiddleware({
+			serializableCheck: {
+				ignoredActions: ['levels/evaluateLevel'],
+			},
+		}),
 });
 
 // Infer the `RootState` and `AppDispatch` types from the store itself

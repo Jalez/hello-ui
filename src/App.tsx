@@ -16,6 +16,7 @@ import { useState } from 'react';
 import { useAppSelector } from './store/hooks/hooks';
 import { Paper } from '@mui/material';
 import { useEffect } from 'react';
+import { LevelUpdater } from './LevelUpdater';
 
 function App() {
 	const [checked, setChecked] = useState(false);
@@ -32,6 +33,7 @@ function App() {
 
 	return (
 		<>
+			<LevelUpdater />
 			<Introduction />
 			{open && (
 				<Grow in={open} {...(checked ? { timeout: 2000 } : {})}>
