@@ -117,18 +117,25 @@ export default function Introduction() {
 												<Typography sx={{ mt: 2 }} variant='body2'>
 													Recreate the layouts provided as images using HTML and
 													CSS in the provided CSS editor. The game has two
-													tasks: <em>Task 1 and Task 2</em> You can switch
+													tasks: <em>Task 1 and Task 2</em>. You can switch
 													between the levels using the <strong>LEVELS</strong> -
-													button. Use the <strong>EVALUATE</strong>-button to
-													evaluate the precision of your HTML and CSS code. You
-													can also use the <strong>INSTRUCTIONS</strong>
-													-button to come back to this page.
+													button. You can also use the{' '}
+													<strong>INSTRUCTIONS</strong>
+													-button to come back to this page. Unlike in the past,
+													the EVALUATE-button has now been{' '}
+													<strong>removed</strong>, as the game now evaluates
+													your code automatically: you can see your progress in
+													the accuracy element, and the points you have
+													accumulated for the given task in the points element.
+													However, you still need to click the{' '}
+													<strong>PLUSSA SUBMIT BUTTON</strong> in order to save
+													the points you have accumulated once you are finished
+													with these tasks.
 												</Typography>
 												<Typography sx={{ mt: 2 }} variant='body2'>
 													Use whatever HTML and CSS techniques you know in order
-													to recreate the image on the <strong>right</strong> as
-													closely as possible with the image on the{' '}
-													<strong>left</strong>.
+													to recreate the model image as closely as possible
+													using the provided CSS editor.
 													<strong>
 														{' '}
 														It is highly advisable to use flexbox and grid
@@ -160,12 +167,11 @@ export default function Introduction() {
 															to you.
 														</li>
 														<li>
-															<strong>Evaluate your code:</strong> Upon
-															completing your work, evaluate your code using the
-															EVALUATE button. If your accuracy is 91% or above,
-															you will receive points for the level. If you
-															accuracy 98% or above, you will receive full
-															points for the level. Accuracy below 90% will
+															<strong>Evaluating your code:</strong> Evaluation
+															now happens automatically. If your accuracy is 91%
+															or above, you will receive points for the level.
+															If you accuracy 98% or above, you will receive
+															full points for the level. Accuracy below 90% will
 															result in a zero point score for the level. If you
 															refresh the page, your progress will be lost, in
 															which case you will need to evaluate your code
@@ -183,7 +189,7 @@ export default function Introduction() {
 										),
 									},
 									{
-										label: 'Remember: Evaluate & Submit',
+										label: 'Remember to Submit your work',
 										content: (
 											<>
 												<Typography sx={{ mt: 2 }} variant='body2'>

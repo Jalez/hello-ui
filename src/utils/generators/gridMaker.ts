@@ -48,14 +48,19 @@ export const generateGridLevel = (
   <div class="six">Six</div>
 </div>`,
 		TCSS: `
-.wrapper {
+body {
   background-color: ${secondaryColor};
   width: 400px;
   height: 300px;
 }
+.wrapper {
+	width: 100%;
+	height: 100%;
+}
+
 div>div {
 	background-color: ${primaryColor};
-	font-size: 2em;
+	font-size: 40px;
 	text-align: center;
 }
 
@@ -68,6 +73,7 @@ div>div:before {
 `,
 		SCSS: `
 .wrapper {
+	box-sizing: border-box;
   display: grid;
   gap: 2px;
   ${propertiesAndValues['grid-template-columns']} repeat(${columns}, 1fr);

@@ -12,6 +12,7 @@ export const InfoBoard = ({ children }: InfoBoardProps) => {
 				backgroundColor: '#1E1E1E',
 				// border: '0.5em solid #444',
 				color: 'white',
+				height: '4em',
 				width: '100%',
 				padding: '1em',
 				boxSizing: 'border-box',

@@ -37,7 +37,7 @@ export const Drawboard = () => {
 					display: 'flex',
 					justifyContent: 'center',
 					zIndex: 2,
-					backgroundColor: '#333',
+					backgroundColor: '#222',
 					height: 'fit-content',
 					margin: '0px',
 					borderBottom: '5px solid #111',
@@ -55,9 +55,9 @@ export const Drawboard = () => {
 						/
 						<LevelData reduxState='maxPoints' />
 					</InfoText>
-					<InfoText text={''}>
+					{/* <InfoText text={''}>
 						<LevelData reduxState='difficulty' />
-					</InfoText>
+					</InfoText> */}
 					<InfoText text={'Accuracy: '}>
 						<LevelData reduxState='accuracy' />
 					</InfoText>

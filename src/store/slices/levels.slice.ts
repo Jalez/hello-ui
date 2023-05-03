@@ -292,12 +292,17 @@ const levelsSlice = createSlice({
 		updateUrl(state, action) {
 			if (!action.payload) return;
 
+			console.log('UPDATING URL with payload: ', action.payload);
+
 			const { id, dataURL, urlName } = action.payload;
 			if (urlName === 'drawingUrl') state[id - 1].drawingUrl = dataURL;
 			else if (urlName === 'solutionUrl') {
 				state[id - 1].solutionUrl = dataURL;
 				// set image
 				state[id - 1].image = dataURL;
+				// Remove solution code from state if it exists
+				if (state[id - 1].solution.css) state[id - 1].solution.css = '';
+				if (state[id - 1].solution.html) state[id - 1].solution.html = '';
 			}
 			// update the code for the level in local storage
 			storage.setItem(storage.key, JSON.stringify(state));
