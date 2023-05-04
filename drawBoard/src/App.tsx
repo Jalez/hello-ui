@@ -28,7 +28,7 @@ function App() {
 			if (event.data.css) {
 				console.log('name', event.data.name);
 				console.log('received css', event.data.css);
-				let style = document.querySelector('style');
+				// let style = document.querySelector('style');
 				// If oldStyle exists, replace its innerHTML with the new css
 				// if (style) {
 				// 	// style.innerHTML = event.data.css;
@@ -59,16 +59,18 @@ function App() {
 		console.log('HEAD', document.head);
 		console.log('css', css);
 		// If there are multiple style tags, delete the old ones
-		document.head.innerHTML = `
-		<meta charset="UTF-8" />
-		<link rel="icon" type="image/svg+xml" href="/vite.svg" />
-		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>DRAW-BOARD</title>
-		<link rel="stylesheet" href="./src/App.css">
-		<style>
-		${css}
-		</style>
-		`;
+		// document.head.innerHTML = `
+		// <meta charset="UTF-8" />
+		// <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+		// <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		// <title>DRAW-BOARD</title>
+		// <link rel="stylesheet" href="./src/App.css">
+		// <style>
+		// ${css}
+		// </style>
+		// `;
+		const style = document.querySelector('style') as HTMLStyleElement;
+		style.innerHTML = css || '';
 		// const styles = document.querySelectorAll('style');
 		// if (styles.length > 1) {
 		// 	styles.forEach((style, index) => {
