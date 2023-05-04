@@ -68,7 +68,7 @@ export default function CodeEditor({
 		options: {
 			lineWrapping: true,
 			lineNumbers: true,
-			viewportMargin: Infinity,
+			// viewportMargin: Infinity,
 			readOnly: true,
 			className: 'readOnly',
 			// add any other CodeMirror options you need here
@@ -78,6 +78,7 @@ export default function CodeEditor({
 			lang,
 			EditorState.readOnly.of(locked),
 			EditorView.editable.of(!locked),
+			EditorView.lineWrapping,
 		],
 		theme: editorTheme,
 		placeholder: `Write your ${title} here...`,

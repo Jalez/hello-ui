@@ -58,9 +58,11 @@ export const Editors = () => {
 				position: 'relative',
 				// width: '100%',
 				backgroundColor: '#1E1E1E',
-				margin: '1em',
+				// margin: '1em',
+				maxWidth: '100%',
 				flexWrap: 'wrap',
 				zIndex: 1,
+				border: '5px solid #111',
 			}}>
 			<CodeEditor
 				lang={css()}

@@ -10,7 +10,7 @@ import {
 	Fade,
 	Paper,
 } from '@mui/material';
-import { CSSWordCloud } from '../CSSWordCloud/CSSWordCloud';
+
 import { Title } from '../Title/Title';
 import DynamicTabs from '../General/DynamicTabs/DynamicTabs';
 import { useAppDispatch, useAppSelector } from '../../store/hooks/hooks';
