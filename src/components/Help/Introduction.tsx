@@ -76,6 +76,8 @@ export default function Introduction() {
 		setMaskClass('hide-mask');
 	};
 
+	if (!open) return null;
+
 	return (
 		<div
 			style={{
