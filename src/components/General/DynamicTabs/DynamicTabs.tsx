@@ -56,13 +56,25 @@ export default function DynamicTabs({ style, tabs }: TabProps) {
 			<Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
 				<Tabs
 					variant='scrollable'
+					// set color to primary
+					// Set unselected tab color to secondary
+
 					scrollButtons
 					allowScrollButtonsMobile
 					value={value}
 					onChange={handleChange}
-					aria-label='basic tabs example'>
+					aria-label='
+					 tabs
+					'>
 					{tabs.map((tab, index) => (
-						<Tab label={tab.label} {...allyProps(index)} key={index} />
+						<Tab
+							// set color to primary
+							// Set unselected tab color to secondary
+							sx={{ color: 'primary.main' }}
+							label={tab.label}
+							{...allyProps(index)}
+							key={index}
+						/>
 					))}
 				</Tabs>
 			</Box>

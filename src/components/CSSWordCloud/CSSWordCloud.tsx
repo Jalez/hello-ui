@@ -13,6 +13,9 @@ export const CSSWordCloud = () => {
 				left: '0%',
 				padding: '0px',
 				margin: '0px',
+				width: '100%',
+				display: 'flex',
+				justifyContent: 'center',
 			}}>
 			<WordCloud words={cssPropertiesArray} />
 		</div>

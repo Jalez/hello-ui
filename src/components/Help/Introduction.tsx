@@ -10,6 +10,8 @@ import {
 	Fade,
 	Paper,
 } from '@mui/material';
+// Import introduction.css
+import './Introduction.css';
 
 import { Title } from '../Title/Title';
 import DynamicTabs from '../General/DynamicTabs/DynamicTabs';
@@ -18,14 +20,14 @@ import { updateRoom } from '../../store/slices/room.slice';
 import { useEffect } from 'react';
 
 const style = {
-	width: '100%',
-	maxWidth: 700,
-	height: 800,
+	// width: '100%',
+	width: 1000,
+	height: 600,
 	overflow: 'none',
-	// bgcolor: '#222',
-	bgcolor: 'white',
-	// border: '2px solid #000',
-	border: 'none',
+	bgcolor: '#222',
+	// bgcolor: '',
+	border: '5px solid #D4AF37',
+	// border: 'none',
 	boxShadow: 24,
 	p: 4,
 };
@@ -45,27 +47,49 @@ export default function Introduction() {
 	// Get current room
 	const room = useAppSelector((state) => state.room);
 	const [open, setOpen] = React.useState(false);
+	const [maskClass, setMaskClass] = React.useState('hide-mask');
 	// const handleOpen = () => setOpen(true);
-	const handleClose = () => {
-		setOpen(false);
-		setTimeout(() => {
-			dispatch(updateRoom('game'));
-		}, 400);
-	};
-	useEffect(() => {
-		if (open) {
-			dispatch(updateRoom('introduction'));
-		}
-	}, [open]);
+	// useEffect(() => {
+	// 	if (open) {
+	// 		dispatch(updateRoom('instructions'));
+	// 	}
+	// }, [open]);
 
 	useEffect(() => {
 		if (room.currentRoom === 'introduction') {
 			setOpen(true);
+			setMaskClass('show-mask');
 		}
+		console.log('room.currentRoom: ', room.currentRoom);
 	}, [room.currentRoom]);
 
+	useEffect(() => {
+		if (maskClass === 'hide-mask' && room.currentRoom === 'introduction') {
+			setTimeout(() => {
+				setOpen(false);
+				dispatch(updateRoom('game'));
+			}, 400);
+		}
+	}, [maskClass]);
+
+	const handleClose = () => {
+		setMaskClass('hide-mask');
+	};
+
 	return (
-		<>
+		<div
+			style={{
+				width: 1000,
+				height: 600,
+				position: 'absolute' as 'absolute',
+				zIndex: 3,
+				// center the element
+				top: '50%',
+				left: '50%',
+				transform: 'translate(-50%, -50%)',
+			}}
+			id='element-to-mask'
+			className={open && room.currentRoom === 'introduction' ? maskClass : ''}>
 			{/* <Fade in={open}>
 				<Paper elevation={0} sx={wordCloud}>
 					<CSSWordCloud />
@@ -74,6 +98,7 @@ export default function Introduction() {
 
 			<Fade in={open}>
 				<Paper
+					// set background color to primary
 					sx={style}
 					style={{
 						padding: 0,
@@ -95,7 +120,7 @@ export default function Introduction() {
 									padding: 0,
 									maxHeight: 400,
 									// white grey background
-									backgroundColor: '#F5F5F5',
+									backgroundColor: '#D4AF37',
 									overflow: 'auto',
 									boxShadow: '0px 2px 1px rgba(0, 0, 0, 0.25)',
 								}}
@@ -104,9 +129,9 @@ export default function Introduction() {
 										label: 'Introduction',
 										content: (
 											<Typography sx={{ mt: 2 }} variant='body2'>
-												Welcome to the UI Designer - layout edition. In these
-												tasks, we'll test your skills in using CSS to create
-												layouts .
+												Welcome to the UI Designer -{' '}
+												<strong>layout edition</strong>. In these tasks, we'll
+												test your skills in using CSS to create layouts.
 											</Typography>
 										),
 									},
@@ -197,7 +222,9 @@ export default function Introduction() {
 													Submit the score to plussa by clicking the "Submit"
 													button. If you refreshed the page at any moment in
 													time, make sure you received the points for the tasks.
-													Good luck!
+													Course Staff are available for questions during
+													official hours through the Course Teams channel. Good
+													luck!
 												</Typography>
 											</>
 										),
@@ -218,6 +245,6 @@ export default function Introduction() {
 					</div>
 				</Paper>
 			</Fade>
-		</>
+		</div>
 	);
 }

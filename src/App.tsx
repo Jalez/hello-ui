@@ -21,15 +21,15 @@ import { LevelUpdater } from './LevelUpdater';
 function App() {
 	const [checked, setChecked] = useState(false);
 	const room = useAppSelector((state) => state.room);
-	const [open, setOpen] = useState(false);
+	const [open, setOpen] = useState(true);
 
-	useEffect(() => {
-		if (room.currentRoom === 'game') {
-			setOpen(true);
-		} else {
-			setOpen(false);
-		}
-	}, [room.currentRoom]);
+	// useEffect(() => {
+	// 	if (room.currentRoom === 'game') {
+	// 		setOpen(true);
+	// 	} else {
+	// 		setOpen(false);
+	// 	}
+	// }, [room.currentRoom]);
 
 	return (
 		<div
@@ -44,7 +44,9 @@ function App() {
 				position: 'relative',
 			}}>
 			<LevelUpdater />
-			{!open && <Introduction />}
+			{/* {!open &&  */}
+			<Introduction />
+			{/* } */}
 			{open && (
 				<Grow in={open} {...(checked ? { timeout: 200 } : {})}>
 					<Paper
