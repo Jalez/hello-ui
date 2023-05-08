@@ -24,6 +24,8 @@
   margin-top: 5px;
   margin-bottom: 5px;
   padding: 0px;
+  /* flex: 1; */
+  flex-shrink: 0;
 
   height: fit-content;
   width: fit-content;

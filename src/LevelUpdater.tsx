@@ -50,10 +50,11 @@ export const LevelUpdater = () => {
 		}
 	}, [level?.solEvalUrl, level?.drawnEvalUrl]);
 	useEffect(() => {
-		console.log('updating points');
 		dispatch(updatePointsThunk(points));
 		dispatch(sendScoreToParentFrame());
 	}, [points]);
 
-	return null;
+	return <></>;
+
+	// return null;
 };

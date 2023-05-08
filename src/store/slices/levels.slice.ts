@@ -292,7 +292,7 @@ const levelsSlice = createSlice({
 		updateUrl(state, action) {
 			if (!action.payload) return;
 
-			console.log('UPDATING URL with payload: ', action.payload);
+			// console.log('UPDATING URL with payload: ', action.payload);
 
 			const { id, dataURL, urlName } = action.payload;
 			if (urlName === 'drawingUrl') state[id - 1].drawingUrl = dataURL;

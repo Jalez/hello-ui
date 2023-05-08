@@ -45,7 +45,6 @@ function App() {
 
 	useEffect(() => {
 		const board = document.getElementById('root');
-		console.log('stylesCorrect', stylesCorrect);
 		if (stylesCorrect && board) {
 			domToPng(board).then((dataURL: string) => {
 				if (counter > 0) {

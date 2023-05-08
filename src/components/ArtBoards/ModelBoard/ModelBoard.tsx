@@ -32,6 +32,8 @@ export const ModelBoard = (): JSX.Element => {
 				justifyContent: 'center',
 				alignItems: 'center',
 				flex: '1 0 auto',
+				flexShrink: 0,
+				width: 500,
 			}}>
 			<div
 				style={{
@@ -39,6 +41,7 @@ export const ModelBoard = (): JSX.Element => {
 					writingMode: 'vertical-rl',
 					textOrientation: 'upright',
 					// Make it look like a title
+					// flex: '1 0 auto',
 					fontSize: '2rem',
 					// center it
 					display: 'flex',
@@ -50,6 +53,7 @@ export const ModelBoard = (): JSX.Element => {
 					borderBottom: '5px solid #111',
 					borderTop: '5px solid #111',
 					borderLeft: '5px solid #111',
+					flexShrink: 0,
 				}}>
 				<Typography color='primary' variant='h3'>
 					Model version

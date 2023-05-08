@@ -22,7 +22,6 @@ export const WordCloud = ({ words = loremWords }: { words: string[] }) => {
 
 	useEffect(() => {
 		function draw(words: Array<String>) {
-			console.log('Gets to draw function');
 			d3.select('#cloud')
 				.append('svg')
 				.attr('width', layout.size()[0])

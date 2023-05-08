@@ -60,7 +60,6 @@ export default function Introduction() {
 			setOpen(true);
 			setMaskClass('show-mask');
 		}
-		console.log('room.currentRoom: ', room.currentRoom);
 	}, [room.currentRoom]);
 
 	useEffect(() => {

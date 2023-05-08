@@ -26,6 +26,8 @@ export const Drawboard = () => {
 				justifyContent: 'center',
 				alignItems: 'center',
 				flex: '1 0 auto',
+				flexShrink: 0,
+				width: 500,
 			}}>
 			<div
 				style={{
@@ -44,6 +46,7 @@ export const Drawboard = () => {
 					borderBottom: '5px solid #111',
 					borderTop: '5px solid #111',
 					borderLeft: '5px solid #111',
+					flexShrink: 0,
 				}}>
 				<Typography color='primary' variant='h3'>
 					Your version

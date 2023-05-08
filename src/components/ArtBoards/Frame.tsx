@@ -29,7 +29,7 @@ export const Frame = ({
 	const { currentLevel } = useSelector((state: any) => state.currentLevel);
 
 	useEffect(() => {
-		console.log('Mounted Frame.tsx');
+		// console.log('Mounted Frame.tsx');
 		const resendDataAfterMount = (event: MessageEvent) => {
 			if (event.data === 'mounted') {
 				// Send the new html and css to the iframe
@@ -57,7 +57,7 @@ export const Frame = ({
 		const handleDataFromIframe = async (event: MessageEvent) => {
 			// if (event.origin !== frameUrl) return;
 			// Check the src of the message
-			console.log('Message received with name', event.data.urlName);
+			// console.log('Message received with name', event.data.urlName);
 
 			if (!event.data.dataURL) return;
 			// What is the type of event.data.dataurl?
@@ -77,16 +77,6 @@ export const Frame = ({
 	useEffect(() => {
 		// wait for the iframe to load
 		const iframe = iframeRef.current;
-
-		// wait for the iframe to load
-		console.log(
-			'currentLevel: ',
-			currentLevel,
-			'sent newCss: ',
-			newCss,
-			'with name: ',
-			name
-		);
 
 		if (iframe) {
 			// send a message to the iframe
