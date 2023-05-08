@@ -43,7 +43,7 @@ export const ThreeNavs = () => {
 			<HelpModal />
 			{/* <NavButton clickHandler={beginEvaluation}>Evaluate</NavButton> */}
 			<NavMenu clickHandler={levelChanger} menuItems={difficulties}>
-				Levels
+				Levels1
 			</NavMenu>
 		</div>
 	);
