@@ -31,7 +31,7 @@ export const ModelBoard = (): JSX.Element => {
 				flexDirection: 'row',
 				justifyContent: 'center',
 				alignItems: 'center',
-				flex: 1,
+				flex: '1 0 auto',
 			}}>
 			<div
 				style={{
