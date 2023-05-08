@@ -10,7 +10,7 @@ const serve = serveStatic('dist', { index: ['index.html', 'index.htm'] });
 // Create server
 const server = http.createServer(function onRequest(req, res) {
 	// ('Cache-Control', 'no-cache'); to disable caching
-	res.setHeader('Cache-Control', 'no-cache');
+	// res.setHeader('Cache-Control', 'no-cache');
 	serve(req, res, finalhandler(req, res));
 });
 
