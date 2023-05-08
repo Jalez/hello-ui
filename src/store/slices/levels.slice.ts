@@ -1,7 +1,7 @@
 /** @format */
 
 import { createSlice } from '@reduxjs/toolkit';
-import placeholder from '../../assets/Placeholder.svg';
+// import placeholder from '../../assets/Placeholder.svg';
 
 const url = import.meta.env.LOCAL_TESTING_URL;
 
@@ -112,7 +112,7 @@ if (initialState.length === 0) {
 	const createLevels = () => {
 		for (let i = 1; i <= 2; i++) {
 			let randomLevel = {
-				image: placeholder,
+				image: '',
 				colors: ['#fff'],
 				pictures: [],
 			};
