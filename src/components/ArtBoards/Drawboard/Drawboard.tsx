@@ -25,6 +25,7 @@ export const Drawboard = () => {
 				flexDirection: 'row',
 				justifyContent: 'center',
 				alignItems: 'center',
+				flex: 1,
 			}}>
 			<div
 				style={{
@@ -70,7 +71,7 @@ export const Drawboard = () => {
 								style={{
 									height: '300px',
 									width: '400px',
-									overflow: 'hidden',
+									overflow: 'auto',
 								}}>
 								<Frame
 									id='DrawBoard'
