@@ -12,7 +12,7 @@ const theme = createTheme({
 	typography: {
 		h1: {
 			fontFamily: 'Kontakt',
-			fontSize: 50,
+			fontSize: 40,
 			color: '#D4AF37',
 
 			textShadow: '10px 0px 0px #222',
@@ -20,7 +20,7 @@ const theme = createTheme({
 		h2: {
 			fontFamily: 'Kontakt',
 
-			fontSize: 30,
+			fontSize: 20,
 			color: '#D4AF37',
 			textShadow: '5px 0px 0px #222',
 			// Add underline

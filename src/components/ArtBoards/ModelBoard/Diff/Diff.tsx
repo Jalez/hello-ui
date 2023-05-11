@@ -7,11 +7,9 @@ import { Buffer } from 'buffer';
 export const Diff = () => {
 	const { currentLevel } = useSelector((state: any) => state.currentLevel);
 	const level = useSelector((state: any) => state.levels[currentLevel - 1]);
-	// console.log(level.diff);
-	// console.log(level.diff.length);
+
 	useEffect(() => {
 		if (level.diff.length === 0) return;
-		// console.log('diff useEffect');
 		const diff = document.getElementById('diff');
 		if (diff) {
 			diff.innerHTML = '';
