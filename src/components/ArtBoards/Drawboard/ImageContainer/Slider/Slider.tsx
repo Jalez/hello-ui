@@ -1,10 +1,11 @@
 /** @format */
 
-import './Slider.css';
+import "./Slider.css";
 interface SliderProps {
-	sliderValue: number;
-	dragSlider: (e: any) => void;
-	resetSlider: () => void;
+  sliderValue: number;
+  dragSlider: (e: any) => void;
+  resetSlider: () => void;
+  hidden?: boolean;
 }
 
 /**
@@ -15,23 +16,24 @@ interface SliderProps {
  * @param resetSlider - the function that is called when the slider is released, ie when the mouse leaves the slider
  */
 export const Slider = ({
-	sliderValue,
-	dragSlider,
-	resetSlider,
+  sliderValue,
+  dragSlider,
+  resetSlider,
+  hidden = false,
 }: SliderProps) => {
-	return (
-		<div className='slidecontainer'>
-			<input
-				type='range'
-				min='0'
-				max='100'
-				value={sliderValue}
-				className='slider'
-				id='myRange'
-				onMouseMove={dragSlider}
-				onMouseLeave={resetSlider}
-				onChange={() => {}}
-			/>
-		</div>
-	);
+  return (
+    <div className="slidecontainer" hidden={hidden}>
+      <input
+        type="range"
+        min="0"
+        max="100"
+        value={sliderValue}
+        className="slider"
+        id="myRange"
+        onMouseMove={dragSlider}
+        onMouseLeave={resetSlider}
+        onChange={() => {}}
+      />
+    </div>
+  );
 };

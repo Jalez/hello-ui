@@ -1,55 +1,55 @@
 /** @format */
 
 const justifyContent = [
-	'justify-content:flex-start',
-	'justify-content:flex-end',
-	'justify-content:center',
-	'justify-content:space-between',
-	'justify-content:space-around',
-	'justify-content:space-evenly',
+  "justify-content:flex-start",
+  "justify-content:flex-end",
+  "justify-content:center",
+  "justify-content:space-between",
+  "justify-content:space-around",
+  "justify-content:space-evenly",
 ];
 const alignItems = [
-	'align-items:flex-start',
-	'align-items:flex-end',
-	'align-items:center',
-	'align-items:stretch',
-	'align-items:baseline',
+  "align-items:flex-start",
+  "align-items:flex-end",
+  "align-items:center",
+  "align-items:stretch",
+  "align-items:baseline",
 ];
 const alignContent = [
-	'align-content:flex-start',
-	'align-content:flex-end',
-	'align-content:center',
-	'align-content:space-between',
-	'align-content:space-around',
-	'align-content:stretch',
+  "align-content:flex-start",
+  "align-content:flex-end",
+  "align-content:center",
+  "align-content:space-between",
+  "align-content:space-around",
+  "align-content:stretch",
 ];
-const flexWrap = ['flex-wrap:wrap', 'flex-wrap:wrap-reverse'];
+const flexWrap = ["flex-wrap:wrap", "flex-wrap:wrap-reverse"];
 const flexDirection = [
-	'flex-direction:row',
-	'flex-direction:row-reverse',
-	'flex-direction:column',
-	'flex-direction:column-reverse',
+  "flex-direction:row",
+  "flex-direction:row-reverse",
+  "flex-direction:column",
+  "flex-direction:column-reverse",
 ];
 
-const flex = ['flex:1'];
+const flex = ["flex:1"];
 
 export const flexboxMaker = (primaryColor: string, secondaryColor: string) => {
-	const randomJustifyContent =
-		justifyContent[Math.floor(Math.random() * justifyContent.length)].split(
-			':'
-		)[1];
-	const randomAlignItems =
-		alignItems[Math.floor(Math.random() * alignItems.length)].split(':')[1];
-	const randomAlignContent =
-		alignContent[Math.floor(Math.random() * alignContent.length)].split(':')[1];
-	const randomFlexWrap =
-		flexWrap[Math.floor(Math.random() * flexWrap.length)].split(':')[1];
-	const randomFlexDirection =
-		flexDirection[Math.floor(Math.random() * flexDirection.length)].split(
-			':'
-		)[1];
+  const randomJustifyContent =
+    justifyContent[Math.floor(Math.random() * justifyContent.length)].split(
+      ":"
+    )[1];
+  const randomAlignItems =
+    alignItems[Math.floor(Math.random() * alignItems.length)].split(":")[1];
+  const randomAlignContent =
+    alignContent[Math.floor(Math.random() * alignContent.length)].split(":")[1];
+  const randomFlexWrap =
+    flexWrap[Math.floor(Math.random() * flexWrap.length)].split(":")[1];
+  const randomFlexDirection =
+    flexDirection[Math.floor(Math.random() * flexDirection.length)].split(
+      ":"
+    )[1];
 
-	const html = `<div class="wrapper">
+  const html = `<div class="wrapper">
   <div class="one">One</div>
   <div class="two">Two</div>
   <div class="three">Three</div>
@@ -58,7 +58,7 @@ export const flexboxMaker = (primaryColor: string, secondaryColor: string) => {
   <div class="six">Six</div>
 </div>`;
 
-	const tcss = `body {
+  const tcss = `body {
 	height: 300px;
 	width: 400px;
 	margin: 0;
@@ -82,7 +82,7 @@ div>div:before {
 	vertical-align: middle;
 }
 	`;
-	const scss = `
+  const scss = `
 .wrapper {
 	height: 300px;
 	width: 400px;
@@ -97,9 +97,12 @@ div>div {
 	${flex[Math.floor(Math.random() * flex.length)]};
 }
 `;
-	return {
-		HTML: html,
-		SCSS: scss,
-		TCSS: tcss,
-	};
+  const THTML = html;
+  const SHTML = html;
+  return {
+    THTML,
+    SHTML,
+    SCSS: scss + "\n" + tcss,
+    TCSS: tcss,
+  };
 };
