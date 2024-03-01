@@ -8,21 +8,31 @@
   height: 100%;
   overflow: hidden;
   z-index: 3;
+  /* make this unclickable */
+  /* pointer-events: n */
+  cursor: col-resize; /* Cursor on hover */
 }
 
+/* set up a variable that can be used for the location of the slider cursor */
+:root {
+  --sliderCursor: url("./arrows-resize_2.png") 65 50, auto;
+}
 
 /* The slider itself */
 .slider {
-  -webkit-appearance: none;  /* Override default CSS styles */
+  -webkit-appearance: none; /* Override default CSS styles */
   appearance: none;
-  width: 100%; 
+  width: 100%;
   height: 100%;
-  margin:0px;
+  margin: 0px;
   background: none;
+  cursor: var(--sliderCursor);
+
   /* outline: none; Remove outline */
   opacity: 0.0001; /* Set transparency (for mouse-over effects on hover) */
-  -webkit-transition: .5s; /* 0.2 seconds transition on hover */
-  transition: opacity .5s;
+  -webkit-transition: 0.5s; /* 0.2 seconds transition on hover */
+  transition: opacity 0.5s;
+  /* mouse pointer should be two arrows */
 }
 
 /* Mouse-over effects */
@@ -34,16 +44,17 @@
 .slider::-webkit-slider-thumb {
   -webkit-appearance: none; /* Override default look */
   appearance: none;
-  width: 5px; 
+  width: 4px;
   height: 300px;
-  background: #000000;
-  cursor: pointer; /* Cursor on hover */
+  /* background: #000000; */
+
+  border: none;
 }
 
 .slider::-moz-range-thumb {
   appearance: none;
-  width: 5px; /* Set a specific slider handle width */
+  width: 4px; /* Set a specific slider handle width */
   height: 300px;
-  background: #000000;
-  cursor: pointer; /* Cursor on hover */
+  /* background: #000000; */
+  border: none;
 }
