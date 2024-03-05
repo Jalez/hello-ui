@@ -1,11 +1,9 @@
-
-
 /* change scrollbar */
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
   position: absolute;
-  
+
   /* round the corners */
 }
 
@@ -16,22 +14,17 @@
   /* background: #333; */
   padding: 20px;
   position: absolute;
-
-
 }
- 
+
 /* Handle */
 ::-webkit-scrollbar-thumb {
-  background:#444; 
+  background: #444;
   /* give it a shadow */
   border-radius: 10px;
   position: absolute;
-
-
-
 }
 
 /* Handle on hover */
 ::-webkit-scrollbar-thumb:hover {
-  background: #555; 
+  background: #555;
 }

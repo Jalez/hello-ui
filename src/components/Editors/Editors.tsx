@@ -6,20 +6,15 @@ import { html } from "@codemirror/lang-html";
 import { useEffect, useState } from "react";
 import { useAppDispatch, useAppSelector } from "../../store/hooks/hooks";
 import { updateCode } from "../../store/slices/levels.slice";
-import { Slider } from "../ArtBoards/Drawboard/ImageContainer/Slider/Slider";
-import { Divider } from "@mui/material";
-
-// interface EditorsProps {
-// 	codeUpdater: (data: { html?: string; css?: string }) => void;
-// 	htmlCode: string;
-// 	cssCode: string;
-// }
+import { Slider } from "./Slider/Slider";
 
 export const Editors = () => {
   const dispatch = useAppDispatch();
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
+  const [cssEditorWidth, setCssEditorWidth] = useState<string>("49.5%");
+  const [htmlEditorWidth, setHtmlEditorWidth] = useState<string>("49.5%");
+  const [editorHeight, setEditorHeight] = useState<string>("50%");
   const levels = useAppSelector((state: any) => state.levels);
-  const [showSlider, setShowSlider] = useState<boolean>(true);
   const [htmlCode, setHTMLCode] = useState<string>(
     levels[currentLevel - 1].code.html
   );
@@ -46,60 +41,88 @@ export const Editors = () => {
     }
   };
 
+  const onSliderDrag = (e: any) => {
+    console.log("slider dragged");
+    // calculate the width of the html and css editors: CSS is on the left, HTML is on the right
+    const sliderXlocation = e.clientX;
+    const sliderWidth = window.innerWidth;
+    const cssWidth = (sliderXlocation / sliderWidth) * 100 - 0.5;
+    const htmlWidth = 100 - cssWidth - 0.5;
+    console.log("cssWidth", cssWidth, "htmlWidth", htmlWidth);
+    setCssEditorWidth(`${cssWidth}%`);
+    setHtmlEditorWidth(`${htmlWidth}%`);
+  };
+
+  const onEditorHeightSliderDrag = (e: any) => {
+    console.log("slider dragged");
+    // calculate the width of the html and css editors: CSS is on the left, HTML is on the right
+    const sliderYlocation = e.clientY;
+    const sliderHeight = window.innerHeight;
+    const height = 100 - (sliderYlocation / sliderHeight) * 100;
+    setEditorHeight(`${height}%`);
+  };
+
   return (
     <div
-      className="editors"
-      style={{
-        display: "flex",
-        flexDirection: "row",
-        alignContent: "center",
-        justifyContent: "space-between",
-        // maxWidth: '840px',
-        flex: "1 1 100%",
-        position: "relative",
-        // width: '100%',
-        backgroundColor: "#1E1E1E",
-        // margin: '1em',
-        maxWidth: "100%",
-        flexWrap: "wrap",
-        zIndex: 1,
-        border: "3px solid #111",
-      }}
+      style={{ alignSelf: "flex-end", flex: "1 1 100%", height: editorHeight }}
     >
       <Slider
         sliderValue={50}
-        dragSlider={() => {}}
+        dragSlider={onEditorHeightSliderDrag}
         resetSlider={() => {}}
-        hidden={showSlider}
+        needsPress={true}
+        orientation="horizontal"
       />
-      <CodeEditor
-        lang={css()}
-        title="CSS"
-        codeUpdater={codeUpdater}
-        template={cssCode}
-      />
-      <Divider
-        orientation="vertical"
-        flexItem
-        sx={{
-          width: "10px",
-          borderLeft: "2px solid #222",
-          backgroundColor: "#222",
-        }}
-        // onMouseEnter={() => {
-        //   console.log("mouse entered");
-        //   setShowSlider(false);
-        // }}
-      />
-      <CodeEditor
-        lang={html()}
-        title="HTML"
-        codeUpdater={codeUpdater}
-        template={htmlCode}
-        locked={false}
-      />
+      <div
+        className=""
+        style={{
+          display: "flex",
+          flexDirection: "row",
+          // alignContent: "center",
+          justifyContent: "space-between",
+          alignItems: "end",
+          // maxWidth: '840px',
+          flex: "1 1 100%",
+          position: "relative",
+          // width: '100%',
+          // backgroundColor: "#1e1e1e",
+          // margin: '1em',
+          height: "100%",
+          maxWidth: "100%",
+          flexWrap: "wrap",
+          overflow: "hidden",
+          alignSelf: "flex-end",
 
-      {/* <ButtonGroup
+          zIndex: 1,
+          // border: "3px solid #111",
+        }}
+      >
+        <CodeEditor
+          lang={css()}
+          title="CSS"
+          codeUpdater={codeUpdater}
+          template={cssCode}
+          width={cssEditorWidth}
+          locked={true}
+        />
+
+        <Slider
+          sliderValue={50}
+          dragSlider={onSliderDrag}
+          resetSlider={() => {}}
+          needsPress={true}
+          orientation="vertical"
+        />
+        <CodeEditor
+          lang={html()}
+          title="HTML"
+          codeUpdater={codeUpdater}
+          template={htmlCode}
+          locked={false}
+          width={htmlEditorWidth}
+        />
+
+        {/* <ButtonGroup
 				variant='contained'
 				aria-label='Code editor button group'
 				// color='primary'
@@ -114,8 +137,9 @@ export const Editors = () => {
 				}}>
 				<Button sx={{ flex: '1 1 auto' }} onClick={buttonClickHandler}>
 					Execute
-				</Button>
-			</ButtonGroup> */}
+          </Button>
+        </ButtonGroup> */}
+      </div>
     </div>
   );
 };

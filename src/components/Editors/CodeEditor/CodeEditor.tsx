@@ -1,19 +1,10 @@
 /** @format */
 
 import { html } from "@codemirror/lang-html";
-import { oneDark } from "@codemirror/theme-one-dark";
 import CodeMirror from "@uiw/react-codemirror";
 import { EditorView, ViewUpdate } from "@codemirror/view";
 import { EditorState } from "@codemirror/state";
-import {
-  Box,
-  Button,
-  Typography,
-  Modal,
-  Backdrop,
-  Fade,
-  Paper,
-} from "@mui/material";
+import { Typography } from "@mui/material";
 import { useEffect, useState, useRef } from "react";
 import { vscodeDark, vscodeDarkInit } from "@uiw/codemirror-theme-vscode";
 import {
@@ -29,6 +20,7 @@ interface CodeEditorProps {
   template?: string;
   codeUpdater: (data: { html?: string; css?: string }) => void;
   locked?: boolean;
+  width?: string;
 }
 
 interface CodeMirrorProps extends ReactCodeMirrorProps {
@@ -38,7 +30,8 @@ interface CodeMirrorProps extends ReactCodeMirrorProps {
     viewportMargin?: number;
     readOnly?: boolean;
     className?: string;
-
+    screenReaderLabel?: string;
+    autofocus?: boolean;
     // add any other CodeMirror options you need here
   };
 }
@@ -49,6 +42,7 @@ export default function CodeEditor({
   template = "",
   codeUpdater,
   locked = false,
+  width = "20%",
 }: CodeEditorProps) {
   const editorRef = useRef<ReactCodeMirrorRef>(null);
 
@@ -71,7 +65,10 @@ export default function CodeEditor({
       // viewportMargin: Infinity,
       readOnly: true,
       className: "readOnly",
+      screenReaderLabel: "Code Editor for " + title,
       // add any other CodeMirror options you need here
+      // height: "fit-content",
+      autofocus: locked ? false : true,
     },
     value: code,
     extensions: [
@@ -83,12 +80,16 @@ export default function CodeEditor({
     theme: editorTheme,
     placeholder: `Write your ${title} here...`,
     style: {
-      textAlign: "left",
+      // textAlign: "left",
+      // width: width,
       // maxWidth: '400%',
-      height: "100%",
       overflow: "auto",
+      // height: "400px",
       // take border width into account
       boxSizing: "border-box",
+      margin: "0",
+      padding: "0",
+      // position: "relative",
     },
     // maxHeight: '2',
     onChange: (value: string, viewUpdate: ViewUpdate) => {
@@ -99,18 +100,21 @@ export default function CodeEditor({
       setCode(value);
     },
   };
+  console.log("width", width, "locked", locked, "title", title);
 
   return (
     <div
-      className="codeEditor"
+      className="codeEditorContainer"
       style={{
-        flex: "1 1 20px",
-        // maxWidth: '50%',
-        // borderLeft: '3px solid #222',
+        display: "flex",
+        height: "100%",
+        flexDirection: "column",
+        width: width,
+        // flex: `1 ${width} 20%`,
+        // width: "49.5%",
+        // include the border width
+        // backgroundColor: "#1e1e1e",
       }}
-      title={
-        locked ? "You can't edit this code" : " Click on the code to edit it"
-      }
     >
       <Typography
         variant="h3"
@@ -121,7 +125,21 @@ export default function CodeEditor({
       >
         {title} {locked ? "(Locked)" : ""}
       </Typography>
-      <CodeMirror {...cmProps} />
+      <div
+        className="codeEditor"
+        style={{
+          // maxWidth: width,
+          flex: "1 1 20px",
+          backgroundColor: "#1e1e1e",
+          height: "100%",
+          overflow: "auto",
+        }}
+        title={
+          locked ? "You can't edit this code" : " Click on the code to edit it"
+        }
+      >
+        <CodeMirror {...cmProps} />
+      </div>
     </div>
   );
 }
