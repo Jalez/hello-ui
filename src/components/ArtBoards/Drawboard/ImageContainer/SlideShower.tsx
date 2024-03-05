@@ -43,8 +43,6 @@ export const SlideShower = ({
         sliderValue={sliderValue}
         dragSlider={dragSlider}
         resetSlider={resetSlider}
-        needsPress={false}
-        orientation="vertical"
       />
       {staticComponent}
       <div style={slidingStyle}>{slidingComponent}</div>
