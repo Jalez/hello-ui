@@ -5,7 +5,6 @@ interface SliderProps {
   sliderValue: number;
   dragSlider: (e: any) => void;
   resetSlider: () => void;
-  hidden?: boolean;
 }
 
 /**
@@ -19,10 +18,9 @@ export const Slider = ({
   sliderValue,
   dragSlider,
   resetSlider,
-  hidden = false,
 }: SliderProps) => {
   return (
-    <div className="slidecontainer" hidden={hidden}>
+    <div className="slidecontainer">
       <input
         type="range"
         min="0"
