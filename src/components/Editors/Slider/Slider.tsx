@@ -92,7 +92,7 @@ export const Slider = ({
           // dont make this occupy space
           position: "relative",
 
-          // backgroundColor: "#111",
+          backgroundColor: "#111",
           zIndex: hideSlider ? 11 : 50,
           cursor: orientation === "horizontal" ? "ns-resize" : "ew-resize",
         }}
