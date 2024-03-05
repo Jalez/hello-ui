@@ -7,11 +7,7 @@
   width: 100%;
   height: 100%;
   overflow: hidden;
-  /* opacity: 0; */
-  /* background: red; */
-  z-index: 1;
-  /* make it so that I can click past this element */
-  pointer-events: none;
+  z-index: 3;
   /* make this unclickable */
   /* pointer-events: n */
   cursor: col-resize; /* Cursor on hover */
@@ -24,16 +20,16 @@
 
 /* The slider itself */
 .slider {
-  /* display: none; */
   -webkit-appearance: none; /* Override default CSS styles */
   appearance: none;
   width: 100%;
   height: 100%;
   margin: 0px;
-  /* background: yellow; */
+  background: none;
+  cursor: var(--sliderCursor);
 
   /* outline: none; Remove outline */
-  /* opacity: 0; */
+  opacity: 0.0001; /* Set transparency (for mouse-over effects on hover) */
   -webkit-transition: 0.5s; /* 0.2 seconds transition on hover */
   transition: opacity 0.5s;
   /* mouse pointer should be two arrows */
@@ -41,43 +37,24 @@
 
 /* Mouse-over effects */
 .slider:hover {
-  opacity: 0.1;
-  display: block;
-}
-
-/* only show slider container if user hovers over the thumb */
-.slider:hover + .slidecontainer {
-  opacity: 1;
-}
-
-.slider.slider::-moz-range-thumb:hover {
-  background-color: yellow;
-  display: block;
+  opacity: 1; /* Fully shown on mouse-over */
 }
 
 /* The slider handle (use -webkit- (Chrome, Opera, Safari, Edge) and -moz- (Firefox) to override default look) */
 .slider::-webkit-slider-thumb {
   -webkit-appearance: none; /* Override default look */
   appearance: none;
-  width: 10px;
-  height: 200px;
+  width: 4px;
+  height: 300px;
   /* background: #000000; */
-  cursor: var(--sliderCursor);
 
-  z-index: 100;
   border: none;
 }
 
 .slider::-moz-range-thumb {
   appearance: none;
-
-  width: 10px; /* Set a specific slider handle width */
-  height: 100%;
-  /* no rounded corners */
-  border-radius: 0%;
-  background: #000000;
-  cursor: var(--sliderCursor);
-  z-index: 100;
-
+  width: 4px; /* Set a specific slider handle width */
+  height: 300px;
+  /* background: #000000; */
   border: none;
 }
