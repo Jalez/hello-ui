@@ -1,9 +1,7 @@
-/** @format */
-
 import { Divider } from "@mui/material";
-import "./Slider.css";
 import { useState } from "react";
 import SlideContainer from "./SlideContainer";
+
 interface SliderProps {
   sliderValue: number;
   dragSlider: (e: any) => void;
@@ -13,13 +11,6 @@ interface SliderProps {
   orientation?: "horizontal" | "vertical";
 }
 
-/**
- * The slider component
- * @description - the slider component is used to show the user how much of the image they have drawn
- * @param sliderValue - the value of the slider *
- * @param dragSlider - the function that is called when the slider is dragged, ie when the mouse is moved over the slider
- * @param resetSlider - the function that is called when the slider is released, ie when the mouse leaves the slider
- */
 export const Slider = ({
   sliderValue,
   dragSlider,
@@ -28,54 +19,59 @@ export const Slider = ({
   orientation = "vertical",
 }: SliderProps) => {
   const [hideSlider, setHideSlider] = useState<boolean>(true);
-  // create a state for listening when the mouse is pressed
   const [mousePressed, setMousePressed] = useState<boolean>(false);
   const [mouseDragged, setMouseDragged] = useState<boolean>(false);
   const [newSliderValue, setNewSliderValue] = useState<number>(sliderValue);
 
   const handleMouseDrag = (e: any) => {
     if (needsPress && mousePressed) {
+      console.log(`Mouse Drag: ${e.type}, X: ${e.clientX}, Y: ${e.clientY}`);
       setMouseDragged(true);
-      console.log("mouse dragged");
+      if (orientation === "horizontal" && e.clientY > window.innerHeight - 40) {
+        return;
+      } else if (
+        orientation === "vertical" &&
+        (e.clientX > window.innerWidth - 200 || e.clientX < 200)
+      ) {
+        return;
+      }
       dragSlider(e);
-      // give mouse x and y coordinates
-      let x = e.clientX;
-      let y = e.clientY;
-      console.log("x", x, "y", y);
-      console.log("hideSlider", hideSlider);
     }
     if (!needsPress) {
       setMouseDragged(true);
-      console.log("mouse dragged");
       dragSlider(e);
     }
-    // console.log("mouse dragged");
-    // dragSlider(e);
   };
+
   const handleMouseLeave = (e: any) => {
-    console.log("mouse left");
-    setHideSlider(true);
-    resetSlider();
-    console.log("sliderValue", sliderValue);
+    console.log(`Mouse Leave: ${e.type}, X: ${e.clientX}, Y: ${e.clientY}`);
+    if (!mouseDragged) {
+      setMousePressed(false);
+      setHideSlider(true);
+      resetSlider();
+    }
   };
 
   const handleMousePress = (e: any) => {
-    console.log("mouse pressed");
+    console.log(`Mouse Press: ${e.type}, X: ${e.clientX}, Y: ${e.clientY}`);
     setMousePressed(true);
     setHideSlider(false);
   };
 
   const handleMouseRelease = (e: any) => {
-    console.log("mouse released");
+    console.log(`Mouse Release: ${e.type}, X: ${e.clientX}, Y: ${e.clientY}`);
     setMousePressed(false);
     setMouseDragged(false);
     setHideSlider(true);
-    // set the new slider value
     const x = e.clientX;
     const sliderWidth = window.innerWidth;
-    const newSliderValue = (x / sliderWidth) * 100;
-    setNewSliderValue(newSliderValue);
+    setNewSliderValue((x / sliderWidth) * 100);
     resetSlider();
+  };
+
+  const handleMouseEnter = (e: any) => {
+    console.log(`Mouse Enter: ${e.type}, X: ${e.clientX}, Y: ${e.clientY}`);
+    if (mousePressed) setMousePressed(false);
   };
 
   return (
@@ -88,43 +84,26 @@ export const Slider = ({
           minHeight: "5px",
           height: orientation === "vertical" ? "100%" : "5px",
           width: orientation === "horizontal" ? "100%" : "5px",
-          // borderLeft: "2px solid #222",
-          // dont make this occupy space
           position: "relative",
-
           backgroundColor: "#111",
           zIndex: hideSlider ? 11 : 50,
           cursor: orientation === "horizontal" ? "ns-resize" : "ew-resize",
         }}
-        onMouseEnter={() => {
-          console.log("mouse entered");
-
-          setHideSlider(false);
-        }}
-        // listen for on drag events
-        onMouseMove={handleMouseDrag}
-        onMouseLeave={handleMouseLeave}
+        onMouseEnter={handleMouseEnter}
+        // onMouseMove={handleMouseDrag}
+        // onMouseLeave={handleMouseLeave}
         onMouseDown={handleMousePress}
-        onMouseUp={handleMouseRelease}
+        // onMouseUp={handleMouseRelease}
       />
       <SlideContainer
-        opacity={mouseDragged ? 0.25 : 0}
+        opacity={mousePressed ? 0.25 : 0}
         background={"#222"}
-        zIndex={hideSlider ? 4 : 5}
-        // hidden={hideSlider}
+        zIndex={hideSlider ? 4 : 100}
         hidden={hideSlider}
-      >
-        {/* <input
-          type="range"
-          min="0"
-          max="100"
-          value={newSliderValue}
-          className="slider"
-          id="myRange"
-          onMouseMove={handleMouseDrag}
-          onChange={() => {}}
-        /> */}
-      </SlideContainer>
+        onMouseMove={handleMouseDrag}
+        onMouseLeave={handleMouseLeave}
+        onMouseUp={handleMouseRelease}
+      ></SlideContainer>
     </>
   );
 };

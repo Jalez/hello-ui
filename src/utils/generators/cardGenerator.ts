@@ -25,6 +25,13 @@ export const cardGenerator = (primaryColor: string, secondaryColor: string) => {
     </div>`;
 
   const css = `
+
+.root {
+  margin: 0px;
+  padding: 0px;
+  overflow: hidden;
+}
+
 .custom-card {
     text-align: center;
     margin: 10px;
@@ -44,9 +51,10 @@ export const cardGenerator = (primaryColor: string, secondaryColor: string) => {
 .custom-card button {
     padding: 10px 20px;
     border: none;
-    cursor: pointer;
     text-transform: uppercase;
 }
+
+
 
 .custom-card.solid {
     background-color: ${primaryColor};

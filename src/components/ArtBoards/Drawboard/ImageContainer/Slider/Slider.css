@@ -22,6 +22,9 @@
   opacity: 0.0001; /* Set transparency (for mouse-over effects on hover) */
   -webkit-transition: 0.5s; /* 0.2 seconds transition on hover */
   transition: opacity 0.5s;
+  border-radius: 0px;
+  border: none;
+  cursor: col-resize; /* Cursor on hover */
 }
 
 /* Mouse-over effects */
@@ -33,16 +36,18 @@
 .slider::-webkit-slider-thumb {
   -webkit-appearance: none; /* Override default look */
   appearance: none;
-  width: 5px;
+  width: 2px;
   height: 300px;
   background: #000000;
-  cursor: pointer; /* Cursor on hover */
+  /* no rounded corners */
+  border-radius: 0px;
 }
 
 .slider::-moz-range-thumb {
   appearance: none;
-  width: 5px; /* Set a specific slider handle width */
+  border: none;
+  width: 2px; /* Set a specific slider handle width */
   height: 300px;
   background: #000000;
-  cursor: pointer; /* Cursor on hover */
+  border-radius: 0px;
 }

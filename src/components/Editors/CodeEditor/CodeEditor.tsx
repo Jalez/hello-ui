@@ -100,7 +100,6 @@ export default function CodeEditor({
       setCode(value);
     },
   };
-  console.log("width", width, "locked", locked, "title", title);
 
   return (
     <div
