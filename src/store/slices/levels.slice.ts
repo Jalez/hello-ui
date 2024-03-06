@@ -15,6 +15,7 @@ import { formGenerator } from "../../utils/generators/formGenerator";
 import { listGenerator } from "../../utils/generators/listGenerator";
 import { cardGenerator } from "../../utils/generators/cardGenerator";
 import { tableGenerator } from "../../utils/generators/tableGenerator";
+import { Level } from "../../types";
 
 // Remove these static width and height values
 const width = 400;
@@ -22,39 +23,7 @@ const height = 300;
 const maxCodeLength = 100000;
 
 // interface for initial state
-interface Level {
-  id: number;
-  name: string;
-  completed: string;
-  accuracy: string;
-  buildingBlocks?: {
-    pictures?: Array<string>;
-    colors?: Array<string>;
-  };
-  code: {
-    html: string;
-    css: string;
-  };
-  solution: {
-    html: string;
-    css: string;
-  };
-  image: string;
-  diff: string;
-  difficulty: string;
-  points: number;
-  maxPoints: number;
-  help: {
-    description: string;
-    images: string[];
-    usefullCSSProperties: string[];
-  };
-  drawingUrl: string;
-  solutionUrl: string;
-  drawnEvalUrl: string;
-  solEvalUrl: string;
-  confettiSprinkled: boolean;
-}
+
 const primaryColor = "#D4AF37";
 const secondaryColor = "#222";
 const initialHtml: string = `<div></div>`;
@@ -155,6 +124,16 @@ if (initialState.length === 0) {
           html: generatedLevelDetails.SHTML,
           css: generatedLevelDetails.SCSS,
         },
+        timeData: {
+          startTime: 0,
+          pointAndTime: {
+            1: 0,
+            2: 0,
+            3: 0,
+            4: 0,
+            5: 0,
+          },
+        },
       };
       initialState.push(level);
     }
@@ -216,6 +195,16 @@ if (initialState.length === 0) {
         solution: {
           html: generatedLevelDetails.SHTML,
           css: generatedLevelDetails.SCSS,
+        },
+        timeData: {
+          startTime: 0,
+          pointAndTime: {
+            1: 0,
+            2: 0,
+            3: 0,
+            4: 0,
+            5: 0,
+          },
         },
       };
       initialState.push(level);
@@ -287,16 +276,32 @@ const levelsSlice = createSlice({
         level.diff = diff.toString("base64");
         level.accuracy = percentage.toFixed(2);
 
+        const percentageTreshold = 95;
+        const percentageFullPointsTreshold = 99;
         // if percentage is over 90, use confetti
-        if (percentage > 90) {
-          if (percentage > 98 && !level.confettiSprinkled) {
+        console.log("Percentage: ", percentage);
+        if (percentage > percentageTreshold) {
+          if (
+            percentage > percentageFullPointsTreshold &&
+            !level.confettiSprinkled
+          ) {
             confetti({ particleCount: 100 });
             level.confettiSprinkled = true;
           }
           // Calculate the points based on the last 10 percent
-          const lastTenPercent = percentage - 90;
-          const lastTenPercentPercentage = lastTenPercent / 10;
-          level.points = Math.ceil(lastTenPercentPercentage * level.maxPoints);
+          const lastTenPercent = percentage - percentageTreshold;
+          const remainingPercentage = 100 - percentageTreshold;
+          const lastTenPercentPercentage = lastTenPercent / remainingPercentage;
+          const points = Math.ceil(lastTenPercentPercentage * level.maxPoints);
+          level.points = points;
+          // set the time for the level
+          const currentTime = new Date().getTime();
+          const timeAndDate = level.timeData.pointAndTime[points];
+          if (!timeAndDate || timeAndDate > currentTime) {
+            console.log("Setting time for points: ", points);
+            level.timeData.pointAndTime[points] = currentTime;
+            console.log("Current time for all points: ", level.timeData);
+          }
           // set level completed to yes
           level.completed = "yes";
         }
@@ -311,6 +316,7 @@ const levelsSlice = createSlice({
       const { currentLevel, drawnImage, solutionImage } = action.payload;
       loadAndMatch(currentLevel, drawnImage, solutionImage);
     },
+
     updateCode(state, action) {
       const { id, code } = action.payload;
       const level = state.find((level) => level.id === id);
@@ -348,6 +354,14 @@ const levelsSlice = createSlice({
       // update the code for the level in local storage
       storage.setItem(storage.key, JSON.stringify(state));
     },
+    updateTime(state, action) {
+      const { id, timeData } = action.payload;
+      const level = state.find((level) => level.id === id);
+      if (!level) return;
+      level.timeData = timeData;
+      // update the code for the level in local storage
+      storage.setItem(storage.key, JSON.stringify(state));
+    },
     updateUrl(state, action) {
       if (!action.payload) return;
 
@@ -362,6 +376,7 @@ const levelsSlice = createSlice({
         // Remove solution code from state if it exists
         if (state[id - 1].solution.css) state[id - 1].solution.css = "";
         if (state[id - 1].solution.html) state[id - 1].solution.html = "";
+        state[id - 1].timeData.startTime = new Date().getTime();
       }
       // update the code for the level in local storage
       storage.setItem(storage.key, JSON.stringify(state));

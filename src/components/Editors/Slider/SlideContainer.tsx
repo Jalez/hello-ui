@@ -7,6 +7,9 @@ interface SlideContainerProps {
   zIndex: number;
   children?: React.ReactNode;
   hidden?: boolean;
+  onMouseMove?: (event: React.MouseEvent<HTMLDivElement, MouseEvent>) => void;
+  onMouseLeave?: (event: React.MouseEvent<HTMLDivElement, MouseEvent>) => void;
+  onMouseUp?: (event: React.MouseEvent<HTMLDivElement, MouseEvent>) => void;
 }
 
 const SlideContainer: FC<SlideContainerProps> = styled(

@@ -19,14 +19,10 @@ const AppStyle = {
   width: "100%",
   height: "100vh",
   backgroundColor: "yellow",
-  maxHeight: "100vh",
+  // maxHeight: "100vh",
 };
 
 function App() {
-  const onSliderDrag = (value: number) => {
-    console.log("slider dragged", value);
-  };
-
   return (
     <div id="App" style={AppStyle}>
       <LevelUpdater />

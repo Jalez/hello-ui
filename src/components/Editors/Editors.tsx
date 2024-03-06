@@ -42,20 +42,16 @@ export const Editors = () => {
   };
 
   const onSliderDrag = (e: any) => {
-    console.log("slider dragged");
     // calculate the width of the html and css editors: CSS is on the left, HTML is on the right
     const sliderXlocation = e.clientX;
     const sliderWidth = window.innerWidth;
     const cssWidth = (sliderXlocation / sliderWidth) * 100 - 0.5;
     const htmlWidth = 100 - cssWidth - 0.5;
-    console.log("cssWidth", cssWidth, "htmlWidth", htmlWidth);
     setCssEditorWidth(`${cssWidth}%`);
     setHtmlEditorWidth(`${htmlWidth}%`);
   };
 
   const onEditorHeightSliderDrag = (e: any) => {
-    console.log("slider dragged");
-    // calculate the width of the html and css editors: CSS is on the left, HTML is on the right
     const sliderYlocation = e.clientY;
     const sliderHeight = window.innerHeight;
     const height = 100 - (sliderYlocation / sliderHeight) * 100;
@@ -64,7 +60,13 @@ export const Editors = () => {
 
   return (
     <div
-      style={{ alignSelf: "flex-end", flex: "1 1 100%", height: editorHeight }}
+      style={{
+        alignSelf: "flex-end",
+        flex: "1 1 100%",
+        height: editorHeight,
+        // backgroundColor: "#1e1e1e",
+        margin: "0",
+      }}
     >
       <Slider
         sliderValue={50}
@@ -85,7 +87,7 @@ export const Editors = () => {
           flex: "1 1 100%",
           position: "relative",
           // width: '100%',
-          // backgroundColor: "#1e1e1e",
+          backgroundColor: "#1e1e1e",
           // margin: '1em',
           height: "100%",
           maxWidth: "100%",
