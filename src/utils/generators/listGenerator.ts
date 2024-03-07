@@ -5,10 +5,13 @@ const listStyles = ["bullet", "numbered", "interactive", "minimal"];
 const listColors = ["red", "blue", "green", "purple", "orange"];
 
 export const listGenerator = (primaryColor: string, secondaryColor: string) => {
+  const currentTime = new Date();
+  const hour = currentTime.getHours();
+  const timeIndex = Math.floor(hour / 2);
+
+  const selectedStyle = listStyles[timeIndex % listStyles.length];
   // Randomly select style and a subset of list items
-  const selectedStyle =
-    listStyles[Math.floor(Math.random() * listStyles.length)];
-  const selectedItems = listItems.sort(() => 0.5 - Math.random()).slice(0, 3);
+  const selectedItems = listItems;
 
   // Generate HTML for list items, with one item appearing as hovered
   const itemsHTML = selectedItems
