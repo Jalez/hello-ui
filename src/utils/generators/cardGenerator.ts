@@ -8,15 +8,16 @@ const cardStyles = ["solid", "outlined", "rounded", "minimal"];
 const buttonTypes = ["More Info", "Buy Now", "Learn More"];
 
 export const cardGenerator = (primaryColor: string, secondaryColor: string) => {
-  // Randomly select title, content, style, and button text
-  const selectedTitle =
-    cardTitles[Math.floor(Math.random() * cardTitles.length)];
-  const selectedContent =
-    cardContents[Math.floor(Math.random() * cardContents.length)];
-  const selectedStyle =
-    cardStyles[Math.floor(Math.random() * cardStyles.length)];
-  const selectedButtonText =
-    buttonTypes[Math.floor(Math.random() * buttonTypes.length)];
+  // Determine the current time and assign indexes based on time intervals
+  const currentTime = new Date();
+  const hour = currentTime.getHours();
+  const timeIndex = Math.floor(hour / 2);
+
+  // Select content based on time index
+  const selectedTitle = cardTitles[timeIndex % cardTitles.length];
+  const selectedContent = cardContents[timeIndex % cardContents.length];
+  const selectedStyle = cardStyles[timeIndex % cardStyles.length];
+  const selectedButtonText = buttonTypes[timeIndex % buttonTypes.length];
 
   const html = `<div class="custom-card ${selectedStyle}" id="card-${selectedStyle}">
         <h2>${selectedTitle}</h2>

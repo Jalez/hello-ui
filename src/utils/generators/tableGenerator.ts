@@ -12,8 +12,13 @@ export const tableGenerator = (
   primaryColor: string,
   secondaryColor: string
 ) => {
-  const selectedStyle =
-    tableStyles[Math.floor(Math.random() * tableStyles.length)];
+  const currentTime = new Date();
+  const hour = currentTime.getHours();
+  const timeIndex = Math.floor(hour / 2);
+
+  // Select content based on time index
+
+  const selectedStyle = tableStyles[timeIndex % tableStyles.length];
 
   // Generate table headers
   const headersHTML = tableHeaders

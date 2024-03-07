@@ -12,12 +12,11 @@ import { ArtContainer } from "../ArtContainer";
 import { Frame } from "../Frame";
 import "./Drawboard.css";
 import { SlideShower } from "./ImageContainer/SlideShower";
-import { Typography } from "@mui/material";
 import { BoardTitle } from "../BoardTitle";
 import { BoardContainer } from "../BoardContainer";
 import { Board } from "../Board";
-import ErrorBoundary from "./ErrorBoundary";
 import { InfoTime } from "../../InfoBoard/InfoTime";
+import Shaker from "../../General/Shaker/Shaker";
 
 export const Drawboard = (): JSX.Element => {
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
@@ -29,11 +28,17 @@ export const Drawboard = (): JSX.Element => {
       <Board>
         <InfoBoard>
           <InfoText>
-            Points: <LevelData reduxState="points" /> /{" "}
-            <LevelData reduxState="maxPoints" />
+            Points:{" "}
+            <Shaker value={level.points}>
+              <LevelData reduxState="points" /> /{" "}
+              <LevelData reduxState="maxPoints" />
+            </Shaker>
           </InfoText>
           <InfoText>
-            Time: <InfoTime />
+            Time:{" "}
+            <Shaker value={level.timeData.pointAndTime[level.points]}>
+              <InfoTime />
+            </Shaker>
           </InfoText>
           {/* <InfoText>
             Accuracy: <LevelData reduxState="accuracy" />%
