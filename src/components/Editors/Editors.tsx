@@ -15,18 +15,17 @@ export const Editors = () => {
   const [htmlEditorWidth, setHtmlEditorWidth] = useState<string>("49.5%");
   const [editorHeight, setEditorHeight] = useState<string>("50%");
   const levels = useAppSelector((state: any) => state.levels);
-  const [htmlCode, setHTMLCode] = useState<string>(
-    levels[currentLevel - 1].code.html
-  );
-  const [cssCode, setCSSCode] = useState<string>(
-    levels[currentLevel - 1].code.css
-  );
+  const [htmlCode, setHTMLCode] = useState<string>("");
+  const [cssCode, setCSSCode] = useState<string>("");
 
   useEffect(() => {
+    if (!levels[currentLevel - 1]) return;
     setHTMLCode(levels[currentLevel - 1].code.html);
     setCSSCode(levels[currentLevel - 1].code.css);
-  }, [currentLevel]);
+  }, [currentLevel, levels]);
+
   const codeUpdater = (data: { html?: string; css?: string }) => {
+    if (!levels[currentLevel - 1]) return;
     dispatch(
       updateCode({
         id: currentLevel,

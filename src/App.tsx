@@ -10,10 +10,12 @@ import { LevelUpdater } from "./LevelUpdater";
 import { GameContainer } from "./GameContainer";
 import { Slider } from "./components/ArtBoards/Drawboard/ImageContainer/Slider/Slider";
 import { InfoBoard } from "./components/InfoBoard/InfoBoard";
-import { useAppSelector } from "./store/hooks/hooks";
+import { useAppDispatch, useAppSelector } from "./store/hooks/hooks";
 import InfoInstructions from "./components/InfoBoard/InfoInstructions";
 import { InfoQuestionAndAnswer } from "./components/InfoBoard/InfoQuestionAndAnswer";
 import { CSSWordCloud } from "./components/CSSWordCloud/CSSWordCloud";
+import { useEffect } from "react";
+import levelsSlice, { updateWeek } from "./store/slices/levels.slice";
 
 const AppStyle = {
   display: "flex",
@@ -32,28 +34,47 @@ function App() {
   const currentLevel = useAppSelector(
     (state) => state.currentLevel.currentLevel
   );
-  const level = useAppSelector((state) => state.levels[currentLevel - 1]);
+  const levels = useAppSelector((state) => state.levels);
+  const dispatch = useAppDispatch();
+
+  useEffect(() => {
+    console.log("APP MOUNTED");
+    // once it's mounted, send a message to the parent window
+    window.parent.postMessage(
+      {
+        message: "loaded",
+      },
+      "*"
+    );
+
+    // listen for messages from the parent window
+    window.addEventListener("message", (event) => {
+      // console.log("EVENT", event);
+      if (event.data.message === "setWeek") {
+        dispatch(updateWeek(event.data.week));
+      }
+    });
+  }, []);
 
   return (
     <article id="App" style={AppStyle}>
       <LevelUpdater />
       <Instruction />
       <GameContainer>
-        <Navbar />
-        <div
-        // style={{
-        //   zIndex: 10,
-        // }}
-        >
-          <InfoBoard>
-            <InfoInstructions />
-            <InfoQuestionAndAnswer />
-          </InfoBoard>
-        </div>
-        <ArtBoards />
-        <CSSWordCloud />
+        {levels.length > 0 && (
+          <>
+            <Navbar />
 
-        <Editors />
+            <InfoBoard>
+              <InfoInstructions />
+              <InfoQuestionAndAnswer />
+            </InfoBoard>
+            <ArtBoards />
+            <CSSWordCloud />
+
+            <Editors />
+          </>
+        )}
       </GameContainer>
     </article>
   );

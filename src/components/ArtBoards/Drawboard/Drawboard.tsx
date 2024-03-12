@@ -21,6 +21,7 @@ import Shaker from "../../General/Shaker/Shaker";
 export const Drawboard = (): JSX.Element => {
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const level = useAppSelector((state) => state.levels[currentLevel - 1]);
+  if (!level) return <div>loading...</div>;
 
   return (
     <BoardContainer>
