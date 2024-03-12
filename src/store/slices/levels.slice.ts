@@ -6,61 +6,18 @@ import { createSlice } from "@reduxjs/toolkit";
 const url = import.meta.env.LOCAL_TESTING_URL;
 
 import confetti from "canvas-confetti";
-import { generateGridLevel } from "../../utils/generators/gridMaker";
-import { flexboxMaker } from "../../utils/generators/flexboxMaker";
 import { obfuscate } from "../../utils/obfuscators/obfuscate";
 import Pixelmatch from "pixelmatch";
 import { Buffer } from "buffer";
-import { formGenerator } from "../../utils/generators/formGenerator";
-import { listGenerator } from "../../utils/generators/listGenerator";
-import { cardGenerator } from "../../utils/generators/cardGenerator";
-import { tableGenerator } from "../../utils/generators/tableGenerator";
 import { Level } from "../../types";
-import { mainColor, secondaryColor } from "../../constants";
+import { createLevels } from "../../utils/LevelCreator";
 
 // Remove these static width and height values
-const width = 400;
-const height = 300;
+
 const maxCodeLength = 100000;
 
 // interface for initial state
-const initialHtml: string = `<div></div>`;
-const initialCss: string = `body {
-	margin: 0px;
-	background-color: ${secondaryColor};
-}
-div {
-	width: 100px;
-	height: 50px;
-	background-color: ${mainColor};
-}`;
-const initialCode = {
-  html: initialHtml,
-  css: initialCss,
-};
 
-const initialDefaults = {
-  completed: "no",
-  accuracy: "0",
-  code: initialCode,
-  points: 0,
-  maxPoints: 5,
-  diff: "",
-  drawingUrl: "",
-  solutionUrl: "",
-  drawnEvalUrl: "",
-  solEvalUrl: "",
-  solution: {
-    html: "",
-    css: "",
-  },
-  confettiSprinkled: false,
-  instructions: "No instructions available",
-  question_and_answer: {
-    question: "No question available",
-    answer: "No answer available",
-  },
-};
 const storage = obfuscate("ui-designer-layout-levels");
 const timerStorage = obfuscate("ui-designer-start-time");
 
@@ -81,143 +38,25 @@ if (lastUpdated && currentTime - parseInt(lastUpdated) > twhours) {
   timerStorage.setItem(timerStorage.key, currentTime.toString());
 }
 
-// if there is no initial state, set it to the default state
-if (initialState.length === 0) {
-  console.log("There's no initial state, setting it to default");
+// // if there is no initial state, set it to the default state
+// if (initialState.length === 0) {
+//   console.log("There's no initial state, setting it to default");
+// } else {
+//   // if there is an initial state, set the code to the initial code
+//   initialState.forEach((level) => {
+//     level.points = 0;
+//     level.accuracy = "0";
+//   });
+// }
 
-  const createExamLevels = () => {
-    for (let i = 1; i <= 2; i++) {
-      let randomLevel = {
-        image: "",
-        colors: ["#fff"],
-        pictures: [],
-      };
-      let difficulty = i === 1 ? "Task 1" : 2 === 2 ? "Task 2" : "Task 3";
-      let generatedLevelDetails;
-      // If the level is one, lets give them flexbox
-      if (i === 1) {
-        generatedLevelDetails = flexboxMaker(mainColor, secondaryColor);
-      }
-      // if the level is 2, lets give them grid
-      else {
-        generatedLevelDetails = generateGridLevel(mainColor, secondaryColor);
-      }
-
-      const level = {
-        id: i,
-        name: `Level ${i}`,
-
-        buildingBlocks: {
-          pictures: randomLevel.pictures,
-          colors: [mainColor, secondaryColor],
-        },
-        ...initialDefaults,
-        code: {
-          html: generatedLevelDetails.THTML,
-          css: generatedLevelDetails.TCSS,
-        },
-        image: "",
-        difficulty,
-        help: {
-          description: "NO help available",
-          images: [],
-          usefullCSSProperties: [],
-        },
-        solution: {
-          html: generatedLevelDetails.SHTML,
-          css: generatedLevelDetails.SCSS,
-        },
-        timeData: {
-          startTime: 0,
-          pointAndTime: {
-            1: 0,
-            2: 0,
-            3: 0,
-            4: 0,
-            5: 0,
-          },
-        },
-      };
-      initialState.push(level);
-    }
-  };
-
-  const createLevels = () => {
-    for (let i = 1; i <= 4; i++) {
-      let randomLevel = {
-        image: "",
-        colors: ["#fff"],
-        pictures: [],
-      };
-
-      let generatedLevelDetails;
-      // If the level is one, lets give them flexbox
-      if (i === 1) {
-        generatedLevelDetails = cardGenerator(mainColor, secondaryColor);
-      }
-      // if the level is 2, lets give them grid
-      else if (i === 2) {
-        generatedLevelDetails = formGenerator(mainColor, secondaryColor);
-      }
-      // if the level is 3, lets give them list
-      else if (i === 3) {
-        generatedLevelDetails = listGenerator(mainColor, secondaryColor);
-      } else {
-        generatedLevelDetails = tableGenerator(mainColor, secondaryColor);
-      }
-      const level = {
-        id: i,
-        name: `Level ${i}`,
-
-        buildingBlocks: {
-          pictures: randomLevel.pictures,
-          colors: [mainColor, secondaryColor],
-        },
-        ...initialDefaults,
-        code: {
-          html: generatedLevelDetails.THTML,
-          css: generatedLevelDetails.TCSS,
-        },
-        image: "",
-        difficulty: generatedLevelDetails.difficulty,
-        instructions: generatedLevelDetails.instructions,
-        question_and_answer: generatedLevelDetails.question_and_answer,
-        help: {
-          description: "NO help available",
-          images: [],
-          usefullCSSProperties: [],
-        },
-        solution: {
-          html: generatedLevelDetails.SHTML,
-          css: generatedLevelDetails.SCSS,
-        },
-        timeData: {
-          startTime: 0,
-          pointAndTime: {
-            1: 0,
-            2: 0,
-            3: 0,
-            4: 0,
-            5: 0,
-          },
-        },
-      };
-      initialState.push(level);
-    }
-  };
-
-  createLevels();
-} else {
-  // if there is an initial state, set the code to the initial code
-  initialState.forEach((level) => {
-    level.points = 0;
-    level.accuracy = "0";
-  });
-}
+const parseStorage = (storage: any) => {
+  const parsedStorage = JSON.parse(storage.getItem(storage.key) || "[]");
+  return parsedStorage;
+};
 
 const levelsSlice = createSlice({
   name: "levels",
-  initialState: initialState as Level[],
+  initialState: parseStorage(storage) as Level[],
 
   reducers: {
     evaluateLevel(state, action) {
@@ -273,8 +112,7 @@ const levelsSlice = createSlice({
 
         const percentageTreshold = 95;
         const percentageFullPointsTreshold = 99;
-        // if percentage is over 90, use confetti
-        console.log("Percentage: ", percentage);
+        // if percentage is over percentageFullPointsTreshold, use confetti
         if (percentage > percentageTreshold) {
           if (
             percentage > percentageFullPointsTreshold &&
@@ -311,6 +149,23 @@ const levelsSlice = createSlice({
       const { currentLevel, drawnImage, solutionImage } = action.payload;
       loadAndMatch(currentLevel, drawnImage, solutionImage);
     },
+    // update week (if there is no week in the state already)
+    updateWeek(state, action) {
+      const week = action.payload;
+      if (storage.getItem(storage.key)) {
+        state = JSON.parse(storage.getItem(storage.key) || "[]");
+      }
+      // if levels have already been created, do nothing
+      if (state.length > 0) {
+        console.log("Levels have already been created!");
+        return;
+      }
+      // otherwise, create the levels
+      const levels = createLevels(week) as Level[];
+      state = levels;
+      storage.setItem(storage.key, JSON.stringify(state));
+      return state;
+    },
 
     updateCode(state, action) {
       const { id, code } = action.payload;
@@ -326,7 +181,7 @@ const levelsSlice = createSlice({
       }
 
       if (code.css.includes(level?.image) || code.html.includes(level?.image)) {
-        console.log("Using the solutions own image url isn't allowed!");
+        console.log("Note: Using the solutions own image url isn't allowed!");
         return;
       }
 
@@ -387,7 +242,12 @@ const levelsSlice = createSlice({
   },
 });
 
-export const { updateCode, updateUrl, updateEvaluationUrl, evaluateLevel } =
-  levelsSlice.actions;
+export const {
+  updateCode,
+  updateUrl,
+  updateEvaluationUrl,
+  evaluateLevel,
+  updateWeek,
+} = levelsSlice.actions;
 
 export default levelsSlice.reducer;

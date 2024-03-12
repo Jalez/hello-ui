@@ -5,6 +5,7 @@ type question_and_answer = {
 };
 
 export interface Level {
+  week: string;
   id: number;
   name: string;
   completed: string;
