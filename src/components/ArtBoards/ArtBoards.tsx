@@ -21,7 +21,7 @@ export const ArtBoards = (): JSX.Element => {
         <Drawboard />
         <ModelBoard />
       </BoardsContainer>
-      <CSSWordCloud />
+      {/* <CSSWordCloud /> */}
     </div>
   );
 };

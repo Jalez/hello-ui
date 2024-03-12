@@ -40,9 +40,9 @@ export const Drawboard = (): JSX.Element => {
               <InfoTime />
             </Shaker>
           </InfoText>
-          {/* <InfoText>
-            Accuracy: <LevelData reduxState="accuracy" />%
-          </InfoText> */}
+          <InfoText>
+            <LevelData reduxState="accuracy" />%
+          </InfoText>
         </InfoBoard>
         <ArtContainer>
           <SlideShower

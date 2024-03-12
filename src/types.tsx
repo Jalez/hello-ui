@@ -1,3 +1,9 @@
+type instructions = string;
+type question_and_answer = {
+  question: string;
+  answer: string;
+};
+
 export interface Level {
   id: number;
   name: string;
@@ -36,4 +42,6 @@ export interface Level {
   drawnEvalUrl: string;
   solEvalUrl: string;
   confettiSprinkled: boolean;
+  instructions: instructions;
+  question_and_answer: question_and_answer;
 }
