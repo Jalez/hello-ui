@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port 3500",
+    "dev1": "vite --port 3600",
     "start": "node server.cjs",
-    "build": "tsc && vite build --base '/drawboard' ",
+    "build": "tsc && vite build --base '/drawboard2' ",
     "preview": "vite preview"
   },
   "dependencies": {

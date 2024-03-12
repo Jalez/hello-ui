@@ -1,37 +1,31 @@
 /** @format */
 
-import { Button } from '@mui/material';
+import { Button } from "@mui/material";
 
 // create interface for props
 interface NavButtonProps {
-	clickHandler: any;
-	children: any;
-	disabled?: boolean;
+  clickHandler: any;
+  children: any;
+  disabled?: boolean;
 }
 
+const btnStyle = {
+  fontFamily: "Kontakt",
+  flex: 1,
+  border: "2px solid #111",
+  fontSize: 30,
+  minWidth: "fit-content",
+  fontWeight: "bold",
+};
+
 export const NavButton = ({
-	clickHandler,
-	children,
-	disabled,
+  clickHandler,
+  children,
+  disabled,
 }: NavButtonProps) => {
-	return (
-		<Button
-			onClick={clickHandler}
-			style={{
-				fontFamily: 'Kontakt',
-				flex: 1,
-				color: disabled ? 'grey' : 'black',
-			}}
-			disabled={disabled}>
-			<span
-				style={{
-					backdropFilter: 'blur(1px)',
-					fontSize: 30,
-					// make it stronger
-					fontWeight: 'bold',
-				}}>
-				{children}
-			</span>
-		</Button>
-	);
+  return (
+    <Button onClick={clickHandler} style={btnStyle} disabled={disabled}>
+      {children}
+    </Button>
+  );
 };
