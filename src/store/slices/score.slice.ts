@@ -6,7 +6,7 @@ const scoreSlice = createSlice({
 	name: 'score',
 	initialState: {
 		points: 0,
-		maxPoints: 20,
+		maxPoints: 10,
 	},
 	reducers: {
 		updatePoints: (state, action) => {

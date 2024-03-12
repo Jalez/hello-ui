@@ -17,8 +17,8 @@ RUN npm install -g npm@latest \
 # Bundle app source
 COPY . .
 RUN rm -fr ./drawBoard \
-  && sed -i 's#http://localhost:3500#https://tie-lukioplus.rd.tuni.fi/drawboard#' src/components/ArtBoards/Frame.tsx \
-  && sed -i 's#http://localhost:3500#https://tie-lukioplus.rd.tuni.fi/drawboard#' src/components/ArtBoards/Drawboard/Drawboard.tsx \
+  && sed -i 's#http://localhost:3500#https://tie-lukioplus.rd.tuni.fi/drawboard2#' src/components/ArtBoards/Frame.tsx \
+  && sed -i 's#http://localhost:3500#https://tie-lukioplus.rd.tuni.fi/drawboard2#' src/components/ArtBoards/Drawboard/Drawboard.tsx \
   && echo LOCAL_TESTING_URL="https://tie-lukioplus.rd.tuni.fi" >./.env \
   && echo LOCAL_TESTING_URL="https://tie-lukioplus.rd.tuni.fi" >./.env.example \
   && npm run build \

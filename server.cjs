@@ -1,3 +1,5 @@
+/** @format */
+
 const finalhandler = require('finalhandler');
 const http = require('http');
 const serveStatic = require('serve-static');
@@ -6,8 +8,10 @@ const serveStatic = require('serve-static');
 const serve = serveStatic('dist', { index: ['index.html', 'index.htm'] });
 
 // Create server
-const server = http.createServer(function onRequest (req, res) {
-  serve(req, res, finalhandler(req, res));
+const server = http.createServer(function onRequest(req, res) {
+	// ('Cache-Control', 'no-cache'); to disable caching
+	// res.setHeader('Cache-Control', 'no-cache');
+	serve(req, res, finalhandler(req, res));
 });
 
 // Listen

@@ -1,0 +1,61 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+.element {
+  position: fixed;
+	width: 75%;
+	aspect-ratio: 2/1;
+	z-index: 3;
+}
+
+.mask-container {
+  position: relative;
+}
+
+#element-to-mask {
+  background-color: black;
+  -webkit-mask-image: url("../../assets/5x3-41.png");
+  -webkit-mask-size: cover;
+  -webkit-mask-position: 0% 0%;
+  mask-image: url("../../assets/5x3-41.png");
+  mask-size: cover;
+  mask-position: 0% 0%;
+
+  transition: 
+    -webkit-mask-position, mask-position;
+}
+
+.show-mask {
+  animation: 
+    addMask 500ms steps(41) forwards;
+}
+
+@keyframes addMask {
+  0% {
+    -webkit-mask-position: 0% 0%;
+    mask-position: 0% 0%;
+  }
+  100% {
+    -webkit-mask-position: 100% 0%;
+    mask-position: 100% 0%;
+  }
+}
+
+.hide-mask {
+  animation: 
+    removeMask 500ms steps(41) backwards;
+}
+
+@keyframes removeMask {
+  0% {
+    -webkit-mask-position: 100% 0%;
+    mask-position: 100% 0%;
+  }
+  100% {
+    -webkit-mask-position: 0% 0%;
+    mask-position: 0% 0%;
+  }
+}

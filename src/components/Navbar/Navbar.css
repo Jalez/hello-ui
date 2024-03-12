@@ -2,11 +2,13 @@
   /* backdrop-filter: invert(100%); */
   height: fit-content;
   /* background-color: rgba(255, 255, 255, 0.5); */
+  flex: 1 0 100%;
+  z-index: 2;
 
 }
 
 button {
-  color: black;
+  color: rgb(255, 255, 255);
 
 }
 

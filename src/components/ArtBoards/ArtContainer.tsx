@@ -11,6 +11,8 @@ export const ArtContainer = ({ children }: ArtContainerProps) => {
 			style={{
 				position: 'relative',
 				height: '300px',
+				width: '400px',
+				zIndex: 2,
 			}}>
 			{children}
 		</div>
