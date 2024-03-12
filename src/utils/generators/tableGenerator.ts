@@ -20,6 +20,11 @@ export const tableGenerator = (
 
   const selectedStyle = tableStyles[timeIndex % tableStyles.length];
 
+  const instructions = `Create a table that uses the ${selectedStyle} class, with the headers and data in the picture. The table should have the correct class names and semantic tags to style the table and its content. For instance, the semantic tags "table", "thead", "tbody", "tr", "th", and "td" should be present, each included with appropriate child elements. You can look at the stylesheet and provided picture for reference.`;
+  const question_and_answer = {
+    question: "What are tables in html?",
+    answer: `HTML tables allow web developers to arrange data into rows and columns. They are used to display data in a tabular format and are created using the <table> tag. The <tr> tag is used to define the rows of the table, and the <td> tag is used to define the data cells. The <th> tag is used to define the header cells of the table. The <thead>, <tbody>, and <tfoot> tags are used to group the header, body, and footer of the table, respectively.`,
+  };
   // Generate table headers
   const headersHTML = tableHeaders
     .map((header) => `<th>${header}</th>`)
@@ -43,6 +48,12 @@ export const tableGenerator = (
     </table>`;
 
   const css = `
+body {    
+  margin: 0px;
+  padding: 0px;
+  overflow: hidden;
+  background-color: ${secondaryColor};
+}
 .custom-table {
     width: 100%;
     border-collapse: collapse;
@@ -78,5 +89,8 @@ export const tableGenerator = (
     SHTML: html,
     TCSS: css,
     SCSS: css,
+    difficulty: "table",
+    instructions,
+    question_and_answer,
   };
 };

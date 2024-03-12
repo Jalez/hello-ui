@@ -16,6 +16,7 @@ import { listGenerator } from "../../utils/generators/listGenerator";
 import { cardGenerator } from "../../utils/generators/cardGenerator";
 import { tableGenerator } from "../../utils/generators/tableGenerator";
 import { Level } from "../../types";
+import { mainColor, secondaryColor } from "../../constants";
 
 // Remove these static width and height values
 const width = 400;
@@ -23,9 +24,6 @@ const height = 300;
 const maxCodeLength = 100000;
 
 // interface for initial state
-
-const primaryColor = "#D4AF37";
-const secondaryColor = "#222";
 const initialHtml: string = `<div></div>`;
 const initialCss: string = `body {
 	margin: 0px;
@@ -34,7 +32,7 @@ const initialCss: string = `body {
 div {
 	width: 100px;
 	height: 50px;
-	background-color: ${primaryColor};
+	background-color: ${mainColor};
 }`;
 const initialCode = {
   html: initialHtml,
@@ -57,6 +55,11 @@ const initialDefaults = {
     css: "",
   },
   confettiSprinkled: false,
+  instructions: "No instructions available",
+  question_and_answer: {
+    question: "No question available",
+    answer: "No answer available",
+  },
 };
 const storage = obfuscate("ui-designer-layout-levels");
 const timerStorage = obfuscate("ui-designer-start-time");
@@ -93,11 +96,11 @@ if (initialState.length === 0) {
       let generatedLevelDetails;
       // If the level is one, lets give them flexbox
       if (i === 1) {
-        generatedLevelDetails = flexboxMaker(primaryColor, secondaryColor);
+        generatedLevelDetails = flexboxMaker(mainColor, secondaryColor);
       }
       // if the level is 2, lets give them grid
       else {
-        generatedLevelDetails = generateGridLevel(primaryColor, secondaryColor);
+        generatedLevelDetails = generateGridLevel(mainColor, secondaryColor);
       }
 
       const level = {
@@ -106,7 +109,7 @@ if (initialState.length === 0) {
 
         buildingBlocks: {
           pictures: randomLevel.pictures,
-          colors: [primaryColor, secondaryColor],
+          colors: [mainColor, secondaryColor],
         },
         ...initialDefaults,
         code: {
@@ -146,31 +149,21 @@ if (initialState.length === 0) {
         colors: ["#fff"],
         pictures: [],
       };
-      console.log("i: ", i);
-      let difficulty =
-        i === 1 ? "card" : i === 2 ? "form" : i === 3 ? "list" : "table";
-      console.log("difficulty: ", difficulty);
-
-      // // If the level is 1, get random easy level and set difficulty to easy
-      // if (i === 1) {
-      // 	randomLevel = levels[i][Math.floor(Math.random() * levels[i].length)];
-      // 	difficulty = 1 === 1 ? 'easy' : 2 === 2 ? 'medium' : 'hard';
-      // }
 
       let generatedLevelDetails;
       // If the level is one, lets give them flexbox
       if (i === 1) {
-        generatedLevelDetails = cardGenerator(primaryColor, secondaryColor);
+        generatedLevelDetails = cardGenerator(mainColor, secondaryColor);
       }
       // if the level is 2, lets give them grid
       else if (i === 2) {
-        generatedLevelDetails = formGenerator(primaryColor, secondaryColor);
+        generatedLevelDetails = formGenerator(mainColor, secondaryColor);
       }
       // if the level is 3, lets give them list
       else if (i === 3) {
-        generatedLevelDetails = listGenerator(primaryColor, secondaryColor);
+        generatedLevelDetails = listGenerator(mainColor, secondaryColor);
       } else {
-        generatedLevelDetails = tableGenerator(primaryColor, secondaryColor);
+        generatedLevelDetails = tableGenerator(mainColor, secondaryColor);
       }
       const level = {
         id: i,
@@ -178,7 +171,7 @@ if (initialState.length === 0) {
 
         buildingBlocks: {
           pictures: randomLevel.pictures,
-          colors: [primaryColor, secondaryColor],
+          colors: [mainColor, secondaryColor],
         },
         ...initialDefaults,
         code: {
@@ -186,7 +179,9 @@ if (initialState.length === 0) {
           css: generatedLevelDetails.TCSS,
         },
         image: "",
-        difficulty,
+        difficulty: generatedLevelDetails.difficulty,
+        instructions: generatedLevelDetails.instructions,
+        question_and_answer: generatedLevelDetails.question_and_answer,
         help: {
           description: "NO help available",
           images: [],

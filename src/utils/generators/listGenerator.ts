@@ -13,6 +13,12 @@ export const listGenerator = (primaryColor: string, secondaryColor: string) => {
   // Randomly select style and a subset of list items
   const selectedItems = listItems;
 
+  const instructions = `Create a list that uses the ${selectedStyle} class, with the items in the picture. The list should have the correct class names and semantic tags to style the list and its content. For instance, the semantic tags "ul" and "li" should be present, each included with appropriate child elements. You can look at the stylesheet and provided picture for reference.`;
+  const question_and_answer = {
+    question: "What are lists in html?",
+    answer: `Lists in HTML are used to present list of information in well formed and semantic way. There are three different types of lists in HTML and each one has a specific purpose and meaning. The three types of lists are: ordered list, unordered list, and definition list.`,
+  };
+
   // Generate HTML for list items, with one item appearing as hovered
   const itemsHTML = selectedItems
     .map(
@@ -28,6 +34,14 @@ export const listGenerator = (primaryColor: string, secondaryColor: string) => {
 </${listTag}>`;
 
   const css = `
+
+body {    
+  margin: 0px;
+  padding: 0px;
+  overflow: hidden;
+  background-color: ${secondaryColor};
+}
+
 .custom-list {
     list-style-type: ${selectedStyle === "bullet" ? "disc" : "none"};
     padding-left: 20px;
@@ -69,5 +83,8 @@ export const listGenerator = (primaryColor: string, secondaryColor: string) => {
     SHTML: html,
     TCSS: css,
     SCSS: css,
+    difficulty: "list",
+    instructions,
+    question_and_answer,
   };
 };
