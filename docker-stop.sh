@@ -1,1 +1,1 @@
-docker stop cssartist2 && docker container rm cssartist2
+docker stop cssartist && docker container rm cssartist

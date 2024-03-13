@@ -1,1 +1,1 @@
-docker stop drawboard2 && docker container rm drawboard2
+docker stop drawboard && docker container rm drawboard
