@@ -44,6 +44,27 @@
     globalThis.import_meta_env = JSON.parse('"import_meta_env_placeholder"');
   </script>
   <script type="module" src="/src/main.tsx"></script>
+  <script>
+    let lastHeight = 0;
+    const maxHeight = 3000;
+
+    const resizeObserver = new ResizeObserver(entries => {
+      for (let entry of entries) {
+        const currentHeight = entry.target.scrollHeight;
+
+        if (lastHeight !== currentHeight && currentHeight < maxHeight) {
+          window.parent.postMessage({
+            action: 'resizeIframe',
+            frameHeight: currentHeight
+          }, '*');  // Replace '*' with the origin of the parent window for better security if known
+
+          lastHeight = currentHeight;
+        }
+      }
+    });
+
+    resizeObserver.observe(document.body);
+  </script>
 </body>
 
 </html>

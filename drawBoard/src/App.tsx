@@ -19,6 +19,7 @@ function App() {
         setUrlName(event.data.name);
       }
       if (event.data.html) {
+        console.log("Drawboard HTML: ", event.data.html);
         // turn the string into a ReactNode element and set it as the state of the component
         setHtml(<kbd dangerouslySetInnerHTML={{ __html: event.data.html }} />);
       }

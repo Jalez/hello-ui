@@ -20,6 +20,7 @@ export const CSSWordCloud = () => {
         justifyContent: "center",
         alignItems: "center",
         height: "100%",
+        overflow: "hidden",
       }}
     >
       <WordCloud words={htmlElementsArray} />

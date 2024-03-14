@@ -25,7 +25,6 @@ export const Slider = ({
 
   const handleMouseDrag = (e: any) => {
     if (needsPress && mousePressed) {
-      console.log(`Mouse Drag: ${e.type}, X: ${e.clientX}, Y: ${e.clientY}`);
       setMouseDragged(true);
       if (orientation === "horizontal" && e.clientY > window.innerHeight - 40) {
         return;
@@ -44,7 +43,6 @@ export const Slider = ({
   };
 
   const handleMouseLeave = (e: any) => {
-    console.log(`Mouse Leave: ${e.type}, X: ${e.clientX}, Y: ${e.clientY}`);
     if (!mouseDragged) {
       setMousePressed(false);
       setHideSlider(true);
@@ -53,13 +51,11 @@ export const Slider = ({
   };
 
   const handleMousePress = (e: any) => {
-    console.log(`Mouse Press: ${e.type}, X: ${e.clientX}, Y: ${e.clientY}`);
     setMousePressed(true);
     setHideSlider(false);
   };
 
   const handleMouseRelease = (e: any) => {
-    console.log(`Mouse Release: ${e.type}, X: ${e.clientX}, Y: ${e.clientY}`);
     setMousePressed(false);
     setMouseDragged(false);
     setHideSlider(true);
@@ -70,7 +66,6 @@ export const Slider = ({
   };
 
   const handleMouseEnter = (e: any) => {
-    console.log(`Mouse Enter: ${e.type}, X: ${e.clientX}, Y: ${e.clientY}`);
     if (mousePressed) setMousePressed(false);
   };
 

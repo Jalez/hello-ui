@@ -13,6 +13,6 @@ export const InfoTime = () => {
 
   const start = level.timeData.startTime;
   const completionTime = level.timeData.pointAndTime[level.points];
-  const timeInMinutes = numberTimeToMinutesAndSeconds(completionTime - start);
-  return <>{timeInMinutes}</>;
+
+  return <>{completionTime}</>;
 };

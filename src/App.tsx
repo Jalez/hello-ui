@@ -8,14 +8,13 @@ import { ArtBoards } from "./components/ArtBoards/ArtBoards";
 import Instruction from "./components/Help/Instruction";
 import { LevelUpdater } from "./LevelUpdater";
 import { GameContainer } from "./GameContainer";
-import { Slider } from "./components/ArtBoards/Drawboard/ImageContainer/Slider/Slider";
 import { InfoBoard } from "./components/InfoBoard/InfoBoard";
 import { useAppDispatch, useAppSelector } from "./store/hooks/hooks";
 import InfoInstructions from "./components/InfoBoard/InfoInstructions";
 import { InfoQuestionAndAnswer } from "./components/InfoBoard/InfoQuestionAndAnswer";
 import { CSSWordCloud } from "./components/CSSWordCloud/CSSWordCloud";
 import { useEffect } from "react";
-import levelsSlice, { updateWeek } from "./store/slices/levels.slice";
+import { updateWeek } from "./store/slices/levels.slice";
 
 const AppStyle = {
   display: "flex",
@@ -26,6 +25,7 @@ const AppStyle = {
   width: "100%",
   height: "100vh",
   border: "10px solid black",
+  // give it a shadow
   // backgroundColor: "yellow",
   // maxHeight: "100vh",
 };
@@ -38,22 +38,11 @@ function App() {
   const dispatch = useAppDispatch();
 
   useEffect(() => {
-    console.log("APP MOUNTED");
     // once it's mounted, send a message to the parent window
-    window.parent.postMessage(
-      {
-        message: "loaded",
-      },
-      "*"
-    );
-
-    // listen for messages from the parent window
-    window.addEventListener("message", (event) => {
-      // console.log("EVENT", event);
-      if (event.data.message === "setWeek") {
-        dispatch(updateWeek(event.data.week));
-      }
-    });
+    // look at the url params to determine the week
+    const urlParams = new URLSearchParams(window.location.search);
+    const week = urlParams.get("week");
+    dispatch(updateWeek(week));
   }, []);
 
   return (

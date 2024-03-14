@@ -49,7 +49,7 @@ export const WordCloud = ({ words = loremWords }: { words: string[] }) => {
     }
     // create a d3 cloud layout
     const layout = d3Cloud()
-      .size([2000, 1050])
+      .size([1500, 800])
       .words(
         words.map(function (d: string) {
           return { text: d, size: 15 + Math.random() * 30, test: "haha" };
