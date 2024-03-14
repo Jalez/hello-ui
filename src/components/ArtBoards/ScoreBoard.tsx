@@ -13,19 +13,11 @@ const ScoreBoard = () => {
     (state) => state.levels[currentLevel - 1]
   ) as Level;
 
-  const numberTimeToMinutesAndSeconds = (time: number) => {
-    if (time < 0) return "0:00";
-    const minutes = Math.floor(time / 60000);
-    const seconds = ((time % 60000) / 1000).toFixed(0);
-    return minutes + ":" + (parseInt(seconds) < 10 ? "0" : "") + seconds;
-  };
-
   const showTimeData = (level: Level) => {
     return Object.entries(level.timeData.pointAndTime).map(([key, value]) => {
       return (
         <InfoText key={key}>
-          {key}:{" "}
-          {numberTimeToMinutesAndSeconds(value - level.timeData.startTime)}
+          {key}: {value}
         </InfoText>
       );
     });

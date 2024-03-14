@@ -5,7 +5,6 @@ import "./ArtBoard.css";
 import { Drawboard } from "./Drawboard/Drawboard";
 import { ModelBoard } from "./ModelBoard/ModelBoard";
 import { BoardsContainer } from "./BoardsContainer";
-import ScoreBoard from "./ScoreBoard";
 
 const artBoardStyle = {
   position: "relative" as const,
