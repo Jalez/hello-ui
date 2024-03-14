@@ -26,11 +26,11 @@ const ShakerBase = styled("span")(({ shouldAnimate }: ShakerBaseProps) => ({
 
 type ShakerProps = {
   children: ReactNode;
-  value: number;
+  value: string | number;
 };
 
 const Shaker = ({ children, value }: ShakerProps) => {
-  const [prevValue, setPrevValue] = useState(0);
+  const [prevValue, setPrevValue] = useState<string | number>(value);
   const [shouldAnimate, setShouldAnimate] = useState(true);
 
   useEffect(() => {

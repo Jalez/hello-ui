@@ -30,6 +30,7 @@ export const Frame = ({
   useEffect(() => {
     const resendDataAfterMount = (event: MessageEvent) => {
       if (event.data === "mounted") {
+        console.log("Sending html to drawboard: ", newHtml);
         iframeRef.current?.contentWindow?.postMessage(
           {
             html: newHtml,
@@ -46,7 +47,7 @@ export const Frame = ({
     return () => {
       window.removeEventListener("message", resendDataAfterMount);
     };
-  }, []);
+  }, [newHtml, newCss, name]);
 
   useEffect(() => {
     const handleDataFromIframe = async (event: MessageEvent) => {

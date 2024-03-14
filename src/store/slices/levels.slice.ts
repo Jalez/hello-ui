@@ -11,6 +11,8 @@ import Pixelmatch from "pixelmatch";
 import { Buffer } from "buffer";
 import { Level } from "../../types";
 import { createLevels } from "../../utils/LevelCreator";
+import { numberTimeToMinutesAndSeconds } from "../../utils/numberTimeToMinutesAndSeconds";
+import { drawBoardWidth, drawBoardheight, gameMaxTime } from "../../constants";
 
 // Remove these static width and height values
 
@@ -27,27 +29,12 @@ let initialState: Level[] = JSON.parse(storage.getItem(storage.key) || "[]");
 const currentTime = new Date().getTime();
 // get the time the user started the game
 const lastUpdated = timerStorage.getItem(timerStorage.key);
-// if the user started the game more than 12 hours ago, reset the state
-const twhours = 43200000;
-// for testing purposes, set the time to 1 second
-// const twhours = 1000;
-if (lastUpdated && currentTime - parseInt(lastUpdated) > twhours) {
+if (lastUpdated && currentTime - parseInt(lastUpdated) > gameMaxTime) {
   initialState = [];
   timerStorage.setItem(timerStorage.key, currentTime.toString());
 } else if (!lastUpdated) {
   timerStorage.setItem(timerStorage.key, currentTime.toString());
 }
-
-// // if there is no initial state, set it to the default state
-// if (initialState.length === 0) {
-//   console.log("There's no initial state, setting it to default");
-// } else {
-//   // if there is an initial state, set the code to the initial code
-//   initialState.forEach((level) => {
-//     level.points = 0;
-//     level.accuracy = "0";
-//   });
-// }
 
 const parseStorage = (storage: any) => {
   const parsedStorage = JSON.parse(storage.getItem(storage.key) || "[]");
@@ -61,8 +48,6 @@ const levelsSlice = createSlice({
   reducers: {
     evaluateLevel(state, action) {
       const getPixelData = (img = new Image()) => {
-        // return new Promise((resolve, reject) => {
-        // Create a canvas element
         const canvas = document.createElement("canvas");
         // Set the width and height of the canvas to the width and height of the image
         canvas.width = img.width;
@@ -72,7 +57,12 @@ const levelsSlice = createSlice({
         // Draw the image on the canvas
         ctx?.drawImage(img, 0, 0);
         // Get the image data from the canvas
-        const imgData = ctx?.getImageData(0, 0, 400, 300);
+        const imgData = ctx?.getImageData(
+          0,
+          0,
+          drawBoardWidth,
+          drawBoardheight
+        );
         // Resolve the promise with the image data
         return imgData;
         // });
@@ -84,7 +74,6 @@ const levelsSlice = createSlice({
         drawnImage: HTMLImageElement,
         solutionImage: HTMLImageElement
       ) => {
-        // console.log('COMPARING IMAGES: ', level?.solutionUrl, level?.drawingUrl);
         // set the src of the image to the data url
         const img1Data = getPixelData(drawnImage) as ImageData;
         const img2Data = getPixelData(solutionImage) as ImageData;
@@ -126,14 +115,17 @@ const levelsSlice = createSlice({
           const remainingPercentage = 100 - percentageTreshold;
           const lastTenPercentPercentage = lastTenPercent / remainingPercentage;
           const points = Math.ceil(lastTenPercentPercentage * level.maxPoints);
+          if (points < level.points) return; // if points are less than the current points, do nothing
           level.points = points;
           // set the time for the level
           const currentTime = new Date().getTime();
           const timeAndDate = level.timeData.pointAndTime[points];
-          if (!timeAndDate || timeAndDate > currentTime) {
-            console.log("Setting time for points: ", points);
-            level.timeData.pointAndTime[points] = currentTime;
-            console.log("Current time for all points: ", level.timeData);
+          if (timeAndDate == "0:0" || !timeAndDate) {
+            // console.log("Setting time for points: ", points);
+            level.timeData.pointAndTime[points] = numberTimeToMinutesAndSeconds(
+              currentTime - level.timeData.startTime
+            );
+            // console.log("Current time for all points: ", level.timeData);
           }
           // set level completed to yes
           level.completed = "yes";
@@ -170,8 +162,8 @@ const levelsSlice = createSlice({
     updateCode(state, action) {
       const { id, code } = action.payload;
       const level = state.find((level) => level.id === id);
-      // check that code doesnt contain level solution in it
-      //check if html or css length is over 100000, do nothing
+
+      if (!level) return;
       if (
         (code.html && code.html.length > maxCodeLength) ||
         (code.css && code.css.length > maxCodeLength)
@@ -180,42 +172,26 @@ const levelsSlice = createSlice({
         return;
       }
 
-      if (code.css.includes(level?.image) || code.html.includes(level?.image)) {
+      if (
+        level?.image &&
+        (code.css.includes(level?.image) || code.html.includes(level?.image))
+      ) {
         console.log("Note: Using the solutions own image url isn't allowed!");
         return;
       }
 
-      // cant include "script" in code
-      if (code.html.includes("script")) {
+      if (code.html.includes("<script>")) {
         console.log("Using scripts isn't allowed!");
         return;
       }
 
-      if (!level) return;
+      console.log("UPDATING CODE FOR LEVEL", id);
+      console.log("NEW CODE", code.html);
       level.code = code;
-      // update the code for the level in local storage
-      storage.setItem(storage.key, JSON.stringify(state));
-    },
-    updateSolution(state, action) {
-      const { id, solution } = action.payload;
-      const level = state.find((level) => level.id === id);
-      if (!level) return;
-      // level.solution = solution;
-      // update the code for the level in local storage
-      storage.setItem(storage.key, JSON.stringify(state));
-    },
-    updateTime(state, action) {
-      const { id, timeData } = action.payload;
-      const level = state.find((level) => level.id === id);
-      if (!level) return;
-      level.timeData = timeData;
-      // update the code for the level in local storage
       storage.setItem(storage.key, JSON.stringify(state));
     },
     updateUrl(state, action) {
       if (!action.payload) return;
-
-      // console.log('UPDATING URL with payload: ', action.payload);
 
       const { id, dataURL, urlName } = action.payload;
       if (urlName === "drawingUrl") state[id - 1].drawingUrl = dataURL;

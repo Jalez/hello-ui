@@ -30,7 +30,7 @@ export interface Level {
   timeData: {
     startTime: number;
     pointAndTime: {
-      [key: string]: number;
+      [key: string]: string;
     };
   };
   help: {

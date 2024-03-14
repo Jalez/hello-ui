@@ -17,12 +17,16 @@ export const Editors = () => {
   const levels = useAppSelector((state: any) => state.levels);
   const [htmlCode, setHTMLCode] = useState<string>("");
   const [cssCode, setCSSCode] = useState<string>("");
+  const [lastHeight, setLastHeight] = useState<number>(
+    document.body.scrollHeight
+  );
+  const [maxPercentage, setMaxPercentage] = useState<number>(0);
 
   useEffect(() => {
     if (!levels[currentLevel - 1]) return;
     setHTMLCode(levels[currentLevel - 1].code.html);
     setCSSCode(levels[currentLevel - 1].code.css);
-  }, [currentLevel, levels]);
+  }, [currentLevel]);
 
   const codeUpdater = (data: { html?: string; css?: string }) => {
     if (!levels[currentLevel - 1]) return;
@@ -32,20 +36,14 @@ export const Editors = () => {
         code: { ...levels[currentLevel - 1].code, ...data },
       })
     );
-    if (data.html) {
-      setHTMLCode(data.html);
-    }
-    if (data.css) {
-      setCSSCode(data.css);
-    }
   };
 
   const onSliderDrag = (e: any) => {
     // calculate the width of the html and css editors: CSS is on the left, HTML is on the right
     const sliderXlocation = e.clientX;
     const sliderWidth = window.innerWidth;
-    const cssWidth = (sliderXlocation / sliderWidth) * 100 - 0.5;
-    const htmlWidth = 100 - cssWidth - 0.5;
+    const htmlWidth = (sliderXlocation / sliderWidth) * 100 - 0.5;
+    const cssWidth = 100 - htmlWidth - 0.5;
     setCssEditorWidth(`${cssWidth}%`);
     setHtmlEditorWidth(`${htmlWidth}%`);
   };
@@ -53,8 +51,37 @@ export const Editors = () => {
   const onEditorHeightSliderDrag = (e: any) => {
     const sliderYlocation = e.clientY;
     const sliderHeight = window.innerHeight;
-    const height = 100 - (sliderYlocation / sliderHeight) * 100;
-    setEditorHeight(`${height}%`);
+    const newMaxPercentage = 100 - (sliderYlocation / sliderHeight) * 100;
+    const maxHeight = 2000;
+    //if the slider is less than the max height OR it is decreasing in size
+    if (sliderHeight < maxHeight || newMaxPercentage < maxPercentage) {
+      setEditorHeight(`${newMaxPercentage}%`);
+      const currentHeight = document.body.scrollHeight;
+      console.log(
+        "currentHeight",
+        currentHeight,
+        "maxHeight",
+        maxHeight,
+        "sliderHeight",
+        sliderHeight
+      );
+      if (lastHeight !== currentHeight && currentHeight == maxHeight) {
+        setMaxPercentage(newMaxPercentage);
+      }
+
+      if (lastHeight !== currentHeight && currentHeight < maxHeight) {
+        window.parent.postMessage(
+          {
+            action: "resizeIframe",
+            frameHeight: currentHeight,
+          },
+          "*"
+        ); // Replace '*' with the origin of the parent window for better security if known
+
+        setLastHeight(currentHeight);
+      }
+      console.log("currentHeight", currentHeight);
+    }
   };
 
   return (
@@ -79,15 +106,11 @@ export const Editors = () => {
         style={{
           display: "flex",
           flexDirection: "row",
-          // alignContent: "center",
           justifyContent: "space-between",
           alignItems: "end",
-          // maxWidth: '840px',
           flex: "1 1 100%",
           position: "relative",
-          // width: '100%',
           backgroundColor: "#1e1e1e",
-          // margin: '1em',
           height: "100%",
           maxWidth: "100%",
           flexWrap: "wrap",
@@ -95,16 +118,15 @@ export const Editors = () => {
           alignSelf: "flex-end",
 
           zIndex: 1,
-          // border: "3px solid #111",
         }}
       >
         <CodeEditor
-          lang={css()}
-          title="CSS"
+          lang={html()}
+          title="HTML"
           codeUpdater={codeUpdater}
-          template={cssCode}
-          width={cssEditorWidth}
-          locked={true}
+          template={htmlCode}
+          locked={false}
+          width={htmlEditorWidth}
         />
 
         <Slider
@@ -115,31 +137,13 @@ export const Editors = () => {
           orientation="vertical"
         />
         <CodeEditor
-          lang={html()}
-          title="HTML"
+          lang={css()}
+          title="CSS"
           codeUpdater={codeUpdater}
-          template={htmlCode}
-          locked={false}
-          width={htmlEditorWidth}
+          template={cssCode}
+          width={cssEditorWidth}
+          locked={true}
         />
-
-        {/* <ButtonGroup
-				variant='contained'
-				aria-label='Code editor button group'
-				// color='primary'
-				sx={{
-					display: 'flex',
-					flexDirection: 'row',
-					alignContent: 'center',
-					justifyContent: 'space-between',
-					flexWrap: 'wrap',
-					borderRadius: '0',
-					bgcolor: '#35393C',
-				}}>
-				<Button sx={{ flex: '1 1 auto' }} onClick={buttonClickHandler}>
-					Execute
-          </Button>
-        </ButtonGroup> */}
       </div>
     </div>
   );

@@ -48,11 +48,30 @@ export default function CodeEditor({
 
   const [code, setCode] = useState<string>(template);
 
+  const handleCodeUpdate = (value: string) => {
+    if (!locked) {
+      // console.log("Code updated: ", value);
+      setCode(value);
+    }
+  };
+
   useEffect(() => {
-    codeUpdater({ [title.toLowerCase()]: code });
+    console.log("Code changed");
+    let timer: NodeJS.Timeout | null = null;
+    if (code !== "") {
+      timer = setTimeout(() => {
+        codeUpdater({ [title.toLowerCase()]: code });
+
+        // console.log("Updating in state");
+      }, 200);
+    }
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
   }, [code]);
 
   useEffect(() => {
+    console.log("Template changed");
     setCode(template);
   }, [template]);
 
@@ -80,25 +99,13 @@ export default function CodeEditor({
     theme: editorTheme,
     placeholder: `Write your ${title} here...`,
     style: {
-      // textAlign: "left",
-      // width: width,
-      // maxWidth: '400%',
       overflow: "auto",
-      // height: "400px",
-      // take border width into account
       boxSizing: "border-box",
       margin: "0",
       padding: "0",
-      // position: "relative",
     },
-    // maxHeight: '2',
-    onChange: (value: string, viewUpdate: ViewUpdate) => {
-      if (locked) {
-        console.log("changed", value);
-        setCode(code);
-      }
-      setCode(value);
-    },
+
+    onChange: handleCodeUpdate,
   };
 
   return (
