@@ -56,7 +56,6 @@ export default function CodeEditor({
   };
 
   useEffect(() => {
-    console.log("Code changed");
     let timer: NodeJS.Timeout | null = null;
     if (code !== "") {
       timer = setTimeout(() => {
@@ -71,7 +70,6 @@ export default function CodeEditor({
   }, [code]);
 
   useEffect(() => {
-    console.log("Template changed");
     setCode(template);
   }, [template]);
 

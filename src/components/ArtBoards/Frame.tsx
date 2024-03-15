@@ -30,7 +30,6 @@ export const Frame = ({
   useEffect(() => {
     const resendDataAfterMount = (event: MessageEvent) => {
       if (event.data === "mounted") {
-        console.log("Sending html to drawboard: ", newHtml);
         iframeRef.current?.contentWindow?.postMessage(
           {
             html: newHtml,
