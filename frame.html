@@ -17,13 +17,11 @@
 
   window.addEventListener('message', receiveMessage, false);
   function receiveMessage(event) {
-    console.log("received message", event.data)
+    //console.log("received message", event.data)
     if (event.data.message === "loaded") {
-      console.log("")
       setWeek("html_2_es"); //_es (exercise session), _vh (viikkoharkka), _ex (tentti)
     }
     if (event.data.message === "s") {
-      console.log("received points", event.data.d)
       //Decode the base64 data
       const data = atob(event.data.d);
       document.querySelector('#data').value = event.data;

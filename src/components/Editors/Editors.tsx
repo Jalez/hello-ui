@@ -57,14 +57,7 @@ export const Editors = () => {
     if (sliderHeight < maxHeight || newMaxPercentage < maxPercentage) {
       setEditorHeight(`${newMaxPercentage}%`);
       const currentHeight = document.body.scrollHeight;
-      console.log(
-        "currentHeight",
-        currentHeight,
-        "maxHeight",
-        maxHeight,
-        "sliderHeight",
-        sliderHeight
-      );
+
       if (lastHeight !== currentHeight && currentHeight == maxHeight) {
         setMaxPercentage(newMaxPercentage);
       }
@@ -80,7 +73,6 @@ export const Editors = () => {
 
         setLastHeight(currentHeight);
       }
-      console.log("currentHeight", currentHeight);
     }
   };
 

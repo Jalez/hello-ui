@@ -149,7 +149,7 @@ const levelsSlice = createSlice({
       }
       // if levels have already been created, do nothing
       if (state.length > 0) {
-        console.log("Levels have already been created!");
+        console.error("Levels have already been created!");
         return;
       }
       // otherwise, create the levels
@@ -168,7 +168,7 @@ const levelsSlice = createSlice({
         (code.html && code.html.length > maxCodeLength) ||
         (code.css && code.css.length > maxCodeLength)
       ) {
-        console.log("Code is too long!");
+        console.error("Code is too long!");
         return;
       }
 
@@ -176,17 +176,15 @@ const levelsSlice = createSlice({
         level?.image &&
         (code.css.includes(level?.image) || code.html.includes(level?.image))
       ) {
-        console.log("Note: Using the solutions own image url isn't allowed!");
+        console.error("Note: Using the solutions own image url isn't allowed!");
         return;
       }
 
       if (code.html.includes("<script>")) {
-        console.log("Using scripts isn't allowed!");
+        console.error("Using scripts isn't allowed!");
         return;
       }
 
-      console.log("UPDATING CODE FOR LEVEL", id);
-      console.log("NEW CODE", code.html);
       level.code = code;
       storage.setItem(storage.key, JSON.stringify(state));
     },
