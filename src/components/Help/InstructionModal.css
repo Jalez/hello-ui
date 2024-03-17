@@ -6,9 +6,9 @@
 
 .element {
   position: fixed;
-	width: 75%;
-	aspect-ratio: 2/1;
-	z-index: 3;
+  width: 75%;
+  aspect-ratio: 2/1;
+  z-index: 3;
 }
 
 .mask-container {
@@ -24,13 +24,11 @@
   mask-size: cover;
   mask-position: 0% 0%;
 
-  transition: 
-    -webkit-mask-position, mask-position;
+  transition: -webkit-mask-position, mask-position;
 }
 
 .show-mask {
-  animation: 
-    addMask 500ms steps(41) forwards;
+  animation: addMask 1000ms steps(41) forwards;
 }
 
 @keyframes addMask {
@@ -45,8 +43,7 @@
 }
 
 .hide-mask {
-  animation: 
-    removeMask 500ms steps(41) backwards;
+  animation: removeMask 1000ms steps(41) backwards;
 }
 
 @keyframes removeMask {

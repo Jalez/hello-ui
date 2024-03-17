@@ -1,12 +1,14 @@
 /** @format */
-
 import { useEffect, useRef } from "react";
 import { useSelector } from "react-redux";
+import { styled } from "@mui/system";
 import { updateUrl } from "../../store/slices/levels.slice";
 import { useAppDispatch } from "../../store/hooks/hooks";
-// import my redux store
+import {
+  drawBoardWidth,
+  drawBoardheight, // Corrected the variable name
+} from "../../constants";
 
-// prop types
 interface FrameProps {
   newHtml: string;
   newCss: string;
@@ -14,6 +16,16 @@ interface FrameProps {
   name: string;
   frameUrl?: string;
 }
+
+const StyledIframe = styled("iframe")(({ theme }) => ({
+  width: `${drawBoardWidth}px`,
+  height: `${drawBoardheight}px`, // Corrected the variable name
+  overflow: "hidden",
+  margin: "0",
+  padding: "0",
+  border: "none",
+  backgroundColor: theme.palette.secondary.main, // Assuming secondaryColor corresponds to secondary color in the theme
+}));
 
 export const Frame = ({
   id,
@@ -78,20 +90,5 @@ export const Frame = ({
     }
   }, [newHtml, newCss, iframeRef, currentLevel]);
 
-  return (
-    <iframe
-      id={id}
-      ref={iframeRef}
-      src={frameUrl}
-      style={{
-        width: "400px",
-        height: "300px",
-        overflow: "hidden",
-        margin: "0",
-        padding: "0",
-        border: "none",
-        backgroundColor: "#2b2b2e",
-      }}
-    ></iframe>
-  );
+  return <StyledIframe id={id} ref={iframeRef} src={frameUrl}></StyledIframe>;
 };

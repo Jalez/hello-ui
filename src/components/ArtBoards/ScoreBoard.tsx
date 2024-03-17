@@ -6,12 +6,15 @@ import { useAppSelector } from "../../store/hooks/hooks";
 import { Level } from "../../types";
 import { InfoText } from "../InfoBoard/InfoText";
 import { BoardsContainer } from "./BoardsContainer";
+import { mainColor, secondaryColor } from "../../constants";
+import { useTheme } from "@mui/material/styles";
 
 const ScoreBoard = () => {
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const level = useAppSelector(
     (state) => state.levels[currentLevel - 1]
   ) as Level;
+  const theme = useTheme();
 
   const showTimeData = (level: Level) => {
     return Object.entries(level.timeData.pointAndTime).map(([key, value]) => {
@@ -24,22 +27,18 @@ const ScoreBoard = () => {
   };
   const timeData = showTimeData(level);
 
+  const paperStyle: React.CSSProperties = {
+    backgroundColor: theme.palette.secondary.main, // use secondary color from theme
+    padding: "1em",
+    color: theme.palette.primary.main, // use primary color from theme
+  };
+
   return (
     <BoardsContainer>
       <BoardContainer>
         <BoardTitle side="left">Points</BoardTitle>
         <Board>
-          <Paper
-            sx={{
-              backgroundColor: "#222",
-              padding: "1em",
-              //   margin: "1em",
-              color: "white",
-              //   height: "100%",
-            }}
-          >
-            {timeData}
-          </Paper>
+          <Paper sx={paperStyle}>{timeData}</Paper>
         </Board>
         <BoardTitle side="right">Time</BoardTitle>
       </BoardContainer>

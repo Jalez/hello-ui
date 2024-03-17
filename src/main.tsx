@@ -1,63 +1,66 @@
-/** @format */
-
 import React from "react";
 import ReactDOM from "react-dom/client";
-
-import { Provider } from "react-redux";
+import { Provider, useSelector } from "react-redux";
 import App from "./App";
 import { store } from "./store/store";
-
 import { createTheme, ThemeProvider } from "@mui/material/styles";
 import { mainColor, secondaryColor } from "./constants";
-// Set textShadow: "5px 0px 0px #D4AF37" for h2 and h3 tags in the theme if color is primary, and for h2 and h3 tags in the theme if color is secondary
+import { useAppSelector } from "./store/hooks/hooks";
 
-const theme = createTheme({
-  typography: {
-    h1: {
-      fontFamily: "Kontakt",
-      fontSize: 40,
-      // color: '#D4AF37',
+const ThemedApp = () => {
+  const options = useAppSelector((state) => state.options);
+  const { darkMode } = options;
 
-      textShadow: `10px 0px 0px ${secondaryColor}`,
-    },
-    h2: {
-      fontFamily: "Kontakt",
+  const theme = React.useMemo(
+    () =>
+      createTheme({
+        palette: {
+          mode: darkMode ? "dark" : "light",
+          primary: {
+            main: darkMode ? mainColor : secondaryColor,
+          },
+          secondary: {
+            main: darkMode ? secondaryColor : mainColor,
+          },
+        },
+        typography: {
+          h1: {
+            fontFamily: "Kontakt",
+            fontSize: 40,
+            textShadow: `10px 0px 0px ${secondaryColor}`,
+          },
+          h2: {
+            fontFamily: "Kontakt",
+            fontSize: 20,
+            textShadow: `5px 0px 0px ${darkMode ? secondaryColor : mainColor}`,
+          },
+          h3: {
+            fontSize: 20,
+            fontFamily: "Kontakt",
+            margin: 10,
+            textShadow: `5px 0px 0px ${darkMode ? secondaryColor : mainColor}`,
+          },
+          button: {
+            fontFamily: "Kontakt",
+          },
+        },
+      }),
+    [darkMode]
+  );
 
-      fontSize: 20,
-      //   color: "#D4AF37",
-      textShadow: `5px 0px 0px ${secondaryColor}`,
-      // Add underline
-    },
-    h3: {
-      fontSize: 20,
-      fontFamily: "Kontakt",
-      margin: 10,
-    },
-    button: {
-      fontFamily: "Kontakt",
-    },
-    // Add font family kontakt for switch and form control label, but not for paragraph
-    body1: {
-      //   fontFamily: "Kontakt",
-    },
-  },
-  palette: {
-    primary: {
-      // main: "#D4AF37",
-      main: mainColor,
-    },
-
-    secondary: {
-      //   main: "#222",
-      main: secondaryColor,
-    },
-  },
-});
-
-ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
-  <Provider store={store}>
+  return (
     <ThemeProvider theme={theme}>
       <App />
     </ThemeProvider>
-  </Provider>
-);
+  );
+};
+
+const rootElement = document.getElementById("root");
+if (rootElement) {
+  const root = ReactDOM.createRoot(rootElement);
+  root.render(
+    <Provider store={store}>
+      <ThemedApp />
+    </Provider>
+  );
+}

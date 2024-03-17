@@ -27,6 +27,8 @@
 
     #root {
       font-family: "Kontakt";
+      margin: 0;
+      padding: 0;
 
     }
 
@@ -46,7 +48,7 @@
   <script type="module" src="/src/main.tsx"></script>
   <script>
     let lastHeight = 0;
-    const maxHeight = 3000;
+    const maxHeight = 1900;
 
     const resizeObserver = new ResizeObserver(entries => {
       for (let entry of entries) {

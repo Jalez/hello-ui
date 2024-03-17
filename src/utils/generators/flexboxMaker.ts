@@ -1,5 +1,7 @@
 /** @format */
 
+import { drawBoardWidth, drawBoardheight } from "../../constants";
+
 const justifyContent = [
   "justify-content:flex-start",
   "justify-content:flex-end",
@@ -59,8 +61,8 @@ export const flexboxMaker = (primaryColor: string, secondaryColor: string) => {
 </div>`;
 
   const tcss = `body {
-	height: 300px;
-	width: 400px;
+	height: ${drawBoardheight}px;
+	width: ${drawBoardWidth}px;
 	margin: 0;
 	padding: 0;
 	background-color: ${secondaryColor};
@@ -84,8 +86,8 @@ div>div:before {
 	`;
   const scss = `
 .wrapper {
-	height: 300px;
-	width: 400px;
+	height: ${drawBoardheight}px;
+	width: ${drawBoardWidth}px;
 display: flex;
 flex-wrap: ${randomFlexWrap};
 justify-content: ${randomJustifyContent};

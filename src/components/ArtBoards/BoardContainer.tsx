@@ -1,5 +1,7 @@
 /** @format */
 
+import { drawBoardWidth } from "../../constants";
+
 interface BoardContainerProps {
   children: React.ReactNode;
 }
@@ -11,7 +13,7 @@ const containerStyles = {
   alignItems: "center",
   flex: "1 0 auto",
   flexShrink: 0,
-  width: 500,
+  width: drawBoardWidth + 100 + "px",
 };
 
 export const BoardContainer = ({ children }: BoardContainerProps) => {

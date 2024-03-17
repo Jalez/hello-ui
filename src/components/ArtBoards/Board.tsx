@@ -1,27 +1,24 @@
-/** @format */
+import React from "react";
+import { styled } from "@mui/system";
 
 interface BoardProps {
   children: React.ReactNode;
 }
 
-const boardStyle = {
+const StyledBoard = styled("div")(({ theme }) => ({
   marginTop: "5px",
   marginBottom: "5px",
   padding: "0px",
   flexShrink: 0,
   height: "fit-content",
   width: "fit-content",
-  boxSizing: "content-box" as const, //Ensures that typescript treats the value as a literal type of 'content-box' instead of a string
+  boxSizing: "content-box",
   overflow: "hidden",
   border: "5px solid #111",
   zIndex: 2,
-  backgroundColor: "#1e1e1e",
-};
+  backgroundColor: theme.palette.secondary.main, // Use the theme's secondary color
+}));
 
 export const Board = ({ children }: BoardProps) => {
-  return (
-    <div className="board" style={boardStyle}>
-      {children}
-    </div>
-  );
+  return <StyledBoard className="board">{children}</StyledBoard>;
 };

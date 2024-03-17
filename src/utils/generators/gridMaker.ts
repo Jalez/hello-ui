@@ -1,10 +1,12 @@
 /** @format */
 
+import { drawBoardWidth, drawBoardheight } from "../../constants";
+
 const propertiesAndValues = {
   display: ["block", "inline", "inline-block", "flex", "grid"],
   position: ["absolute", "relative", "fixed", "sticky"],
-  width: ["400px", "100%", "50%"],
-  height: ["300px", "100%", "50%"],
+  width: [drawBoardWidth + "px", "100%", "50%"],
+  height: [drawBoardheight + "px", "100%", "50%"],
   gap: ["2px", "10px", "20px"],
   "grid-template-columns": "grid-template-columns: ",
 };
@@ -50,8 +52,8 @@ export const generateGridLevel = (
   const TCSS = `
 body {
   background-color: ${secondaryColor};
-  width: 400px;
-  height: 300px;
+  width: ${drawBoardWidth}px;
+  height: ${drawBoardheight}px;
 }
 .wrapper {
 	width: 100%;

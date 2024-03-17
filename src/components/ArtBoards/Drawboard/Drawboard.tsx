@@ -17,6 +17,7 @@ import { BoardContainer } from "../BoardContainer";
 import { Board } from "../Board";
 import { InfoTime } from "../../InfoBoard/InfoTime";
 import Shaker from "../../General/Shaker/Shaker";
+import { drawBoardWidth, drawBoardheight } from "../../../constants";
 
 export const Drawboard = (): JSX.Element => {
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
@@ -51,8 +52,8 @@ export const Drawboard = (): JSX.Element => {
             slidingComponent={
               <div
                 style={{
-                  height: "300px",
-                  width: "400px",
+                  height: drawBoardheight + "px",
+                  width: drawBoardWidth + "px",
                   overflow: "hidden",
                 }}
               >
@@ -67,10 +68,7 @@ export const Drawboard = (): JSX.Element => {
                 <div
                   style={{
                     position: "absolute",
-                    // hide the screenshot
-                    // visibility: "hidden",
                     bottom: 0,
-                    // zIndex: 0,
                   }}
                 >
                   <ScreenshotWithRedux

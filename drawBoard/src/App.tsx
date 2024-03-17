@@ -14,12 +14,10 @@ function App() {
   const [urlName, setUrlName] = useState<string>();
   useEffect(() => {
     const handlePostMessage = (event: MessageEvent) => {
-      // If it countains new data, update the state
       if (event.data.name) {
         setUrlName(event.data.name);
       }
       if (event.data.html) {
-        // console.log("Drawboard HTML: ", event.data.html);
         // turn the string into a ReactNode element and set it as the state of the component
         setHtml(<kbd dangerouslySetInnerHTML={{ __html: event.data.html }} />);
       }
@@ -45,8 +43,6 @@ function App() {
   }, [stylesCorrect]);
 
   useEffect(() => {
-    // get the "my-app-root" element from the html
-    // const board = document.querySelector("my-app-root");
     const board = document.getElementById("root");
     if (stylesCorrect && board) {
       domToPng(board).then((dataURL: string) => {
@@ -54,9 +50,7 @@ function App() {
           window.parent.postMessage({ dataURL, urlName }, "*");
         }
         counter++;
-        // window.parent.postMessage(dataURL, '*');
       });
-      // }
     }
   }, [html, stylesCorrect]);
 

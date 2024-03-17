@@ -12,14 +12,15 @@ export const tabsContent = [
     ),
   },
   {
-    label: "Objective:",
+    label: "Objective",
     content: (
       <>
         <Typography sx={{ mt: 2 }} variant="body2">
           Recreate the components provided as images using HTML and CSS in the
-          provided CSS editor. The game may have a number of levels(tasks): You
-          can switch between the levels using the <strong>LEVELS</strong> -
-          button. You can also use the <strong>INSTRUCTIONS</strong>
+          provided CSS editor. Depending on setup, the game may have a number of
+          levels(tasks): You can switch between the levels using the{" "}
+          <strong>LEVELS</strong> - button. You can also use the{" "}
+          <strong>HELP</strong>
           -button to come back to this page. You can see your progress in the
           points you have accumulated for the given task in the points element
           above your own designs picture. However, you still need to click the{" "}
@@ -39,15 +40,17 @@ export const tabsContent = [
     label: "General advice",
     content: (
       <>
-        <Typography variant="body2">
-          <ol>
-            <li>
+        <ol>
+          <li>
+            <Typography sx={{ mt: 2 }} variant="body2">
               <strong>Use the provided CSS/HTML template:</strong> We strongly
               advise using the existing CSS/HTML template provided, as it
               contains CSS rules and HTML elements that are suitable for your
               task. This should be used as a starting point for your work.
-            </li>
-            <li>
+            </Typography>
+          </li>
+          <li>
+            <Typography sx={{ mt: 2 }} variant="body2">
               <strong>Evaluating your code:</strong> Evaluation happens
               automatically. If your accuracy is 91% or above, you will receive
               points for the level. If you accuracy 98% or above, you will
@@ -55,14 +58,16 @@ export const tabsContent = [
               in a zero point score for the level. If you refresh the page, your
               progress will be lost, in which case you will need to evaluate
               your code again.
-            </li>
-            <li>
+            </Typography>
+          </li>
+          <li>
+            <Typography sx={{ mt: 2 }} variant="body2">
               <strong>Submit your points to plussa:</strong> After completing
               the exam, ensure that you Submit the points to plussa by clicking
               the "Submit" button located beneath the game.
-            </li>
-          </ol>
-        </Typography>
+            </Typography>
+          </li>
+        </ol>
       </>
     ),
   },

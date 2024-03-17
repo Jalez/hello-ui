@@ -1,32 +1,40 @@
 /** @format */
 
+import { styled, Theme } from "@mui/system";
+
+const FooterStyled = styled("footer")(
+  ({ theme }: { theme: Theme }) => `
+  // margin: 10px;
+  text-align: center;
+  padding: 10px;
+  width: 100%;
+  height: fit-content;
+  background-color: ${theme.palette.secondary.main};
+  color: ${theme.palette.primary.main};
+  z-index: 50;
+  pointer-events: none;
+`
+);
+
+const LinkStyled = styled("a")`
+  color: #f5c518;
+  text-shadow: 1px 1px 1px #000;
+  text-decoration: none;
+  margin: 10px;
+  pointer-events: visible;
+`;
+
 export const Footer = () => {
-	return (
-		<footer
-			style={{
-				margin: 0,
-				fontSize: 10,
-				// center the text
-				textAlign: 'center',
-				color: '#333',
-				padding: 5,
-				// give a shadow to the text
-			}}>
-			Creating art with the magic of your mind and the power of HTML and CSS.
-			Inspired by
-			<a
-				href='https://cssbattle.dev/'
-				target='_blank'
-				rel='noreferrer'
-				style={{
-					// Give a dark yellow color
-					color: '#f5c518',
-					// color: '#',
-					textDecoration: 'none',
-					margin: 10,
-				}}>
-				CSS Battle
-			</a>
-		</footer>
-	);
+  return (
+    <FooterStyled>
+      Creating HTML components with the magic of your mind. Inspired by
+      <LinkStyled
+        href="https://cssbattle.dev/"
+        target="_blank"
+        rel="noreferrer"
+      >
+        CSS Battle
+      </LinkStyled>
+    </FooterStyled>
+  );
 };

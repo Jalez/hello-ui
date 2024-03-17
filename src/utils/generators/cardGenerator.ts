@@ -44,6 +44,7 @@ margin: 0px;
 padding: 0px;
 overflow: hidden;
 background-color: ${secondaryColor};
+color: ${primaryColor};
 }
 
 .custom-card {
