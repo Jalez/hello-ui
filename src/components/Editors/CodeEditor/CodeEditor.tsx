@@ -105,6 +105,7 @@ export default function CodeEditor({
       boxSizing: "border-box",
       margin: "0",
       padding: "0",
+      minHeight: "300px",
     },
 
     onChange: handleCodeUpdate,

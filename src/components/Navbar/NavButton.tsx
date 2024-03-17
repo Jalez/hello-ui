@@ -9,9 +9,10 @@ interface NavButtonProps {
   disabled?: boolean;
 }
 
-const btnStyle = {
+const btnStyle: React.CSSProperties = {
   fontFamily: "Kontakt",
   flex: 1,
+  boxSizing: "border-box",
   border: "2px solid #111",
   fontSize: 30,
   minWidth: "fit-content",

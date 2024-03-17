@@ -7,7 +7,7 @@ interface OptionsState {
 }
 
 const initialState: OptionsState = {
-  darkMode: false,
+  darkMode: true,
   showWordCloud: false,
 };
 
@@ -18,7 +18,7 @@ if (storedOptions) {
   initialState.darkMode = JSON.parse(storedOptions).darkMode;
   initialState.showWordCloud = JSON.parse(storedOptions).showWordCloud;
 } else {
-  initialState.darkMode = false;
+  initialState.darkMode = true;
   initialState.showWordCloud = false;
 }
 

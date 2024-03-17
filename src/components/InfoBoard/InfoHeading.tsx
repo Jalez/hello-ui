@@ -32,6 +32,7 @@ export const InfoHeading = ({ children, variant }: InfoHeadingProps) => {
         sx={{
           bgcolor: theme.palette.secondary.main || secondaryColor,
           userSelect: "none",
+          boxSizing: "border-box",
           borderBottom: "3px solid rgb(17, 17, 17)",
           borderLeft: "3px solid rgb(17, 17, 17)",
           borderRight: "3px solid rgb(17, 17, 17)",

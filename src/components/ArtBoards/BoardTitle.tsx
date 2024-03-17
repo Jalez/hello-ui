@@ -17,6 +17,7 @@ const StyledBoardTitle = styled("div")<Pick<BoardTitleProps, "side">>(
     backgroundColor: theme.palette.secondary.main,
     height: "fit-content",
     margin: "0px",
+    boxSizing: "border-box",
     border: "5px solid #111",
     position: "relative",
     right: side === "left" ? "-5px" : "5px",

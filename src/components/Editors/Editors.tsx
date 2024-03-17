@@ -136,7 +136,7 @@ export const Editors = () => {
           codeUpdater={codeUpdater}
           template={cssCode}
           width={cssEditorWidth}
-          locked={true}
+          // locked={true}
         />
       </div>
     </div>

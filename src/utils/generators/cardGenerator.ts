@@ -108,12 +108,14 @@ button {
 }
 
 .outlined {
+    box-sizing: border-box;
     border: 2px solid ${primaryColor};
     background-color: transparent;
     color: ${primaryColor};
 }
 
 .rounded {
+    box-sizing: border-box;
     background-color: ${primaryColor};
     color: ${secondaryColor};
     border-radius: 10px;
@@ -141,6 +143,7 @@ button {
 }
 
 .minimal button {
+    box-sizing: border-box;
     background-color: ${primaryColor};
     color: ${secondaryColor};
     border: 2px solid ${primaryColor};

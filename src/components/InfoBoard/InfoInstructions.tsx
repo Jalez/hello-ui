@@ -5,7 +5,7 @@ import { useAppSelector } from "../../store/hooks/hooks";
 const StyledSection = styled("section")(({ theme }) => ({
   display: "flex",
   flexDirection: "column",
-  width: "80%",
+  width: "100%",
   flex: "1 1 auto",
   justifyContent: "center",
   alignItems: "center",

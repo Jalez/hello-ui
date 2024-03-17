@@ -46,3 +46,18 @@ export interface Level {
   instructions: instructions;
   question_and_answer: question_and_answer;
 }
+
+export type generator = (
+  primaryColor: string,
+  secondaryColor: string
+) => {
+  THTML: string;
+  SHTML: string;
+  TCSS: string;
+  SCSS: string;
+  instructions: instructions;
+  question_and_answer: question_and_answer;
+  difficulty: string;
+};
+
+export type levelNames = "card" | "form" | "list" | "table";

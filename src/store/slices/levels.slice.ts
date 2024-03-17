@@ -1,24 +1,25 @@
 /** @format */
 
 import { createSlice } from "@reduxjs/toolkit";
-// import placeholder from '../../assets/Placeholder.svg';
-
-const url = import.meta.env.LOCAL_TESTING_URL;
-
 import confetti from "canvas-confetti";
 import { obfuscate } from "../../utils/obfuscators/obfuscate";
 import Pixelmatch from "pixelmatch";
 import { Buffer } from "buffer";
-import { Level } from "../../types";
-import { createLevels } from "../../utils/LevelCreator";
+import { Level, levelNames } from "../../types";
+import {
+  createLevels,
+  generatorNameAndFunction,
+} from "../../utils/LevelCreator";
 import { numberTimeToMinutesAndSeconds } from "../../utils/numberTimeToMinutesAndSeconds";
-import { drawBoardWidth, drawBoardheight, gameMaxTime } from "../../constants";
-
-// Remove these static width and height values
+import {
+  drawBoardWidth,
+  drawBoardheight,
+  gameMaxTime,
+  mainColor,
+  secondaryColor,
+} from "../../constants";
 
 const maxCodeLength = 100000;
-
-// interface for initial state
 
 const storage = obfuscate("ui-designer-layout-levels");
 const timerStorage = obfuscate("ui-designer-start-time");
@@ -67,7 +68,6 @@ const levelsSlice = createSlice({
         return imgData;
         // });
       };
-      // get the image urls from the current level
 
       const loadAndMatch = (
         currentLevel: Number,
@@ -101,7 +101,6 @@ const levelsSlice = createSlice({
 
         const percentageTreshold = 95;
         const percentageFullPointsTreshold = 99;
-        // if percentage is over percentageFullPointsTreshold, use confetti
         if (percentage > percentageTreshold) {
           if (
             percentage > percentageFullPointsTreshold &&
@@ -110,38 +109,29 @@ const levelsSlice = createSlice({
             confetti({ particleCount: 100 });
             level.confettiSprinkled = true;
           }
-          // Calculate the points based on the last 10 percent
           const lastTenPercent = percentage - percentageTreshold;
           const remainingPercentage = 100 - percentageTreshold;
           const lastTenPercentPercentage = lastTenPercent / remainingPercentage;
           const points = Math.ceil(lastTenPercentPercentage * level.maxPoints);
-          if (points < level.points) return; // if points are less than the current points, do nothing
+          if (points < level.points) return;
           level.points = points;
-          // set the time for the level
           const currentTime = new Date().getTime();
           const timeAndDate = level.timeData.pointAndTime[points];
           if (timeAndDate == "0:0" || !timeAndDate) {
-            // console.log("Setting time for points: ", points);
             level.timeData.pointAndTime[points] = numberTimeToMinutesAndSeconds(
               currentTime - level.timeData.startTime
             );
-            // console.log("Current time for all points: ", level.timeData);
           }
-          // set level completed to yes
           level.completed = "yes";
-        }
-        // If percentage is less than 90, set points to 0
-        else {
+        } else {
           level.points = 0;
         }
 
         storage.setItem(storage.key, JSON.stringify(state));
       };
-      // allImagesLoaded();
       const { currentLevel, drawnImage, solutionImage } = action.payload;
       loadAndMatch(currentLevel, drawnImage, solutionImage);
     },
-    // update week (if there is no week in the state already)
     updateWeek(state, action) {
       let week = action.payload;
       if (storage.getItem(storage.key)) {
@@ -158,6 +148,37 @@ const levelsSlice = createSlice({
       state = levels;
       storage.setItem(storage.key, JSON.stringify(state));
       return state;
+    },
+    resetLevel(state, action) {
+      const level = state.find((level) => level.id === action.payload);
+      if (!level) return;
+      level.points = 0;
+      level.completed = "no";
+      level.accuracy = "";
+      level.diff = "";
+      level.confettiSprinkled = false;
+      level.timeData.pointAndTime = {};
+      const name = level.name.toString() as levelNames;
+      const newGeneration = generatorNameAndFunction[name](
+        mainColor,
+        secondaryColor
+      );
+      level.code = { html: newGeneration.THTML, css: newGeneration.TCSS };
+      level.solution = { html: newGeneration.SHTML, css: newGeneration.SCSS };
+      level.solEvalUrl = "";
+      level.drawnEvalUrl = "";
+      level.drawingUrl = "";
+      level.solutionUrl = "";
+
+      // level.timeData.startTime = new Date().getTime();
+
+      storage.setItem(storage.key, JSON.stringify(state));
+    },
+    startLevelTimer(state, action) {
+      const level = state.find((level) => level.id === action.payload);
+      if (!level) return;
+      level.timeData.startTime = new Date().getTime();
+      storage.setItem(storage.key, JSON.stringify(state));
     },
 
     updateCode(state, action) {
@@ -201,7 +222,6 @@ const levelsSlice = createSlice({
         // Remove solution code from state if it exists
         if (state[id - 1].solution.css) state[id - 1].solution.css = "";
         if (state[id - 1].solution.html) state[id - 1].solution.html = "";
-        state[id - 1].timeData.startTime = new Date().getTime();
       }
       // update the code for the level in local storage
       storage.setItem(storage.key, JSON.stringify(state));
@@ -223,6 +243,8 @@ export const {
   updateEvaluationUrl,
   evaluateLevel,
   updateWeek,
+  resetLevel,
+  startLevelTimer,
 } = levelsSlice.actions;
 
 export default levelsSlice.reducer;

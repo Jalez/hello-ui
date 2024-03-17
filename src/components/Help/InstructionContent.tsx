@@ -19,11 +19,11 @@ export const tabsContent = [
           Recreate the components provided as images using HTML and CSS in the
           provided CSS editor. Depending on setup, the game may have a number of
           levels(tasks): You can switch between the levels using the{" "}
-          <strong>LEVELS</strong> - button. You can also use the{" "}
-          <strong>HELP</strong>
+          <strong>LEVEL</strong> - navigational system inside the application.
+          You can also use the <strong>?</strong>
           -button to come back to this page. You can see your progress in the
-          points you have accumulated for the given task in the points element
-          above your own designs picture. However, you still need to click the{" "}
+          points you have accumulated for the given task in the element above
+          your own designs picture. However, you still need to click the{" "}
           <strong>PLUSSA SUBMIT BUTTON</strong> in order to save the points you
           have accumulated once you are finished with these tasks.
         </Typography>
