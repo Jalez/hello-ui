@@ -1,35 +1,28 @@
-/** @format */
-
-import { Paper } from "@mui/material";
-import { mainColor } from "../../constants";
+import React from "react";
+import { Paper, styled } from "@mui/material";
 
 interface InstructionPaperProps {
-  children: any;
+  children: React.ReactNode;
 }
 
-const paperStyle = {
-  // width: '100%',
+const StyledPaper = styled(Paper)(({ theme }) => ({
   width: "100%",
-  aspectRatio: "2/1",
-  // make height half of width, where width can be anything
+  aspectRatio: "2 / 1",
   overflow: "auto",
-  bgcolor: "#222",
-  // bgcolor: '',
-  border: `5px solid ${mainColor}`,
-  // border: 'none',
-  boxShadow: 24 as const,
-  p: 4,
-  padding: 0,
+  backgroundColor: theme.palette.secondary.main,
+  border: `5px solid ${theme.palette.primary.main}`,
+  boxShadow: "0px 4px 20px rgba(0, 0, 0, 0.1)", // Example shadow
+  padding: theme.spacing(4), // MUI spacing equivalent for 'p: 4'
   display: "flex",
   flexDirection: "column",
   justifyContent: "space-between",
-};
+}));
 
 const InstructionPaper = ({ children }: InstructionPaperProps) => {
   return (
-    <Paper sx={paperStyle} role="region" aria-label="Instruction">
+    <StyledPaper role="region" aria-label="Instruction">
       {children}
-    </Paper>
+    </StyledPaper>
   );
 };
 

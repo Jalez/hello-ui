@@ -43,12 +43,13 @@ const initialDefaults = {
   },
 };
 
-type week = "html_2_es" | "css_1_es" | "css_2_es";
+type week = "html_2_es" | "css_1_es" | "css_2_es" | "all";
 export const createLevels = (week: week) => {
   const weekAndGenerators = {
     html_2_es: [cardGenerator, formGenerator],
     css_1_es: [listGenerator, tableGenerator],
     css_2_es: [cardGenerator, formGenerator], //TODO: Add more generators
+    all: [cardGenerator, formGenerator, listGenerator, tableGenerator],
   };
   const initialState = [];
   const generators = weekAndGenerators[week];

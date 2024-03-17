@@ -7,12 +7,19 @@ import { EditorState } from "@codemirror/state";
 import { Typography } from "@mui/material";
 import { useEffect, useState, useRef } from "react";
 import { vscodeDark, vscodeDarkInit } from "@uiw/codemirror-theme-vscode";
+
+import {
+  duotoneLight,
+  duotoneLightInit,
+  duotoneDark,
+  duotoneDarkInit,
+} from "@uiw/codemirror-theme-duotone";
 import {
   ReactCodeMirrorProps,
   ReactCodeMirrorRef,
 } from "@uiw/react-codemirror";
-
-import "./CodeEditor.css";
+import { useAppSelector } from "../../../store/hooks/hooks";
+import { mainColor, secondaryColor } from "../../../constants";
 
 interface CodeEditorProps {
   lang: any;
@@ -48,9 +55,10 @@ export default function CodeEditor({
 
   const [code, setCode] = useState<string>(template);
 
+  const options = useAppSelector((state) => state.options);
+  const theme = options.darkMode ? "none" : vscodeDark;
   const handleCodeUpdate = (value: string) => {
     if (!locked) {
-      // console.log("Code updated: ", value);
       setCode(value);
     }
   };
@@ -60,8 +68,6 @@ export default function CodeEditor({
     if (code !== "") {
       timer = setTimeout(() => {
         codeUpdater({ [title.toLowerCase()]: code });
-
-        // console.log("Updating in state");
       }, 200);
     }
     return () => {
@@ -74,17 +80,15 @@ export default function CodeEditor({
   }, [template]);
 
   const editorTheme = vscodeDark;
+  // const editorTheme = duotoneLight;
 
   const cmProps: CodeMirrorProps = {
     options: {
       lineWrapping: true,
       lineNumbers: true,
-      // viewportMargin: Infinity,
       readOnly: true,
       className: "readOnly",
       screenReaderLabel: "Code Editor for " + title,
-      // add any other CodeMirror options you need here
-      // height: "fit-content",
       autofocus: locked ? false : true,
     },
     value: code,
@@ -94,7 +98,7 @@ export default function CodeEditor({
       EditorView.editable.of(!locked),
       EditorView.lineWrapping,
     ],
-    theme: editorTheme,
+    theme: theme,
     placeholder: `Write your ${title} here...`,
     style: {
       overflow: "auto",
@@ -114,27 +118,17 @@ export default function CodeEditor({
         height: "100%",
         flexDirection: "column",
         width: width,
-        // flex: `1 ${width} 20%`,
-        // width: "49.5%",
-        // include the border width
-        // backgroundColor: "#1e1e1e",
+
+        backgroundColor: theme === "none" ? secondaryColor : mainColor,
       }}
     >
-      <Typography
-        variant="h3"
-        // Make it h2
-
-        color="primary"
-        id="title"
-      >
+      <Typography variant="h3" color="primary" id="title">
         {title} {locked ? "(Locked)" : ""}
       </Typography>
       <div
         className="codeEditor"
         style={{
-          // maxWidth: width,
           flex: "1 1 20px",
-          backgroundColor: "#1e1e1e",
           height: "100%",
           overflow: "auto",
         }}

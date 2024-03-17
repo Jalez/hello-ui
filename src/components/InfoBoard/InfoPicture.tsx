@@ -57,9 +57,7 @@ export const InfoPicture = ({
 		setPopUp(false);
 	};
 
-	const handleScroll = () => {
-		console.log('scrolling');
-	};
+
 	if (!picture) return null;
 
 	return (

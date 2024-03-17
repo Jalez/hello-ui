@@ -7,8 +7,11 @@ import { useEffect, useState } from "react";
 import { useAppDispatch, useAppSelector } from "../../store/hooks/hooks";
 import { updateCode } from "../../store/slices/levels.slice";
 import { Slider } from "./Slider/Slider";
+import { secondaryColor } from "../../constants";
+import { useTheme } from "@mui/system";
 
 export const Editors = () => {
+  const theme = useTheme();
   const dispatch = useAppDispatch();
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const [cssEditorWidth, setCssEditorWidth] = useState<string>("49.5%");
@@ -52,7 +55,7 @@ export const Editors = () => {
     const sliderYlocation = e.clientY;
     const sliderHeight = window.innerHeight;
     const newMaxPercentage = 100 - (sliderYlocation / sliderHeight) * 100;
-    const maxHeight = 2000;
+    const maxHeight = 1000;
     //if the slider is less than the max height OR it is decreasing in size
     if (sliderHeight < maxHeight || newMaxPercentage < maxPercentage) {
       setEditorHeight(`${newMaxPercentage}%`);
@@ -82,7 +85,6 @@ export const Editors = () => {
         alignSelf: "flex-end",
         flex: "1 1 100%",
         height: editorHeight,
-        // backgroundColor: "#1e1e1e",
         margin: "0",
       }}
     >
@@ -102,13 +104,13 @@ export const Editors = () => {
           alignItems: "end",
           flex: "1 1 100%",
           position: "relative",
-          backgroundColor: "#1e1e1e",
+          backgroundColor: theme.palette.secondary.main,
+          // blur out the background behind the editors
           height: "100%",
           maxWidth: "100%",
           flexWrap: "wrap",
           overflow: "hidden",
           alignSelf: "flex-end",
-
           zIndex: 1,
         }}
       >

@@ -11,11 +11,11 @@ export const InfoBoard = ({ children }: InfoBoardProps) => {
     <StyledInfoBoard id="info-board">
       <StyledInfoBoardContainer id="info-board-container">
         {/* map through children */}
-        {children
+        {children.length > 1
           ? children.map((child: any, index: number) => (
               <StyledChildContainer key={index}>{child}</StyledChildContainer>
             ))
-          : null}
+          : children}{" "}
       </StyledInfoBoardContainer>
     </StyledInfoBoard>
   );

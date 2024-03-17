@@ -1,6 +1,7 @@
 import { Divider } from "@mui/material";
 import { useState } from "react";
 import SlideContainer from "./SlideContainer";
+import { secondaryColor } from "../../../constants";
 
 interface SliderProps {
   sliderValue: number;
@@ -10,6 +11,17 @@ interface SliderProps {
   needsPress?: boolean;
   orientation?: "horizontal" | "vertical";
 }
+
+const dividerStyles: any = (orientation: string, hideSlider: boolean) => ({
+  minWidth: "5px",
+  minHeight: "5px",
+  height: orientation === "vertical" ? "100%" : "5px",
+  width: orientation === "horizontal" ? "100%" : "5px",
+  position: "relative",
+  // backgroundColor: "#111",
+  zIndex: hideSlider ? 11 : 50,
+  cursor: orientation === "horizontal" ? "ns-resize" : "ew-resize",
+});
 
 export const Slider = ({
   sliderValue,
@@ -74,16 +86,7 @@ export const Slider = ({
       <Divider
         orientation={orientation}
         flexItem
-        sx={{
-          minWidth: "5px",
-          minHeight: "5px",
-          height: orientation === "vertical" ? "100%" : "5px",
-          width: orientation === "horizontal" ? "100%" : "5px",
-          position: "relative",
-          backgroundColor: "#111",
-          zIndex: hideSlider ? 11 : 50,
-          cursor: orientation === "horizontal" ? "ns-resize" : "ew-resize",
-        }}
+        sx={dividerStyles(orientation, hideSlider)}
         onMouseEnter={handleMouseEnter}
         // onMouseMove={handleMouseDrag}
         // onMouseLeave={handleMouseLeave}
@@ -92,7 +95,7 @@ export const Slider = ({
       />
       <SlideContainer
         opacity={mousePressed ? 0.25 : 0}
-        background={"#222"}
+        background={secondaryColor}
         zIndex={hideSlider ? 4 : 100}
         hidden={hideSlider}
         onMouseMove={handleMouseDrag}

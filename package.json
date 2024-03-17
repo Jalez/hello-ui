@@ -23,6 +23,7 @@
     "@mui/material": "^5.11.10",
     "@mui/system": "^5.11.9",
     "@reduxjs/toolkit": "^1.9.3",
+    "@uiw/codemirror-theme-duotone": "^4.21.24",
     "@uiw/codemirror-theme-material": "^4.19.9",
     "@uiw/codemirror-theme-vscode": "^4.19.9",
     "@uiw/react-codemirror": "^4.19.9",

@@ -26,7 +26,7 @@ const SlideContainer: FC<SlideContainerProps> = styled(
   overflow: hidden;
   opacity: ${(props) => props.opacity};
   background: ${(props) => props.background};
-  background: yellow;
+  // background: yellow;
   z-index: ${(props) => props.zIndex};
   cursor: col-resize;
 `;

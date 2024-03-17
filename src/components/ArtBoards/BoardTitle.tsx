@@ -1,40 +1,37 @@
-/** @format */
-
-import { Typography } from "@mui/material";
+import React from "react";
+import { Typography, styled, useTheme } from "@mui/material";
 
 interface BoardTitleProps {
   children: React.ReactNode;
   side?: "left" | "right";
 }
 
-const BoardStyles = (side: string) => ({
-  // Put the text sideways
-  writingMode: "vertical-rl" as const,
-  textOrientation: "upright" as const,
-  // Make it look like a title
-  fontSize: "2rem",
-  // center it
-  display: "flex",
-  justifyContent: "center",
-  zIndex: 2,
-  backgroundColor: "#222",
-  height: "fit-content",
-  margin: "0px",
-  borderBottom: "5px solid #111",
-  borderTop: "5px solid #111",
-  borderLeft: "5px solid #111",
-  borderRight: "5px solid #111",
-  position: "relative" as const,
-  right: side === "left" ? "-5px" : "5px",
-  flexShrink: 0,
-});
+const StyledBoardTitle = styled("div")<Pick<BoardTitleProps, "side">>(
+  ({ theme, side }) => ({
+    writingMode: "vertical-rl",
+    textOrientation: "upright",
+    fontSize: "2rem",
+    display: "flex",
+    justifyContent: "center",
+    zIndex: 2,
+    backgroundColor: theme.palette.secondary.main,
+    height: "fit-content",
+    margin: "0px",
+    border: "5px solid #111",
+    position: "relative",
+    right: side === "left" ? "-5px" : "5px",
+    flexShrink: 0,
+  })
+);
 
 export const BoardTitle = ({ children, side = "left" }: BoardTitleProps) => {
+  const theme = useTheme();
+
   return (
-    <div style={BoardStyles(side)}>
+    <StyledBoardTitle theme={theme} side={side}>
       <Typography color="primary" variant="h3">
         {children}
       </Typography>
-    </div>
+    </StyledBoardTitle>
   );
 };

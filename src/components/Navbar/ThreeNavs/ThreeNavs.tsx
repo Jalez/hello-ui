@@ -1,50 +1,89 @@
-/** @format */
-
-import { useDispatch } from 'react-redux/es/hooks/useDispatch';
-import { domToPng } from 'modern-screenshot';
-
-import { setCurrentLevel } from '../../../store/slices/currentLevel.slice';
-import HelpModal from '../../Help/Help';
-import { NavButton } from '../NavButton';
-import NavMenu from '../NavMenu';
-// import pixelmatch from 'pixelmatch';
+import { styled } from "@mui/system";
 import {
-	sendScoreToParentFrame,
-	updatePointsThunk,
-} from '../../../store/actions/score.actions';
+  setDarkMode,
+  setShowWordCloud,
+} from "../../../store/slices/options.slice";
+import HelpModal from "../../Help/Help";
+import { useAppDispatch, useAppSelector } from "../../../store/hooks/hooks";
+import { Fab } from "@mui/material";
+import Brightness6Icon from "@mui/icons-material/Brightness6";
+import LevelControls from "../../General/LevelControls/LevelControls";
+import { mainColor, secondaryColor } from "../../../constants";
+import CloudIcon from "@mui/icons-material/Cloud";
+import CloudOffIcon from "@mui/icons-material/CloudOff";
+import RestoreIcon from "@mui/icons-material/Restore";
+import { setCurrentLevel } from "../../../store/slices/currentLevel.slice";
 
-import './ThreeNavs.css';
-import { useAppDispatch, useAppSelector } from '../../../store/hooks/hooks';
-import pixelmatch from 'pixelmatch';
+const StyledContainer = styled("div")(({ theme }) => ({
+  display: "flex",
+  flexDirection: "row",
+  justifyContent: "center",
+  gap: "10px",
+  alignItems: "center",
+  flex: "1 0 100%",
+  flexWrap: "wrap",
+  height: "100%",
+  margin: "0.2em",
+  padding: "0.2em",
+}));
+
+const StyledNavContainer = styled("div")(({ theme }) => ({
+  display: "flex",
+  flexDirection: "row",
+  justifyContent: "center",
+  alignItems: "center",
+  width: "fit-content",
+  backgroundColor: theme.palette.secondary.main,
+  color: theme.palette.primary.main,
+  padding: "0.5em",
+  borderRadius: "2em",
+}));
+
+const StyledFab = styled(Fab)({
+  boxShadow: "none",
+  border: "none",
+  backgroundColor: "transparent",
+});
 
 export const ThreeNavs = () => {
-	const dispatch = useAppDispatch();
-	const levels = useAppSelector((state) => state.levels);
-	const { currentLevel } = useAppSelector((state) => state.currentLevel);
+  const dispatch = useAppDispatch();
+  const levels = useAppSelector((state) => state.levels);
+  const { currentLevel } = useAppSelector((state) => state.currentLevel);
+  const options = useAppSelector((state) => state.options);
+  const level = levels[currentLevel - 1];
 
-	// get difficulties in an array from the levels
-	const difficulties = levels.map((level) => level.difficulty);
+  const levelChanger = (pickedLevel: any) => {
+    dispatch(setCurrentLevel(pickedLevel));
+  };
 
-	const levelChanger = (pickedLevel: any) => {
-		// get the level object from the levels array
-		const level = levels.find((level) => level.difficulty === pickedLevel);
-		if (level) {
-			// dispatch the levels id to the store as the current level
-			dispatch(setCurrentLevel(level.id));
-		}
-	};
+  const toggleWordCloud = () => {
+    dispatch(setShowWordCloud(!options.showWordCloud));
+  };
 
-	return (
-		<div
-			id='three-navs'
-			style={{
-				borderBottom: '1px solid #111',
-			}}>
-			<HelpModal />
-			{/* <NavButton clickHandler={beginEvaluation}>Evaluate</NavButton> */}
-			<NavMenu clickHandler={levelChanger} menuItems={difficulties}>
-				Levels
-			</NavMenu>
-		</div>
-	);
+  const toggleDarkMode = () => {
+    dispatch(setDarkMode(!options.darkMode));
+  };
+
+  return (
+    <StyledContainer id="three-navs">
+      <StyledNavContainer>
+        <StyledFab color="secondary">
+          <RestoreIcon />
+        </StyledFab>
+        <HelpModal />
+        <LevelControls
+          currentlevel={currentLevel}
+          levelHandler={levelChanger}
+          maxLevels={Object.keys(levels).length}
+          levelName={level.difficulty}
+        />
+        <StyledFab color="secondary" onClick={toggleDarkMode}>
+          <Brightness6Icon />
+        </StyledFab>
+        <StyledFab color="secondary" onClick={toggleWordCloud}>
+          {options.showWordCloud ? <CloudIcon /> : <CloudOffIcon />}
+        </StyledFab>
+      </StyledNavContainer>
+    </StyledContainer>
+  );
 };

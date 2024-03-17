@@ -1,10 +1,11 @@
 /** @format */
 
-import { Typography } from '@mui/material';
+import { Typography, useTheme } from "@mui/material";
+import { secondaryColor } from "../../constants";
 
 interface InfoHeadingProps {
-	children: React.ReactNode;
-	variant: 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6';
+  children: React.ReactNode;
+  variant: "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
 }
 
 /**
@@ -13,31 +14,35 @@ interface InfoHeadingProps {
  * @returns {JSX.Element}
  */
 export const InfoHeading = ({ children, variant }: InfoHeadingProps) => {
-	return (
-		<div
-			style={{
-				display: 'flex',
-				justifyContent: 'center',
-				// width: '100%',
-				position: 'relative',
-			}}>
-			<Typography
-				variant={variant}
-				// color='primary'
-				// Add styling
-				sx={{
-					bgcolor: '#222',
-					userSelect: 'none',
-					borderBottom: '3px solid rgb(17, 17, 17)',
-					borderLeft: '3px solid rgb(17, 17, 17)',
-					borderRight: '3px solid rgb(17, 17, 17)',
-					padding: '0.25em',
-					borderBottomLeftRadius: '0.3em',
-					borderBottomRightRadius: '0.3em',
-					zIndex: 2,
-				}}>
-				{children}
-			</Typography>
-		</div>
-	);
+  const theme = useTheme();
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "center",
+        // width: '100%',
+        position: "relative",
+      }}
+    >
+      <Typography
+        variant={variant}
+        // color='primary'
+        // Add styling
+        sx={{
+          bgcolor: theme.palette.secondary.main || secondaryColor,
+          userSelect: "none",
+          borderBottom: "3px solid rgb(17, 17, 17)",
+          borderLeft: "3px solid rgb(17, 17, 17)",
+          borderRight: "3px solid rgb(17, 17, 17)",
+          padding: "0.25em",
+          borderBottomLeftRadius: "0.3em",
+          borderBottomRightRadius: "0.3em",
+          zIndex: 2,
+        }}
+      >
+        {children}
+      </Typography>
+    </div>
+  );
 };

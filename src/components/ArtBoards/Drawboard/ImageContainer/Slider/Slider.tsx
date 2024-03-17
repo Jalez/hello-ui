@@ -1,11 +1,14 @@
 /** @format */
 
-import "./Slider.css";
+import { StyledSlider } from "./Styled/StyledSlider";
+// import "./Slider.css";
 interface SliderProps {
   sliderValue: number;
   dragSlider: (e: any) => void;
   resetSlider: () => void;
 }
+
+import { StyledSliderContainer } from "./Styled/StyledSliderContainer";
 
 /**
  * The slider component
@@ -20,8 +23,8 @@ export const Slider = ({
   resetSlider,
 }: SliderProps) => {
   return (
-    <div className="slidecontainer">
-      <input
+    <StyledSliderContainer>
+      <StyledSlider
         type="range"
         min="0"
         max="100"
@@ -32,6 +35,6 @@ export const Slider = ({
         onMouseLeave={resetSlider}
         onChange={() => {}}
       />
-    </div>
+    </StyledSliderContainer>
   );
 };

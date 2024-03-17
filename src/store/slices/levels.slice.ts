@@ -143,7 +143,7 @@ const levelsSlice = createSlice({
     },
     // update week (if there is no week in the state already)
     updateWeek(state, action) {
-      const week = action.payload;
+      let week = action.payload;
       if (storage.getItem(storage.key)) {
         state = JSON.parse(storage.getItem(storage.key) || "[]");
       }
@@ -153,6 +153,7 @@ const levelsSlice = createSlice({
         return;
       }
       // otherwise, create the levels
+      if (!week) week = "all";
       const levels = createLevels(week) as Level[];
       state = levels;
       storage.setItem(storage.key, JSON.stringify(state));

@@ -1,6 +1,6 @@
 /** @format */
 
-import { Paper } from "@mui/material";
+import { Paper, backdropClasses } from "@mui/material";
 import Grow from "@mui/material/Grow";
 
 interface GameContainerProps {
@@ -17,13 +17,13 @@ const paperStyle = {
   position: "relative" as const,
 
   overflow: "none",
-  backgroundColor: "#222",
   border: "none",
   display: "flex",
   flexDirection: "row" as const,
   justifyContent: "space-between",
   alignItems: "space-between" as const,
   flexWrap: "wrap" as const,
+  backgroundColor: "transparent",
 };
 
 export const GameContainer = ({ children }: GameContainerProps) => {

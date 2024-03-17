@@ -1,7 +1,10 @@
-export const mainColor = "#fff";
-export const secondaryColor = "#222";
-export const drawBoardWidth = 400;
-export const drawBoardheight = 300;
+// export const mainColor = "#fff";
+export let mainColor = "#222";
+
+// export const secondaryColor = "#222";
+export let secondaryColor = "#fff";
+export const drawBoardWidth = 450;
+export const drawBoardheight = 350;
 
 const second = 1000;
 const minute = 60 * second;
