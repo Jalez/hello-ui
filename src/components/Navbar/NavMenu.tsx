@@ -20,7 +20,6 @@ const StyledNavContainer = styled("div")(({ theme }) => ({
 }));
 
 const StyledButton = styled(Button)({
-  border: "2px solid #111",
   fontFamily: "Kontakt",
   flex: "1 0 100%",
   fontSize: 30,

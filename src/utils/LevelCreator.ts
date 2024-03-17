@@ -1,4 +1,5 @@
 import { mainColor, secondaryColor } from "../constants";
+import { generator, levelNames } from "../types";
 import { cardGenerator } from "./generators/cardGenerator";
 import { formGenerator } from "./generators/formGenerator";
 import { listGenerator } from "./generators/listGenerator";
@@ -43,6 +44,16 @@ const initialDefaults = {
   },
 };
 
+type generatorNameAndFunction = {
+  [K in levelNames]: generator;
+};
+
+export const generatorNameAndFunction: generatorNameAndFunction = {
+  card: cardGenerator,
+  form: formGenerator,
+  list: listGenerator,
+  table: tableGenerator,
+};
 type week = "html_2_es" | "css_1_es" | "css_2_es" | "all";
 export const createLevels = (week: week) => {
   const weekAndGenerators = {
@@ -68,7 +79,7 @@ export const createLevels = (week: week) => {
     let generatedLevelDetails = generator(mainColor, secondaryColor);
     const level = {
       id: i,
-      name: `Level ${i}`,
+      name: generatedLevelDetails.difficulty,
 
       buildingBlocks: {
         pictures: randomLevel.pictures,

@@ -27,18 +27,15 @@ const ThemedApp = () => {
           h1: {
             fontFamily: "Kontakt",
             fontSize: 40,
-            textShadow: `10px 0px 0px ${secondaryColor}`,
           },
           h2: {
             fontFamily: "Kontakt",
             fontSize: 20,
-            textShadow: `5px 0px 0px ${darkMode ? secondaryColor : mainColor}`,
           },
           h3: {
             fontSize: 20,
             fontFamily: "Kontakt",
             margin: 10,
-            textShadow: `5px 0px 0px ${darkMode ? secondaryColor : mainColor}`,
           },
           button: {
             fontFamily: "Kontakt",

@@ -14,6 +14,7 @@ const StyledBox = styled(Box)(
   transform: translate(-50%, -50%);
   width: ${drawBoardWidth}
   background-color: ${theme.palette.primary.main};
+  box-sizing: border-box;
   border: 2px solid #000;
   color: ${theme.palette.secondary.main};
   box-shadow: 24px;

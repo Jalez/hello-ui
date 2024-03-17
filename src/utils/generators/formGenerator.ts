@@ -19,20 +19,13 @@ export const formGenerator = (primaryColor: string, secondaryColor: string) => {
   const selectedButtonType = buttonTypes[timeIndex % buttonTypes.length];
   const selectedFormStyle = formStyles[timeIndex % formStyles.length];
 
-  const instructions = `Create a <strong>form</strong> that uses the <em>${selectedFormStyle}</em> class, with a <em>${selectedInputType}</em> input, a <em>checkbox</em> inside a fieldset and a <em>${selectedButtonType}</em> button. The form should have a label for the input, and the label should have inline styling for ${selectedLabelDecoration}. For parent elements that need their children to be on the same row, you can use the <em>same-row-children</em> class. You must use the correct class names, ids and semantic tags to style the form and its content. For instance, the semantic tags "form", "label", "input" and "button" should be present. If Ids are required, Id is the same as the <em>type</em> of the element. You can look at the stylesheet and provided picture for reference.`;
+  const instructions = `Create a <strong>form</strong> that uses the <em>${selectedFormStyle}</em> class, with a <em>${selectedInputType}</em> input, a <em>checkbox</em> inside a fieldset and a <em>${selectedButtonType}</em> button. The form should have a label for the input, and the label should have inline styling for ${selectedLabelDecoration}. For parent elements that need their children to be on the same row, you can use the <em>same-row-children</em> class. You must use the correct class names, ids and semantic tags to style the form and its content. For instance, the semantic tags "form", "label", "input" and "button" should be present. header, section and footer should be used. If Ids are required, Id is the same as the <em>type</em> of the element. You can look at the stylesheet and provided picture for reference.`;
   const question_and_answer = {
     question: "What are forms in html?",
     answer: `HTML forms are used to collect user input. They contain form elements like text fields, checkboxes, radio buttons, submit buttons, etc. Users enter data into these elements, and the data is sent to a server for processing.  `,
   };
 
   // Generate HTML for the selected input type
-  const inputHTML = `
-    <label for="${selectedInputType}" style="text-decoration: ${selectedLabelDecoration};">${
-    selectedInputType.charAt(0).toUpperCase() +
-    selectedInputType.slice(1) +
-    " label"
-  }</label>
-    <input type="${selectedInputType}" id="${selectedInputType}" name="${selectedInputType}" placeholder="Enter ${selectedInputType}">`;
 
   // Generate CSS for the selected input type
 
@@ -40,25 +33,44 @@ export const formGenerator = (primaryColor: string, secondaryColor: string) => {
   <header>
   <h1>Form title</h1>
   </header>
-    ${inputHTML}
-    <fieldset>
+  <div class="same-row-children">
+  <label for="${selectedInputType}" style="text-decoration: ${selectedLabelDecoration};">${
+    selectedInputType.charAt(0).toUpperCase() +
+    selectedInputType.slice(1) +
+    " label"
+  }</label>
+  <section>
+  <input type="${selectedInputType}" id="${selectedInputType}" name="${selectedInputType}" placeholder="Enter ${selectedInputType}">
+  </div>
+  <fieldset>
       <legend>Remember input?</legend>
       <div
-        class="same-row-children"
+      class="same-row-children"
       >
-        <input type="checkbox" id="scales" name="scales" checked />
-        <label for="scales">Remember</label>
+      <input type="checkbox" id="scales" name="scales" checked />
+      <label for="scales">Remember</label>
       </div>
-    </fieldset>
-
+      </fieldset>
+      </section>
+    <footer>
+    
     <button type="${selectedButtonType}">${
     selectedButtonType.charAt(0).toUpperCase() + selectedButtonType.slice(1)
   }</button>
+    </footer>
 </form>
 `;
 
   const css = `
 
+
+body {    
+  margin: 0px;
+  padding: 0px;
+  overflow: hidden;
+  background-color: ${secondaryColor};
+  color: ${primaryColor};
+}
 
 .same-row-children {
   display: flex;
@@ -67,6 +79,17 @@ export const formGenerator = (primaryColor: string, secondaryColor: string) => {
   justify-content: center;
 }
 
+section {
+  margin-top: 20px
+}
+
+footer {
+  margin-top: 40px;
+}
+
+fieldset {
+  margin-top: 30px;
+}
 
 
 form input {
@@ -78,7 +101,7 @@ form input {
 input[type="text"] {
   background-color: ${primaryColor};
   color: ${secondaryColor};
-  border: 2px solid ${secondaryColor}; /* Adds a border */
+  border: 2px solid ${secondaryColor}; 
   border-radius: 5px; /* Slight rounding of corners */
   padding: 5px; /* Adds some padding inside the input */
 }
@@ -165,12 +188,7 @@ input[type="checkbox"]:checked::before {
 }
 
 
-body {    
-  margin: 0px;
-  padding: 0px;
-  overflow: hidden;
-  background-color: ${secondaryColor};
-}
+
 header h1,
 header h2,
 header h3,
@@ -188,13 +206,11 @@ form {
   flex-direction: column;
   align-items: center;
   background-color: ${primaryColor};
+  color: ${secondaryColor};
   margin: 10px;
   padding: 10px;
 }
 
-fieldset {
-  margin: 5px;
-}
 
 form label {
   margin-bottom: 5px;

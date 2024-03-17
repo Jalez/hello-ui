@@ -10,7 +10,7 @@ export const CSSWordCloud = () => {
       style={{
         position: "absolute",
         zIndex: 1,
-        top: "0%",
+        top: "30%",
         left: "0%",
         padding: "0px",
 

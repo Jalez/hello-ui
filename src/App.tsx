@@ -17,6 +17,7 @@ import { useEffect } from "react";
 import { updateWeek } from "./store/slices/levels.slice";
 import { sendScoreToParentFrame } from "./store/actions/score.actions";
 import { Footer } from "./components/Footer/Footer";
+import Timer from "./Timer";
 
 const AppStyle = {
   display: "flex",
@@ -26,7 +27,9 @@ const AppStyle = {
   position: "relative" as const,
   width: "100%",
   height: "100vh",
-  // border: "10px solid black",
+  // disable scrolling
+  // overflow: "hidden",
+  boxSizing: "border-box" as const,
 };
 
 function App() {
@@ -36,6 +39,7 @@ function App() {
   const levels = useAppSelector((state) => state.levels);
   const dispatch = useAppDispatch();
   const options = useAppSelector((state) => state.options);
+  const level = levels[currentLevel - 1];
 
   useEffect(() => {
     // once it's mounted, send a message to the parent window
@@ -56,32 +60,24 @@ function App() {
           {levels.length > 0 && (
             <>
               <Navbar />
-
-              <section>
-                {/* <InfoBoard> */}
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    justifyContent: "center",
-                    alignItems: "center",
-                    width: "100%",
-                    height: "100%",
-                  }}
-                >
-                  <InfoInstructions />
-                  <ArtBoards />
-                </div>
-                {/* <InfoQuestionAndAnswer /> */}
-              </section>
-
-              {/* </InfoBoard> */}
+              <Timer />
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "row",
+                  justifyContent: "center",
+                  alignItems: "start",
+                  width: "100%",
+                }}
+              >
+                <InfoInstructions />
+              </div>
+              <ArtBoards />
               {options.showWordCloud && <CSSWordCloud />}
-
               <Editors />
-              <Footer />
             </>
           )}
+          <Footer />
         </GameContainer>
       </article>
     </>

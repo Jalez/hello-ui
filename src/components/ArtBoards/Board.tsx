@@ -12,7 +12,7 @@ const StyledBoard = styled("div")(({ theme }) => ({
   flexShrink: 0,
   height: "fit-content",
   width: "fit-content",
-  boxSizing: "content-box",
+  boxSizing: "border-box",
   overflow: "hidden",
   border: "5px solid #111",
   zIndex: 2,

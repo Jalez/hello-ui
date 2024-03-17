@@ -4,14 +4,9 @@ text {
   -moz-user-select: none;
   -ms-user-select: none;
   user-select: none;
-  fill:rgb(39, 39, 39);
-  /* fill: white; */
+  fill: rgb(230, 230, 230);
   z-index: 0;
-  /* font-family: Impact; */
-  /* remove shadow */
   text-shadow: none;
-  /* remove bold */
-  /* font-weight: normal; */
 }
 
 /* Add a transform to whenever the fill changes */
@@ -21,6 +16,6 @@ text {
 
 /* Add a hover effect to text elements */
 text:hover {
-  fill: rgb(168, 167, 167);
+  fill: #222;
   transition: fill 100ms;
 }
