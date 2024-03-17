@@ -56,7 +56,7 @@ export default function CodeEditor({
   const [code, setCode] = useState<string>(template);
 
   const options = useAppSelector((state) => state.options);
-  const theme = options.darkMode ? "none" : vscodeDark;
+  const theme = options.darkMode ? duotoneLight : vscodeDark;
   const handleCodeUpdate = (value: string) => {
     if (!locked) {
       setCode(value);
@@ -119,7 +119,7 @@ export default function CodeEditor({
         flexDirection: "column",
         width: width,
 
-        backgroundColor: theme === "none" ? secondaryColor : mainColor,
+        // backgroundColor: theme === "dark" ? secondaryColor : mainColor,
       }}
     >
       <Typography variant="h3" color="primary" id="title">
