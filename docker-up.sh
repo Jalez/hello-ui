@@ -12,14 +12,14 @@ usage() {
 
 start_ui() {
   pushd ${SCRIPT_DIR} &>/dev/null || exit 1
-  docker build -t cssartist
+  docker build -t cssartist .
   docker run -d -p 54322:3000 --name cssartist --restart always cssartist
   popd &>/dev/null
 }
 
 start_drawboard() {
   pushd ${SCRIPT_DIR}/drawBoard &>/dev/null || exit 1
-  docker build -t draw ${SCRIPT_DIR}/drawBoard
+  docker build -t drawboard .
   docker run -d -p 54320:3000 --name drawboard --restart always drawboard
   popd &>/dev/null
 }
