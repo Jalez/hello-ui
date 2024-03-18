@@ -7,7 +7,7 @@ import { EditorState } from "@codemirror/state";
 import { Typography } from "@mui/material";
 import { useEffect, useState, useRef } from "react";
 import { vscodeDark, vscodeDarkInit } from "@uiw/codemirror-theme-vscode";
-
+import { Compartment } from "@codemirror/state";
 import {
   duotoneLight,
   duotoneLightInit,
@@ -39,6 +39,7 @@ interface CodeMirrorProps extends ReactCodeMirrorProps {
     className?: string;
     screenReaderLabel?: string;
     autofocus?: boolean;
+    highlightActiveLine?: boolean;
     // add any other CodeMirror options you need here
   };
 }
@@ -51,10 +52,8 @@ export default function CodeEditor({
   locked = false,
   width = "20%",
 }: CodeEditorProps) {
-  const editorRef = useRef<ReactCodeMirrorRef>(null);
-
+  const lineNumberCompartment = new Compartment();
   const [code, setCode] = useState<string>(template);
-
   const options = useAppSelector((state) => state.options);
   const theme = options.darkMode ? duotoneLight : vscodeDark;
   const handleCodeUpdate = (value: string) => {
@@ -79,19 +78,16 @@ export default function CodeEditor({
     setCode(template);
   }, [template]);
 
-  const editorTheme = vscodeDark;
-  // const editorTheme = duotoneLight;
-
   const cmProps: CodeMirrorProps = {
     options: {
       lineWrapping: true,
       lineNumbers: true,
-      readOnly: true,
+      // readOnly: true,
       className: "readOnly",
       screenReaderLabel: "Code Editor for " + title,
       autofocus: locked ? false : true,
     },
-    value: code,
+    // value: code,
     extensions: [
       lang,
       EditorState.readOnly.of(locked),
@@ -100,15 +96,30 @@ export default function CodeEditor({
     ],
     theme: theme,
     placeholder: `Write your ${title} here...`,
-    style: {
-      overflow: "auto",
-      boxSizing: "border-box",
-      margin: "0",
-      padding: "0",
-      minHeight: "300px",
-    },
 
     onChange: handleCodeUpdate,
+  };
+
+  const cmPropsFirstLine: CodeMirrorProps = {
+    options: {
+      lineWrapping: true,
+      lineNumbers: false,
+      readOnly: true,
+      className: "readOnly",
+      screenReaderLabel: "Code Editor for " + title,
+      autofocus: locked ? false : true,
+      highlightActiveLine: false,
+    },
+    // value: code,
+    extensions: [
+      // lang,
+      EditorState.readOnly.of(true),
+      EditorView.editable.of(false),
+      EditorView.lineWrapping,
+      lineNumberCompartment.of([]),
+    ],
+    theme: theme,
+    placeholder: `Write your ${title} here...`,
   };
 
   return (
@@ -137,7 +148,56 @@ export default function CodeEditor({
           locked ? "You can't edit this code" : " Click on the code to edit it"
         }
       >
-        <CodeMirror {...cmProps} />
+        {title === "HTML" && (
+          <div title="You can't edit this code">
+            <CodeMirror
+              {...cmPropsFirstLine}
+              value={"<div id='root'>"}
+              style={{
+                overflow: "auto",
+                boxSizing: "border-box",
+                margin: "0",
+                padding: "0",
+                minHeight: "20px",
+              }}
+              basicSetup={{
+                lineNumbers: false,
+                foldGutter: false,
+                highlightActiveLine: false,
+              }}
+            />
+          </div>
+        )}
+        <CodeMirror
+          {...cmProps}
+          value={code}
+          style={{
+            overflow: "auto",
+            boxSizing: "border-box",
+            margin: "0",
+            padding: "0",
+          }}
+        />
+        {title === "HTML" && (
+          <div title="You can't edit this code">
+            <CodeMirror
+              {...cmPropsFirstLine}
+              value={"</div>"}
+              style={{
+                overflow: "auto",
+                boxSizing: "border-box",
+                margin: "0",
+                padding: "0",
+                minHeight: "20px",
+              }}
+              basicSetup={{
+                lineNumbers: false,
+                foldGutter: false,
+                highlightActiveLine: false,
+              }}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 /** @format */
-
+import React from "react";
 import { ReactElement, useEffect, useRef, useState } from "react";
 import { domToPng } from "modern-screenshot";
 
@@ -46,17 +46,12 @@ function App() {
     const board = document.getElementById("root");
     if (stylesCorrect && board) {
       domToPng(board).then((dataURL: string) => {
-        if (counter > 0) {
-          window.parent.postMessage({ dataURL, urlName }, "*");
-        }
-        counter++;
+        window.parent.postMessage({ dataURL, urlName }, "*");
       });
     }
   }, [html, stylesCorrect]);
 
   return <>{html}</>;
 }
-
-let counter = 0;
 
 export default App;

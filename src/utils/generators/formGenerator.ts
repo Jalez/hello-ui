@@ -64,7 +64,7 @@ export const formGenerator = (primaryColor: string, secondaryColor: string) => {
   const css = `
 
 
-body {    
+#root {    
   margin: 0px;
   padding: 0px;
   overflow: hidden;

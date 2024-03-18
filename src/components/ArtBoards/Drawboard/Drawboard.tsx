@@ -73,6 +73,7 @@ export const Drawboard = (): JSX.Element => {
                 >
                   <ScreenshotWithRedux
                     imageUrl={level.drawingUrl}
+                    // imageUrl="wdawdw"
                     name="drawing"
                   >
                     <Image imageUrl={level.drawingUrl} name="drawing" />

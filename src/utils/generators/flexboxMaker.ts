@@ -60,7 +60,7 @@ export const flexboxMaker = (primaryColor: string, secondaryColor: string) => {
   <div class="six">Six</div>
 </div>`;
 
-  const tcss = `body {
+  const tcss = `#root {
 	height: ${drawBoardheight}px;
 	width: ${drawBoardWidth}px;
 	margin: 0;
