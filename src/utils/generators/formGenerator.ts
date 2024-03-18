@@ -33,13 +33,13 @@ export const formGenerator = (primaryColor: string, secondaryColor: string) => {
   <header>
   <h1>Form title</h1>
   </header>
+  <section>
   <div class="same-row-children">
   <label for="${selectedInputType}" style="text-decoration: ${selectedLabelDecoration};">${
     selectedInputType.charAt(0).toUpperCase() +
     selectedInputType.slice(1) +
     " label"
   }</label>
-  <section>
   <input type="${selectedInputType}" id="${selectedInputType}" name="${selectedInputType}" placeholder="Enter ${selectedInputType}">
   </div>
   <fieldset>
