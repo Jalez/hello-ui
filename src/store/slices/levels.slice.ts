@@ -165,6 +165,8 @@ const levelsSlice = createSlice({
       );
       level.code = { html: newGeneration.THTML, css: newGeneration.TCSS };
       level.solution = { html: newGeneration.SHTML, css: newGeneration.SCSS };
+      level.instructions = newGeneration.instructions;
+      level.question_and_answer = newGeneration.question_and_answer;
       level.solEvalUrl = "";
       level.drawnEvalUrl = "";
       level.drawingUrl = "";
