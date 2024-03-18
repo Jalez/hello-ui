@@ -19,7 +19,6 @@ export default function Instruction() {
   const room = useAppSelector((state) => state.room);
 
   useEffect(() => {
-    console.log("room.currentRoom", room.currentRoom);
     if (room.currentRoom === "Instruction") {
       setOpen(true);
     }
@@ -29,7 +28,6 @@ export default function Instruction() {
     setOpen(false);
     dispatch(updateRoom("game"));
   };
-  console.log("open", open);
 
   return (
     <InstructionModal open={open}>

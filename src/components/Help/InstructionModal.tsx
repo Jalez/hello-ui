@@ -79,7 +79,6 @@ const InstructionModal = ({ open, children }: InstructionModalProps) => {
     }
   }, [id, open]);
 
-  console.log("isVisible", isVisible);
   if (closed) return null;
   return (
     <ModalContainer isVisible={isVisible} className="mask-container">

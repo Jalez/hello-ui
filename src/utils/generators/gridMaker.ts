@@ -50,7 +50,7 @@ export const generateGridLevel = (
 </div>`;
   const SHTML = THTML;
   const TCSS = `
-body {
+#root {
   background-color: ${secondaryColor};
   width: ${drawBoardWidth}px;
   height: ${drawBoardheight}px;

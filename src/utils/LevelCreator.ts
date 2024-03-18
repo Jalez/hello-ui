@@ -107,7 +107,7 @@ export const createLevels = (week: week) => {
       timeData: {
         startTime: 0,
         pointAndTime: {
-          0: "-",
+          0: "0:0",
           1: "0:0",
           2: "0:0",
           3: "0:0",

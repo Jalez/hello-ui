@@ -46,7 +46,9 @@ export const tabsContent = [
               <strong>Use the provided CSS/HTML template:</strong> We strongly
               advise using the existing CSS/HTML template provided, as it
               contains CSS rules and HTML elements that are suitable for your
-              task. This should be used as a starting point for your work.
+              task. This should be used as a starting point for your work.{" "}
+              <strong>Beware:</strong> HTML is always wrapped in a div with the
+              id "root".
             </Typography>
           </li>
           <li>

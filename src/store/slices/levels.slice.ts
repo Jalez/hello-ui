@@ -153,10 +153,7 @@ const levelsSlice = createSlice({
     resetLevel(state, action) {
       const level = state.find((level) => level.id === action.payload);
       if (!level) return;
-      level.points = 0;
-      level.completed = "no";
-      level.accuracy = "";
-      level.diff = "";
+
       level.confettiSprinkled = false;
       level.timeData.pointAndTime = {};
       const name = level.name.toString() as levelNames;
