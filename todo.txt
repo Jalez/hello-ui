@@ -1,0 +1,7 @@
+ES-manager Päivitetty: html_url keyword on nyt dynaamisesti valittavissa. 
+CSS-artist: UI päivitetty (darkmode, questions, reset button, cloud on/off)
+
+- Transitions between levels/darkmode
+- Update levels to be more user friendly. 
+
+- Tänään: huomiseen harkkatuntiin valmistautuminen. Mahdolliset muutokset levelleihin. 

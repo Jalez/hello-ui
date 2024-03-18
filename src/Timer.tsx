@@ -3,9 +3,8 @@
 import { useEffect, useState } from "react";
 import { useAppDispatch, useAppSelector } from "./store/hooks/hooks";
 import { numberTimeToMinutesAndSeconds } from "./utils/numberTimeToMinutesAndSeconds";
-import { Paper, Typography } from "@mui/material";
+import { Typography } from "@mui/material";
 import { startLevelTimer } from "./store/slices/levels.slice";
-import { NoEncryption } from "@mui/icons-material";
 import { Box } from "@mui/system";
 
 const Timer = () => {
@@ -15,28 +14,29 @@ const Timer = () => {
   );
   const levels = useAppSelector((state) => state.levels);
   const level = levels[currentLevel - 1];
-  const startTime = level.timeData.startTime;
-  const [timeSpent, setTimeSpent] = useState(
-    numberTimeToMinutesAndSeconds(new Date().getTime() - startTime)
-  );
+  const [timeSpent, setTimeSpent] = useState(numberTimeToMinutesAndSeconds(-1));
+  const room = useAppSelector((state) => state.room);
 
   useEffect(() => {
+    let interval: NodeJS.Timeout;
     const startTime = level.timeData.startTime;
-    if (!startTime) {
+    if (!startTime && room.currentRoom !== "Instruction") {
       dispatch(startLevelTimer(currentLevel));
-    }
-    setTimeSpent(
-      numberTimeToMinutesAndSeconds(new Date().getTime() - startTime)
-    );
-
-    const interval = setInterval(() => {
+      return;
+    } else if (startTime) {
       setTimeSpent(
         numberTimeToMinutesAndSeconds(new Date().getTime() - startTime)
       );
-    }, 1000);
+
+      interval = setInterval(() => {
+        setTimeSpent(
+          numberTimeToMinutesAndSeconds(new Date().getTime() - startTime)
+        );
+      }, 1000);
+    }
 
     return () => clearInterval(interval);
-  }, [level]);
+  }, [room, level]);
 
   return (
     <div

@@ -52,12 +52,8 @@ export const tabsContent = [
           <li>
             <Typography sx={{ mt: 2 }} variant="body2">
               <strong>Evaluating your code:</strong> Evaluation happens
-              automatically. If your accuracy is 91% or above, you will receive
-              points for the level. If you accuracy 98% or above, you will
-              receive full points for the level. Accuracy below 90% will result
-              in a zero point score for the level. If you refresh the page, your
-              progress will be lost, in which case you will need to evaluate
-              your code again.
+              automatically. The more accurate web-component you design, the
+              more points you get.
             </Typography>
           </li>
           <li>
