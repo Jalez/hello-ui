@@ -117,6 +117,7 @@ const levelsSlice = createSlice({
           level.points = points;
           const currentTime = new Date().getTime();
           const timeAndDate = level.timeData.pointAndTime[points];
+          if (!level.timeData.startTime) return;
           if (timeAndDate == "0:0" || !timeAndDate) {
             level.timeData.pointAndTime[points] = numberTimeToMinutesAndSeconds(
               currentTime - level.timeData.startTime

@@ -52,14 +52,12 @@ const InstructionModal = ({ open, children }: InstructionModalProps) => {
   const [isVisible, setIsVisible] = React.useState(false);
 
   useEffect(() => {
-    setId("element-to-mask");
     let timeout: NodeJS.Timeout;
     if (open) {
-      // setTimeout(() => {
       setIsVisible(true);
       setMaskClass("show-mask");
       setClosed(false);
-      // }, 100);
+      setTimeout(() => {}, 100);
     } else {
       setMaskClass("hide-mask");
       setIsVisible(false);
@@ -79,12 +77,12 @@ const InstructionModal = ({ open, children }: InstructionModalProps) => {
         setId("");
       }, 400);
     }
-  }, [id]);
+  }, [id, open]);
 
   console.log("isVisible", isVisible);
   if (closed) return null;
   return (
-    <ModalContainer isVisible={isVisible}>
+    <ModalContainer isVisible={isVisible} className="mask-container">
       <section
         id={id}
         className={`element ${maskClass}`}
