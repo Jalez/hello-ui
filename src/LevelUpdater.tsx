@@ -50,7 +50,7 @@ export const LevelUpdater = () => {
     }
   }, [level?.drawingUrl, level?.solutionUrl]);
   useEffect(() => {
-    dispatch(updatePointsThunk(points));
+    // dispatch(updatePointsThunk(points));
     dispatch(sendScoreToParentFrame());
   }, [points]);
 

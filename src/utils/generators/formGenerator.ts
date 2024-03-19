@@ -134,7 +134,7 @@ input[type="number"] {
 
 input[type="checkbox"] {
   appearance: none;
-  background-color: #fff;
+  background-color: ${primaryColor};
   margin: 0;
   font: inherit;
   color: currentColor;
@@ -272,8 +272,8 @@ form label[for="number"] {
 
 
 
-form button,
-form input[type="submit"] {
+form footer button,
+form footer input[type="submit"] {
   margin: 10px;
   padding: 10px;
   background-color: ${secondaryColor};

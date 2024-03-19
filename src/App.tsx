@@ -18,6 +18,7 @@ import { updateWeek } from "./store/slices/levels.slice";
 import { sendScoreToParentFrame } from "./store/actions/score.actions";
 import { Footer } from "./components/Footer/Footer";
 import Timer from "./Timer";
+import Info from "./components/InfoBoard/Info";
 
 const AppStyle = {
   display: "flex",
@@ -56,6 +57,7 @@ function App() {
       <Instruction />
       <article id="App" style={AppStyle}>
         <LevelUpdater />
+
         <GameContainer>
           {levels.length > 0 && (
             <>
@@ -72,6 +74,7 @@ function App() {
               >
                 <InfoInstructions />
               </div>
+              <Info />
               <ArtBoards />
               {options.showWordCloud && <CSSWordCloud />}
               <Editors />

@@ -5,7 +5,6 @@ import Paper from "@mui/material/Paper";
 import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
 import Typography from "@mui/material/Typography";
-import Box from "@mui/material/Box";
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -24,7 +23,7 @@ function TabPanel(props: TabPanelProps) {
       aria-labelledby={`simple-tab-${index}`}
       {...other}
     >
-      {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
+      {value === index && <div style={{ padding: 3 }}>{children}</div>}
     </div>
   );
 }
@@ -53,8 +52,8 @@ export default function DynamicTabs({ style, tabs }: TabProps) {
   };
 
   return (
-    <Box>
-      <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
+    <div>
+      <div style={{ borderBottom: 1, borderColor: "divider" }}>
         <Tabs
           variant="scrollable"
           // set color to primary
@@ -79,7 +78,7 @@ export default function DynamicTabs({ style, tabs }: TabProps) {
             />
           ))}
         </Tabs>
-      </Box>
+      </div>
       {tabs.map((tab, index) => (
         <div style={style} key={index}>
           <TabPanel value={value} index={index}>
@@ -87,6 +86,6 @@ export default function DynamicTabs({ style, tabs }: TabProps) {
           </TabPanel>
         </div>
       ))}
-    </Box>
+    </div>
   );
 }

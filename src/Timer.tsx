@@ -3,9 +3,8 @@
 import { useEffect, useState } from "react";
 import { useAppDispatch, useAppSelector } from "./store/hooks/hooks";
 import { numberTimeToMinutesAndSeconds } from "./utils/numberTimeToMinutesAndSeconds";
-import { Typography } from "@mui/material";
-import { startLevelTimer } from "./store/slices/levels.slice";
-import { Box } from "@mui/system";
+import { Paper, Typography } from "@mui/material";
+import { resetLevel, startLevelTimer } from "./store/slices/levels.slice";
 
 const Timer = () => {
   const dispatch = useAppDispatch();
@@ -21,6 +20,7 @@ const Timer = () => {
     let interval: NodeJS.Timeout;
     const startTime = level.timeData.startTime;
     if (!startTime && room.currentRoom !== "Instruction") {
+      dispatch(resetLevel(currentLevel));
       dispatch(startLevelTimer(currentLevel));
       return;
     } else if (startTime) {
@@ -50,7 +50,7 @@ const Timer = () => {
         zIndex: 10,
       }}
     >
-      <Box
+      <Paper
         sx={{
           display: "flex",
           justifyContent: "center",
@@ -58,6 +58,8 @@ const Timer = () => {
           flexDirection: "column",
           padding: "1rem",
           borderRadius: "2rem",
+          // remove shadow
+          boxShadow: 0,
           //   width: "100%",
           bgcolor: "secondary.main",
         }}
@@ -66,7 +68,7 @@ const Timer = () => {
           {" "}
           <strong>Time: {timeSpent}</strong>
         </Typography>
-      </Box>
+      </Paper>
     </div>
   );
 };

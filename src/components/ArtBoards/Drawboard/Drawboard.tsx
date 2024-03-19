@@ -28,7 +28,7 @@ export const Drawboard = (): JSX.Element => {
     <BoardContainer>
       <BoardTitle>Your version</BoardTitle>
       <Board>
-        <InfoBoard>
+        {/* <InfoBoard>
           <InfoText>
             Points:{" "}
             <Shaker value={level.points}>
@@ -45,7 +45,7 @@ export const Drawboard = (): JSX.Element => {
           <InfoText>
             <LevelData reduxState="accuracy" />%
           </InfoText>
-        </InfoBoard>
+        </InfoBoard> */}
         <ArtContainer>
           <SlideShower
             staticComponent={<Image imageUrl={level.image} name="solution" />}

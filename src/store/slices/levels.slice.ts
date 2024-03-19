@@ -21,11 +21,13 @@ import {
 
 const maxCodeLength = 100000;
 
-const storage = obfuscate("ui-designer-layout-levels");
+let storage: ReturnType<typeof obfuscate> | null = null;
+
+// let storage = obfuscate("ui-designer-layout-levels");
 const timerStorage = obfuscate("ui-designer-start-time");
 
 // Get initial state from local storage
-let initialState: Level[] = JSON.parse(storage.getItem(storage.key) || "[]");
+let initialState: Level[] = [];
 // get current time in milliseconds
 const currentTime = new Date().getTime();
 // get the time the user started the game
@@ -44,7 +46,7 @@ const parseStorage = (storage: any) => {
 
 const levelsSlice = createSlice({
   name: "levels",
-  initialState: parseStorage(storage) as Level[],
+  initialState: [] as Level[],
 
   reducers: {
     evaluateLevel(state, action) {
@@ -70,7 +72,7 @@ const levelsSlice = createSlice({
       };
 
       const loadAndMatch = (
-        currentLevel: Number,
+        currentLevel: number,
         drawnImage: HTMLImageElement,
         solutionImage: HTMLImageElement
       ) => {
@@ -93,7 +95,7 @@ const levelsSlice = createSlice({
           }
         );
         // Update the current level with the accuracy and diff
-        const level = state.find((level) => level.id === currentLevel);
+        const level = state[currentLevel - 1];
         if (!level) return;
         const percentage = 100 - (accuracy / (width * height)) * 100;
         level.diff = diff.toString("base64");
@@ -128,31 +130,36 @@ const levelsSlice = createSlice({
           level.points = 0;
         }
 
-        storage.setItem(storage.key, JSON.stringify(state));
+        storage?.setItem(storage.key, JSON.stringify(state));
       };
       const { currentLevel, drawnImage, solutionImage } = action.payload;
       loadAndMatch(currentLevel, drawnImage, solutionImage);
     },
     updateWeek(state, action) {
       let week = action.payload;
+
+      if (!week) week = "all";
+      storage = obfuscate(`ui-designer-${week}`);
       if (storage.getItem(storage.key)) {
         state = JSON.parse(storage.getItem(storage.key) || "[]");
       }
+
       // if levels have already been created, do nothing
       if (state.length > 0) {
         console.error("Levels have already been created!");
-        return;
+        return state;
       }
-      // otherwise, create the levels
-      if (!week) week = "all";
+
       const levels = createLevels(week) as Level[];
+
       state = levels;
       storage.setItem(storage.key, JSON.stringify(state));
       return state;
     },
     resetLevel(state, action) {
-      const level = state.find((level) => level.id === action.payload);
+      const level = state[action.payload - 1];
       if (!level) return;
+      level.identifier = Math.random().toString(36).substring(7);
 
       level.confettiSprinkled = false;
       level.timeData.pointAndTime = {};
@@ -172,18 +179,24 @@ const levelsSlice = createSlice({
 
       // level.timeData.startTime = new Date().getTime();
 
-      storage.setItem(storage.key, JSON.stringify(state));
+      storage?.setItem(storage.key, JSON.stringify(state));
+    },
+    toggleShowModelSolution(state, action) {
+      const level = state[action.payload - 1];
+      if (!level) return;
+      level.showModelPicture = !level.showModelPicture;
+      storage?.setItem(storage.key, JSON.stringify(state));
     },
     startLevelTimer(state, action) {
-      const level = state.find((level) => level.id === action.payload);
+      const level = state[action.payload - 1];
       if (!level) return;
       level.timeData.startTime = new Date().getTime();
-      storage.setItem(storage.key, JSON.stringify(state));
+      storage?.setItem(storage.key, JSON.stringify(state));
     },
 
     updateCode(state, action) {
       const { id, code } = action.payload;
-      const level = state.find((level) => level.id === id);
+      const level = state[id - 1];
 
       if (!level) return;
       if (
@@ -208,7 +221,7 @@ const levelsSlice = createSlice({
       }
 
       level.code = code;
-      storage.setItem(storage.key, JSON.stringify(state));
+      storage?.setItem(storage.key, JSON.stringify(state));
     },
     updateUrl(state, action) {
       if (!action.payload) return;
@@ -224,7 +237,7 @@ const levelsSlice = createSlice({
         if (state[id - 1].solution.html) state[id - 1].solution.html = "";
       }
       // update the code for the level in local storage
-      storage.setItem(storage.key, JSON.stringify(state));
+      storage?.setItem(storage.key, JSON.stringify(state));
     },
     updateEvaluationUrl(state, action) {
       const { id, dataUrl, name } = action.payload;
@@ -232,7 +245,7 @@ const levelsSlice = createSlice({
       if (name === "solution") state[id - 1].solEvalUrl = dataUrl;
 
       // update the code for the level in local storage
-      storage.setItem(storage.key, JSON.stringify(state));
+      storage?.setItem(storage.key, JSON.stringify(state));
     },
   },
 });
@@ -245,6 +258,7 @@ export const {
   updateWeek,
   resetLevel,
   startLevelTimer,
+  toggleShowModelSolution,
 } = levelsSlice.actions;
 
 export default levelsSlice.reducer;

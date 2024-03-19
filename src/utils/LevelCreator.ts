@@ -78,7 +78,7 @@ export const createLevels = (week: week) => {
 
     let generatedLevelDetails = generator(mainColor, secondaryColor);
     const level = {
-      id: i,
+      identifier: Math.random().toString(36).substring(7),
       name: generatedLevelDetails.difficulty,
 
       buildingBlocks: {
@@ -115,6 +115,7 @@ export const createLevels = (week: week) => {
           5: "0:0",
         },
       },
+      showModelPicture: true,
     };
     initialState.push(level);
   }
