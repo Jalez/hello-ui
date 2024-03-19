@@ -1,6 +1,6 @@
 /** @format */
 
-import { Box, IconButton, Typography } from "@mui/material";
+import { IconButton, Typography } from "@mui/material";
 import React from "react";
 import ArrowForwardIosIcon from "@mui/icons-material/ArrowForwardIos";
 import ArrowBackIosIcon from "@mui/icons-material/ArrowBackIos";
@@ -54,8 +54,8 @@ const LevelControls = ({
         handleConfirmation={increaseLevel}
         resetAnchorEl={resetAnchorEl}
       />
-      <Box
-        sx={{ display: "flex", justifyContent: "center" }}
+      <div
+        style={{ display: "flex", justifyContent: "center" }}
         ref={forwardArrowRef}
       >
         <IconButton
@@ -92,7 +92,7 @@ const LevelControls = ({
         >
           <ArrowForwardIosIcon color="primary" />
         </IconButton>
-      </Box>
+      </div>
     </>
   );
 };

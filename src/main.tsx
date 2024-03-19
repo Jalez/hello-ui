@@ -3,6 +3,12 @@ import ReactDOM from "react-dom/client";
 import { Provider, useSelector } from "react-redux";
 import App from "./App";
 import { store } from "./store/store";
+// import {
+//   ThemeProvider,
+//   createMuiTheme,
+//   makeStyles,
+//   createTheme,
+// } from "@material-ui/core/styles";
 import { createTheme, ThemeProvider } from "@mui/material/styles";
 import { mainColor, secondaryColor } from "./constants";
 import { useAppSelector } from "./store/hooks/hooks";

@@ -13,6 +13,7 @@ const FooterStyled = styled("footer")(
   color: ${theme.palette.primary.main};
   z-index: 50;
   pointer-events: none;
+  font-size: 0.5rem;
 `
 );
 
@@ -27,7 +28,7 @@ const LinkStyled = styled("a")`
 export const Footer = () => {
   return (
     <FooterStyled>
-      Creating HTML components with the magic of your mind. Inspired by
+      Inspired by
       <LinkStyled
         href="https://cssbattle.dev/"
         target="_blank"

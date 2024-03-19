@@ -92,7 +92,7 @@ export const ThreeNavs = () => {
       <StyledNavContainer>
         <NavPopper
           anchorEl={anchorEl}
-          paragraph="This is an irreversible action. Timer is nor affected. Are you sure you want to reset the level?"
+          paragraph="This is an irreversible action. All progress will be lost, but timer is not affected. Are you sure you want to reset the level?"
           title="Reset Level"
           handleConfirmation={handleLevelReset}
           resetAnchorEl={handleAnchorElReset}

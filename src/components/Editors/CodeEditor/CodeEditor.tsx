@@ -8,18 +8,15 @@ import { Typography } from "@mui/material";
 import { useEffect, useState, useRef } from "react";
 import { vscodeDark, vscodeDarkInit } from "@uiw/codemirror-theme-vscode";
 import { Compartment } from "@codemirror/state";
+
 import {
-  duotoneLight,
-  duotoneLightInit,
-  duotoneDark,
-  duotoneDarkInit,
-} from "@uiw/codemirror-theme-duotone";
-import {
-  ReactCodeMirrorProps,
-  ReactCodeMirrorRef,
-} from "@uiw/react-codemirror";
+  githubLight,
+  githubLightInit,
+  githubDark,
+  githubDarkInit,
+} from "@uiw/codemirror-theme-github";
+import { ReactCodeMirrorProps } from "@uiw/react-codemirror";
 import { useAppSelector } from "../../../store/hooks/hooks";
-import { mainColor, secondaryColor } from "../../../constants";
 
 interface CodeEditorProps {
   lang: any;
@@ -28,6 +25,7 @@ interface CodeEditorProps {
   codeUpdater: (data: { html?: string; css?: string }) => void;
   locked?: boolean;
   width?: string;
+  levelIdentifier: string;
 }
 
 interface CodeMirrorProps extends ReactCodeMirrorProps {
@@ -51,11 +49,12 @@ export default function CodeEditor({
   codeUpdater,
   locked = false,
   width = "20%",
+  levelIdentifier,
 }: CodeEditorProps) {
   const lineNumberCompartment = new Compartment();
   const [code, setCode] = useState<string>(template);
   const options = useAppSelector((state) => state.options);
-  const theme = options.darkMode ? duotoneLight : vscodeDark;
+  const theme = options.darkMode ? githubLight : vscodeDark;
   const handleCodeUpdate = (value: string) => {
     if (!locked) {
       setCode(value);
@@ -76,7 +75,7 @@ export default function CodeEditor({
 
   useEffect(() => {
     setCode(template);
-  }, [template]);
+  }, [template, levelIdentifier]);
 
   const cmProps: CodeMirrorProps = {
     options: {

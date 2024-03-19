@@ -5,8 +5,8 @@ type question_and_answer = {
 };
 
 export interface Level {
+  identifier: string;
   week: string;
-  id: number;
   name: string;
   completed: string;
   accuracy: string;
@@ -45,6 +45,7 @@ export interface Level {
   confettiSprinkled: boolean;
   instructions: instructions;
   question_and_answer: question_and_answer;
+  showModelPicture: boolean;
 }
 
 export type generator = (

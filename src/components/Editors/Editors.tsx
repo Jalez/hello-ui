@@ -7,15 +7,15 @@ import { useEffect, useState } from "react";
 import { useAppDispatch, useAppSelector } from "../../store/hooks/hooks";
 import { updateCode } from "../../store/slices/levels.slice";
 import { Slider } from "./Slider/Slider";
-import { secondaryColor } from "../../constants";
 import { useTheme } from "@mui/system";
+import { Level } from "../../types";
 
 export const Editors = () => {
   const theme = useTheme();
   const dispatch = useAppDispatch();
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
-  const [cssEditorWidth, setCssEditorWidth] = useState<string>("49.5%");
-  const [htmlEditorWidth, setHtmlEditorWidth] = useState<string>("49.5%");
+  const [cssEditorWidth, setCssEditorWidth] = useState<string>("49.7%");
+  const [htmlEditorWidth, setHtmlEditorWidth] = useState<string>("49.7%");
   const [editorHeight, setEditorHeight] = useState<string>("50%");
   const levels = useAppSelector((state: any) => state.levels);
   const [htmlCode, setHTMLCode] = useState<string>("");
@@ -24,12 +24,14 @@ export const Editors = () => {
     document.body.scrollHeight
   );
   const [maxPercentage, setMaxPercentage] = useState<number>(0);
+  const level = levels[currentLevel - 1] as Level;
+  const identifier = level?.identifier;
 
   useEffect(() => {
     if (!levels[currentLevel - 1]) return;
     setHTMLCode(levels[currentLevel - 1].code.html);
     setCSSCode(levels[currentLevel - 1].code.css);
-  }, [currentLevel]);
+  }, [currentLevel, identifier]);
 
   const codeUpdater = (data: { html?: string; css?: string }) => {
     if (!levels[currentLevel - 1]) return;
@@ -119,6 +121,7 @@ export const Editors = () => {
           title="HTML"
           codeUpdater={codeUpdater}
           template={htmlCode}
+          levelIdentifier={identifier}
           locked={false}
           width={htmlEditorWidth}
         />
@@ -134,6 +137,7 @@ export const Editors = () => {
           lang={css()}
           title="CSS"
           codeUpdater={codeUpdater}
+          levelIdentifier={identifier}
           template={cssCode}
           width={cssEditorWidth}
           // locked={true}

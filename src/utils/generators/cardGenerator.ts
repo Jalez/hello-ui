@@ -29,7 +29,7 @@ export const cardGenerator = (primaryColor: string, secondaryColor: string) => {
         </header>
         <section>
           <p>
-          The word <em>italic</em> and  <strong>bold</strong> in this paragraph use semantic tags denoting "emphasized text" and "great urgency" respectively.
+          The word <em>italic</em> and  <strong>bold</strong> in this paragraph use semantic tags denoting <i>emphasized text</i> and <b>great urgency</b> respectively.
           </p>
         </section>
         <footer>
@@ -54,7 +54,7 @@ color: ${primaryColor};
 }
 
 .custom-card header, .custom-card section, .custom-card footer {
-    padding: 10px;
+    padding: 5px;
 }
 
 b {
