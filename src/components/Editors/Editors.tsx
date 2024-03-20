@@ -140,7 +140,7 @@ export const Editors = () => {
           levelIdentifier={identifier}
           template={cssCode}
           width={cssEditorWidth}
-          // locked={true}
+          locked={true}
         />
       </div>
     </div>
