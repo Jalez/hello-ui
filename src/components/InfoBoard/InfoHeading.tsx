@@ -1,6 +1,6 @@
 /** @format */
 
-import { Typography, useTheme } from "@mui/material";
+import { Box, Typography, useTheme } from "@mui/material";
 import { secondaryColor } from "../../constants";
 
 interface InfoHeadingProps {
@@ -17,8 +17,8 @@ export const InfoHeading = ({ children, variant }: InfoHeadingProps) => {
   const theme = useTheme();
 
   return (
-    <div
-      style={{
+    <Box
+      sx={{
         display: "flex",
         justifyContent: "center",
         // width: '100%',
@@ -44,6 +44,6 @@ export const InfoHeading = ({ children, variant }: InfoHeadingProps) => {
       >
         {children}
       </Typography>
-    </div>
+    </Box>
   );
 };

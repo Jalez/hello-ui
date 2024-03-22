@@ -39,8 +39,7 @@ export const tabsContent = [
   {
     label: "General advice",
     content: (
-      <>
-        <ol>
+      <ol>
           <li>
             <Typography sx={{ mt: 2 }} variant="body2">
               <strong>Use the provided CSS/HTML template:</strong> We strongly
@@ -66,21 +65,18 @@ export const tabsContent = [
             </Typography>
           </li>
         </ol>
-      </>
     ),
   },
   {
     label: "Remember to Submit your work",
     content: (
-      <>
-        <Typography sx={{ mt: 2 }} variant="body2">
+      <Typography sx={{ mt: 2 }} variant="body2">
           Once you are finished with the game, remember to Submit the score to
           plussa by clicking the "Submit" button. If you refreshed the page at
           any moment in time, make sure you received the points for the tasks.
           Course Staff are available for questions during official hours through
           the Course Teams channel. Good luck!
         </Typography>
-      </>
     ),
   },
 ];

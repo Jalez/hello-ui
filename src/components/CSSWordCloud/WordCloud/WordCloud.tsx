@@ -1,11 +1,10 @@
 /** @format */
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 // import d3
 import d3Cloud from "d3-cloud";
 import * as d3 from "d3";
 import "./WordCloud.css";
-import { useTheme } from "@mui/system";
 // const as = d3Cloud_ as any;
 // include namespace for d3-cloud
 // import { d3 } from 'd3-cloud';
@@ -18,10 +17,6 @@ const loremWords = loremIpsum.split(" ").map((word) => {
   return word;
 });
 export const WordCloud = ({ words = loremWords }: { words: string[] }) => {
-  // const [words, setWords] = useState(loremWords);
-  const [hoveredWord, setHoveredWord] = useState<string | null>(null);
-  const theme = useTheme();
-
   useEffect(() => {
     function draw(words: Array<String>) {
       d3.select("#cloud")
@@ -73,5 +68,5 @@ export const WordCloud = ({ words = loremWords }: { words: string[] }) => {
     layout.start();
   }, []);
 
-  return <div id="cloud"></div>;
+  return <div id="cloud" />;
 };

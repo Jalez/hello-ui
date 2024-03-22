@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { styled } from "@mui/system";
 import { useAppSelector } from "../../store/hooks/hooks";
 
@@ -19,13 +19,16 @@ const StyledSection = styled("section")(({ theme }) => ({
 export const InfoInstructions = () => {
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const level = useAppSelector((state) => state.levels[currentLevel - 1]);
-
+  const instructionsHtmlObj = useMemo(
+    () => ({ __html: level?.instructions || "" }),
+    [level?.instructions]
+  );
   return (
     <StyledSection>
       <header>
         <h2>Level Instructions</h2>
       </header>
-      <p dangerouslySetInnerHTML={{ __html: level?.instructions || "" }} />
+      <p dangerouslySetInnerHTML={instructionsHtmlObj} />
     </StyledSection>
   );
 };

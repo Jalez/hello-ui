@@ -90,5 +90,5 @@ export const Frame = ({
     }
   }, [newHtml, newCss, iframeRef, currentLevel]);
 
-  return <StyledIframe id={id} ref={iframeRef} src={frameUrl}></StyledIframe>;
+  return <StyledIframe id={id} ref={iframeRef} src={frameUrl} />;
 };

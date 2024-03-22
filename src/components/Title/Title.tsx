@@ -1,4 +1,3 @@
-import React from "react";
 import { Typography, styled } from "@mui/material";
 
 const StyledTitleContainer = styled("div")(({ theme }) => ({

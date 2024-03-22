@@ -1,16 +1,17 @@
 /** @format */
 
-import { cssPropertiesArray } from "./CSSProperties";
-import { htmlElementsArray } from "./HTMLElements";
+import { Box } from "@mui/material";
+// import { htmlElementsArray } from "./HTMLElements";
 import { WordCloud } from "./WordCloud/WordCloud";
+import { cssPropertiesArray } from "./CSSProperties";
 
 export const CSSWordCloud = () => {
   return (
-    <div
-      style={{
+    <Box
+      sx={{
         position: "absolute",
         zIndex: 1,
-        top: "30%",
+        top: "10%",
         left: "0%",
         padding: "0px",
 
@@ -23,7 +24,7 @@ export const CSSWordCloud = () => {
         overflow: "hidden",
       }}
     >
-      <WordCloud words={htmlElementsArray} />
-    </div>
+      <WordCloud words={cssPropertiesArray} />
+    </Box>
   );
 };

@@ -2,19 +2,14 @@
 
 import { html } from "@codemirror/lang-html";
 import CodeMirror from "@uiw/react-codemirror";
-import { EditorView, ViewUpdate } from "@codemirror/view";
+import { EditorView } from "@codemirror/view";
 import { EditorState } from "@codemirror/state";
-import { Typography } from "@mui/material";
-import { useEffect, useState, useRef } from "react";
-import { vscodeDark, vscodeDarkInit } from "@uiw/codemirror-theme-vscode";
+import { Box, Typography } from "@mui/material";
+import { useEffect, useState } from "react";
+import { vscodeDark } from "@uiw/codemirror-theme-vscode";
 import { Compartment } from "@codemirror/state";
 
-import {
-  githubLight,
-  githubLightInit,
-  githubDark,
-  githubDarkInit,
-} from "@uiw/codemirror-theme-github";
+import { githubLight } from "@uiw/codemirror-theme-github";
 import { ReactCodeMirrorProps } from "@uiw/react-codemirror";
 import { useAppSelector } from "../../../store/hooks/hooks";
 
@@ -41,6 +36,14 @@ interface CodeMirrorProps extends ReactCodeMirrorProps {
     // add any other CodeMirror options you need here
   };
 }
+
+const CodeEditorStyle = {
+  overflow: "auto",
+  boxSizing: "border-box" as const,
+  margin: "0",
+  padding: "0",
+  minHeight: "20px",
+};
 
 export default function CodeEditor({
   lang = html(),
@@ -122,11 +125,12 @@ export default function CodeEditor({
   };
 
   return (
-    <div
+    <Box
       className="codeEditorContainer"
-      style={{
+      sx={{
         display: "flex",
         height: "100%",
+        minHeight: "600px",
         flexDirection: "column",
         width: width,
 
@@ -136,9 +140,9 @@ export default function CodeEditor({
       <Typography variant="h3" color="primary" id="title">
         {title} {locked ? "(Locked)" : ""}
       </Typography>
-      <div
+      <Box
         className="codeEditor"
-        style={{
+        sx={{
           flex: "1 1 20px",
           height: "100%",
           overflow: "auto",
@@ -152,13 +156,7 @@ export default function CodeEditor({
             <CodeMirror
               {...cmPropsFirstLine}
               value={"<div id='root'>"}
-              style={{
-                overflow: "auto",
-                boxSizing: "border-box",
-                margin: "0",
-                padding: "0",
-                minHeight: "20px",
-              }}
+              style={CodeEditorStyle}
               basicSetup={{
                 lineNumbers: false,
                 foldGutter: false,
@@ -182,13 +180,7 @@ export default function CodeEditor({
             <CodeMirror
               {...cmPropsFirstLine}
               value={"</div>"}
-              style={{
-                overflow: "auto",
-                boxSizing: "border-box",
-                margin: "0",
-                padding: "0",
-                minHeight: "20px",
-              }}
+              style={CodeEditorStyle}
               basicSetup={{
                 lineNumbers: false,
                 foldGutter: false,
@@ -197,7 +189,7 @@ export default function CodeEditor({
             />
           </div>
         )}
-      </div>
-    </div>
+      </Box>
+    </Box>
   );
 }

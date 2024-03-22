@@ -160,5 +160,8 @@ button {
     instructions,
     question_and_answer,
     difficulty: "card",
+    lockCSS: true,
+    lockHTML: false,
+    lockJS: true,
   };
 };

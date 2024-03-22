@@ -1,12 +1,7 @@
 /** @format */
 
-import zIndex from "@mui/material/styles/zIndex";
 import { useAppSelector } from "../../../store/hooks/hooks";
 import { Image } from "../../General/Image/Image";
-
-import { InfoBoard } from "../../InfoBoard/InfoBoard";
-import { InfoText } from "../../InfoBoard/InfoText";
-import { LevelData } from "../../InfoBoard/LevelData";
 import ScreenshotWithRedux from "../../Specific/ScreenshotWithRedux/ScreenshotWithRedux";
 import { ArtContainer } from "../ArtContainer";
 import { Frame } from "../Frame";
@@ -15,9 +10,8 @@ import { SlideShower } from "./ImageContainer/SlideShower";
 import { BoardTitle } from "../BoardTitle";
 import { BoardContainer } from "../BoardContainer";
 import { Board } from "../Board";
-import { InfoTime } from "../../InfoBoard/InfoTime";
-import Shaker from "../../General/Shaker/Shaker";
 import { drawBoardWidth, drawBoardheight } from "../../../constants";
+import { Box } from "@mui/material";
 
 export const Drawboard = (): JSX.Element => {
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
@@ -28,29 +22,11 @@ export const Drawboard = (): JSX.Element => {
     <BoardContainer>
       <BoardTitle>Your version</BoardTitle>
       <Board>
-        {/* <InfoBoard>
-          <InfoText>
-            Points:{" "}
-            <Shaker value={level.points}>
-              <LevelData reduxState="points" /> /{" "}
-              <LevelData reduxState="maxPoints" />
-            </Shaker>
-          </InfoText>
-          <InfoText>
-            Time:{" "}
-            <Shaker value={level.timeData.pointAndTime[level.points]}>
-              <InfoTime />
-            </Shaker>
-          </InfoText>
-          <InfoText>
-            <LevelData reduxState="accuracy" />%
-          </InfoText>
-        </InfoBoard> */}
         <ArtContainer>
           <SlideShower
             staticComponent={<Image imageUrl={level.image} name="solution" />}
             slidingComponent={
-              <div
+              <Box
                 style={{
                   height: drawBoardheight + "px",
                   width: drawBoardWidth + "px",
@@ -65,8 +41,8 @@ export const Drawboard = (): JSX.Element => {
                   name="drawingUrl"
                 />
                 {/* </ErrorBoundary> */}
-                <div
-                  style={{
+                <Box
+                  sx={{
                     position: "absolute",
                     bottom: 0,
                   }}
@@ -78,8 +54,8 @@ export const Drawboard = (): JSX.Element => {
                   >
                     <Image imageUrl={level.drawingUrl} name="drawing" />
                   </ScreenshotWithRedux>
-                </div>
-              </div>
+                </Box>
+              </Box>
             }
           />
         </ArtContainer>

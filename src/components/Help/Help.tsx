@@ -1,7 +1,7 @@
 /** @format */
 
 import * as React from "react";
-import { NavButton } from "../Navbar/NavButton";
+
 import { useAppDispatch, useAppSelector } from "../../store/hooks/hooks";
 import { updateRoom } from "../../store/slices/room.slice";
 import { Fab, Zoom } from "@mui/material";
@@ -14,27 +14,19 @@ export default function Help() {
     dispatch(updateRoom("Instruction"));
   };
 
-  //   return <NavButton clickHandler={handleOpen}>Instructions</NavButton>;
-
   return (
-    <Zoom
-      // zoom in whenever room is not Instruction
-      in={room.currentRoom !== "Instruction"}
-      // zoom out whenever room is Instruction
-      //   out={room.currentRoom === "Instruction"}
-    >
+    <Zoom in={room.currentRoom !== "Instruction"}>
       <Fab
         color="secondary"
         aria-label="instructions"
         onClick={handleOpen}
-        style={{
+        sx={{
           boxShadow: "none",
           border: "none",
           backgroundColor: "transparent",
         }}
       >
         <QuestionMarkIcon />
-        {/* Navigate */}
       </Fab>
     </Zoom>
   );

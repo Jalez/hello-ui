@@ -13,7 +13,9 @@ export const InfoBoard = ({ children }: InfoBoardProps) => {
         {/* map through children */}
         {children.length > 1
           ? children.map((child: any, index: number) => (
-              <StyledChildContainer key={index}>{child}</StyledChildContainer>
+              <StyledChildContainer key={Math.random() * 1000000}>
+                {child}
+              </StyledChildContainer>
             ))
           : children}{" "}
       </StyledInfoBoardContainer>

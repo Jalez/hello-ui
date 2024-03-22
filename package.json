@@ -7,7 +7,8 @@
     "dev": "vite --open",
     "start": "node server.cjs",
     "build": "tsc && vite build --base '/css-artist'",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "lint": "eslint --no-eslintrc --fix --config ./.reactlintrc.json --no-inline-config --ignore-path ./.reactlintignore --ext .js,.tsx ."
   },
   "dependencies": {
     "@codemirror/commands": "^6.2.1",
@@ -48,8 +49,15 @@
     "@types/pixelmatch": "^5.2.4",
     "@types/react": "^18.0.27",
     "@types/react-dom": "^18.0.10",
+    "@typescript-eslint/eslint-plugin": "^7.3.1",
+    "@typescript-eslint/parser": "^7.3.1",
     "@vitejs/plugin-react": "^3.1.0",
     "dotenv": "^16.0.3",
+    "eslint": "^8.56.0",
+    "eslint-plugin-jsx-a11y": "^6.8.0",
+    "eslint-plugin-react": "^7.33.2",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-react-perf": "^3.3.2",
     "typescript": "^4.9.3",
     "vite": "^4.1.0"
   }

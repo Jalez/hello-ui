@@ -1,5 +1,4 @@
 import { useEffect } from "react";
-import { useSelector } from "react-redux";
 import { Buffer } from "buffer";
 import { styled } from "@mui/system";
 import { drawBoardWidth, drawBoardheight } from "../../../../constants";

@@ -1,7 +1,6 @@
 /** @format */
 
-import { Paper, backdropClasses } from "@mui/material";
-import Grow from "@mui/material/Grow";
+import { Paper } from "@mui/material";
 
 interface GameContainerProps {
   children: React.ReactNode;
@@ -26,7 +25,7 @@ const paperStyle = {
 export const GameContainer = ({ children }: GameContainerProps) => {
   return (
     // <Grow in={true}>
-    <Paper elevation={1} style={paperStyle}>
+    <Paper elevation={1} sx={paperStyle}>
       {children}
     </Paper>
     // </Grow>

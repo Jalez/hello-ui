@@ -1,5 +1,6 @@
 /** @format */
 
+import { Box } from "@mui/material";
 import { drawBoardWidth, drawBoardheight } from "../../constants";
 
 interface ArtContainerProps {
@@ -8,9 +9,9 @@ interface ArtContainerProps {
 
 export const ArtContainer = ({ children }: ArtContainerProps) => {
   return (
-    <div
+    <Box
       className="img-container"
-      style={{
+      sx={{
         position: "relative",
         height: drawBoardheight + "px",
         width: drawBoardWidth + "px",
@@ -18,6 +19,6 @@ export const ArtContainer = ({ children }: ArtContainerProps) => {
       }}
     >
       {children}
-    </div>
+    </Box>
   );
 };

@@ -1,9 +1,9 @@
-type instructions = string;
 type question_and_answer = {
   question: string;
   answer: string;
 };
 
+type instructions = string;
 export interface Level {
   identifier: string;
   week: string;
@@ -46,11 +46,15 @@ export interface Level {
   instructions: instructions;
   question_and_answer: question_and_answer;
   showModelPicture: boolean;
+  lockCSS: boolean;
+  lockHTML: boolean;
+  lockJS: boolean;
 }
 
 export type generator = (
   primaryColor: string,
-  secondaryColor: string
+  secondaryColor: string,
+  tertiaryColor?: string
 ) => {
   THTML: string;
   SHTML: string;

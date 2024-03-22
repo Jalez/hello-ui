@@ -75,8 +75,14 @@ export const createLevels = (week: week) => {
       colors: ["#fff"],
       pictures: [],
     };
+    // add grey as tertiary color
+    const tertiaryColor = "#808080";
 
-    let generatedLevelDetails = generator(mainColor, secondaryColor);
+    let generatedLevelDetails = generator(
+      mainColor,
+      secondaryColor,
+      tertiaryColor
+    );
     const level = {
       identifier: Math.random().toString(36).substring(7),
       name: generatedLevelDetails.difficulty,
@@ -116,6 +122,9 @@ export const createLevels = (week: week) => {
         },
       },
       showModelPicture: true,
+      lockCSS: generatedLevelDetails.lockCSS,
+      lockHTML: generatedLevelDetails.lockHTML,
+      lockJS: generatedLevelDetails.lockJS,
     };
     initialState.push(level);
   }

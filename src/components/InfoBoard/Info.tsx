@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useAppDispatch, useAppSelector } from "../../store/hooks/hooks";
 import Shaker from "../General/Shaker/Shaker";
 import { InfoBoard } from "./InfoBoard";
 import { InfoColors } from "./InfoColors";
-import { InfoPictures } from "./InfoPictures";
+// import { InfoPictures } from "./InfoPictures";
 import { InfoSwitch } from "./InfoSwitch";
 import { InfoText } from "./InfoText";
 import { InfoTime } from "./InfoTime";
@@ -17,9 +17,9 @@ const Info = () => {
   const levels = useAppSelector((state) => state.levels);
   const level = levels[currentLevel - 1];
   const showModel = level.showModelPicture;
-  const handleSwitch = () => {
+  const handleSwitch = useCallback(() => {
     dispatch(toggleShowModelSolution(currentLevel));
-  };
+  }, [currentLevel, dispatch]);
 
   if (!level) return <div>loading...</div>;
   return (
@@ -57,7 +57,7 @@ const Info = () => {
           Accuracy: <LevelData reduxState="accuracy" />%
         </InfoText>
         <InfoColors />
-        <InfoPictures />
+        {/* <InfoPictures /> */}
         <InfoSwitch
           rightLabel={"Show model"}
           leftLabel={"Show diff"}

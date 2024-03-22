@@ -16,6 +16,7 @@ const StyledPaper = styled(Paper)(({ theme }) => ({
   display: "flex",
   flexDirection: "column",
   justifyContent: "space-between",
+  height: "500px",
 }));
 
 const InstructionPaper = ({ children }: InstructionPaperProps) => {

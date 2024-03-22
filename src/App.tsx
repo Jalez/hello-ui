@@ -2,16 +2,13 @@
 
 import "./App.css";
 
-import { Navbar } from "./components/Navbar/Navbar";
 import { Editors } from "./components/Editors/Editors";
 import { ArtBoards } from "./components/ArtBoards/ArtBoards";
 import Instruction from "./components/Help/Instruction";
 import { LevelUpdater } from "./LevelUpdater";
 import { GameContainer } from "./GameContainer";
-import { InfoBoard } from "./components/InfoBoard/InfoBoard";
 import { useAppDispatch, useAppSelector } from "./store/hooks/hooks";
 import InfoInstructions from "./components/InfoBoard/InfoInstructions";
-import { InfoQuestionAndAnswer } from "./components/InfoBoard/InfoQuestionAndAnswer";
 import { CSSWordCloud } from "./components/CSSWordCloud/CSSWordCloud";
 import { useEffect } from "react";
 import { updateWeek } from "./store/slices/levels.slice";
@@ -19,6 +16,8 @@ import { sendScoreToParentFrame } from "./store/actions/score.actions";
 import { Footer } from "./components/Footer/Footer";
 import Timer from "./Timer";
 import Info from "./components/InfoBoard/Info";
+import { Box } from "@mui/material";
+import { Navbar } from "./components/Navbar/Navbar";
 
 const AppStyle = {
   display: "flex",
@@ -27,7 +26,7 @@ const AppStyle = {
   alignItems: "center",
   position: "relative" as const,
   width: "100%",
-  height: "100vh",
+  height: "100%",
   // disable scrolling
   // overflow: "hidden",
   boxSizing: "border-box" as const,
@@ -46,7 +45,7 @@ function App() {
     // once it's mounted, send a message to the parent window
     // look at the url params to determine the week
     const urlParams = new URLSearchParams(window.location.search);
-    let week = urlParams.get("week");
+    const week = urlParams.get("week");
 
     dispatch(updateWeek(week));
     dispatch(sendScoreToParentFrame());
@@ -63,20 +62,10 @@ function App() {
             <>
               <Navbar />
               <Timer />
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "row",
-                  justifyContent: "center",
-                  alignItems: "start",
-                  width: "100%",
-                }}
-              >
-                <InfoInstructions />
-              </div>
+              <InfoInstructions />
               <Info />
-              <ArtBoards />
               {options.showWordCloud && <CSSWordCloud />}
+              <ArtBoards />
               <Editors />
             </>
           )}
