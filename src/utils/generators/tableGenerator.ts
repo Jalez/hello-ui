@@ -166,7 +166,7 @@ export const tableGenerator = (
     instructions,
     question_and_answer,
     lockCSS: false,
-    lockHTML: false,
+    lockHTML: true,
     lockJS: true,
   };
 };
