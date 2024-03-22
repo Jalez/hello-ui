@@ -1,15 +1,10 @@
 /** @format */
 
 import styled from "@emotion/styled";
-import {
-  FormControlLabel,
-  Stack,
-  Switch,
-  Typography,
-  alpha,
-} from "@mui/material";
+import { Stack, Switch, Typography, alpha } from "@mui/material";
 import { pink } from "@mui/material/colors";
 import { Theme, useTheme } from "@mui/material/styles";
+import { useCallback } from "react";
 
 interface InfoSwitchProps {
   switchHandler: () => void;
@@ -44,38 +39,25 @@ export const InfoSwitch = ({
   checked,
 }: InfoSwitchProps) => {
   const theme = useTheme();
+
   return (
     <Stack direction="row" spacing={1} alignItems="center">
       <Typography
-        style={{
+        sx={{
           userSelect: "none",
         }}
       >
         {leftLabel}
       </Typography>
-      <PinkSwitch
-        theme={theme}
-        checked={checked}
-        onChange={() => switchHandler()}
-        // add border to switch
-      />
-      {/* <AntSwitch defaultChecked inputProps={{ 'aria-label': 'ant design' }} /> */}
+      <PinkSwitch theme={theme} checked={checked} onChange={switchHandler} />
+
       <Typography
-        style={{
+        sx={{
           userSelect: "none",
         }}
       >
         {rightLabel}
       </Typography>
     </Stack>
-    // <FormControlLabel
-    //   control={
-    //   }
-    //   style={{
-    //     userSelect: "none",
-    //   }}
-    //   label={<Typography variant="body1">{label}</Typography>}
-    //   labelPlacement="start"
-    // />
   );
 };

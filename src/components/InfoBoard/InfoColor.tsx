@@ -1,6 +1,6 @@
 /** @format */
 
-import { Popover } from "@mui/material";
+import { Box, Popover, Typography } from "@mui/material";
 import { useEffect, useRef, useState } from "react";
 import { mainColor, secondaryColor } from "../../constants";
 
@@ -34,8 +34,8 @@ export const InfoColor = ({ color }: InfoColorProps): JSX.Element | null => {
   };
 
   return (
-    <div
-      style={{
+    <Box
+      sx={{
         width: "100%",
       }}
     >
@@ -51,54 +51,52 @@ export const InfoColor = ({ color }: InfoColorProps): JSX.Element | null => {
         anchorEl={colorRef.current}
         open={popUp}
       >
-        <p
-          style={{
-            margin: "10px",
+        <Typography
+          sx={{
+            margin: 0,
           }}
         >
           Copied to the clipboard
-        </p>
+        </Typography>
       </Popover>
-      <div
+      <Box
         ref={colorRef}
         onClick={clickHandler}
-        style={{
+        sx={{
           // make p display box
           display: "flex",
           flexDirection: "row",
-
+          marginLeft: "0.5em",
           alignItems: "center",
           justifyContent: "center",
         }}
       >
-        <div
+        <Box
           className="color-box"
-          style={{
+          sx={{
             backgroundColor: color,
             height: "20px",
             width: "20px",
             boxSizing: "border-box",
             borderRadius: "50%",
-            border: `2px solid #444`,
+            border: `0.1em solid #444`,
             // Dont allow the user to select the color box
             userSelect: "none",
           }}
-        ></div>
-        <span
-          style={{
+        />
+        <Typography
+          sx={{
             userSelect: "none",
             // remove margin and padding
             margin: 0,
-            padding: 5,
+            marginLeft: "0.5em",
             // backgroundColor: "yellow",
             fontSize: "0.8rem",
-            lineHeight: "0.8rem",
-            marginLeft: "5px",
           }}
         >
           {color}
-        </span>
-      </div>
-    </div>
+        </Typography>
+      </Box>
+    </Box>
   );
 };

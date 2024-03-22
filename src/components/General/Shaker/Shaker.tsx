@@ -1,7 +1,5 @@
-import React, { useState, useEffect, ReactNode } from "react";
+import { useState, useEffect, ReactNode } from "react";
 import { styled, keyframes } from "@mui/system";
-import { useAppSelector } from "../../../store/hooks/hooks";
-import { Level } from "../../../types";
 
 type ShakerBaseProps = {
   children: ReactNode;

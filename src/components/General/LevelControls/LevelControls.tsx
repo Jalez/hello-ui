@@ -1,10 +1,10 @@
 /** @format */
 
-import { IconButton, Typography } from "@mui/material";
+import { Box, IconButton, Typography } from "@mui/material";
 import React from "react";
 import ArrowForwardIosIcon from "@mui/icons-material/ArrowForwardIos";
 import ArrowBackIosIcon from "@mui/icons-material/ArrowBackIos";
-import { NavPopper } from "../../Navbar/ThreeNavs/ThreeNavs";
+import { NavPopper } from "../../Navbar/Navbar";
 import { useAppSelector } from "../../../store/hooks/hooks";
 
 interface LevelControlsProps {
@@ -54,13 +54,13 @@ const LevelControls = ({
         handleConfirmation={increaseLevel}
         resetAnchorEl={resetAnchorEl}
       />
-      <div
-        style={{ display: "flex", justifyContent: "center" }}
+      <Box
+        sx={{ display: "flex", justifyContent: "center" }}
         ref={forwardArrowRef}
       >
         <IconButton
           disabled={currentlevel === 1}
-          style={{
+          sx={{
             // hide it from sight if current level === 1
             visibility: currentlevel === 1 ? "hidden" : "visible",
           }}
@@ -69,7 +69,7 @@ const LevelControls = ({
           <ArrowBackIosIcon color="primary" />
         </IconButton>
         <Typography
-          style={{
+          sx={{
             fontSize: "1.5rem",
             display: "flex",
             flexDirection: "column",
@@ -84,7 +84,7 @@ const LevelControls = ({
         </Typography>
         <IconButton
           disabled={currentlevel === maxLevels}
-          style={{
+          sx={{
             // hide it from sight if current level === maxLevels
             visibility: currentlevel === maxLevels ? "hidden" : "visible",
           }}
@@ -92,7 +92,7 @@ const LevelControls = ({
         >
           <ArrowForwardIosIcon color="primary" />
         </IconButton>
-      </div>
+      </Box>
     </>
   );
 };

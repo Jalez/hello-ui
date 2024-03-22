@@ -95,6 +95,9 @@ ${generateGridAreasCSSString(selectors, primaryColor)}
     SHTML,
     TCSS,
     SCSS,
+    lockCSS: true,
+    lockHTML: false,
+    lockJS: true,
   };
 };
 const createRandomGrid = (

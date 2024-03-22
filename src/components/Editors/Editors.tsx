@@ -3,12 +3,13 @@
 import CodeEditor from "./CodeEditor/CodeEditor";
 import { css } from "@codemirror/lang-css";
 import { html } from "@codemirror/lang-html";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useAppDispatch, useAppSelector } from "../../store/hooks/hooks";
 import { updateCode } from "../../store/slices/levels.slice";
 import { Slider } from "./Slider/Slider";
 import { useTheme } from "@mui/system";
 import { Level } from "../../types";
+import { Box } from "@mui/material";
 
 export const Editors = () => {
   const theme = useTheme();
@@ -16,7 +17,7 @@ export const Editors = () => {
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const [cssEditorWidth, setCssEditorWidth] = useState<string>("49.7%");
   const [htmlEditorWidth, setHtmlEditorWidth] = useState<string>("49.7%");
-  const [editorHeight, setEditorHeight] = useState<string>("50%");
+  const [editorHeight, setEditorHeight] = useState<string>("100%");
   const levels = useAppSelector((state: any) => state.levels);
   const [htmlCode, setHTMLCode] = useState<string>("");
   const [cssCode, setCSSCode] = useState<string>("");
@@ -33,7 +34,7 @@ export const Editors = () => {
     setCSSCode(levels[currentLevel - 1].code.css);
   }, [currentLevel, identifier]);
 
-  const codeUpdater = (data: { html?: string; css?: string }) => {
+  const codeUpdater = useCallback((data: { html?: string; css?: string }) => {
     if (!levels[currentLevel - 1]) return;
     dispatch(
       updateCode({
@@ -41,7 +42,7 @@ export const Editors = () => {
         code: { ...levels[currentLevel - 1].code, ...data },
       })
     );
-  };
+  }, []);
 
   const onSliderDrag = (e: any) => {
     // calculate the width of the html and css editors: CSS is on the left, HTML is on the right
@@ -81,9 +82,11 @@ export const Editors = () => {
     }
   };
 
+  console.log("RENDERED");
+
   return (
-    <div
-      style={{
+    <Box
+      sx={{
         alignSelf: "flex-end",
         flex: "1 1 100%",
         height: editorHeight,
@@ -97,9 +100,9 @@ export const Editors = () => {
         needsPress={true}
         orientation="horizontal"
       />
-      <div
+      <Box
         className=""
-        style={{
+        sx={{
           display: "flex",
           flexDirection: "row",
           justifyContent: "space-between",
@@ -122,7 +125,7 @@ export const Editors = () => {
           codeUpdater={codeUpdater}
           template={htmlCode}
           levelIdentifier={identifier}
-          locked={false}
+          locked={level.lockHTML}
           width={htmlEditorWidth}
         />
 
@@ -140,9 +143,9 @@ export const Editors = () => {
           levelIdentifier={identifier}
           template={cssCode}
           width={cssEditorWidth}
-          locked={true}
+          locked={level.lockCSS}
         />
-      </div>
-    </div>
+      </Box>
+    </Box>
   );
 };

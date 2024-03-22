@@ -1,5 +1,6 @@
 /** @format */
 
+import { Box } from "@mui/material";
 import { useAppSelector } from "../../store/hooks/hooks";
 import { InfoColor } from "./InfoColor";
 
@@ -11,15 +12,15 @@ export const InfoColors = () => {
   if (!level) return <div>loading...</div>;
 
   return (
-    <div
-      style={{
+    <Box
+      sx={{
         display: "flex",
-        flexDirection: "column",
+        // flexDirection: "column",
       }}
     >
-      {level.buildingBlocks?.colors?.map((color, index) => (
-        <InfoColor key={index} color={color} />
+      {level.buildingBlocks?.colors?.map((color) => (
+        <InfoColor key={Math.random() * 10000} color={color} />
       ))}
-    </div>
+    </Box>
   );
 };

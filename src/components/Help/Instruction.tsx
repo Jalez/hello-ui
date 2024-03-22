@@ -1,7 +1,7 @@
 /** @format */
 
 import * as React from "react";
-import { Button } from "@mui/material";
+import { Box, Button } from "@mui/material";
 
 import { Title } from "../Title/Title";
 import { useAppDispatch, useAppSelector } from "../../store/hooks/hooks";
@@ -24,10 +24,10 @@ export default function Instruction() {
     }
   }, [room.currentRoom]);
 
-  const handleClose = () => {
+  const handleClose = React.useCallback(() => {
     setOpen(false);
     dispatch(updateRoom("game"));
-  };
+  }, [dispatch]);
 
   return (
     <InstructionModal open={open}>
@@ -35,17 +35,16 @@ export default function Instruction() {
         <Title />
         <InstructionContentContainer>
           <InstructionTabs />
-          <div
-            style={{
+          <Box
+            sx={{
               display: "flex",
               justifyContent: "center",
-              padding: 30,
             }}
           >
             <Button onClick={handleClose} variant="contained">
               <strong>To the tasks</strong>
             </Button>
-          </div>
+          </Box>
         </InstructionContentContainer>
       </InstructionPaper>
     </InstructionModal>

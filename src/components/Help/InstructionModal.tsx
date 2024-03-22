@@ -24,13 +24,15 @@ const fadeOut = keyframes`
 
 // Styled component with animations
 import { MUIStyledCommonProps } from "@mui/system";
+import { Box } from "@mui/material";
+import { yellow } from "@mui/material/colors";
 
 interface ModalContainerProps extends MUIStyledCommonProps {
   isVisible: boolean;
 }
 
 const ModalContainer = styled("div")<ModalContainerProps>(({ isVisible }) => ({
-  position: "absolute",
+  position: "fixed",
   display: "flex",
   justifyContent: "center",
   // align it to the top, but give some space to the top
@@ -40,6 +42,8 @@ const ModalContainer = styled("div")<ModalContainerProps>(({ isVisible }) => ({
   width: "100%",
   height: "100%",
   zIndex: 100,
+  // top: 80,
+  // backgroundColor: "yellow",
   backdropFilter: "blur(5px)", // Static backdropFilter
   opacity: `${isVisible ? 1 : 0}`,
   animation: `${isVisible ? fadeIn : fadeOut} 1s ease-out`,
@@ -82,15 +86,15 @@ const InstructionModal = ({ open, children }: InstructionModalProps) => {
   if (closed) return null;
   return (
     <ModalContainer isVisible={isVisible} className="mask-container">
-      <section
+      <Box
         id={id}
         className={`element ${maskClass}`}
-        style={{
+        sx={{
           margin: "10rem",
         }}
       >
         {children}
-      </section>
+      </Box>
     </ModalContainer>
   );
 };

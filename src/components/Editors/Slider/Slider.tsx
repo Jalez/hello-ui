@@ -1,5 +1,5 @@
 import { Divider } from "@mui/material";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import SlideContainer from "./SlideContainer";
 import { secondaryColor } from "../../../constants";
 
@@ -54,20 +54,23 @@ export const Slider = ({
     }
   };
 
-  const handleMouseLeave = (e: any) => {
-    if (!mouseDragged) {
-      setMousePressed(false);
-      setHideSlider(true);
-      resetSlider();
-    }
-  };
+  const handleMouseLeave = useCallback(
+    (e: any) => {
+      if (!mouseDragged) {
+        setMousePressed(false);
+        setHideSlider(true);
+        resetSlider();
+      }
+    },
+    [mouseDragged]
+  );
 
-  const handleMousePress = (e: any) => {
+  const handleMousePress = useCallback((e: any) => {
     setMousePressed(true);
     setHideSlider(false);
-  };
+  }, []);
 
-  const handleMouseRelease = (e: any) => {
+  const handleMouseRelease = useCallback((e: any) => {
     setMousePressed(false);
     setMouseDragged(false);
     setHideSlider(true);
@@ -75,11 +78,11 @@ export const Slider = ({
     const sliderWidth = window.innerWidth;
     setNewSliderValue((x / sliderWidth) * 100);
     resetSlider();
-  };
+  }, []);
 
-  const handleMouseEnter = (e: any) => {
+  const handleMouseEnter = useCallback(() => {
     if (mousePressed) setMousePressed(false);
-  };
+  }, [mousePressed]);
 
   return (
     <>
@@ -101,7 +104,7 @@ export const Slider = ({
         onMouseMove={handleMouseDrag}
         onMouseLeave={handleMouseLeave}
         onMouseUp={handleMouseRelease}
-      ></SlideContainer>
+      />
     </>
   );
 };

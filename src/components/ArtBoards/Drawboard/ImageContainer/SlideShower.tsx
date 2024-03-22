@@ -1,8 +1,9 @@
 /** @format */
 
 // components/ImageContainer/ImageContainer.tsx
-import { CSSProperties, useState } from "react";
+import { CSSProperties, useCallback, useState } from "react";
 import { Slider } from "./Slider/Slider";
+import { Box } from "@mui/material";
 
 interface ImageContainerProps {
   slidingComponent: any;
@@ -15,17 +16,17 @@ export const SlideShower = ({
 }: ImageContainerProps) => {
   const [sliderValue, setSliderValue] = useState(100);
 
-  const dragSlider = (e: any) => {
+  const dragSlider = useCallback((e: any) => {
     const slider = e.target;
     const sliderRect = slider.getBoundingClientRect();
     const mousePos = e.clientX - sliderRect.left;
     const sliderPercent = (mousePos / sliderRect.width) * 100;
     setSliderValue(sliderPercent);
-  };
+  }, []);
 
-  const resetSlider = () => {
+  const resetSlider = useCallback(() => {
     setSliderValue(100);
-  };
+  }, []);
 
   const slidingStyle: CSSProperties = {
     clipPath: `polygon(0 0, ${sliderValue}% 0, ${sliderValue}% 100%, 0 100%)`,
@@ -45,7 +46,7 @@ export const SlideShower = ({
         resetSlider={resetSlider}
       />
       {staticComponent}
-      <div style={slidingStyle}>{slidingComponent}</div>
+      <Box sx={slidingStyle}>{slidingComponent}</Box>
     </>
   );
 };

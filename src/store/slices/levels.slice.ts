@@ -39,11 +39,6 @@ if (lastUpdated && currentTime - parseInt(lastUpdated) > gameMaxTime) {
   timerStorage.setItem(timerStorage.key, currentTime.toString());
 }
 
-const parseStorage = (storage: any) => {
-  const parsedStorage = JSON.parse(storage.getItem(storage.key) || "[]");
-  return parsedStorage;
-};
-
 const levelsSlice = createSlice({
   name: "levels",
   initialState: [] as Level[],
@@ -91,7 +86,7 @@ const levelsSlice = createSlice({
           width,
           height,
           {
-            threshold: 0.1,
+            threshold: 0,
           }
         );
         // Update the current level with the accuracy and diff
@@ -130,6 +125,7 @@ const levelsSlice = createSlice({
           level.points = 0;
         }
 
+        console.log("Accuracy: ", percentage);
         storage?.setItem(storage.key, JSON.stringify(state));
       };
       const { currentLevel, drawnImage, solutionImage } = action.payload;

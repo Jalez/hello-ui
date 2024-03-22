@@ -1,10 +1,9 @@
 /** @format */
 
 import * as React from "react";
-import Paper from "@mui/material/Paper";
 import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
-import Typography from "@mui/material/Typography";
+import { Box } from "@mui/material";
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -52,13 +51,10 @@ export default function DynamicTabs({ style, tabs }: TabProps) {
   };
 
   return (
-    <div>
-      <div style={{ borderBottom: 1, borderColor: "divider" }}>
+    <>
+      <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
         <Tabs
           variant="scrollable"
-          // set color to primary
-          // Set unselected tab color to secondary
-
           scrollButtons
           allowScrollButtonsMobile
           value={value}
@@ -69,8 +65,6 @@ export default function DynamicTabs({ style, tabs }: TabProps) {
         >
           {tabs.map((tab, index) => (
             <Tab
-              // set color to primary
-              // Set unselected tab color to secondary
               sx={{ color: "primary.main" }}
               label={tab.label}
               {...allyProps(index)}
@@ -78,14 +72,14 @@ export default function DynamicTabs({ style, tabs }: TabProps) {
             />
           ))}
         </Tabs>
-      </div>
+      </Box>
       {tabs.map((tab, index) => (
-        <div style={style} key={index}>
+        <Box sx={style} key={Math.random() * 100000}>
           <TabPanel value={value} index={index}>
             {tab.content}
           </TabPanel>
-        </div>
+        </Box>
       ))}
-    </div>
+    </>
   );
 }

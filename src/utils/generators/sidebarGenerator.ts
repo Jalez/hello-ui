@@ -124,5 +124,8 @@ export const sidebarGenerator = (
     SHTML: html,
     TCSS: css,
     SCSS: css,
+    lockCSS: false,
+    lockHTML: true,
+    lockJS: true,
   };
 };

@@ -106,5 +106,8 @@ div>div {
     SHTML,
     SCSS: scss + "\n" + tcss,
     TCSS: tcss,
+    lockCSS: false,
+    lockHTML: true,
+    lockJS: true,
   };
 };

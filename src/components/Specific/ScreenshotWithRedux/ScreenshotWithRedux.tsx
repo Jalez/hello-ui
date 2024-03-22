@@ -1,14 +1,13 @@
 /** @format */
 
 import { useScreenshotUpdate } from "../../../store/hooks/hooks";
-import { Image } from "../../General/Image/Image";
 import { ScreenShotter } from "../../General/Screenshotter/Screenshotter";
 
-interface ScreenshotWithReduxProps {
+type ScreenshotWithReduxProps = {
   imageUrl: string;
   name: string;
   children: JSX.Element;
-}
+};
 
 const ScreenshotWithRedux = ({
   imageUrl,

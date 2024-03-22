@@ -1,15 +1,12 @@
 /** @format */
-import React from "react";
 import { ReactElement, useEffect, useRef, useState } from "react";
 import { domToPng } from "modern-screenshot";
 
 const sheet = new CSSStyleSheet();
 
 function App() {
-  const boardRef = useRef<HTMLDivElement>(null);
   const [html, setHtml] = useState<ReactElement>();
   const [css, setCss] = useState<string>();
-  const [appendedCSS, setAppendedCSS] = useState<Boolean>(false);
   const [stylesCorrect, setStylesCorrect] = useState<Boolean>(false);
   const [urlName, setUrlName] = useState<string>();
   useEffect(() => {
@@ -39,7 +36,6 @@ function App() {
     const style = document.querySelector("style") as HTMLStyleElement;
     style.innerHTML = css || "";
     setStylesCorrect(true);
-    setAppendedCSS(true);
   }, [stylesCorrect]);
 
   useEffect(() => {

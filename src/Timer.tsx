@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAppDispatch, useAppSelector } from "./store/hooks/hooks";
 import { numberTimeToMinutesAndSeconds } from "./utils/numberTimeToMinutesAndSeconds";
-import { Paper, Typography } from "@mui/material";
+import { Box, Paper, Typography } from "@mui/material";
 import { resetLevel, startLevelTimer } from "./store/slices/levels.slice";
 
 const Timer = () => {
@@ -39,8 +39,8 @@ const Timer = () => {
   }, [room, level]);
 
   return (
-    <div
-      style={{
+    <Box
+      sx={{
         display: "flex",
         justifyContent: "center",
         alignItems: "center",
@@ -69,7 +69,7 @@ const Timer = () => {
           <strong>Time: {timeSpent}</strong>
         </Typography>
       </Paper>
-    </div>
+    </Box>
   );
 };
 

@@ -1,7 +1,10 @@
 /** @format */
+
+import { Typography } from "@mui/material";
+
 // create prop interface
 interface NavTextProps {
-	children: any;
+  children: any;
 }
 /**
  * @description InfoText is a component that displays text in the InfoBoard component
@@ -10,16 +13,14 @@ interface NavTextProps {
  * @returns {JSX.Element}
  */
 export const InfoText = ({ children }: NavTextProps) => {
-	return (
-		<p
-			style={{
-				textAlign: 'center',
-				// dont allow selection
-				userSelect: 'none',
-				// show the back blurred
-				// backdropFilter: 'blur(10px)',
-			}}>
-			{children}
-		</p>
-	);
+  return (
+    <Typography
+      sx={{
+        textAlign: "center",
+        userSelect: "none",
+      }}
+    >
+      {children}
+    </Typography>
+  );
 };

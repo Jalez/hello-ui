@@ -38,59 +38,135 @@ export const tableGenerator = (
     })
     .join("\n    ");
 
-  const html = `<table class="custom-table ${selectedStyle}" id="table-${selectedStyle}">
-        <thead>
-            <tr>${headersHTML}</tr>
-        </thead>
-        <tbody>
-            ${rowsHTML}
-        </tbody>
-    </table>`;
+  const html = `
+  <table class="custom-table minimal" id="table-minimal">
+        <caption>Current League Standings</caption>
+  
+      <thead>
+          <tr>
+              <th>Rank</th>
+              <th>Team</th>
+              <th>Games Played</th>
+              <th>Points</th>
+          </tr>
+      </thead>
+      <tbody>
+          <tr>
+              <td>1</td>
+              <td>Aston Villa</td>
+              <td>10</td> 
+              <td class="points"> 30</td> 
+          </tr>
+          <tr>
+              <td>2</td>
+              <td>Manchester U</td>
+              <td>10</td> 
+              <td class="points">15</td> 
+          </tr>
+               <tr>
+              <td>3</td>
+              <td>Liverpool</td>
+              <td>10</td> 
+              <td class="points">10</td>
+          </tr>
+          <tr>
+              <td>4</td>
+              <td>Chelsea</td>
+              <td>10</td> 
+              <td class="total-points">5</td>
+          </tr>
+          <tr>
+              <td>5</td>
+              <td>Arsenal</td>
+              <td>10</td> 
+              <td class="total-points">1</td>
+          </tr>
+          <!-- Additional rows for other teams if necessary -->
+      </tbody>
+      <tfoot class="footer">
+          <tr>
+              <td colspan="3">Total Points</td>
+              <td>61</td> <!-- Sum of Points -->
+          </tr>
+      </tfoot>
+  </table>
+  
+  <footer>
+    <p>As always, Aston Villa reigns <strong>supreme</strong>.</p>
+  </footer>`;
 
   const css = `
-#root {    
-  margin: 0px;
-  padding: 0px;
-  overflow: hidden;
-  background-color: ${secondaryColor};
-}
-.custom-table {
-    width: 100%;
-    border-collapse: collapse;
-    text-align: left;
-    color: ${primaryColor};
-}
-
-.custom-table th, .custom-table td {
-    padding: 8px;
-    border: ${
-      selectedStyle === "bordered" ? "1px solid " + primaryColor : "none"
-    };
-}
-
-.custom-table.striped tbody tr:nth-child(odd) {
-    background-color: ${secondaryColor};
-}
-
-.custom-table.minimal th {
-    border-bottom: 2px solid ${primaryColor};
-}
-
-.custom-table.minimal td {
-    padding: 8px;
-    border-bottom: 1px solid ${secondaryColor};
-}
+  #root {    
+    overflow: hidden;
+    background-color: #fff;
+  }
+  
+  .custom-table {
+      width: 100%;
+      border-collapse: collapse;
+  }
+  
+  footer {
+    text-align: center; 
+  }
+  
+   th, td {
+      padding: 0.2em;
+     font-size: 1.5em; 
+  }
+  
+  strong {
+    text-decoration: underline; 
+  }
+  
+  caption {
+    font-size: 2em; 
+  }
+  
+  td:nth-child(4) {
+    background-color: black;
+    color: white; 
+  }
+  
+  td:nth-child(1n) {
+    border-color: black; 
+  }
+  
+  .custom-table.minimal th {
+      border-bottom: 0.2em solid #222;
+  }
+  
+  .footer tr td {
+    border-bottom: none; 
+  }
+  
+  td {
+      border-bottom: 1px solid #222;
+  }
+  
 `;
 
   const THTML = `<table class="custom-table">Add your table content here</table>`;
+  const TCSS = `#root {    
+    overflow: hidden;
+    background-color: #fff;
+  }
+  
+  .custom-table {
+      width: 100%;
+      border-collapse: collapse;
+  }`;
 
   return {
-    THTML,
+    THTML: html,
     SHTML: html,
-    TCSS: css,
+    TCSS: TCSS,
     SCSS: css,
     difficulty: "table",
     instructions,
     question_and_answer,
+    lockCSS: false,
+    lockHTML: false,
+    lockJS: true,
   };
 };

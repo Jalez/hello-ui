@@ -294,5 +294,8 @@ form footer input[type="submit"] {
     difficulty: "form",
     instructions,
     question_and_answer,
+    lockCSS: true,
+    lockHTML: false,
+    lockJS: true,
   };
 };

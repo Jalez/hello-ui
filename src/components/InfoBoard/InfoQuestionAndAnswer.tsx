@@ -1,4 +1,3 @@
-import React from "react";
 import { styled } from "@mui/system";
 import { useAppSelector } from "../../store/hooks/hooks";
 import { mainColor, secondaryColor } from "../../constants";

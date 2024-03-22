@@ -6,7 +6,6 @@ import { useAppSelector } from "../../store/hooks/hooks";
 import { Level } from "../../types";
 import { InfoText } from "../InfoBoard/InfoText";
 import { BoardsContainer } from "./BoardsContainer";
-import { mainColor, secondaryColor } from "../../constants";
 import { useTheme } from "@mui/material/styles";
 
 const ScoreBoard = () => {

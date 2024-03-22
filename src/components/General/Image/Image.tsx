@@ -1,5 +1,6 @@
 /** @format */
 
+import { Box } from "@mui/material";
 import { drawBoardWidth, drawBoardheight } from "../../../constants";
 import { Spinner } from "../Spinner/Spinner";
 
@@ -11,8 +12,8 @@ interface ModelProps {
 
 export const Image = ({ imageUrl, name }: ModelProps): JSX.Element => {
   return (
-    <div
-      style={{
+    <Box
+      sx={{
         margin: 0,
         height: drawBoardheight + "px",
       }}
@@ -30,6 +31,6 @@ export const Image = ({ imageUrl, name }: ModelProps): JSX.Element => {
           <Spinner />
         )}
       </div>
-    </div>
+    </Box>
   );
 };

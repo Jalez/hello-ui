@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useSelector } from "react-redux";
-import { Tab, Tabs, Typography, useTheme } from "@mui/material";
+import { Box, Tab, Tabs, Typography, useTheme } from "@mui/material";
 
 import { styled } from "@mui/system";
 import { drawBoardWidth } from "../../constants";
@@ -39,9 +39,9 @@ function TabPanel(props: TabPanelProps) {
       {...other}
     >
       {value === index && (
-        <div style={{ padding: 3 }}>
+        <Box sx={{ padding: 3 }}>
           <Typography>{children}</Typography>
-        </div>
+        </Box>
       )}
     </div>
   );
@@ -81,7 +81,7 @@ export const HelpContent = () => {
 
   return (
     <StyledBox>
-      <div style={{ borderBottom: 1, borderColor: "divider" }}>
+      <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
         <Tabs
           value={value}
           onChange={handleChange}
@@ -95,7 +95,7 @@ export const HelpContent = () => {
             />
           ))}
         </Tabs>
-      </div>
+      </Box>
       {titlesAndDescriptions.map((titleAndDescription, index) => (
         <TabPanel value={value} index={index} key={index}>
           <Typography id="help-modal-title" variant="h6" component="h3">
