@@ -10,7 +10,8 @@ const tableStyles = ["bordered", "striped", "minimal"];
 
 export const tableGenerator = (
   primaryColor: string,
-  secondaryColor: string
+  secondaryColor: string,
+  tertiaryColor?: string
 ) => {
   const currentTime = new Date();
   const hour = currentTime.getHours();
@@ -34,7 +35,7 @@ export const tableGenerator = (
   <section>
   <h2>Requirements:</h2>
   <ul>
-  <li>Use 'em' units for measurements such as padding, font sizes, and borders.</li>
+  <li>Use 'pixel' units for measurements such as padding, font sizes, and borders.</li>
   <li>Adhere to a color palette based on default colors or those included in the template.</li>
   <li>Focus on styling table headers, cells, and the footer for clarity and readability.</li>
   </ul>
@@ -113,13 +114,13 @@ export const tableGenerator = (
               <td>4</td>
               <td>Chelsea</td>
               <td>10</td> 
-              <td class="total-points">5</td>
+              <td class="points">5</td>
           </tr>
           <tr>
               <td>5</td>
               <td>Arsenal</td>
               <td>10</td> 
-              <td class="total-points">1</td>
+              <td class="points">1</td>
           </tr>
           <!-- Additional rows for other teams if necessary -->
       </tbody>
@@ -135,8 +136,7 @@ export const tableGenerator = (
     <p>As always, Aston Villa reigns <strong>supreme</strong>.</p>
   </footer>`;
 
-  const css = `
-  #root {    
+  const css = `#root {    
     overflow: hidden;
     background-color: #fff;
   }
@@ -151,8 +151,7 @@ export const tableGenerator = (
   }
   
    th, td {
-      padding: 0.2em;
-     font-size: 1.5em; 
+     font-size: 20px; 
   }
   
   strong {
@@ -160,7 +159,7 @@ export const tableGenerator = (
   }
   
   caption {
-    font-size: 2em; 
+    font-size: 30px; 
   }
   
   td:nth-child(4) {
@@ -173,7 +172,7 @@ export const tableGenerator = (
   }
   
   .custom-table.minimal th {
-      border-bottom: 0.2em solid #222;
+      border-bottom: 4px solid #222;
   }
   
   .footer tr td {

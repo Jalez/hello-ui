@@ -76,7 +76,7 @@ export const createLevels = (week: week) => {
       pictures: [],
     };
     // add grey as tertiary color
-    const tertiaryColor = "#808080";
+    const tertiaryColor = "#888";
 
     let generatedLevelDetails = generator(
       mainColor,
@@ -89,7 +89,7 @@ export const createLevels = (week: week) => {
 
       buildingBlocks: {
         pictures: randomLevel.pictures,
-        colors: [mainColor, secondaryColor],
+        colors: [mainColor, secondaryColor, tertiaryColor],
       },
       ...initialDefaults,
       code: {
