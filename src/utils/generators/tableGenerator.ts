@@ -20,7 +20,47 @@ export const tableGenerator = (
 
   const selectedStyle = tableStyles[timeIndex % tableStyles.length];
 
-  const instructions = `Create a table that uses the ${selectedStyle} class, with the headers and data in the picture. The table should have the correct class names and semantic tags to style the table and its content. For instance, the semantic tags "table", "thead", "tbody", "tr", "th", and "td" should be present, each included with appropriate child elements. You can look at the stylesheet and provided picture for reference.`;
+  const instructions = `  
+  <div style="display:flex; flex-direction: row; gap: 0.2em;">  
+  <section>
+  <h2>Task Overview:</h2>
+  <ol>
+  <li>Review the provided HTML template for the table.</li>
+  <li>Create a CSS stylesheet to style the table and associated elements.</li>
+  <li>Your styling should be visually akin to the model solution but should reflect your personal design approach.</li>
+  </ol>
+  </section>
+
+  <section>
+  <h2>Requirements:</h2>
+  <ul>
+  <li>Use 'em' units for measurements such as padding, font sizes, and borders.</li>
+  <li>Adhere to a color palette based on default colors or those included in the template.</li>
+  <li>Focus on styling table headers, cells, and the footer for clarity and readability.</li>
+  </ul>
+  </section>
+
+  <section>
+  <h2>Styling Suggestions:</h2>
+  <p>Consider these aspects when styling your table:</p>
+  <ul>
+  <li>Experiment with padding and font sizes to improve legibility.</li>
+  <li>Explore different ways to style table headers (<code>th</code>) and cells (<code>td</code>).</li>
+  <li>Think about how to use colors and borders to distinguish table rows or columns.</li>
+  <li>Style the table caption and footer to complement the overall table design.</li>
+  </ul>
+  </section>
+
+  <section>
+  <h2>Exploration Resources:</h2>
+  <p>To enhance your understanding of CSS styling for tables, you may find the following resources helpful:</p>
+  <ul>
+  <li>Search "CSS Table Styling" on MDN Web Docs for a comprehensive guide to table styling in CSS.</li>
+  <li>Look up "Responsive Table Design" to learn how to make tables look good on different screen sizes.</li>
+  <li>Investigate "CSS Pseudo-classes" to discover ways to style specific parts of your table.</li>
+  </ul>
+  </section>
+  `;
   const question_and_answer = {
     question: "What are tables in html?",
     answer: `HTML tables allow web developers to arrange data into rows and columns. They are used to display data in a tabular format and are created using the <table> tag. The <tr> tag is used to define the rows of the table, and the <td> tag is used to define the data cells. The <th> tag is used to define the header cells of the table. The <thead>, <tbody>, and <tfoot> tags are used to group the header, body, and footer of the table, respectively.`,

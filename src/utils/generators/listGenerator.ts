@@ -17,7 +17,35 @@ export const listGenerator = (
   // Randomly select style and a subset of list items
   const selectedItems = listItems;
 
-  const instructions = `Create a list that uses the ${selectedStyle} class, with the items in the picture. The list should have the correct class names and semantic tags to style the list and its content. For instance, the semantic tags "ul" and "li" should be present, each included with appropriate child elements. You can look at the stylesheet and provided picture for reference.`;
+  const instructions = `
+  <div style="display:flex; flex-direction: row; gap: 0.2em;">
+  <section>
+  <h2>Requirements:</h2>
+  <ul>
+  <li>Only use 'em' units for measurements like margins, padding, and font sizes.</li>
+  <li>Limit your color choices to default colors or those included in the template.</li>
+  <li>Focus on how to position the two lists (store and work) side by side.</li>
+  </ul>
+  </section>  
+
+  <section>
+  <h2>Exploration Suggestions:</h2>
+  <p>For arranging the lists side by side, consider researching various CSS properties and techniques. Here are some keywords and resources to start your exploration:</p>
+  <ul>
+  <li>Search for "CSS Flexbox" on websites like MDN Web Docs or CSS-Tricks for a comprehensive guide.</li>
+  <li>Look up "CSS Float Layout" for understanding the traditional float-based layouts.</li>
+  <li>Investigate "CSS display inline-block" for an alternative approach to layouts.</li>
+  </ul>
+  </section>
+
+  <section>
+  <h2>Additional Guidelines:</h2>
+  <ul>
+  <li>You are not required to use the same selectors as in our model solution. Experiment with different ones to achieve the layout.</li>
+  <li>Feel free to try out various styles for lists, headings, and other elements within the unit and color constraints.</li>
+  </ul>
+  </section>
+  `;
   const question_and_answer = {
     question: "What are lists in html?",
     answer: `Lists in HTML are used to present list of information in well formed and semantic way. There are three different types of lists in HTML and each one has a specific purpose and meaning. The three types of lists are: ordered list, unordered list, and definition list.`,
