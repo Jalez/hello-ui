@@ -58,5 +58,20 @@ export const sendScoreToParentFrame = (): AppThunk => (dispatch, getState) => {
       },
       "*"
     );
+
+    const levelsAndCode = {} as Record<string, {}>;
+    // go through all levels and get the code
+    for (const level of levels) {
+      const title = level.difficulty;
+      levelsAndCode[title] = level.code;
+    }
+
+    window.parent.postMessage(
+      {
+        m: "c",
+        d: JSON.stringify(levelsAndCode),
+      },
+      "*"
+    );
   }
 };

@@ -24,15 +24,6 @@ export const tableGenerator = (
   const instructions = `  
   <div style="display:flex; flex-direction: row; gap: 0.2em;">  
   <section>
-  <h2>Task Overview:</h2>
-  <ol>
-  <li>Review the provided HTML template for the table.</li>
-  <li>Create a CSS stylesheet to style the table and associated elements.</li>
-  <li>Your styling should be visually akin to the model solution but should reflect your personal design approach.</li>
-  </ol>
-  </section>
-
-  <section>
   <h2>Requirements:</h2>
   <ul>
   <li>Use 'pixel' units for measurements such as padding, font sizes, and borders.</li>
@@ -207,5 +198,7 @@ export const tableGenerator = (
     lockCSS: false,
     lockHTML: true,
     lockJS: true,
+    percentageTreshold: 90,
+    percentageFullPointsTreshold: 98,
   };
 };

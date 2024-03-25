@@ -98,6 +98,9 @@ export const createLevels = (week: week) => {
       },
       week: week,
       image: "",
+      percentageTreshold: generatedLevelDetails.percentageTreshold,
+      percentageFullPointsTreshold:
+        generatedLevelDetails.percentageFullPointsTreshold,
       difficulty: generatedLevelDetails.difficulty,
       instructions: generatedLevelDetails.instructions,
       question_and_answer: generatedLevelDetails.question_and_answer,
