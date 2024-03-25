@@ -34,7 +34,7 @@ export const Editors = () => {
     setCSSCode(levels[currentLevel - 1].code.css);
   }, [currentLevel, identifier]);
 
-  const codeUpdater = useCallback((data: { html?: string; css?: string }) => {
+  const codeUpdater = (data: { html?: string; css?: string }) => {
     if (!levels[currentLevel - 1]) return;
     dispatch(
       updateCode({
@@ -42,7 +42,7 @@ export const Editors = () => {
         code: { ...levels[currentLevel - 1].code, ...data },
       })
     );
-  }, []);
+  };
 
   const onSliderDrag = (e: any) => {
     // calculate the width of the html and css editors: CSS is on the left, HTML is on the right

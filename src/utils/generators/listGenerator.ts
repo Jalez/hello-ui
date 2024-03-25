@@ -22,7 +22,7 @@ export const listGenerator = (
   <section>
   <h2>Requirements:</h2>
   <ul>
-  <li>Only use 'em' units for measurements like margins, padding, and font sizes.</li>
+  <li>Only use 'pixel' units for measurements like margins, padding, and font sizes.</li>
   <li>Limit your color choices to default colors or those included in the template.</li>
   <li>Focus on how to position the two lists (store and work) side by side.</li>
   </ul>
@@ -90,58 +90,57 @@ export const listGenerator = (
     </div>
 </article>`;
 
-  const css = `
-  #root {    
-      margin: 0px;
-      padding: 0px;
-      overflow: hidden;
-      position: relative; 
-      background-color: #FFF; 
-    }
+  const css = `#root {    
+    margin: 0px;
+    padding: 0px;
+    overflow: hidden;
+    position: relative; 
+    background-color: #FFF; 
+}
 
 article {
-  background-color: #222;
-  color: #FFF;
-  margin: 1em;
+background-color: #222;
+color: #FFF;
+margin: 10px;
 }
 
 header h1 {
-  margin: 0px; 
-  font-size: 3em; 
-  text-align: center; 
+margin: 0px; 
+font-size: 40px; 
+text-align: center; 
 }
 
 
 h2 {
-  font-size: 2.5em;
-  margin: 1em;
-  margin-top: 0.5em; 
-  margin-bottom: 0px;
+font-size: 30px;
+margin: 30px;
+margin-top: 10px; 
+margin-bottom: 0px; 
 }
 
 .list-container {
-  display: flex; 
+display: flex; 
 }
 
 ul, ol {
-  margin: 0px;
-  line-height: 1.5em; 
-  font-size: 1.5em; 
+margin: 0px;
+line-height: 40px; 
+font-size: 20px; 
 }
 
 .upper-roman {
-  list-style-type: upper-roman; 
+list-style-type: upper-roman; 
 }
 
 .done {
-  text-decoration: line-through;
+text-decoration: line-through;
+color: #888;
 }
 
 .next {
-  font-weight: bold; 
-  text-decoration: underline; 
+font-weight: bold; 
+text-decoration: underline; 
 }
-
 `;
 
   const THTML = `<ul class="custom-list">Add your list items here</ul>`;
