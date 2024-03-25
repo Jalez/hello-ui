@@ -127,5 +127,7 @@ export const sidebarGenerator = (
     lockCSS: false,
     lockHTML: true,
     lockJS: true,
+    percentageTreshold: 90,
+    percentageFullPointsTreshold: 98,
   };
 };

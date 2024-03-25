@@ -163,5 +163,7 @@ button {
     lockCSS: true,
     lockHTML: false,
     lockJS: true,
+    percentageTreshold: 95,
+    percentageFullPointsTreshold: 99,
   };
 };

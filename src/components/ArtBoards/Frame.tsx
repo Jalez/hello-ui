@@ -1,9 +1,8 @@
 /** @format */
 import { useEffect, useRef } from "react";
-import { useSelector } from "react-redux";
 import { styled } from "@mui/system";
 import { updateUrl } from "../../store/slices/levels.slice";
-import { useAppDispatch } from "../../store/hooks/hooks";
+import { useAppDispatch, useAppSelector } from "../../store/hooks/hooks";
 import {
   drawBoardWidth,
   drawBoardheight, // Corrected the variable name
@@ -37,7 +36,7 @@ export const Frame = ({
 }: FrameProps) => {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const dispatch = useAppDispatch();
-  const { currentLevel } = useSelector((state: any) => state.currentLevel);
+  const { currentLevel } = useAppSelector((state: any) => state.currentLevel);
 
   useEffect(() => {
     const resendDataAfterMount = (event: MessageEvent) => {

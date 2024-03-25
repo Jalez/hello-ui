@@ -96,8 +96,9 @@ const levelsSlice = createSlice({
         level.diff = diff.toString("base64");
         level.accuracy = percentage.toFixed(2);
 
-        const percentageTreshold = 95;
-        const percentageFullPointsTreshold = 99;
+        const percentageTreshold = level.percentageTreshold || 90;
+        const percentageFullPointsTreshold =
+          level.percentageFullPointsTreshold || 98;
         if (percentage > percentageTreshold) {
           if (
             percentage > percentageFullPointsTreshold &&

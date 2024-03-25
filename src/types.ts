@@ -49,6 +49,8 @@ export interface Level {
   lockCSS: boolean;
   lockHTML: boolean;
   lockJS: boolean;
+  percentageTreshold: number;
+  percentageFullPointsTreshold: number;
 }
 
 export type generator = (

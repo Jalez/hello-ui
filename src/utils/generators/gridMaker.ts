@@ -98,6 +98,9 @@ ${generateGridAreasCSSString(selectors, primaryColor)}
     lockCSS: true,
     lockHTML: false,
     lockJS: true,
+    percentageTreshold: 90,
+    percentageFullPointsTreshold: 98,
+
   };
 };
 const createRandomGrid = (
