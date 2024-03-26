@@ -1,6 +1,6 @@
 /** @format */
 
-import { Box } from "@mui/material";
+import { Box, Typography } from "@mui/material";
 import { useAppSelector } from "../../store/hooks/hooks";
 import { InfoColor } from "./InfoColor";
 
@@ -15,12 +15,24 @@ export const InfoColors = () => {
     <Box
       sx={{
         display: "flex",
-        // flexDirection: "column",
+        flexDirection: "column",
+        alignItems: "center",
       }}
     >
-      {level.buildingBlocks?.colors?.map((color) => (
-        <InfoColor key={Math.random() * 10000} color={color} />
-      ))}
+      <Typography variant="h5">Colors</Typography>
+      <Box
+        sx={{
+          display: "flex",
+          // flexDirection: "column",
+        }}
+      >
+        {level.buildingBlocks?.colors?.map((color) => (
+          <InfoColor key={Math.random() * 10000} color={color} />
+        ))}
+      </Box>
+      <Typography variant="body2">
+        Click the color to copy color code
+      </Typography>
     </Box>
   );
 };

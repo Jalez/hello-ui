@@ -1,9 +1,12 @@
 import { mainColor, secondaryColor } from "../constants";
 import { generator, levelNames } from "../types";
 import { cardGenerator } from "./generators/cardGenerator";
+import { easyFlexGenerator } from "./generators/easyFlexGenerator";
+import { easyGridGenerator } from "./generators/easyGridGenerator";
 import { formGenerator } from "./generators/formGenerator";
 import { listGenerator } from "./generators/listGenerator";
 import { tableGenerator } from "./generators/tableGenerator";
+import { testGenerator } from "./generators/testGenerator";
 
 const initialHtml: string = `<div></div>`;
 const initialCss: string = `body {
@@ -49,18 +52,30 @@ type generatorNameAndFunction = {
 };
 
 export const generatorNameAndFunction: generatorNameAndFunction = {
+  test: testGenerator,
   card: cardGenerator,
   form: formGenerator,
   list: listGenerator,
   table: tableGenerator,
+  flex: easyFlexGenerator,
+  grid: easyGridGenerator,
 };
-type week = "html_2_es" | "css_1_es" | "css_2_es" | "all";
+type week = "html_2_es" | "css_1_es" | "css_2_es" | "css_2" | "all";
 export const createLevels = (week: week) => {
   const weekAndGenerators = {
     html_2_es: [cardGenerator, formGenerator],
     css_1_es: [listGenerator, tableGenerator],
-    css_2_es: [cardGenerator, formGenerator], //TODO: Add more generators
-    all: [cardGenerator, formGenerator, listGenerator, tableGenerator],
+    css_2: [easyFlexGenerator, easyGridGenerator],
+    css_2_es: [cardGenerator, formGenerator], //TODO: Add more generators,
+    all: [
+      testGenerator,
+      cardGenerator,
+      formGenerator,
+      listGenerator,
+      tableGenerator,
+      easyFlexGenerator,
+      easyGridGenerator,
+    ],
   };
   const initialState = [];
   const generators = weekAndGenerators[week];
@@ -72,7 +87,6 @@ export const createLevels = (week: week) => {
     i++;
     let randomLevel = {
       image: "",
-      colors: ["#fff"],
       pictures: [],
     };
     // add grey as tertiary color
@@ -89,7 +103,7 @@ export const createLevels = (week: week) => {
 
       buildingBlocks: {
         pictures: randomLevel.pictures,
-        colors: [mainColor, secondaryColor, tertiaryColor],
+        colors: generatedLevelDetails.colors,
       },
       ...initialDefaults,
       code: {

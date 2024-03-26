@@ -56,7 +56,7 @@ export interface Level {
 export type generator = (
   primaryColor: string,
   secondaryColor: string,
-  tertiaryColor?: string
+  tertiaryColor: string
 ) => {
   THTML: string;
   SHTML: string;
@@ -65,6 +65,20 @@ export type generator = (
   instructions: instructions;
   question_and_answer: question_and_answer;
   difficulty: string;
+  lockCSS: boolean;
+  lockHTML: boolean;
+  lockJS: boolean;
+
+  percentageTreshold: number;
+  percentageFullPointsTreshold: number;
+  colors: string[];
 };
 
-export type levelNames = "card" | "form" | "list" | "table";
+export type levelNames =
+  | "card"
+  | "form"
+  | "list"
+  | "table"
+  | "test"
+  | "flex"
+  | "grid";
