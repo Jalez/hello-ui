@@ -299,5 +299,6 @@ form footer input[type="submit"] {
     lockJS: true,
     percentageTreshold: 95,
     percentageFullPointsTreshold: 99,
+    colors: [primaryColor, secondaryColor],
   };
 };

@@ -54,6 +54,7 @@ export const InfoColor = ({ color }: InfoColorProps): JSX.Element | null => {
         <Typography
           sx={{
             margin: 0,
+            padding: "0.5em",
           }}
         >
           Copied to the clipboard
@@ -84,7 +85,7 @@ export const InfoColor = ({ color }: InfoColorProps): JSX.Element | null => {
             userSelect: "none",
           }}
         />
-        <Typography
+        {/* <Typography
           sx={{
             userSelect: "none",
             // remove margin and padding
@@ -95,7 +96,7 @@ export const InfoColor = ({ color }: InfoColorProps): JSX.Element | null => {
           }}
         >
           {color}
-        </Typography>
+        </Typography> */}
       </Box>
     </Box>
   );

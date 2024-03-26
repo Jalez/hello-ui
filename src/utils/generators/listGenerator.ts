@@ -1,5 +1,7 @@
 /** @format */
 
+import { colors } from "@mui/material";
+
 const listItems = ["Item 1", "Item 2", "Item 3", "Item 4", "Item 5"];
 const listStyles = ["bullet", "numbered", "interactive", "minimal"];
 const listColors = ["red", "blue", "green", "purple", "orange"];
@@ -164,5 +166,6 @@ text-decoration: underline;
     lockJS: true,
     percentageTreshold: 90,
     percentageFullPointsTreshold: 98,
+    colors: [primaryColor, secondaryColor],
   };
 };

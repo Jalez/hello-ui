@@ -11,7 +11,7 @@ const tableStyles = ["bordered", "striped", "minimal"];
 export const tableGenerator = (
   primaryColor: string,
   secondaryColor: string,
-  tertiaryColor?: string
+  tertiaryColor: string
 ) => {
   const currentTime = new Date();
   const hour = currentTime.getHours();
@@ -129,7 +129,7 @@ export const tableGenerator = (
 
   const css = `#root {    
     overflow: hidden;
-    background-color: #fff;
+    background-color: ${secondaryColor};
   }
   
   .custom-table {
@@ -154,16 +154,16 @@ export const tableGenerator = (
   }
   
   td:nth-child(4) {
-    background-color: black;
+    background-color: ${tertiaryColor};
     color: white; 
   }
   
   td:nth-child(1n) {
-    border-color: black; 
+    border-color: ${primaryColor};
   }
   
   .custom-table.minimal th {
-      border-bottom: 4px solid #222;
+      border-bottom: 5px solid ${primaryColor};
   }
   
   .footer tr td {
@@ -171,7 +171,7 @@ export const tableGenerator = (
   }
   
   td {
-      border-bottom: 1px solid #222;
+      border-bottom: 1px solid ${primaryColor};
   }
   
 `;
@@ -179,7 +179,7 @@ export const tableGenerator = (
   const THTML = `<table class="custom-table">Add your table content here</table>`;
   const TCSS = `#root {    
     overflow: hidden;
-    background-color: #fff;
+    background-color: ${secondaryColor};
   }
   
   .custom-table {
@@ -200,5 +200,6 @@ export const tableGenerator = (
     lockJS: true,
     percentageTreshold: 90,
     percentageFullPointsTreshold: 98,
+    colors: [primaryColor, secondaryColor, tertiaryColor],
   };
 };
