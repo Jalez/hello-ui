@@ -163,7 +163,8 @@ const levelsSlice = createSlice({
       const name = level.name.toString() as levelNames;
       const newGeneration = generatorNameAndFunction[name](
         mainColor,
-        secondaryColor
+        secondaryColor,
+        "#888"
       );
       level.code = { html: newGeneration.THTML, css: newGeneration.TCSS };
       level.solution = { html: newGeneration.SHTML, css: newGeneration.SCSS };
