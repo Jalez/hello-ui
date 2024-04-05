@@ -6,7 +6,7 @@ const listItems = ["Item 1", "Item 2", "Item 3", "Item 4", "Item 5"];
 const listStyles = ["bullet", "numbered", "interactive", "minimal"];
 const listColors = ["red", "blue", "green", "purple", "orange"];
 
-export const easyFlexGenerator: generator = (
+export const harderFlexGenerator: generator = (
   primaryColor: string,
   secondaryColor: string,
   tertiaryColor?: string
@@ -28,9 +28,12 @@ export const easyFlexGenerator: generator = (
   <section>
     <h2>Requirements:</h2>
     <ul>
-      <li>Utilize CSS Flexbox for the layout, specifically focusing on 'display', 'flex-direction', and 'justify-content'.</li>
-      <li>Ensure all measurements for padding, margins, and font sizes are in 'pixels'.</li>
-      <li>Experiment with different color combinations using the provided color palette.</li>
+      <li>Utilize CSS Flexbox for the layout, specifically focusing on 'flex-direction', and flex property.</li>
+      <li>You shouldnt need to use very many, if any, units of measurement for this exercise. Flexbox is designed to be flexible and responsive without needing to specify exact measurements.
+      </li>
+      <li>
+       You may need to use media queries to make the layout responsive.
+      </li>
     </ul>
   </section>
   
@@ -39,16 +42,12 @@ export const easyFlexGenerator: generator = (
     <p>To improve your CSS Flexbox skills, consider the following:</p>
     <ul>
       <li>Explore resources like MDN Web Docs or CSS-Tricks for detailed guides and examples on CSS Flexbox.</li>
-      <li>Investigate the 'flex-wrap' property to understand wrapping behavior in flex layouts.</li>
-      <li>Experiment with 'flex-grow' and 'flex-shrink' to control item growth and shrinking in flex layouts.</li>
-    </ul>
-  </section>
-  
-  <section>
-    <h2>Additional Guidelines:</h2>
-    <ul>
-      <li>Feel free to experiment with flex item placement, not just sticking to the example solution's selectors.</li>
-      <li>Try styling individual flex items (e.g., header, main, aside) within the specified color and size constraints.</li>
+      <li>Investigate the 'flex' property to understand how it can be used to control the size of flex items.</li>
+      <li>Experiment with 'flex-direction' to change the direction of the flex container's main axis.</li>
+      <li>
+       For media queries, consider using the 'min-width' property to make the layout responsive.
+      </li>
+
     </ul>
   </section>
   </div>
@@ -58,13 +57,13 @@ export const easyFlexGenerator: generator = (
     answer: `Flexbox is a layout model in CSS that allows you to design complex layouts more easily and efficiently. It provides a more efficient way to align and distribute space among items in a container, even when their size is unknown or dynamic. Flexbox is particularly useful for creating responsive designs and complex layouts that are difficult to achieve with traditional CSS methods.`,
   };
 
-  const html = `
-  <header></header>
-  <main>
-      <section></section>
-      <aside></aside>
-  </main>
-  <footer></footer>
+  const html = `<div class="container">
+  <div class="box" style="background-color: #496989;">A</div>
+  <div class="box" style="background-color: #58A399;">B</div>
+  <div class="box" style="background-color: #A8CD9F;">C</div>
+  <div class="box" style="background-color: #E2F4C5;">D</div>
+  <div class="box" style="background-color: #F4A896;">E</div>
+</div>
 
 `;
   const TCSS = `
@@ -77,33 +76,22 @@ export const easyFlexGenerator: generator = (
 
   const css = `${TCSS}
 
-header, footer {
+.container {
   display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 50px;
-  background-color: ${colors[0]};
+  flex-direction: column; 
+  height: 80%; 
 }
 
-main {
-  display: flex;
-  flex-direction: row;
-  justify-content: space-between;
-  align-items: start;
-  height: calc(100% - 100px);
-  background-color: ${colors[1]};
+.box {
+  flex: 1; 
 }
 
-section {
-  background-color: ${colors[2]}; 
-  width: 30%; 
-  height: 100%;
-}
-
-aside {
-  background-color: ${colors[3]};
-  height: 100%;
-width: 20%; 
+@media (min-width: 400px) {
+  .container {
+    flex-direction: row;
+    height: 100%; 
+    width: 80%; 
+  }
 }
 `;
 
@@ -112,7 +100,7 @@ width: 20%;
     SHTML: html,
     TCSS: TCSS,
     SCSS: css,
-    difficulty: "flex",
+    difficulty: "Harder Flex",
     instructions,
     question_and_answer,
     lockCSS: false,
@@ -123,8 +111,12 @@ width: 20%;
     colors: colors,
     dimensions: [
       {
-        width: 400,
-        height: 300,
+        width: 500,
+        height: 200,
+      },
+      {
+        width: 200,
+        height: 500,
       },
     ],
   };

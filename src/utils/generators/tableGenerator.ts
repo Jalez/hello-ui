@@ -1,3 +1,6 @@
+import { drawBoardWidth, drawBoardheight } from "../../constants";
+import { generator } from "../../types";
+
 const tableHeaders = ["Header 1", "Header 2", "Header 3", "Header 4"];
 const tableData = [
   ["Row 1, Cell 1", "Row 1, Cell 2", "Row 1, Cell 3", "Row 1, Cell 4"],
@@ -8,10 +11,10 @@ const tableData = [
 ];
 const tableStyles = ["bordered", "striped", "minimal"];
 
-export const tableGenerator = (
-  primaryColor: string,
-  secondaryColor: string,
-  tertiaryColor: string
+export const tableGenerator: generator = (
+  primaryColor = "#000000",
+  secondaryColor = "#ffffff",
+  tertiaryColor = "#000000"
 ) => {
   const currentTime = new Date();
   const hour = currentTime.getHours();
@@ -201,5 +204,11 @@ export const tableGenerator = (
     percentageTreshold: 90,
     percentageFullPointsTreshold: 98,
     colors: [primaryColor, secondaryColor, tertiaryColor],
+    dimensions: [
+      {
+        width: drawBoardWidth,
+        height: drawBoardheight,
+      },
+    ],
   };
 };

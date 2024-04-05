@@ -1,21 +1,29 @@
 /** @format */
 
 import { Box } from "@mui/material";
-import { drawBoardWidth, drawBoardheight } from "../../../constants";
 import { Spinner } from "../Spinner/Spinner";
 
 // interface
 interface ModelProps {
   imageUrl: string;
-  name: string;
+  height: number;
+  width: number;
+  name?: string;
 }
 
-export const Image = ({ imageUrl, name }: ModelProps): JSX.Element => {
+export const Image = ({
+  imageUrl,
+  height,
+  width,
+  name,
+}: ModelProps): JSX.Element => {
+  // if (name) console.log(name, height, width);
   return (
     <Box
+      aria-label={name ? name + " image" : "image"}
       sx={{
         margin: 0,
-        height: drawBoardheight + "px",
+        height: height + "px",
       }}
     >
       <div>
@@ -25,10 +33,10 @@ export const Image = ({ imageUrl, name }: ModelProps): JSX.Element => {
             alt="
 					The image that the user will draw a copy of
 					"
-            width={drawBoardWidth}
+            width={width}
           />
         ) : (
-          <Spinner />
+          <Spinner height={height} width={width} />
         )}
       </div>
     </Box>

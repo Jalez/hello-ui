@@ -1,13 +1,14 @@
 /** @format */
 
-import { useEffect, useRef } from 'react';
-import { domToPng } from 'modern-screenshot';
+import { useEffect, useRef } from "react";
+import { domToPng } from "modern-screenshot";
 
 interface ConditionalScreenshotProps {
-	screenshotName: string;
-	triggerCondition: string;
-	children: React.ReactNode;
-	updateScreenshot: (screenshotName: string, dataUrl: string) => void;
+  screenshotName: string;
+  triggerCondition: string;
+  children: React.ReactNode;
+  updateScreenshot: (screenshotName: string, dataUrl: string) => void;
+  takeScreenshotWhen: boolean;
 }
 
 /**
@@ -16,19 +17,22 @@ interface ConditionalScreenshotProps {
  * @returns
  */
 export const ScreenShotter = ({
-	screenshotName,
-	triggerCondition,
-	children,
-	updateScreenshot,
+  screenshotName,
+  triggerCondition,
+  children,
+  updateScreenshot,
+  takeScreenshotWhen,
 }: ConditionalScreenshotProps) => {
-	const screenshotRef = useRef<HTMLDivElement>(null);
+  const screenshotRef = useRef<HTMLDivElement>(null);
 
-	useEffect(() => {
-		if (!screenshotRef.current) return;
-		domToPng(screenshotRef.current).then((dataUrl: string) => {
-			updateScreenshot(screenshotName, dataUrl);
-		});
-	}, [triggerCondition]);
+  useEffect(() => {
+    // console.log("screenshotter useEffect");
+    if (!takeScreenshotWhen) return;
+    if (!screenshotRef.current) return;
+    domToPng(screenshotRef.current).then((dataUrl: string) => {
+      updateScreenshot(screenshotName, dataUrl);
+    });
+  }, [triggerCondition]);
 
-	return <div ref={screenshotRef}>{children}</div>;
+  return <div ref={screenshotRef}>{children}</div>;
 };

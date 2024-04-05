@@ -1,12 +1,14 @@
 /** @format */
 
 import { colors } from "@mui/material";
+import { drawBoardWidth, drawBoardheight } from "../../constants";
+import { generator } from "../../types";
 
 const listItems = ["Item 1", "Item 2", "Item 3", "Item 4", "Item 5"];
 const listStyles = ["bullet", "numbered", "interactive", "minimal"];
 const listColors = ["red", "blue", "green", "purple", "orange"];
 
-export const listGenerator = (
+export const listGenerator: generator = (
   primaryColor: string,
   secondaryColor: string,
   tertiaryColor?: string
@@ -167,5 +169,11 @@ text-decoration: underline;
     percentageTreshold: 90,
     percentageFullPointsTreshold: 98,
     colors: [primaryColor, secondaryColor],
+    dimensions: [
+      {
+        width: drawBoardWidth,
+        height: drawBoardheight,
+      },
+    ],
   };
 };

@@ -1,6 +1,14 @@
 import React, { useMemo } from "react";
 import { styled } from "@mui/system";
 import { useAppSelector } from "../../store/hooks/hooks";
+import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
+  Box,
+} from "@mui/material";
+import { ExpandMoreOutlined } from "@mui/icons-material";
+import Info from "./Info";
 
 const StyledSection = styled("section")(({ theme }) => ({
   display: "flex",
@@ -14,6 +22,7 @@ const StyledSection = styled("section")(({ theme }) => ({
   padding: "1rem",
   borderRadius: "1rem",
   zIndex: 10,
+  bgcolor: "secondary.main",
 }));
 
 export const InfoInstructions = () => {
@@ -23,13 +32,44 @@ export const InfoInstructions = () => {
     () => ({ __html: level?.instructions || "" }),
     [level?.instructions]
   );
+  // <StyledSection>
+  // </StyledSection>
   return (
-    <StyledSection>
-      <header>
-        <h2>Level Instructions</h2>
-      </header>
-      <p dangerouslySetInnerHTML={instructionsHtmlObj} />
-    </StyledSection>
+    <Accordion
+      sx={{
+        bgcolor: "secondary.main",
+        color: "primary.main",
+        border: "none",
+        // remove shadow
+        boxShadow: "none",
+        width: "100%",
+      }}
+    >
+      <Box
+        sx={{ display: "flex", justifyContent: "center", alignItems: "center" }}
+      >
+        <Info />
+        <AccordionSummary
+          expandIcon={<ExpandMoreOutlined sx={{ color: "primary.main" }} />}
+        >
+          <header>
+            <h2>Level Instructions</h2>
+          </header>
+        </AccordionSummary>
+      </Box>
+      <AccordionDetails
+        sx={{
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "center",
+          alignItems: "center",
+          bgcolor: "secondary.main",
+          color: "primary.main",
+        }}
+      >
+        <p dangerouslySetInnerHTML={instructionsHtmlObj} />
+      </AccordionDetails>
+    </Accordion>
   );
 };
 

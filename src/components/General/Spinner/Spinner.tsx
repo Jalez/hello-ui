@@ -1,14 +1,15 @@
 /** @format */
 
 import { useTheme } from "@mui/system";
-import {
-  drawBoardWidth,
-  drawBoardheight,
-  secondaryColor,
-} from "../../../constants";
+import { secondaryColor } from "../../../constants";
 import "./Spinner.css";
 
-export const Spinner = () => {
+type SpinnerProps = {
+  height: number;
+  width: number;
+};
+
+export const Spinner = ({ height, width }: SpinnerProps): JSX.Element => {
   const theme = useTheme();
 
   return (
@@ -17,8 +18,8 @@ export const Spinner = () => {
         display: "flex",
         justifyContent: "center",
         alignItems: "center",
-        height: drawBoardheight + "px",
-        width: drawBoardWidth + "px",
+        height: height + "px",
+        width: width + "px",
         backgroundColor: theme.palette.secondary.main || secondaryColor,
       }}
     >

@@ -11,13 +11,9 @@ import {
   generatorNameAndFunction,
 } from "../../utils/LevelCreator";
 import { numberTimeToMinutesAndSeconds } from "../../utils/numberTimeToMinutesAndSeconds";
-import {
-  drawBoardWidth,
-  drawBoardheight,
-  gameMaxTime,
-  mainColor,
-  secondaryColor,
-} from "../../constants";
+import { gameMaxTime, mainColor, secondaryColor } from "../../constants";
+import calculateAccuracy from "../../utils/imageTools/calculateAccuracy";
+import loadImage from "../../utils/imageTools/loadBase64Image";
 
 const maxCodeLength = 100000;
 
@@ -45,92 +41,26 @@ const levelsSlice = createSlice({
 
   reducers: {
     evaluateLevel(state, action) {
-      const getPixelData = (img = new Image()) => {
-        const canvas = document.createElement("canvas");
-        // Set the width and height of the canvas to the width and height of the image
-        canvas.width = img.width;
-        canvas.height = img.height;
-        // Get the 2D context of the canvas
-        const ctx = canvas.getContext("2d");
-        // Draw the image on the canvas
-        ctx?.drawImage(img, 0, 0);
-        // Get the image data from the canvas
-        const imgData = ctx?.getImageData(
-          0,
-          0,
-          drawBoardWidth,
-          drawBoardheight
-        );
-        // Resolve the promise with the image data
-        return imgData;
-        // });
-      };
-
-      const loadAndMatch = (
-        currentLevel: number,
-        drawnImage: HTMLImageElement,
-        solutionImage: HTMLImageElement
-      ) => {
-        // set the src of the image to the data url
-        const img1Data = getPixelData(drawnImage) as ImageData;
-        const img2Data = getPixelData(solutionImage) as ImageData;
-
-        // Create a diff image with the same dimensions as img1
-        const diff = Buffer.alloc(img2Data.data.length as number) as Buffer;
-        const width = img1Data?.width;
-        const height = img1Data?.height;
-        const accuracy = Pixelmatch(
-          img2Data?.data,
-          img1Data?.data,
-          diff,
-          width,
-          height,
-          {
-            threshold: 0,
-          }
-        );
+      const loadAndMatch = (currentLevel: number, scenarioId: string) => {
         // Update the current level with the accuracy and diff
         const level = state[currentLevel - 1];
         if (!level) return;
-        const percentage = 100 - (accuracy / (width * height)) * 100;
-        level.diff = diff.toString("base64");
-        level.accuracy = percentage.toFixed(2);
 
-        const percentageTreshold = level.percentageTreshold || 90;
-        const percentageFullPointsTreshold =
-          level.percentageFullPointsTreshold || 98;
-        if (percentage > percentageTreshold) {
-          if (
-            percentage > percentageFullPointsTreshold &&
-            !level.confettiSprinkled
-          ) {
-            confetti({ particleCount: 100 });
-            level.confettiSprinkled = true;
-          }
-          const lastTenPercent = percentage - percentageTreshold;
-          const remainingPercentage = 100 - percentageTreshold;
-          const lastTenPercentPercentage = lastTenPercent / remainingPercentage;
-          const points = Math.ceil(lastTenPercentPercentage * level.maxPoints);
-          if (points < level.points) return;
-          level.points = points;
-          const currentTime = new Date().getTime();
-          const timeAndDate = level.timeData.pointAndTime[points];
-          if (!level.timeData.startTime) return;
-          if (timeAndDate == "0:0" || !timeAndDate) {
-            level.timeData.pointAndTime[points] = numberTimeToMinutesAndSeconds(
-              currentTime - level.timeData.startTime
-            );
-          }
-          level.completed = "yes";
-        } else {
-          level.points = 0;
-        }
+        // find the scenario
+        const scenario = level.scenarios?.find(
+          (scenario) => scenario.scenarioId === scenarioId
+        );
+        if (!scenario) return;
+        // const
+        const percentage = 100;
+        scenario.accuracy = percentage;
+        // scenario.differenceUrl = diff.toString("base64");
 
-        console.log("Accuracy: ", percentage);
         storage?.setItem(storage.key, JSON.stringify(state));
       };
-      const { currentLevel, drawnImage, solutionImage } = action.payload;
-      loadAndMatch(currentLevel, drawnImage, solutionImage);
+      // const { currentLevel, drawnImage, solutionImage, scenarioId } =
+      //   action.payload;
+      // loadAndMatch(currentLevel, drawnImage, solutionImage, scenarioId);
     },
     updateWeek(state, action) {
       let week = action.payload;
@@ -166,17 +96,85 @@ const levelsSlice = createSlice({
         secondaryColor,
         "#888"
       );
-      level.code = { html: newGeneration.THTML, css: newGeneration.TCSS };
-      level.solution = { html: newGeneration.SHTML, css: newGeneration.SCSS };
+      level.code = {
+        html: newGeneration.THTML,
+        css: newGeneration.TCSS,
+        js: newGeneration?.TJS || "",
+      };
+      level.solution = {
+        html: newGeneration.SHTML,
+        css: newGeneration.SCSS,
+        js: newGeneration?.SJS || "",
+      };
       level.instructions = newGeneration.instructions;
       level.question_and_answer = newGeneration.question_and_answer;
-      level.solEvalUrl = "";
-      level.drawnEvalUrl = "";
-      level.drawingUrl = "";
-      level.solutionUrl = "";
+      // level.solEvalUrl = "";
+      // level.drawnEvalUrl = "";
+      // level.drawingUrl = "";
+      // level.solutionUrl = "";
+      // go through the scenarios and reset them
+      level.scenarios?.forEach((scenario) => {
+        scenario.accuracy = 0;
+        scenario.differenceUrl = "";
+        scenario.drawingUrl = "";
+        scenario.solutionUrl = "";
+      });
 
       // level.timeData.startTime = new Date().getTime();
 
+      storage?.setItem(storage.key, JSON.stringify(state));
+    },
+    updateAccuracy(state, action) {
+      const { currentLevel, scenarioId, diff, accuracy } = action.payload;
+      const level = state[currentLevel - 1];
+      if (!level) return;
+      const scenario = level.scenarios?.find(
+        (scenario) => scenario.scenarioId === scenarioId
+      );
+      if (!scenario) return;
+      scenario.accuracy = accuracy;
+      scenario.differenceUrl = diff;
+      storage?.setItem(storage.key, JSON.stringify(state));
+    },
+    updatePoints(state, action) {
+      const { currentLevel } = action.payload;
+      const level = state[currentLevel - 1];
+      if (!level) return;
+      // take the average of the accuracy of all scenarios
+      const accuracy = level.scenarios.reduce(
+        (acc, scenario) => acc + scenario.accuracy,
+        0
+      );
+      const percentage = accuracy / level.scenarios.length;
+      level.accuracy = percentage;
+      let newpoints = 0;
+      const percentageTreshold = level.percentageTreshold || 90;
+      const percentageFullPointsTreshold =
+        level.percentageFullPointsTreshold || 98;
+      if (percentage > percentageTreshold) {
+        if (
+          percentage > percentageFullPointsTreshold &&
+          !level.confettiSprinkled
+        ) {
+          confetti({ particleCount: 100 });
+        }
+        const lastTenPercent = percentage - percentageTreshold;
+        const remainingPercentage = 100 - percentageTreshold;
+        const lastTenPercentPercentage = lastTenPercent / remainingPercentage;
+        newpoints = Math.ceil(lastTenPercentPercentage * level.maxPoints);
+        if (newpoints < level.points) return;
+        level.points = newpoints;
+        const currentTime = new Date().getTime();
+        const timeAndDate = level.timeData.pointAndTime[newpoints];
+        if (!level.timeData.startTime) return;
+        if (timeAndDate == "0:0" || !timeAndDate) {
+          level.timeData.pointAndTime[newpoints] =
+            numberTimeToMinutesAndSeconds(
+              currentTime - level.timeData.startTime
+            );
+        }
+        level.completed = "yes";
+      }
       storage?.setItem(storage.key, JSON.stringify(state));
     },
     toggleShowModelSolution(state, action) {
@@ -199,18 +197,26 @@ const levelsSlice = createSlice({
       if (!level) return;
       if (
         (code.html && code.html.length > maxCodeLength) ||
-        (code.css && code.css.length > maxCodeLength)
+        (code.css && code.css.length > maxCodeLength) ||
+        (code.js && code.js.length > maxCodeLength)
       ) {
         console.error("Code is too long!");
         return;
       }
 
-      if (
-        level?.image &&
-        (code.css.includes(level?.image) || code.html.includes(level?.image))
-      ) {
-        console.error("Note: Using the solutions own image url isn't allowed!");
-        return;
+      // go through scenarios and make sure the solution url is not in the code
+      for (const scenario of level.scenarios || []) {
+        if (
+          scenario.solutionUrl &&
+          (code.css.includes(scenario.solutionUrl) ||
+            code.html.includes(scenario.solutionUrl) ||
+            code.js.includes(scenario.solutionUrl))
+        ) {
+          console.error(
+            "Note: Using the solutions own image url isn't allowed!"
+          );
+          return;
+        }
       }
 
       if (code.html.includes("<script>")) {
@@ -224,34 +230,54 @@ const levelsSlice = createSlice({
     updateUrl(state, action) {
       if (!action.payload) return;
 
-      const { id, dataURL, urlName } = action.payload;
-      if (urlName === "drawingUrl") state[id - 1].drawingUrl = dataURL;
-      else if (urlName === "solutionUrl") {
-        state[id - 1].solutionUrl = dataURL;
-        // set image
-        state[id - 1].image = dataURL;
-        // Remove solution code from state if it exists
-        if (state[id - 1].solution.css) state[id - 1].solution.css = "";
-        if (state[id - 1].solution.html) state[id - 1].solution.html = "";
-      }
-      // update the code for the level in local storage
-      storage?.setItem(storage.key, JSON.stringify(state));
-    },
-    updateEvaluationUrl(state, action) {
-      const { id, dataUrl, name } = action.payload;
-      if (name === "drawing") state[id - 1].drawnEvalUrl = dataUrl;
-      if (name === "solution") state[id - 1].solEvalUrl = dataUrl;
+      const { levelId, dataURL, urlName, scenarioId } = action.payload;
+      // find the level and scenario
+      const level = state[levelId - 1];
+      if (!level) return;
 
-      // update the code for the level in local storage
+      const scenario = level.scenarios?.find(
+        (scenario) => scenario.scenarioId === scenarioId
+      );
+      if (!scenario) return;
+      if (urlName === "drawingUrl") {
+        // console.log("updateUrl drawingUrl");
+        scenario.drawingUrl = dataURL;
+      } else if (urlName === "solutionUrl") {
+        // console.log("updateUrl solutionUrl");
+        scenario.solutionUrl = dataURL;
+        // Remove solution code from state if it exists
+        // if (level.solution.html) level.solution.html = "";
+        // if (level.solution.css) level.solution.css = "";
+        // if (level.solution.js) level.solution.js = "";
+      }
+
       storage?.setItem(storage.key, JSON.stringify(state));
     },
+    // updateEvaluationUrl(state, action) {
+    //   // // console.log("UPDATE EVALUATION URL");
+    //   const { id, dataUrl, name, scenarioId } = action.payload;
+
+    //   const level = state[id - 1];
+    //   if (!level) return;
+    //   const scenario = level.scenarios?.find(
+    //     (scenario) => scenario.scenarioId === scenarioId
+    //   );
+    //   if (!scenario) return;
+    //   if (name === "drawing") {
+    //     scenario.drawingUrl = dataUrl;
+    //   }
+    //   if (name === "solution") scenario.solutionUrl = dataUrl;
+    //   // update the code for the level in local storage
+    //   storage?.setItem(storage.key, JSON.stringify(state));
+    // },
   },
 });
 
 export const {
   updateCode,
   updateUrl,
-  updateEvaluationUrl,
+  updatePoints,
+  updateAccuracy,
   evaluateLevel,
   updateWeek,
   resetLevel,

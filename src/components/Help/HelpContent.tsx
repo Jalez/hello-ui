@@ -3,15 +3,19 @@ import { useSelector } from "react-redux";
 import { Box, Tab, Tabs, Typography, useTheme } from "@mui/material";
 
 import { styled } from "@mui/system";
-import { drawBoardWidth } from "../../constants";
 
-const StyledBox = styled("div")(
-  ({ theme }) => `
+type StyledBoxProps = {
+  theme: any;
+  width: number;
+};
+
+const StyledBox = styled("div")<StyledBoxProps>(
+  ({ theme, width }) => `
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: ${drawBoardWidth}
+  width: ${width}px;
   background-color: ${theme.palette.primary.main};
   box-sizing: border-box;
   border: 2px solid #000;
@@ -54,7 +58,11 @@ function a11yProps(index: number) {
   };
 }
 
-export const HelpContent = () => {
+type HelpContentProps = {
+  height: number;
+};
+
+export const HelpContent = ({ height }: HelpContentProps): JSX.Element => {
   const [value, setValue] = useState(0);
   const { currentLevel } = useSelector((state: any) => state.currentLevel);
   const levelDetails = useSelector(
@@ -80,7 +88,13 @@ export const HelpContent = () => {
   };
 
   return (
-    <StyledBox>
+    <StyledBox
+      theme={theme}
+      width={height}
+      id="help-modal"
+      aria-labelledby="help-modal-title"
+      aria-describedby="help-modal-description"
+    >
       <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
         <Tabs
           value={value}

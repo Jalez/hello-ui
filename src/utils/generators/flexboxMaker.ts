@@ -1,6 +1,7 @@
 /** @format */
 
 import { drawBoardWidth, drawBoardheight } from "../../constants";
+import { generator } from "../../types";
 
 const justifyContent = [
   "justify-content:flex-start",
@@ -35,7 +36,10 @@ const flexDirection = [
 
 const flex = ["flex:1"];
 
-export const flexboxMaker = (primaryColor: string, secondaryColor: string) => {
+export const flexboxMaker: generator = (
+  primaryColor: string,
+  secondaryColor: string
+) => {
   const randomJustifyContent =
     justifyContent[Math.floor(Math.random() * justifyContent.length)].split(
       ":"
@@ -112,5 +116,17 @@ div>div {
     percentageTreshold: 90,
     percentageFullPointsTreshold: 98,
     colors: [primaryColor, secondaryColor],
+    difficulty: "flex",
+    instructions: "Create a flexbox layout",
+    question_and_answer: {
+      question: "Create a flexbox layout",
+      answer: "display:flex",
+    },
+    dimensions: [
+      {
+        width: drawBoardWidth,
+        height: drawBoardheight,
+      },
+    ],
   };
 };

@@ -1,10 +1,13 @@
 /** @format */
 
+import { drawBoardWidth, drawBoardheight } from "../../constants";
+import { generator } from "../../types";
+
 const navLinks = ["Home", "About", "Services", "Contact"];
 const widgetTypes = ["search", "newsletter", "profile", "social"];
 const sidebarStyles = ["classic", "modern", "minimal"];
 
-export const sidebarGenerator = (
+export const sidebarGenerator: generator = (
   primaryColor: string,
   secondaryColor: string
 ) => {
@@ -130,5 +133,17 @@ export const sidebarGenerator = (
     percentageTreshold: 90,
     percentageFullPointsTreshold: 98,
     colors: [primaryColor, secondaryColor],
+    difficulty: "sidebar",
+    instructions: "Create a sidebar layout",
+    question_and_answer: {
+      question: "Create a sidebar layout",
+      answer: "aside.custom-sidebar",
+    },
+    dimensions: [
+      {
+        width: drawBoardWidth,
+        height: drawBoardheight,
+      },
+    ],
   };
 };

@@ -3,13 +3,28 @@ type question_and_answer = {
   answer: string;
 };
 
+export type scenario = {
+  scenarioId: string;
+  accuracy: number;
+  // solutionData: ImageData;
+  solutionUrl: string;
+  // drawingData: ImageData;
+  drawingUrl: string;
+  differenceUrl: string;
+  dimensions: {
+    width: number;
+    height: number;
+  };
+};
+
 type instructions = string;
 export interface Level {
   identifier: string;
   week: string;
   name: string;
+  difficulty: string;
   completed: string;
-  accuracy: string;
+  accuracy: number;
   buildingBlocks?: {
     pictures?: Array<string>;
     colors?: Array<string>;
@@ -17,14 +32,14 @@ export interface Level {
   code: {
     html: string;
     css: string;
+    js: string;
   };
   solution: {
     html: string;
     css: string;
+    js: string;
   };
-  image: string;
-  diff: string;
-  difficulty: string;
+  scenarios: scenario[];
   points: number;
   maxPoints: number;
   timeData: {
@@ -38,10 +53,6 @@ export interface Level {
     images: string[];
     usefullCSSProperties: string[];
   };
-  drawingUrl: string;
-  solutionUrl: string;
-  drawnEvalUrl: string;
-  solEvalUrl: string;
   confettiSprinkled: boolean;
   instructions: instructions;
   question_and_answer: question_and_answer;
@@ -56,12 +67,14 @@ export interface Level {
 export type generator = (
   primaryColor: string,
   secondaryColor: string,
-  tertiaryColor: string
+  tertiaryColor?: string
 ) => {
   THTML: string;
   SHTML: string;
   TCSS: string;
   SCSS: string;
+  TJS?: string;
+  SJS?: string;
   instructions: instructions;
   question_and_answer: question_and_answer;
   difficulty: string;
@@ -72,6 +85,10 @@ export type generator = (
   percentageTreshold: number;
   percentageFullPointsTreshold: number;
   colors: string[];
+  dimensions: {
+    width: number;
+    height: number;
+  }[];
 };
 
 export type levelNames =
@@ -80,5 +97,8 @@ export type levelNames =
   | "list"
   | "table"
   | "test"
+  | "testFlex"
   | "flex"
-  | "grid";
+  | "grid"
+  | "Harder Flex"
+  | "Harder Grid";

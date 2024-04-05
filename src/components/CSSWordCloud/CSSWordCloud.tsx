@@ -11,7 +11,7 @@ export const CSSWordCloud = () => {
       sx={{
         position: "absolute",
         zIndex: 1,
-        top: "10%",
+        bottom: "10%",
         left: "0%",
         padding: "0px",
 
@@ -19,8 +19,7 @@ export const CSSWordCloud = () => {
         width: "100%",
         display: "flex",
         justifyContent: "center",
-        alignItems: "center",
-        height: "100%",
+        // height: "100%",
         overflow: "hidden",
       }}
     >

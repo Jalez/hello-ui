@@ -1,20 +1,25 @@
 /** @format */
 
 import { Box } from "@mui/material";
-import { drawBoardWidth, drawBoardheight } from "../../constants";
 
 interface ArtContainerProps {
   children: React.ReactNode;
+  height?: number;
+  width?: number;
 }
 
-export const ArtContainer = ({ children }: ArtContainerProps) => {
+export const ArtContainer = ({
+  children,
+  height,
+  width,
+}: ArtContainerProps) => {
   return (
     <Box
       className="img-container"
       sx={{
         position: "relative",
-        height: drawBoardheight + "px",
-        width: drawBoardWidth + "px",
+        height: height + "px",
+        width: width + "px",
         zIndex: 2,
       }}
     >
