@@ -6,6 +6,7 @@ interface SliderProps {
   sliderValue: number;
   dragSlider: (e: any) => void;
   resetSlider: () => void;
+  sliderHeight: number;
 }
 
 import { StyledSliderContainer } from "./Styled/StyledSliderContainer";
@@ -25,6 +26,7 @@ export const Slider = ({
   sliderValue,
   dragSlider,
   resetSlider,
+  sliderHeight,
 }: SliderProps) => {
   return (
     <StyledSliderContainer>
@@ -35,6 +37,7 @@ export const Slider = ({
         value={sliderValue}
         className="slider"
         id="myRange"
+        height={sliderHeight}
         onMouseMove={dragSlider}
         onMouseLeave={resetSlider}
         onChange={onChange}

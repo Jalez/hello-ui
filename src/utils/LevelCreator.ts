@@ -1,11 +1,14 @@
 import { mainColor, secondaryColor } from "../constants";
-import { generator, levelNames } from "../types";
+import { generator, levelNames, scenario } from "../types";
 import { cardGenerator } from "./generators/cardGenerator";
 import { easyFlexGenerator } from "./generators/easyFlexGenerator";
 import { easyGridGenerator } from "./generators/easyGridGenerator";
 import { formGenerator } from "./generators/formGenerator";
+import { harderFlexGenerator } from "./generators/harderFlexGenerator";
+import { harderGridGenerator } from "./generators/harderGridGenerator";
 import { listGenerator } from "./generators/listGenerator";
 import { tableGenerator } from "./generators/tableGenerator";
+import { testFlexGenerator } from "./generators/testFlexGenerator";
 import { testGenerator } from "./generators/testGenerator";
 
 const initialHtml: string = `<div></div>`;
@@ -26,15 +29,15 @@ const initialCode = {
 const initialDefaults = {
   week: "",
   completed: "no",
-  accuracy: "0",
+  // accuracy: "0",
   code: initialCode,
   points: 0,
   maxPoints: 5,
-  diff: "",
-  drawingUrl: "",
-  solutionUrl: "",
-  drawnEvalUrl: "",
-  solEvalUrl: "",
+  // diff: "",
+  // drawingUrl: "",
+  // solutionUrl: "",
+  // drawnEvalUrl: "",
+  // solEvalUrl: "",
   solution: {
     html: "",
     css: "",
@@ -53,32 +56,39 @@ type generatorNameAndFunction = {
 
 export const generatorNameAndFunction: generatorNameAndFunction = {
   test: testGenerator,
+  testFlex: testFlexGenerator,
   card: cardGenerator,
   form: formGenerator,
   list: listGenerator,
   table: tableGenerator,
   flex: easyFlexGenerator,
   grid: easyGridGenerator,
+  "Harder Flex": harderFlexGenerator,
+  "Harder Grid": harderGridGenerator,
 };
 type week = "html_2_es" | "css_1_es" | "css_2_es" | "css_2" | "all";
 export const createLevels = (week: week) => {
   const weekAndGenerators = {
+    test: [testGenerator],
     html_2_es: [cardGenerator, formGenerator],
     css_1_es: [listGenerator, tableGenerator],
     css_2: [easyFlexGenerator, easyGridGenerator],
-    css_2_es: [cardGenerator, formGenerator], //TODO: Add more generators,
+    css_2_es: [harderFlexGenerator, harderGridGenerator], //TODO: Add more generators,
     all: [
       testGenerator,
+      testFlexGenerator,
       cardGenerator,
       formGenerator,
       listGenerator,
       tableGenerator,
       easyFlexGenerator,
       easyGridGenerator,
+      harderFlexGenerator,
+      harderGridGenerator,
     ],
   };
   const initialState = [];
-  const generators = weekAndGenerators[week];
+  const generators = weekAndGenerators[week] as generator[];
   if (!generators) return;
 
   let i = 0;
@@ -97,10 +107,24 @@ export const createLevels = (week: week) => {
       secondaryColor,
       tertiaryColor
     );
+    const { dimensions } = generatedLevelDetails;
+
+    const scenarios = [] as scenario[];
+    //  go through the dimensions
+    for (const dimension of dimensions) {
+      scenarios.push({
+        scenarioId: Math.random().toString(36).substring(7),
+        accuracy: 0,
+        solutionUrl: "",
+        drawingUrl: "",
+        differenceUrl: "",
+        dimensions: dimension,
+      } as scenario);
+    }
     const level = {
       identifier: Math.random().toString(36).substring(7),
       name: generatedLevelDetails.difficulty,
-
+      scenarios: scenarios,
       buildingBlocks: {
         pictures: randomLevel.pictures,
         colors: generatedLevelDetails.colors,
@@ -109,9 +133,10 @@ export const createLevels = (week: week) => {
       code: {
         html: generatedLevelDetails.THTML,
         css: generatedLevelDetails.TCSS,
+        js: generatedLevelDetails?.TJS || "",
       },
+      accuracy: 0,
       week: week,
-      image: "",
       percentageTreshold: generatedLevelDetails.percentageTreshold,
       percentageFullPointsTreshold:
         generatedLevelDetails.percentageFullPointsTreshold,
@@ -126,6 +151,7 @@ export const createLevels = (week: week) => {
       solution: {
         html: generatedLevelDetails.SHTML,
         css: generatedLevelDetails.SCSS,
+        js: generatedLevelDetails?.SJS || "",
       },
       timeData: {
         startTime: 0,

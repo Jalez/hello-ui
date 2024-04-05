@@ -82,7 +82,7 @@ export const Editors = () => {
     }
   };
 
-  console.log("RENDERED");
+  // // console.log("RENDERED");
 
   return (
     <Box

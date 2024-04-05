@@ -6,7 +6,7 @@ const listItems = ["Item 1", "Item 2", "Item 3", "Item 4", "Item 5"];
 const listStyles = ["bullet", "numbered", "interactive", "minimal"];
 const listColors = ["red", "blue", "green", "purple", "orange"];
 
-export const easyFlexGenerator: generator = (
+export const testFlexGenerator: generator = (
   primaryColor: string,
   secondaryColor: string,
   tertiaryColor?: string
@@ -58,13 +58,13 @@ export const easyFlexGenerator: generator = (
     answer: `Flexbox is a layout model in CSS that allows you to design complex layouts more easily and efficiently. It provides a more efficient way to align and distribute space among items in a container, even when their size is unknown or dynamic. Flexbox is particularly useful for creating responsive designs and complex layouts that are difficult to achieve with traditional CSS methods.`,
   };
 
-  const html = `
-  <header></header>
-  <main>
-      <section></section>
-      <aside></aside>
-  </main>
-  <footer></footer>
+  const html = `<div class="container">
+  <div class="box" style="background-color: #496989;"></div>
+  <div class="box" style="background-color: #58A399;"></div>
+  <div class="box" style="background-color: #A8CD9F;"></div>
+  <div class="box" style="background-color: #E2F4C5;"></div>
+  <div class="box" style="background-color: #F4A896;"></div>
+</div>
 
 `;
   const TCSS = `
@@ -77,33 +77,22 @@ export const easyFlexGenerator: generator = (
 
   const css = `${TCSS}
 
-header, footer {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 50px;
-  background-color: ${colors[0]};
+.container {
+    display: flex;
+    flex-direction: column;
+    height: 400px;
 }
 
-main {
-  display: flex;
-  flex-direction: row;
-  justify-content: space-between;
-  align-items: start;
-  height: calc(100% - 100px);
-  background-color: ${colors[1]};
+.box {
+    flex: 1;
 }
 
-section {
-  background-color: ${colors[2]}; 
-  width: 30%; 
-  height: 100%;
-}
-
-aside {
-  background-color: ${colors[3]};
-  height: 100%;
-width: 20%; 
+/* Media query for larger screens */
+@media (min-width: 400px) {
+    .container {
+        flex-direction: row;
+        width: 400px;
+    }
 }
 `;
 
@@ -112,7 +101,7 @@ width: 20%;
     SHTML: html,
     TCSS: TCSS,
     SCSS: css,
-    difficulty: "flex",
+    difficulty: "testFlex",
     instructions,
     question_and_answer,
     lockCSS: false,
@@ -123,8 +112,12 @@ width: 20%;
     colors: colors,
     dimensions: [
       {
-        width: 400,
-        height: 300,
+        width: 500,
+        height: 200,
+      },
+      {
+        width: 200,
+        height: 500,
       },
     ],
   };

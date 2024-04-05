@@ -46,7 +46,7 @@ const Timer = () => {
         alignItems: "center",
         flexDirection: "column",
         width: "100%",
-        margin: "1rem 0",
+        margin: "0",
         zIndex: 10,
       }}
     >
@@ -65,8 +65,11 @@ const Timer = () => {
         }}
       >
         <Typography style={{ fontSize: "1.5rem" }} color="primary">
+          Timer
+        </Typography>
+        <Typography style={{ fontSize: "1.5rem" }} color="primary">
           {" "}
-          <strong>Time: {timeSpent}</strong>
+          <strong>{timeSpent}</strong>
         </Typography>
       </Paper>
     </Box>

@@ -1,11 +1,17 @@
 /** @format */
 
+import { drawBoardWidth, drawBoardheight } from "../../constants";
+import { generator } from "../../types";
+
 const inputTypes = ["text", "email", "password", "number", "date"];
 const labelTextDecorations = ["underline", "underline overline", "overline "];
 const buttonTypes = ["submit"];
 const formStyles = ["solid", "outlined", "rounded", "minimal"];
 
-export const formGenerator = (primaryColor: string, secondaryColor: string) => {
+export const formGenerator: generator = (
+  primaryColor: string,
+  secondaryColor: string
+) => {
   // Determine the current time and assign indexes based on time intervals
   const currentTime = new Date();
   const hour = currentTime.getHours();
@@ -300,5 +306,11 @@ form footer input[type="submit"] {
     percentageTreshold: 95,
     percentageFullPointsTreshold: 99,
     colors: [primaryColor, secondaryColor],
+    dimensions: [
+      {
+        width: drawBoardWidth,
+        height: drawBoardheight,
+      },
+    ],
   };
 };

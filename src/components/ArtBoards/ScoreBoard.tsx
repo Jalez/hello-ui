@@ -34,7 +34,7 @@ const ScoreBoard = () => {
 
   return (
     <BoardsContainer>
-      <BoardContainer>
+      <BoardContainer width={400}>
         <BoardTitle side="left">Points</BoardTitle>
         <Board>
           <Paper sx={paperStyle}>{timeData}</Paper>

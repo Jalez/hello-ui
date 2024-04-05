@@ -1,21 +1,19 @@
-/** @format */
-
-import { drawBoardWidth } from "../../constants";
+import { styled } from "@mui/system";
 
 interface BoardContainerProps {
-  children: React.ReactNode;
+  width: number;
 }
 
-const containerStyles = {
-  display: "flex" as const,
-  flexDirection: "row" as const,
-  justifyContent: "center",
-  alignItems: "center",
-  flex: "1 0 auto",
-  flexShrink: 0,
-  width: drawBoardWidth + 100 + "px",
-};
+const defaultWidthAddition = 100;
+const BoardContainer = styled("div")<BoardContainerProps>`
+  display: flex;
+  flexdirection: row;
+  justifycontent: center;
+  alignitems: center;
+  flex: 1 0 auto;
+  flexshrink: 0;
+  margin: 0.5em;
+  width: ${(props) => props.width}px;
+`;
 
-export const BoardContainer = ({ children }: BoardContainerProps) => {
-  return <div style={containerStyles}>{children}</div>;
-};
+export { BoardContainer };

@@ -14,9 +14,7 @@ import { useEffect } from "react";
 import { updateWeek } from "./store/slices/levels.slice";
 import { sendScoreToParentFrame } from "./store/actions/score.actions";
 import { Footer } from "./components/Footer/Footer";
-import Timer from "./Timer";
-import Info from "./components/InfoBoard/Info";
-import { Box } from "@mui/material";
+
 import { Navbar } from "./components/Navbar/Navbar";
 
 const AppStyle = {
@@ -61,9 +59,7 @@ function App() {
           {levels.length > 0 && (
             <>
               <Navbar />
-              <Timer />
               <InfoInstructions />
-              <Info />
               {options.showWordCloud && <CSSWordCloud />}
               <ArtBoards />
               <Editors />

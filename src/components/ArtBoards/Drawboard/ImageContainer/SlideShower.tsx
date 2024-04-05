@@ -8,13 +8,16 @@ import { Box } from "@mui/material";
 interface ImageContainerProps {
   slidingComponent: any;
   staticComponent: any;
+  sliderHeight: number;
 }
 
 export const SlideShower = ({
   slidingComponent,
   staticComponent,
+  sliderHeight,
 }: ImageContainerProps) => {
   const [sliderValue, setSliderValue] = useState(100);
+  const [showStatic, setShowStatic] = useState(false);
 
   const dragSlider = useCallback((e: any) => {
     const slider = e.target;
@@ -25,6 +28,7 @@ export const SlideShower = ({
   }, []);
 
   const resetSlider = useCallback(() => {
+    // console.log("resetting slider", sliderValue);
     setSliderValue(100);
   }, []);
 
@@ -44,6 +48,7 @@ export const SlideShower = ({
         sliderValue={sliderValue}
         dragSlider={dragSlider}
         resetSlider={resetSlider}
+        sliderHeight={sliderHeight}
       />
       {staticComponent}
       <Box sx={slidingStyle}>{slidingComponent}</Box>

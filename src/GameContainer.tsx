@@ -19,7 +19,8 @@ const paperStyle = {
   justifyContent: "space-between",
   alignItems: "space-between" as const,
   flexWrap: "wrap" as const,
-  backgroundColor: "transparent",
+  bgcolor: "secondary.main",
+  // backgroundColor: "transparent",
 };
 
 export const GameContainer = ({ children }: GameContainerProps) => {

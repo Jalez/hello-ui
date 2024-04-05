@@ -1,5 +1,3 @@
-/** @format */
-
 import { useAppSelector } from "../../../store/hooks/hooks";
 import { Image } from "../../General/Image/Image";
 import ScreenshotWithRedux from "../../Specific/ScreenshotWithRedux/ScreenshotWithRedux";
@@ -10,50 +8,67 @@ import { SlideShower } from "./ImageContainer/SlideShower";
 import { BoardTitle } from "../BoardTitle";
 import { BoardContainer } from "../BoardContainer";
 import { Board } from "../Board";
-import { drawBoardWidth, drawBoardheight } from "../../../constants";
 import { Box } from "@mui/material";
+import { scenario } from "../../../types";
 
-export const Drawboard = (): JSX.Element => {
+type ScenarioDrawingProps = {
+  scenario: scenario;
+};
+
+export const ScenarioDrawing = ({
+  scenario,
+}: ScenarioDrawingProps): JSX.Element => {
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const level = useAppSelector((state) => state.levels[currentLevel - 1]);
   if (!level) return <div>loading...</div>;
 
   return (
-    <BoardContainer>
-      <BoardTitle>Your version</BoardTitle>
+    <BoardContainer width={scenario.dimensions.width}>
+      {/* <BoardTitle>Your version</BoardTitle> */}
       <Board>
         <ArtContainer>
           <SlideShower
-            staticComponent={<Image imageUrl={level.image} name="solution" />}
+            sliderHeight={scenario.dimensions.height}
+            staticComponent={
+              <Image
+                imageUrl={scenario.solutionUrl}
+                height={scenario.dimensions.height}
+                width={scenario.dimensions.width}
+              />
+            }
             slidingComponent={
               <Box
                 style={{
-                  height: drawBoardheight + "px",
-                  width: drawBoardWidth + "px",
+                  height: scenario.dimensions.height + "px",
+                  width: scenario.dimensions.width + "px",
                   overflow: "hidden",
+                  position: "relative",
                 }}
               >
-                {/* <ErrorBoundary> */}
                 <Frame
                   id="DrawBoard"
                   newCss={level.code.css}
                   newHtml={level.code.html}
+                  scenario={scenario}
                   name="drawingUrl"
                 />
-                {/* </ErrorBoundary> */}
                 <Box
                   sx={{
                     position: "absolute",
                     bottom: 0,
                   }}
                 >
-                  <ScreenshotWithRedux
-                    imageUrl={level.drawingUrl}
-                    // imageUrl="wdawdw"
+                  {/* <ScreenshotWithRedux
+                    imageUrl={scenario.drawingUrl}
+                    scenarioId={scenario.scenarioId}
                     name="drawing"
                   >
-                    <Image imageUrl={level.drawingUrl} name="drawing" />
-                  </ScreenshotWithRedux>
+                    <Image
+                      imageUrl={scenario.drawingUrl}
+                      height={scenario.dimensions.height}
+                      width={scenario.dimensions.width}
+                    /> 
+                  </ScreenshotWithRedux> */}
                 </Box>
               </Box>
             }

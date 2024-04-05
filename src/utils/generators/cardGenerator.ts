@@ -1,11 +1,16 @@
 /** @format */
 
+import { generator } from "../../types";
+
 const cardTitles = ["This is the cards header"];
 const cardContents = ["This is card content."];
 const cardStyles = ["solid", "outlined", "rounded", "minimal"];
 const buttonTypes = ["More Info", "Buy Now", "Learn More"];
 
-export const cardGenerator = (primaryColor: string, secondaryColor: string) => {
+export const cardGenerator: generator = (
+  primaryColor: string,
+  secondaryColor: string
+) => {
   // Determine the current time and assign indexes based on time intervals
   const currentTime = new Date();
   const hour = currentTime.getHours();
@@ -166,5 +171,11 @@ button {
     percentageTreshold: 95,
     percentageFullPointsTreshold: 99,
     colors: [primaryColor, secondaryColor],
+    dimensions: [
+      {
+        width: 400,
+        height: 300,
+      },
+    ],
   };
 };

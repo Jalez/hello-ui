@@ -1,6 +1,7 @@
 /** @format */
 
 import { drawBoardWidth, drawBoardheight } from "../../constants";
+import { generator } from "../../types";
 
 const propertiesAndValues = {
   display: ["block", "inline", "inline-block", "flex", "grid"],
@@ -29,7 +30,7 @@ function generateGridAreasCSSString(
   return cssString;
 }
 
-export const generateGridLevel = (
+export const generateGridLevel: generator = (
   primaryColor: string,
   secondaryColor: string
 ) => {
@@ -101,6 +102,27 @@ ${generateGridAreasCSSString(selectors, primaryColor)}
     percentageTreshold: 90,
     percentageFullPointsTreshold: 98,
     colors: [primaryColor, secondaryColor],
+    difficulty: "grid",
+    instructions: `
+    <div style="display:flex; flex-direction: row; gap: 0.2em;">
+    <section>
+    <h2>Grid Layout:</h2>
+    <ul>
+    <li>Level specific instructions TODO</li>
+    </ul>
+    </section>
+    </div>
+    `,
+    question_and_answer: {
+      question: "NO QUESTION",
+      answer: `NO ANSWER`,
+    },
+    dimensions: [
+      {
+        width: drawBoardWidth,
+        height: drawBoardheight,
+      },
+    ],
   };
 };
 const createRandomGrid = (

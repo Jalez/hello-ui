@@ -1,7 +1,7 @@
 import { styled } from "@mui/system";
 import { drawBoardheight } from "../../../../../../constants";
 
-export const StyledSlider = styled("input")`
+export const StyledSlider = styled("input")<{ height: number }>`
   -webkit-appearance: none; /* Override default CSS styles */
   appearance: none;
   width: 100%;
@@ -22,7 +22,7 @@ export const StyledSlider = styled("input")`
     -webkit-appearance: none; /* Override default look */
     appearance: none;
     width: 2px;
-    height: ${drawBoardheight}px;
+    height: ${(props) => props.height}px;
     background: #000000;
     border-radius: 0px; /* no rounded corners */
   }
@@ -31,7 +31,7 @@ export const StyledSlider = styled("input")`
     appearance: none;
     border: none;
     width: 2px; /* Set a specific slider handle width */
-    height: ${drawBoardheight}px; /* Custom height */
+    height: ${(props) => props.height}px; /* Custom height */
     background: #000000;
     border-radius: 0px;
   }

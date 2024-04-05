@@ -1,25 +1,37 @@
 /** @format */
 
+import { useState } from "react";
 import { useScreenshotUpdate } from "../../../store/hooks/hooks";
 import { ScreenShotter } from "../../General/Screenshotter/Screenshotter";
 
 type ScreenshotWithReduxProps = {
   imageUrl: string;
   name: string;
-  children: JSX.Element;
+  scenarioId: string;
+  children?: JSX.Element;
 };
 
 const ScreenshotWithRedux = ({
   imageUrl,
   name,
+  scenarioId,
   children,
 }: ScreenshotWithReduxProps) => {
-  const { updateScreenshot } = useScreenshotUpdate();
+  const { updateScreenshot } = useScreenshotUpdate(scenarioId);
+  const [oldImageUrl, setOldImageUrl] = useState("no image");
+
+  const handleUpdate = (name: string, imageUrl: string) => {
+    if (imageUrl !== oldImageUrl) {
+      updateScreenshot(name, imageUrl);
+      setOldImageUrl(imageUrl);
+    }
+  };
   return (
     <ScreenShotter
       screenshotName={name}
+      takeScreenshotWhen={imageUrl !== oldImageUrl}
       triggerCondition={imageUrl}
-      updateScreenshot={updateScreenshot}
+      updateScreenshot={handleUpdate}
     >
       {children}
     </ScreenShotter>

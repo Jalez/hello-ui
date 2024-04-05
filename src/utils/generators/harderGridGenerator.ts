@@ -7,7 +7,7 @@ const listItems = ["Item 1", "Item 2", "Item 3", "Item 4", "Item 5"];
 const listStyles = ["bullet", "numbered", "interactive", "minimal"];
 const listColors = ["red", "blue", "green", "purple", "orange"];
 
-export const easyGridGenerator: generator = (
+export const harderGridGenerator: generator = (
   primaryColor: string,
   secondaryColor: string,
   tertiaryColor?: string
@@ -62,14 +62,13 @@ export const easyGridGenerator: generator = (
   };
 
   const html = `
-  <div class="container">
-  <div class="grid header">Header</div>
-  <div class="grid hero">Hero</div>
-  <div class="grid sidebar">Sidebar</div>
-  <div class="grid content">Main Content
-  </div>
-  <div class="grid extra">Extra Content</div>
-</div>
+  <section class="container">
+    <header class="header">Header</header>
+    <main class="hero">Hero</main>
+    <aside class="sidebar">Sidebar</aside>
+    <section class="content">Main Content</section>
+    <section class="extra">Extra Content</section>
+  </section>
 `;
 
   const TCSS = `
@@ -121,6 +120,38 @@ export const easyGridGenerator: generator = (
     grid-row: 4 / 5;
     background-color: ${colors[4]};
   }
+
+  @media (max-width: 200px) {
+    .container {
+      grid-template-columns: 1fr;
+      grid-template-rows: 50px 1fr 1fr 1fr;
+    }
+
+    .header {
+      grid-column: 1 / 2;
+      grid-row: 1 / 2;
+    }
+
+    .hero {
+      grid-column: 1 / 2;
+      grid-row: 2 / 3;
+    }
+
+    .sidebar {
+      grid-column: 1 / 2;
+      grid-row: 3 / 4;
+    }
+
+    .content {
+      grid-column: 1 / 2;
+      grid-row: 4 / 5;
+    }
+
+    .extra {
+      grid-column: 1 / 2;
+      grid-row: 5 / 6;
+    }
+  }
 `;
 
   return {
@@ -128,7 +159,7 @@ export const easyGridGenerator: generator = (
     SHTML: html,
     TCSS: TCSS,
     SCSS: css,
-    difficulty: "grid",
+    difficulty: "Harder Grid",
     instructions,
     question_and_answer,
     lockCSS: false,
@@ -139,8 +170,12 @@ export const easyGridGenerator: generator = (
     colors: colors,
     dimensions: [
       {
-        width: drawBoardWidth,
-        height: drawBoardheight,
+        width: 500,
+        height: 200,
+      },
+      {
+        width: 200,
+        height: 500,
       },
     ],
   };

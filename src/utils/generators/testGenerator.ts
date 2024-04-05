@@ -1,13 +1,14 @@
 /** @format */
 
-const listItems = ["Item 1", "Item 2", "Item 3", "Item 4", "Item 5"];
-const listStyles = ["bullet", "numbered", "interactive", "minimal"];
-const listColors = ["red", "blue", "green", "purple", "orange"];
+import { drawBoardWidth, drawBoardheight } from "../../constants";
+import { generator } from "../../types";
 
-export const testGenerator = (
-  primaryColor: string,
-  secondaryColor: string,
-  tertiaryColor?: string
+
+
+export const testGenerator: generator = (
+  primaryColor,
+  secondaryColor,
+  tertiaryColor
 ) => {
   const instructions = `
   <div style="display:flex; flex-direction: row; gap: 0.2em;">
@@ -60,5 +61,15 @@ export const testGenerator = (
     percentageTreshold: 90,
     percentageFullPointsTreshold: 98,
     colors: [primaryColor, secondaryColor],
+    dimensions: [
+      {
+        width: drawBoardWidth,
+        height: drawBoardheight,
+      },
+      {
+        width: drawBoardheight,
+        height: drawBoardWidth,
+      },
+    ],
   };
 };
