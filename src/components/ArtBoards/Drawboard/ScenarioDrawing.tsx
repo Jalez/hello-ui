@@ -21,6 +21,7 @@ export const ScenarioDrawing = ({
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const level = useAppSelector((state) => state.levels[currentLevel - 1]);
   if (!level) return <div>loading...</div>;
+  console.log("level.code", level.code);
 
   return (
     <BoardContainer width={scenario.dimensions.width}>
@@ -49,6 +50,7 @@ export const ScenarioDrawing = ({
                   id="DrawBoard"
                   newCss={level.code.css}
                   newHtml={level.code.html}
+                  newJs={level.code.js}
                   scenario={scenario}
                   name="drawingUrl"
                 />

@@ -9,6 +9,7 @@ import { scenario } from "../../types";
 interface FrameProps {
   newHtml: string;
   newCss: string;
+  newJs: string;
   id: string;
   name: string;
   frameUrl?: string;
@@ -41,6 +42,7 @@ export const Frame = ({
   id,
   newHtml,
   newCss,
+  newJs,
   name,
   scenario,
   frameUrl = "http://localhost:3500/" ||
@@ -57,6 +59,7 @@ export const Frame = ({
           {
             html: newHtml,
             css: newCss,
+            js: newJs,
             name,
             scenarioId: scenario.scenarioId,
           },
@@ -70,7 +73,7 @@ export const Frame = ({
     return () => {
       window.removeEventListener("message", resendDataAfterMount);
     };
-  }, [newHtml, newCss, name]);
+  }, [newHtml, newCss, name, newJs, scenario]);
 
   useEffect(() => {
     const handleDataFromIframe = async (event: MessageEvent) => {
@@ -104,13 +107,14 @@ export const Frame = ({
         {
           html: newHtml,
           css: newCss,
+          js: newJs,
           name,
           scenarioId: scenario.scenarioId,
         },
         "*"
       );
     }
-  }, [newHtml, newCss, iframeRef]);
+  }, [newHtml, newCss, iframeRef, newJs, name, scenario]);
   // // console.log("scenario", scenario);
   if (!scenario) {
     return <div>Scenario not found</div>;

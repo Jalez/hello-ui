@@ -195,6 +195,7 @@ const levelsSlice = createSlice({
       const level = state[id - 1];
 
       if (!level) return;
+      console.log("updateCode");
       if (
         (code.html && code.html.length > maxCodeLength) ||
         (code.css && code.css.length > maxCodeLength) ||
@@ -223,7 +224,8 @@ const levelsSlice = createSlice({
         console.error("Using scripts isn't allowed!");
         return;
       }
-
+      // console.log("updateCode", code.html, code.css, code.js);
+      console.log("level.code", code);
       level.code = code;
       storage?.setItem(storage.key, JSON.stringify(state));
     },

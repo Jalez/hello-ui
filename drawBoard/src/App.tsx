@@ -1,6 +1,7 @@
 /** @format */
 import { ReactElement, useEffect, useRef, useState } from "react";
 import { domToPng } from "modern-screenshot";
+import xss from "xss";
 
 const sheet = new CSSStyleSheet();
 
@@ -34,8 +35,12 @@ function App() {
   const [stylesCorrect, setStylesCorrect] = useState<Boolean>(false);
   const [urlName, setUrlName] = useState<string>();
   const [scenarioId, setScenarioId] = useState<string>();
+  const [js, setJs] = useState<string>();
+  const [error, setError] = useState<string>();
   useEffect(() => {
     const handlePostMessage = (event: MessageEvent) => {
+      setError("");
+      console.log("event.data", event.data);
       if (event.data.name) {
         setUrlName(event.data.name);
         // console.log("name", event.data.name);
@@ -51,7 +56,28 @@ function App() {
       if (event.data.scenarioId) {
         setScenarioId(event.data.scenarioId);
       }
+
       // TODO: handle javascript
+      if (event.data.js) {
+        console.log("js", event.data.js);
+        const sanitizedJS = xss(event.data.js);
+
+        // execute the javascript code
+        try {
+          // Create a new function with the JavaScript code as its body
+
+          const func = new Function(sanitizedJS);
+
+          // Invoke the function
+          func();
+        } catch (e) {
+          if (e instanceof Error) {
+            console.log("error in js");
+            setError(e.message);
+            console.error(e);
+          }
+        }
+      }
     };
 
     window.addEventListener("message", handlePostMessage);
@@ -86,7 +112,7 @@ function App() {
     }
   }, [html, stylesCorrect]);
 
-  return <>{html}</>;
+  return <>{error ? error : html}</>;
 }
 
 export default App;

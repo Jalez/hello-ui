@@ -10,6 +10,7 @@ import { Slider } from "./Slider/Slider";
 import { useTheme } from "@mui/system";
 import { Level } from "../../types";
 import { Box } from "@mui/material";
+import { javascript } from "@codemirror/lang-javascript";
 
 export const Editors = () => {
   const theme = useTheme();
@@ -21,6 +22,7 @@ export const Editors = () => {
   const levels = useAppSelector((state: any) => state.levels);
   const [htmlCode, setHTMLCode] = useState<string>("");
   const [cssCode, setCSSCode] = useState<string>("");
+  const [jsCode, setJSCode] = useState<string>("");
   const [lastHeight, setLastHeight] = useState<number>(
     document.body.scrollHeight
   );
@@ -32,9 +34,10 @@ export const Editors = () => {
     if (!levels[currentLevel - 1]) return;
     setHTMLCode(levels[currentLevel - 1].code.html);
     setCSSCode(levels[currentLevel - 1].code.css);
+    setJSCode(levels[currentLevel - 1].code.js);
   }, [currentLevel, identifier]);
 
-  const codeUpdater = (data: { html?: string; css?: string }) => {
+  const codeUpdater = (data: { html?: string; css?: string; js?: string }) => {
     if (!levels[currentLevel - 1]) return;
     dispatch(
       updateCode({
@@ -145,6 +148,17 @@ export const Editors = () => {
           width={cssEditorWidth}
           locked={level.lockCSS}
         />
+        {level.lockJS ? null : (
+          <CodeEditor
+            lang={javascript()}
+            title="JS"
+            codeUpdater={codeUpdater}
+            levelIdentifier={identifier}
+            template={jsCode}
+            width={cssEditorWidth}
+            locked={false}
+          />
+        )}
       </Box>
     </Box>
   );

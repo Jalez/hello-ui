@@ -4,6 +4,7 @@ import { cardGenerator } from "./generators/cardGenerator";
 import { easyFlexGenerator } from "./generators/easyFlexGenerator";
 import { easyGridGenerator } from "./generators/easyGridGenerator";
 import { formGenerator } from "./generators/formGenerator";
+import { fullFormGenerator } from "./generators/fullFormGenerator";
 import { harderFlexGenerator } from "./generators/harderFlexGenerator";
 import { harderGridGenerator } from "./generators/harderGridGenerator";
 import { listGenerator } from "./generators/listGenerator";
@@ -65,8 +66,9 @@ export const generatorNameAndFunction: generatorNameAndFunction = {
   grid: easyGridGenerator,
   "Harder Flex": harderFlexGenerator,
   "Harder Grid": harderGridGenerator,
+  "Full form": fullFormGenerator,
 };
-type week = "html_2_es" | "css_1_es" | "css_2_es" | "css_2" | "all";
+type week = "html_2_es" | "css_1_es" | "css_2_es" | "css_2" | "js_1_es" | "all";
 export const createLevels = (week: week) => {
   const weekAndGenerators = {
     test: [testGenerator],
@@ -74,6 +76,7 @@ export const createLevels = (week: week) => {
     css_1_es: [listGenerator, tableGenerator],
     css_2: [easyFlexGenerator, easyGridGenerator],
     css_2_es: [harderFlexGenerator, harderGridGenerator], //TODO: Add more generators,
+    js_1_es: [fullFormGenerator],
     all: [
       testGenerator,
       testFlexGenerator,
@@ -85,6 +88,7 @@ export const createLevels = (week: week) => {
       easyGridGenerator,
       harderFlexGenerator,
       harderGridGenerator,
+      fullFormGenerator,
     ],
   };
   const initialState = [];
