@@ -133,7 +133,7 @@ export const easyGridGenerator: generator = (
     question_and_answer,
     lockCSS: false,
     lockHTML: true,
-    lockJS: false,
+    lockJS: true,
     percentageTreshold: 90,
     percentageFullPointsTreshold: 98,
     colors: colors,

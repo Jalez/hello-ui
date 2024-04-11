@@ -59,12 +59,14 @@ export const ScenarioModel = ({
           justifyContent: "center",
           alignItems: "center",
           padding: "10px",
-          left: "-25px",
+          right: "-30px",
           top: "50%",
           transform: "translateY(-50%)",
           color: "secondary.main",
           bgcolor: "primary.main",
-          writingMode: "sideways-lr",
+          writingMode: "vertical-lr",
+          // for chrome
+          WebkitWritingMode: "vertical-lr",
         }}
       >
         {scenario.dimensions.height + " px"}
@@ -78,6 +80,7 @@ export const ScenarioModel = ({
                 id="DrawBoard"
                 newCss={level.solution.css}
                 newHtml={level.solution.html}
+                newJs={level.solution.js}
                 scenario={scenario}
                 name="solutionUrl"
               />

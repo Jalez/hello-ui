@@ -101,4 +101,5 @@ export type levelNames =
   | "flex"
   | "grid"
   | "Harder Flex"
-  | "Harder Grid";
+  | "Harder Grid"
+  | "Full form";
