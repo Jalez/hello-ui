@@ -56,65 +56,59 @@ export const fullFormGenerator: generator = (
 
   const css = `
 :root {
-    --primary-color: ${colors[0]};
-    --secondary-color: ${colors[1]};
-    --text-color: #fff;
+  --primary-color: #496989;
+  --secondary-color: #58A399;
+  --text-color: #fff;
 }
 
 #root {
     font-family: Arial, sans-serif;
-    padding: 20px;
     background-color: var(--secondary-color);
     color: var(--text-color);
-}
+} 
 
 form {
     background-color: var(--primary-color);
-    padding: 10px;
-    border-radius: 5px;
     max-width: 100%;
+  display: flex; 
+  flex-direction: column; 
+  margin: 1em; 
+  padding: 1em; 
 }
 
 h2 {
     text-align: center;
+  
 }
 
 input, textarea {
-    width: calc(100% - 20px);
-    margin-bottom: 10px;
-    padding: 5px;
-    border-radius: 3px;
     border: 1px solid var(--secondary-color);
+  margin: 1em; 
 }
 
 button {
     width: 100%;
-    padding: 5px;
-    background-color: var(--secondary-color);
+    background-color: var(--primary-color);
     color: var(--text-color);
     border: none;
     border-radius: 3px;
     cursor: pointer;
 }
-
-button:hover {
-    background-color: darken(var(--secondary-color), 10%);
-}
 `;
 
   const TCSS = `
 :root {
-    --primary-color: ${colors[0]};
-    --secondary-color: ${colors[1]};
+    --primary-color: #496989;
+    --secondary-color: #58A399;
     --text-color: #fff;
 }
 
 #root {
     font-family: Arial, sans-serif;
-    padding: 20px;
     background-color: var(--secondary-color);
     color: var(--text-color);
-} `;
+} 
+   `;
   const THTML = `<form>Add your form elements here</form>`;
 
   return {
