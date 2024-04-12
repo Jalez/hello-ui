@@ -25,7 +25,32 @@ export const fullFormGenerator: generator = (
   const selectedButtonType = buttonTypes[timeIndex % buttonTypes.length];
   const selectedFormStyle = formStyles[timeIndex % formStyles.length];
 
-  const instructions = `Create a <strong>form</strong> that uses the <em>${selectedFormStyle}</em> class, with a <em>${selectedInputType}</em> input, a <em>checkbox</em> inside a fieldset and a <em>${selectedButtonType}</em> button. The form should have a label for the input, and the label should have inline styling for ${selectedLabelDecoration}. For parent elements that need their children to be on the same row, you can use the <em>same-row-children</em> class. You must use the correct class names, ids and semantic tags to style the form and its content. For instance, the semantic tags "form", "label", "input" and "button" should be present. header, section and footer should be used. If Ids are required, Id is the same as the <em>type</em> of the element. You can look at the stylesheet and provided picture for reference.`;
+  const instructions = `  <div style="display:flex; flex-direction: row; gap: 1em;">
+  <section>
+    <h2>Requirements:</h2>
+    <ul>
+      <li>You need to modify both the HTML and CSS to create a form layout.</li>
+      <li>Use the given custom variables for paddings and margins, and colors.</li>
+      <li>Submit the finished form before the end of the exercise session.</li>
+    </ul>
+  </section>
+  
+  <section>
+    <h2>Exploration Suggestions:</h2>
+    <ul>
+      <li> :root : look into what it does and how variables can be used in CSS.</li>
+      <li>Experiment with different form elements and their attributes.</li>
+    </ul>
+  </section>
+  
+  <section>
+    <h2>Additional Guidelines:</h2>
+    <ul>
+      <li>When in need of help, ask.</li>
+      <li>If group work: Work together as a group to solve this exercise. </li>
+    </ul>
+  </section>
+  </div>`;
   const question_and_answer = {
     question: "What are forms in html?",
     answer: `HTML forms are used to collect user input. They contain form elements like text fields, checkboxes, radio buttons, submit buttons, etc. Users enter data into these elements, and the data is sent to a server for processing.  `,
@@ -34,16 +59,9 @@ export const fullFormGenerator: generator = (
   const colors = [
     "#496989",
     "#58A399",
-    "#A8CD9F",
-    "#E2F4C5",
-    "#F4A896",
     primaryColor, //#fff
     secondaryColor, //#222
   ];
-
-  // Generate HTML for the selected input type
-
-  // Generate CSS for the selected input type
 
   const html = `<form>
   <h2>Contact Us</h2>
@@ -55,59 +73,59 @@ export const fullFormGenerator: generator = (
 `;
 
   const css = `
-:root {
-  --primary-color: #496989;
-  --secondary-color: #58A399;
-  --text-color: #fff;
-}
-
-#root {
-    font-family: Arial, sans-serif;
-    background-color: var(--secondary-color);
-    color: var(--text-color);
-} 
-
-form {
-    background-color: var(--primary-color);
-    max-width: 100%;
-  display: flex; 
-  flex-direction: column; 
-  margin: 1em; 
-  padding: 1em; 
-}
-
-h2 {
-    text-align: center;
-  
-}
-
-input, textarea {
-    border: 1px solid var(--secondary-color);
-  margin: 1em; 
-}
-
-button {
-    width: 100%;
-    background-color: var(--primary-color);
-    color: var(--text-color);
-    border: none;
-    border-radius: 3px;
-    cursor: pointer;
-}
-`;
-
-  const TCSS = `
-:root {
+  :root {
     --primary-color: #496989;
     --secondary-color: #58A399;
     --text-color: #fff;
-}
+    --margin: 1em;
+    --padding: 1em;  
+  }
+  
+  #root {
+      font-family: Arial, sans-serif;
+      background-color: var(--secondary-color);
+      color: var(--text-color);
+  } 
+  
+  form {
+      background-color: var(--primary-color);
+    display: flex; 
+    flex-direction: column; 
+    margin: var(--margin);
+    padding: var(--padding);
+  }
+  
+  h2 {
+      text-align: center;
+    
+  }
+  
+  input, textarea {
+    margin: var(--margin)
+  }
+  
+  button {
+      background-color: var(--primary-color);
+      color: var(--text-color);
+      border: none;
+  }
+`;
 
-#root {
-    font-family: Arial, sans-serif;
-    background-color: var(--secondary-color);
-    color: var(--text-color);
-} 
+  const TCSS = `
+  :root {
+    --primary-color: #496989;
+    --secondary-color: #58A399;
+    --text-color: #fff;
+    --margin: 1em;
+    --padding: 1em;  
+  }
+  
+  #root {
+      font-family: Arial, sans-serif;
+      background-color: var(--secondary-color);
+      color: var(--text-color);
+  } 
+  
    `;
   const THTML = `<form>Add your form elements here</form>`;
 

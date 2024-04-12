@@ -59,7 +59,7 @@ export const ScenarioModel = ({
           justifyContent: "center",
           alignItems: "center",
           padding: "10px",
-          right: "-30px",
+          right: "-35px",
           top: "50%",
           transform: "translateY(-50%)",
           color: "secondary.main",
