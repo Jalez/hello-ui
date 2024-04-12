@@ -54,6 +54,7 @@ export const ModelArtContainer = ({
           id="DrawBoard"
           newCss={level.solution.css}
           newHtml={level.solution.html}
+          newJs={level.solution.js}
           scenario={scenario}
           name="solutionUrl"
         />
