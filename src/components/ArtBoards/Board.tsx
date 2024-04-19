@@ -15,7 +15,12 @@ const StyledBoard = styled("div")(({ theme }) => ({
   boxSizing: "border-box",
   overflow: "hidden",
   border: "5px solid #111",
-  zIndex: 2,
+  display: "flex",
+  flexDirection: "column",
+  justifyContent: "center",
+  alignItems: "center",
+
+  zIndex: 20,
   backgroundColor: theme.palette.secondary.main, // Use the theme's secondary color
 }));
 

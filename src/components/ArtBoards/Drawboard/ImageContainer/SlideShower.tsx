@@ -9,15 +9,16 @@ interface ImageContainerProps {
   slidingComponent: any;
   staticComponent: any;
   sliderHeight: number;
+  showStatic: boolean;
 }
 
 export const SlideShower = ({
   slidingComponent,
   staticComponent,
   sliderHeight,
+  showStatic,
 }: ImageContainerProps) => {
   const [sliderValue, setSliderValue] = useState(100);
-  const [showStatic, setShowStatic] = useState(false);
 
   const dragSlider = useCallback((e: any) => {
     const slider = e.target;
@@ -34,7 +35,7 @@ export const SlideShower = ({
 
   const slidingStyle: CSSProperties = {
     clipPath: `polygon(0 0, ${sliderValue}% 0, ${sliderValue}% 100%, 0 100%)`,
-    position: "absolute",
+    position: showStatic ? "absolute" : "relative",
     top: 0,
     left: 0,
     width: "100%",
@@ -44,13 +45,17 @@ export const SlideShower = ({
 
   return (
     <>
-      <Slider
-        sliderValue={sliderValue}
-        dragSlider={dragSlider}
-        resetSlider={resetSlider}
-        sliderHeight={sliderHeight}
-      />
-      {staticComponent}
+      {showStatic && (
+        <>
+          <Slider
+            sliderValue={sliderValue}
+            dragSlider={dragSlider}
+            resetSlider={resetSlider}
+            sliderHeight={sliderHeight}
+          />
+          {staticComponent}
+        </>
+      )}
       <Box sx={slidingStyle}>{slidingComponent}</Box>
     </>
   );

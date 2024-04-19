@@ -137,7 +137,7 @@ export const easyGridGenerator: generator = (
     percentageTreshold: 90,
     percentageFullPointsTreshold: 98,
     colors: colors,
-    dimensions: [
+    scenarioDetails: [
       {
         width: drawBoardWidth,
         height: drawBoardheight,

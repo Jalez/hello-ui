@@ -306,7 +306,7 @@ form footer input[type="submit"] {
     percentageTreshold: 95,
     percentageFullPointsTreshold: 99,
     colors: [primaryColor, secondaryColor],
-    dimensions: [
+    scenarioDetails: [
       {
         width: drawBoardWidth,
         height: drawBoardheight,

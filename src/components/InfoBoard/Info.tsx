@@ -8,7 +8,10 @@ import { InfoSwitch } from "./InfoSwitch";
 import { InfoText } from "./InfoText";
 import { InfoTime } from "./InfoTime";
 import { LevelData } from "./LevelData";
-import { toggleShowModelSolution } from "../../store/slices/levels.slice";
+import {
+  toggleImageInteractivity,
+  toggleShowModelSolution,
+} from "../../store/slices/levels.slice";
 import { Box, Paper } from "@mui/material";
 import Timer from "../../Timer";
 import { Navbar } from "../Navbar/Navbar";
@@ -19,9 +22,7 @@ const Info = () => {
   const levels = useAppSelector((state) => state.levels);
   const level = levels[currentLevel - 1];
   const showModel = level.showModelPicture;
-  const handleSwitch = useCallback(() => {
-    dispatch(toggleShowModelSolution(currentLevel));
-  }, [currentLevel, dispatch]);
+  const interactive = level.interactive;
 
   if (!level) return <div>loading...</div>;
   return (
@@ -60,16 +61,13 @@ const Info = () => {
           <InfoText>
             Accuracy: <LevelData reduxState="accuracy" />%
           </InfoText>
+          <InfoText>
+            Accuracy threshold: <LevelData reduxState="percentageTreshold" />%
+          </InfoText>
         </Box>
 
         <InfoColors />
         {/* <InfoPictures /> */}
-        <InfoSwitch
-          rightLabel={"Show model"}
-          leftLabel={"Show diff"}
-          checked={showModel}
-          switchHandler={handleSwitch}
-        />
       </InfoBoard>
     </Paper>
   );

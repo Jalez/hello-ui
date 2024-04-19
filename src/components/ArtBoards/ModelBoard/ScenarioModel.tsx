@@ -2,15 +2,15 @@
 
 import { Diff } from "./Diff/Diff";
 import { BoardContainer } from "../BoardContainer";
-import { BoardTitle } from "../BoardTitle";
 import { Board } from "../Board";
 import { ModelArtContainer } from "./ModelArtContainer";
-import { Model } from "./Model";
-import { useAppSelector } from "../../../store/hooks/hooks";
+import { useAppDispatch, useAppSelector } from "../../../store/hooks/hooks";
 import { scenario } from "../../../types";
 import { Image } from "../../General/Image/Image";
-import { Frame } from "../Frame";
 import { Box } from "@mui/material";
+import { InfoSwitch } from "../../InfoBoard/InfoSwitch";
+import { useCallback } from "react";
+import { toggleShowModelSolution } from "../../../store/slices/levels.slice";
 
 type ScenarioModelProps = {
   scenario: scenario;
@@ -22,8 +22,11 @@ export const ScenarioModel = ({
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const level = useAppSelector((state) => state.levels[currentLevel - 1]);
   const showModel = level.showModelPicture;
-  // console.log("scenario.dimensions.width", scenario.dimensions.width);
-  // console.log("Scenario id in ScenarioModel", scenario.scenarioId);
+  const dispatch = useAppDispatch();
+
+  const handleSwitchModel = useCallback(() => {
+    dispatch(toggleShowModelSolution(currentLevel));
+  }, [currentLevel, dispatch]);
 
   return (
     <Box
@@ -60,7 +63,7 @@ export const ScenarioModel = ({
           alignItems: "center",
           padding: "10px",
           right: "-35px",
-          top: "50%",
+          top: "calc(50% - 30px)",
           transform: "translateY(-50%)",
           color: "secondary.main",
           bgcolor: "primary.main",
@@ -73,9 +76,8 @@ export const ScenarioModel = ({
       </Box>
       <BoardContainer width={scenario.dimensions.width}>
         <Board>
-          {/* <ModelInfoBoard showModel={showModel} setShowModel={setShowModel} /> */}
           <ModelArtContainer scenario={scenario}>
-            {!scenario.solutionUrl ? (
+            {/* {!scenario.solutionUrl ? (
               <Frame
                 id="DrawBoard"
                 newCss={level.solution.css}
@@ -84,7 +86,8 @@ export const ScenarioModel = ({
                 scenario={scenario}
                 name="solutionUrl"
               />
-            ) : showModel ? (
+            ) : */}
+            {showModel ? (
               <Image
                 name="solution"
                 imageUrl={scenario.solutionUrl}
@@ -95,6 +98,12 @@ export const ScenarioModel = ({
               <Diff scenario={scenario} />
             )}
           </ModelArtContainer>
+          <InfoSwitch
+            rightLabel={"Show model"}
+            leftLabel={"Show diff"}
+            checked={showModel}
+            switchHandler={handleSwitchModel}
+          />
         </Board>
         {/* <BoardTitle side="right">Model version</BoardTitle> */}
       </BoardContainer>

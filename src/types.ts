@@ -15,6 +15,7 @@ export type scenario = {
     width: number;
     height: number;
   };
+  js: string;
 };
 
 type instructions = string;
@@ -60,6 +61,10 @@ export interface Level {
   lockCSS: boolean;
   lockHTML: boolean;
   lockJS: boolean;
+  interactive: boolean;
+  showScenarioModel: boolean;
+  showHotkeys: boolean;
+  events: string[];
   percentageTreshold: number;
   percentageFullPointsTreshold: number;
 }
@@ -75,19 +80,20 @@ export type generator = (
   SCSS: string;
   TJS?: string;
   SJS?: string;
+  events?: string[];
   instructions: instructions;
   question_and_answer: question_and_answer;
   difficulty: string;
   lockCSS: boolean;
   lockHTML: boolean;
   lockJS: boolean;
-
   percentageTreshold: number;
   percentageFullPointsTreshold: number;
   colors: string[];
-  dimensions: {
+  scenarioDetails: {
     width: number;
     height: number;
+    js?: string;
   }[];
 };
 
@@ -102,4 +108,6 @@ export type levelNames =
   | "grid"
   | "Harder Flex"
   | "Harder Grid"
-  | "Full form";
+  | "Full form"
+  | "Dynamic list"
+  | "Active Navbar";

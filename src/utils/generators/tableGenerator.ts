@@ -204,10 +204,11 @@ export const tableGenerator: generator = (
     percentageTreshold: 90,
     percentageFullPointsTreshold: 98,
     colors: [primaryColor, secondaryColor, tertiaryColor],
-    dimensions: [
+    scenarioDetails: [
       {
         width: drawBoardWidth,
         height: drawBoardheight,
+        js: "",
       },
     ],
   };

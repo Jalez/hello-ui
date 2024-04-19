@@ -143,7 +143,7 @@ export const fullFormGenerator: generator = (
     percentageTreshold: 95,
     percentageFullPointsTreshold: 99,
     colors: colors,
-    dimensions: [
+    scenarioDetails: [
       {
         width: drawBoardWidth,
         height: drawBoardheight,

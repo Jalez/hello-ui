@@ -16,6 +16,7 @@ import { sendScoreToParentFrame } from "./store/actions/score.actions";
 import { Footer } from "./components/Footer/Footer";
 
 import { Navbar } from "./components/Navbar/Navbar";
+import ArtBoardControls from "./ArtBoardControls";
 
 const AppStyle = {
   display: "flex",
@@ -31,13 +32,9 @@ const AppStyle = {
 };
 
 function App() {
-  const currentLevel = useAppSelector(
-    (state) => state.currentLevel.currentLevel
-  );
   const levels = useAppSelector((state) => state.levels);
   const dispatch = useAppDispatch();
   const options = useAppSelector((state) => state.options);
-  const level = levels[currentLevel - 1];
 
   useEffect(() => {
     // once it's mounted, send a message to the parent window
@@ -62,6 +59,7 @@ function App() {
               <InfoInstructions />
               {options.showWordCloud && <CSSWordCloud />}
               <ArtBoards />
+              <ArtBoardControls />
               <Editors />
             </>
           )}

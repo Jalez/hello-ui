@@ -40,9 +40,6 @@ export const ModelArtContainer = ({
 
     // Create an object URL from the blob
     const imageUrl = URL.createObjectURL(blob);
-
-    // Now you can set this imageUrl as the src attribute of an img tag
-    // console.log("Image URL", imageUrl);
   }
   return (
     <ArtContainer
@@ -54,7 +51,8 @@ export const ModelArtContainer = ({
           id="DrawBoard"
           newCss={level.solution.css}
           newHtml={level.solution.html}
-          newJs={level.solution.js}
+          newJs={level.solution.js + "\n" + scenario.js}
+          events={level.events || []}
           scenario={scenario}
           name="solutionUrl"
         />

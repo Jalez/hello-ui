@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Buffer } from "buffer";
 import { styled } from "@mui/system";
 import { useAppSelector } from "../../../../store/hooks/hooks";
@@ -29,28 +29,35 @@ type DiffProps = {
 export const Diff = ({ scenario }: DiffProps): JSX.Element => {
   const { currentLevel } = useAppSelector((state: any) => state.currentLevel);
   const level = useAppSelector((state: any) => state.levels[currentLevel - 1]);
+  const [imgUrl, setImgUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
-    if (scenario.differenceUrl.length === 0) return;
-    const diff = document.getElementById("diff");
-    if (diff) {
-      diff.innerHTML = "";
-
-      // Create a canvas element and use the diff data to draw the image
-      const width = scenario.dimensions.width;
-      const height = scenario.dimensions.height;
-      const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext("2d");
-      const imgData = ctx?.createImageData(width, height);
-      const deserializedDiff = Buffer.from(scenario.differenceUrl, "base64");
-
-      imgData?.data.set(deserializedDiff);
-      ctx?.putImageData(imgData!, 0, 0);
-      diff.appendChild(canvas);
+    setLoading(true);
+    if (scenario.differenceUrl.length === 0) {
+      setLoading(false);
+      return;
     }
-  }, [level.diff]);
+
+    const width = scenario.dimensions.width;
+    const height = scenario.dimensions.height;
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    const imgData = ctx?.createImageData(width, height);
+    const deserializedDiff = Buffer.from(scenario.differenceUrl, "base64");
+
+    imgData?.data.set(deserializedDiff);
+    ctx?.putImageData(imgData!, 0, 0);
+
+    canvas.toBlob((blob) => {
+      if (blob) {
+        setImgUrl(URL.createObjectURL(blob));
+      }
+    });
+    setLoading(false);
+  }, [scenario]);
 
   return (
     <StyledDiffContainer
@@ -58,9 +65,15 @@ export const Diff = ({ scenario }: DiffProps): JSX.Element => {
       width={scenario.dimensions.width}
       height={scenario.dimensions.height}
     >
-      <StyledParagraph>
-        No diff image created for this level yet. Click evaluate to generate.
-      </StyledParagraph>
+      {
+        // @ts-ignore
+        (imgUrl && <img src={imgUrl} alt="Difference" />) || (
+          <StyledParagraph>
+            No diff image created for this level yet. Save your solution to
+            generate.
+          </StyledParagraph>
+        )
+      }
     </StyledDiffContainer>
   );
 };

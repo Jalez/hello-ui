@@ -5,6 +5,7 @@ import { BoardsContainer } from "./BoardsContainer";
 import { ScenarioDrawing } from "./Drawboard/ScenarioDrawing";
 import { useAppSelector } from "../../store/hooks/hooks";
 import { Typography } from "@mui/material";
+import { KeyBindings } from "../Editors/KeyBindings";
 
 const artBoardStyle = {
   position: "relative" as const,
@@ -15,6 +16,8 @@ const artBoardStyle = {
 export const ArtBoards = (): JSX.Element => {
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const level = useAppSelector((state) => state.levels[currentLevel - 1]);
+  const showScenarioModel = level.showScenarioModel;
+  const showHotkeys = level.showHotkeys;
 
   const scenarios = level.scenarios;
   if (!scenarios) {
@@ -36,6 +39,7 @@ export const ArtBoards = (): JSX.Element => {
             ))}
           </BoardsContainer>
         </div>
+        {/* {showScenarioModel && ( */}
         <div>
           <Typography variant="h2" align="center" color="primary">
             Model solution
@@ -46,6 +50,8 @@ export const ArtBoards = (): JSX.Element => {
             ))}
           </BoardsContainer>
         </div>
+        {/* )} */}
+        {showHotkeys && <KeyBindings />}
       </BoardsContainer>
       {/* <CSSWordCloud /> */}
     </div>

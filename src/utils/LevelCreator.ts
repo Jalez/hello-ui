@@ -8,6 +8,8 @@ import { fullFormGenerator } from "./generators/fullFormGenerator";
 import { harderFlexGenerator } from "./generators/harderFlexGenerator";
 import { harderGridGenerator } from "./generators/harderGridGenerator";
 import { listGenerator } from "./generators/listGenerator";
+import { DynamicListGenerator } from "./generators/listGeneratorDynamic";
+import { ActiveNavbarGenerator } from "./generators/navbarGeneratorDynamicActive";
 import { tableGenerator } from "./generators/tableGenerator";
 import { testFlexGenerator } from "./generators/testFlexGenerator";
 import { testGenerator } from "./generators/testGenerator";
@@ -67,8 +69,18 @@ export const generatorNameAndFunction: generatorNameAndFunction = {
   "Harder Flex": harderFlexGenerator,
   "Harder Grid": harderGridGenerator,
   "Full form": fullFormGenerator,
+  "Dynamic list": DynamicListGenerator,
+  "Active Navbar": ActiveNavbarGenerator,
 };
-type week = "html_2_es" | "css_1_es" | "css_2_es" | "css_2" | "js_1_es" | "all";
+type week =
+  | "html_2_es"
+  | "css_1_es"
+  | "css_2_es"
+  | "css_2"
+  | "js_1_es"
+  | "js_2_es"
+  | "js_3_es"
+  | "all";
 export const createLevels = (week: week) => {
   const weekAndGenerators = {
     test: [testGenerator],
@@ -77,6 +89,8 @@ export const createLevels = (week: week) => {
     css_2: [easyFlexGenerator, easyGridGenerator],
     css_2_es: [harderFlexGenerator, harderGridGenerator], //TODO: Add more generators,
     js_1_es: [fullFormGenerator],
+    js_2_es: [DynamicListGenerator],
+    js_3_es: [ActiveNavbarGenerator],
     all: [
       testGenerator,
       testFlexGenerator,
@@ -89,6 +103,8 @@ export const createLevels = (week: week) => {
       harderFlexGenerator,
       harderGridGenerator,
       fullFormGenerator,
+      DynamicListGenerator,
+      ActiveNavbarGenerator,
     ],
   };
   const initialState = [];
@@ -111,18 +127,22 @@ export const createLevels = (week: week) => {
       secondaryColor,
       tertiaryColor
     );
-    const { dimensions } = generatedLevelDetails;
+    const { scenarioDetails } = generatedLevelDetails;
 
     const scenarios = [] as scenario[];
     //  go through the dimensions
-    for (const dimension of dimensions) {
+    for (const details of scenarioDetails) {
       scenarios.push({
         scenarioId: Math.random().toString(36).substring(7),
         accuracy: 0,
         solutionUrl: "",
         drawingUrl: "",
         differenceUrl: "",
-        dimensions: dimension,
+        dimensions: {
+          width: details.width,
+          height: details.height,
+        },
+        js: details?.js || "",
       } as scenario);
     }
     const level = {
@@ -168,6 +188,10 @@ export const createLevels = (week: week) => {
           5: "0:0",
         },
       },
+      events: generatedLevelDetails?.events || [],
+      interactive: false,
+      showScenarioModel: true,
+      showHotkeys: false,
       showModelPicture: true,
       lockCSS: generatedLevelDetails.lockCSS,
       lockHTML: generatedLevelDetails.lockHTML,

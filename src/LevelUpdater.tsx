@@ -28,6 +28,7 @@ export const LevelUpdater = () => {
     // console.log("GETS HERE");
     for (const scenario of scenarios) {
       if (!scenario.drawingUrl || !scenario.solutionUrl) return;
+      let imagesLoaded = 0;
       const { drawingUrl, solutionUrl, scenarioId } = scenario;
       const { width, height } = scenario.dimensions;
       const drawnImage = new Image();
@@ -41,7 +42,6 @@ export const LevelUpdater = () => {
       solutionImage.onload = imageLoaded;
 
       // Wait for the image to load
-      let imagesLoaded = 0;
       function imageLoaded() {
         imagesLoaded++;
         if (imagesLoaded == 2) {

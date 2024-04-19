@@ -8,20 +8,23 @@ import { Box, Typography } from "@mui/material";
 import { useEffect, useState } from "react";
 import { vscodeDark } from "@uiw/codemirror-theme-vscode";
 import { Compartment } from "@codemirror/state";
-
+import { keymap } from "@codemirror/view";
 import { githubLight } from "@uiw/codemirror-theme-github";
 import { ReactCodeMirrorProps } from "@uiw/react-codemirror";
 import { useAppSelector } from "../../../store/hooks/hooks";
+import { getCommentKeymap } from "./getCommentKeyMap";
 
 interface CodeEditorProps {
   lang: any;
-  title: string;
+  title: "HTML" | "CSS" | "JS";
   template?: string;
   codeUpdater: (data: { html?: string; css?: string }) => void;
   locked?: boolean;
-  width?: string;
+  width?: number;
   levelIdentifier: string;
 }
+
+const commentKeymapCompartment = new Compartment();
 
 interface CodeMirrorProps extends ReactCodeMirrorProps {
   options: {
@@ -51,7 +54,7 @@ export default function CodeEditor({
   template = "",
   codeUpdater,
   locked = false,
-  width = "20%",
+  width = 20,
   levelIdentifier,
 }: CodeEditorProps) {
   const lineNumberCompartment = new Compartment();
@@ -61,20 +64,41 @@ export default function CodeEditor({
   const handleCodeUpdate = (value: string) => {
     if (!locked) {
       setCode(value);
+      // setSavedChanges(false);
     }
   };
+  // const [savedChanges, setSavedChanges] = useState<boolean>(true);
 
   useEffect(() => {
     let timer: NodeJS.Timeout | null = null;
+    // if (code !== "" && savedChanges) {
     if (code !== "") {
+      console.log("updating code: ", title.toLowerCase());
       timer = setTimeout(() => {
         codeUpdater({ [title.toLowerCase()]: code });
       }, 200);
     }
+    // listen for keydown events to set unsaved changes to true: ctrl + s
+
     return () => {
       if (timer) clearTimeout(timer);
     };
   }, [code]);
+  // }, [code, savedChanges]);
+
+  // useEffect(() => {
+  //   const handleKeyDown = (e: KeyboardEvent) => {
+  //     if (e.ctrlKey && e.key === "s") {
+  //       // can I prevent the default behavior of the browser here?
+  //       e.preventDefault();
+  //       // setSavedChanges(true);
+  //     }
+  //   };
+  //   document.addEventListener("keydown", handleKeyDown);
+  //   return () => {
+  //     document.removeEventListener("keydown", handleKeyDown);
+  //   };
+  // }, [savedChanges]);
 
   useEffect(() => {
     setCode(template);
@@ -88,6 +112,7 @@ export default function CodeEditor({
       className: "readOnly",
       screenReaderLabel: "Code Editor for " + title,
       autofocus: locked ? false : true,
+      // make background black
     },
     // value: code,
     extensions: [
@@ -95,6 +120,8 @@ export default function CodeEditor({
       EditorState.readOnly.of(locked),
       EditorView.editable.of(!locked),
       EditorView.lineWrapping,
+      // keymap.of(commentKeymap),
+      commentKeymapCompartment.of(keymap.of(getCommentKeymap(title))), // default language
     ],
     theme: theme,
     placeholder: `Write your ${title} here...`,
@@ -130,15 +157,50 @@ export default function CodeEditor({
       sx={{
         display: "flex",
         height: "100%",
-        minHeight: "600px",
         flexDirection: "column",
-        width: width,
+        width: width + "%",
+        position: "relative",
 
         // backgroundColor: theme === "dark" ? secondaryColor : mainColor,
       }}
     >
-      <Typography variant="h3" color="primary" id="title">
-        {title} {locked ? "(Locked)" : ""}
+      {locked && (
+        <Typography
+          variant="h3"
+          color="primary"
+          id="title"
+          sx={{
+            color: "red",
+            position: "absolute",
+            // put this in the middle of the editor and at a 45 degree angle
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%) rotate(-45deg)",
+            fontSize: "5rem",
+            opacity: 0.2,
+            zIndex: 1,
+            // disable select
+            userSelect: "none",
+            // create a line background around everything else around it
+            overflow: "hidden",
+          }}
+        >
+          Locked
+        </Typography>
+      )}
+      <Typography
+        variant="h3"
+        color="primary"
+        id="title"
+        sx={{
+          zIndex: 2,
+          margin: "0",
+          padding: "0.5rem 0.5rem 0 0.5rem",
+          backgroundColor: "secondary.main",
+        }}
+      >
+        {title}
+        {/* {savedChanges ? "✓" : "*"}{" "} */}
       </Typography>
       <Box
         className="codeEditor"
