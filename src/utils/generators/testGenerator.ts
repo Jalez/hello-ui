@@ -3,8 +3,6 @@
 import { drawBoardWidth, drawBoardheight } from "../../constants";
 import { generator } from "../../types";
 
-
-
 export const testGenerator: generator = (
   primaryColor,
   secondaryColor,
@@ -61,7 +59,7 @@ export const testGenerator: generator = (
     percentageTreshold: 90,
     percentageFullPointsTreshold: 98,
     colors: [primaryColor, secondaryColor],
-    dimensions: [
+    scenarioDetails: [
       {
         width: drawBoardWidth,
         height: drawBoardheight,
