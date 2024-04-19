@@ -139,7 +139,7 @@ export const sidebarGenerator: generator = (
       question: "Create a sidebar layout",
       answer: "aside.custom-sidebar",
     },
-    dimensions: [
+    scenarioDetails: [
       {
         width: drawBoardWidth,
         height: drawBoardheight,

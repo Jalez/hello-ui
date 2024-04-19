@@ -10,6 +10,7 @@ interface FrameProps {
   newHtml: string;
   newCss: string;
   newJs: string;
+  events: string[];
   id: string;
   name: string;
   frameUrl?: string;
@@ -26,15 +27,13 @@ const StyledIframe = styled("iframe")<{ width: number; height: number }>(
     margin: "0px",
     padding: "0px",
     border: "none",
-    // backgroundColor: theme.palette.secondary.main,
+    backgroundColor: theme.palette.secondary.main,
     position: "absolute",
     top: 0,
-    zIndex: 10,
+    zIndex: 0,
     left: 0,
+    // pointerEvents: "auto",
     transition: "z-index 0.3s ease-in-out",
-    "&:hover": {
-      zIndex: -1,
-    },
   })
 );
 
@@ -44,6 +43,7 @@ export const Frame = ({
   newCss,
   newJs,
   name,
+  events,
   scenario,
   frameUrl = "http://localhost:3500/" ||
     "https://tie-lukioplus.rd.tuni.fi/drawboard/",
@@ -54,14 +54,17 @@ export const Frame = ({
 
   useEffect(() => {
     const resendDataAfterMount = (event: MessageEvent) => {
+      // console.log("CSS-artist received new message");
       if (event.data === "mounted") {
+        console.log("CSS-artist sending the data");
         iframeRef.current?.contentWindow?.postMessage(
           {
             html: newHtml,
             css: newCss,
             js: newJs,
-            name,
+            events: JSON.stringify(events),
             scenarioId: scenario.scenarioId,
+            name,
           },
           "*"
         );
@@ -77,8 +80,8 @@ export const Frame = ({
 
   useEffect(() => {
     const handleDataFromIframe = async (event: MessageEvent) => {
-      // console.log("currentLevel", currentLevel);
       if (!event.data.dataURL) return;
+      // console.log("CSS-artist received new message");
       dispatch(
         updateUrl({
           dataURL: event.data.dataURL,
@@ -98,23 +101,19 @@ export const Frame = ({
   }, [currentLevel]);
 
   useEffect(() => {
-    // wait for the iframe to load
     const iframe = iframeRef.current;
 
     if (iframe) {
-      // send a message to the iframe
-      iframe.contentWindow?.postMessage(
+      console.log("CSS-artist telling it to reload");
+      iframeRef.current?.contentWindow?.postMessage(
         {
-          html: newHtml,
-          css: newCss,
-          js: newJs,
+          message: "reload",
           name,
-          scenarioId: scenario.scenarioId,
         },
         "*"
       );
     }
-  }, [newHtml, newCss, iframeRef, newJs, name, scenario]);
+  }, [newHtml, newCss, iframeRef, newJs, name]);
   // // console.log("scenario", scenario);
   if (!scenario) {
     return <div>Scenario not found</div>;
@@ -123,7 +122,8 @@ export const Frame = ({
     <StyledIframe
       id={id}
       ref={iframeRef}
-      src={frameUrl}
+      // add the name as a query parameter, also scenario id
+      src={frameUrl + `?name=${name}&scenarioId=${scenario.scenarioId}`}
       width={scenario.dimensions.width}
       height={scenario.dimensions.height}
     />

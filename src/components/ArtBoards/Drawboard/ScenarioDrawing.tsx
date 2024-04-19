@@ -1,4 +1,4 @@
-import { useAppSelector } from "../../../store/hooks/hooks";
+import { useAppDispatch, useAppSelector } from "../../../store/hooks/hooks";
 import { Image } from "../../General/Image/Image";
 import ScreenshotWithRedux from "../../Specific/ScreenshotWithRedux/ScreenshotWithRedux";
 import { ArtContainer } from "../ArtContainer";
@@ -10,6 +10,9 @@ import { BoardContainer } from "../BoardContainer";
 import { Board } from "../Board";
 import { Box } from "@mui/material";
 import { scenario } from "../../../types";
+import { InfoSwitch } from "../../InfoBoard/InfoSwitch";
+import { useCallback } from "react";
+import { toggleImageInteractivity } from "../../../store/slices/levels.slice";
 
 type ScenarioDrawingProps = {
   scenario: scenario;
@@ -20,16 +23,24 @@ export const ScenarioDrawing = ({
 }: ScenarioDrawingProps): JSX.Element => {
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const level = useAppSelector((state) => state.levels[currentLevel - 1]);
+  const dispatch = useAppDispatch();
   if (!level) return <div>loading...</div>;
-  console.log("level.code", level.code);
+  // console.log("level.code", level.code);
 
+  const handleSwitchDrawing = useCallback(() => {
+    dispatch(toggleImageInteractivity(currentLevel));
+  }, [currentLevel, dispatch]);
+
+  const interactive = level.interactive;
   return (
     <BoardContainer width={scenario.dimensions.width}>
       {/* <BoardTitle>Your version</BoardTitle> */}
       <Board>
+        {" "}
         <ArtContainer>
           <SlideShower
             sliderHeight={scenario.dimensions.height}
+            showStatic={!interactive}
             staticComponent={
               <Image
                 imageUrl={scenario.solutionUrl}
@@ -44,38 +55,47 @@ export const ScenarioDrawing = ({
                   width: scenario.dimensions.width + "px",
                   overflow: "hidden",
                   position: "relative",
+                  // disable user interaction
+                  // pointerEvents: "none",
                 }}
               >
                 <Frame
                   id="DrawBoard"
+                  events={level.events || []}
                   newCss={level.code.css}
                   newHtml={level.code.html}
                   newJs={level.code.js}
                   scenario={scenario}
                   name="drawingUrl"
                 />
-                <Box
+                {/* <Box
                   sx={{
                     position: "absolute",
                     bottom: 0,
                   }}
-                >
-                  {/* <ScreenshotWithRedux
+                > */}
+                {/* <Image
+                    imageUrl={scenario.drawingUrl}
+                    height={scenario.dimensions.height}
+                    width={scenario.dimensions.width}
+                  /> */}
+                {/* <ScreenshotWithRedux
                     imageUrl={scenario.drawingUrl}
                     scenarioId={scenario.scenarioId}
                     name="drawing"
                   >
-                    <Image
-                      imageUrl={scenario.drawingUrl}
-                      height={scenario.dimensions.height}
-                      width={scenario.dimensions.width}
-                    /> 
                   </ScreenshotWithRedux> */}
-                </Box>
+                {/* </Box> */}
               </Box>
             }
           />
         </ArtContainer>
+        <InfoSwitch
+          rightLabel={"Interactive"}
+          leftLabel={"Slider"}
+          checked={interactive}
+          switchHandler={handleSwitchDrawing}
+        />
       </Board>
     </BoardContainer>
   );

@@ -121,7 +121,7 @@ width: 20%;
     percentageTreshold: 90,
     percentageFullPointsTreshold: 98,
     colors: colors,
-    dimensions: [
+    scenarioDetails: [
       {
         width: 400,
         height: 300,

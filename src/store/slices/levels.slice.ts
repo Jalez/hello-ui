@@ -3,8 +3,6 @@
 import { createSlice } from "@reduxjs/toolkit";
 import confetti from "canvas-confetti";
 import { obfuscate } from "../../utils/obfuscators/obfuscate";
-import Pixelmatch from "pixelmatch";
-import { Buffer } from "buffer";
 import { Level, levelNames } from "../../types";
 import {
   createLevels,
@@ -12,8 +10,6 @@ import {
 } from "../../utils/LevelCreator";
 import { numberTimeToMinutesAndSeconds } from "../../utils/numberTimeToMinutesAndSeconds";
 import { gameMaxTime, mainColor, secondaryColor } from "../../constants";
-import calculateAccuracy from "../../utils/imageTools/calculateAccuracy";
-import loadImage from "../../utils/imageTools/loadBase64Image";
 
 const maxCodeLength = 100000;
 
@@ -40,28 +36,7 @@ const levelsSlice = createSlice({
   initialState: [] as Level[],
 
   reducers: {
-    evaluateLevel(state, action) {
-      const loadAndMatch = (currentLevel: number, scenarioId: string) => {
-        // Update the current level with the accuracy and diff
-        const level = state[currentLevel - 1];
-        if (!level) return;
-
-        // find the scenario
-        const scenario = level.scenarios?.find(
-          (scenario) => scenario.scenarioId === scenarioId
-        );
-        if (!scenario) return;
-        // const
-        const percentage = 100;
-        scenario.accuracy = percentage;
-        // scenario.differenceUrl = diff.toString("base64");
-
-        storage?.setItem(storage.key, JSON.stringify(state));
-      };
-      // const { currentLevel, drawnImage, solutionImage, scenarioId } =
-      //   action.payload;
-      // loadAndMatch(currentLevel, drawnImage, solutionImage, scenarioId);
-    },
+    evaluateLevel(state, action) {},
     updateWeek(state, action) {
       let week = action.payload;
 
@@ -108,11 +83,7 @@ const levelsSlice = createSlice({
       };
       level.instructions = newGeneration.instructions;
       level.question_and_answer = newGeneration.question_and_answer;
-      // level.solEvalUrl = "";
-      // level.drawnEvalUrl = "";
-      // level.drawingUrl = "";
-      // level.solutionUrl = "";
-      // go through the scenarios and reset them
+
       level.scenarios?.forEach((scenario) => {
         scenario.accuracy = 0;
         scenario.differenceUrl = "";
@@ -146,7 +117,10 @@ const levelsSlice = createSlice({
         0
       );
       const percentage = accuracy / level.scenarios.length;
-      level.accuracy = percentage;
+      // round percentage to 2 decimal places
+      const roundedPercentage = Math.round(percentage * 100) / 100;
+
+      level.accuracy = roundedPercentage;
       let newpoints = 0;
       const percentageTreshold = level.percentageTreshold || 90;
       const percentageFullPointsTreshold =
@@ -157,6 +131,7 @@ const levelsSlice = createSlice({
           !level.confettiSprinkled
         ) {
           confetti({ particleCount: 100 });
+          level.confettiSprinkled = true;
         }
         const lastTenPercent = percentage - percentageTreshold;
         const remainingPercentage = 100 - percentageTreshold;
@@ -225,7 +200,7 @@ const levelsSlice = createSlice({
         return;
       }
       // console.log("updateCode", code.html, code.css, code.js);
-      console.log("level.code", code);
+      // console.log("level.code", code);
       level.code = code;
       storage?.setItem(storage.key, JSON.stringify(state));
     },
@@ -248,30 +223,32 @@ const levelsSlice = createSlice({
         // console.log("updateUrl solutionUrl");
         scenario.solutionUrl = dataURL;
         // Remove solution code from state if it exists
-        // if (level.solution.html) level.solution.html = "";
-        // if (level.solution.css) level.solution.css = "";
-        // if (level.solution.js) level.solution.js = "";
+        if (level.solution.html) level.solution.html = "";
+        if (level.solution.css) level.solution.css = "";
+        if (level.solution.js) level.solution.js = "";
       }
 
       storage?.setItem(storage.key, JSON.stringify(state));
     },
-    // updateEvaluationUrl(state, action) {
-    //   // // console.log("UPDATE EVALUATION URL");
-    //   const { id, dataUrl, name, scenarioId } = action.payload;
-
-    //   const level = state[id - 1];
-    //   if (!level) return;
-    //   const scenario = level.scenarios?.find(
-    //     (scenario) => scenario.scenarioId === scenarioId
-    //   );
-    //   if (!scenario) return;
-    //   if (name === "drawing") {
-    //     scenario.drawingUrl = dataUrl;
-    //   }
-    //   if (name === "solution") scenario.solutionUrl = dataUrl;
-    //   // update the code for the level in local storage
-    //   storage?.setItem(storage.key, JSON.stringify(state));
-    // },
+    toggleImageInteractivity(state, action) {
+      const level = state[action.payload - 1];
+      if (!level) return;
+      level.interactive = !level.interactive;
+      storage?.setItem(storage.key, JSON.stringify(state));
+    },
+    toggleShowScenarioModel(state, action) {
+      const { levelId, scenarioId } = action.payload;
+      const level = state[levelId - 1];
+      if (!level) return;
+      level.showScenarioModel = !level.showScenarioModel;
+      storage?.setItem(storage.key, JSON.stringify(state));
+    },
+    toggleShowHotkeys(state, action) {
+      const level = state[action.payload - 1];
+      if (!level) return;
+      level.showHotkeys = !level.showHotkeys;
+      storage?.setItem(storage.key, JSON.stringify(state));
+    },
   },
 });
 
@@ -285,6 +262,9 @@ export const {
   resetLevel,
   startLevelTimer,
   toggleShowModelSolution,
+  toggleImageInteractivity,
+  toggleShowScenarioModel,
+  toggleShowHotkeys,
 } = levelsSlice.actions;
 
 export default levelsSlice.reducer;

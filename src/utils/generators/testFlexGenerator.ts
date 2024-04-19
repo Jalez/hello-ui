@@ -110,7 +110,7 @@ export const testFlexGenerator: generator = (
     percentageTreshold: 90,
     percentageFullPointsTreshold: 98,
     colors: colors,
-    dimensions: [
+    scenarioDetails: [
       {
         width: 500,
         height: 200,

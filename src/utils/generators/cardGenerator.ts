@@ -171,7 +171,7 @@ button {
     percentageTreshold: 95,
     percentageFullPointsTreshold: 99,
     colors: [primaryColor, secondaryColor],
-    dimensions: [
+    scenarioDetails: [
       {
         width: 400,
         height: 300,

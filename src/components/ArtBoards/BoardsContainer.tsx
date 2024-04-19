@@ -13,6 +13,7 @@ const boardsContainerStyle = {
   boxSizing: "border-box" as const,
   width: "100%",
   flex: "1 0 auto",
+  // zIndex: 50,
 };
 
 interface BoardsContainerProps {

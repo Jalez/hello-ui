@@ -15,11 +15,12 @@ interface SliderProps {
 const dividerStyles: any = (orientation: string, hideSlider: boolean) => ({
   minWidth: "5px",
   minHeight: "5px",
-  height: orientation === "vertical" ? "100%" : "5px",
+  // height: orientation === "vertical" ? "100%" : "5px",
   width: orientation === "horizontal" ? "100%" : "5px",
+  flex: 1,
   position: "relative",
-  // backgroundColor: "#111",
-  zIndex: hideSlider ? 11 : 50,
+  backgroundColor: "primary.main",
+  zIndex: hideSlider ? 20 : 50,
   cursor: orientation === "horizontal" ? "ns-resize" : "ew-resize",
 });
 
@@ -66,6 +67,7 @@ export const Slider = ({
   );
 
   const handleMousePress = useCallback((e: any) => {
+    // console.log("mouse pressed", e.clientX, e.clientY);
     setMousePressed(true);
     setHideSlider(false);
   }, []);
@@ -91,10 +93,7 @@ export const Slider = ({
         flexItem
         sx={dividerStyles(orientation, hideSlider)}
         onMouseEnter={handleMouseEnter}
-        // onMouseMove={handleMouseDrag}
-        // onMouseLeave={handleMouseLeave}
         onMouseDown={handleMousePress}
-        // onMouseUp={handleMouseRelease}
       />
       <SlideContainer
         opacity={mousePressed ? 0.25 : 0}

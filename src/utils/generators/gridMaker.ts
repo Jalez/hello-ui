@@ -117,7 +117,7 @@ ${generateGridAreasCSSString(selectors, primaryColor)}
       question: "NO QUESTION",
       answer: `NO ANSWER`,
     },
-    dimensions: [
+    scenarioDetails: [
       {
         width: drawBoardWidth,
         height: drawBoardheight,

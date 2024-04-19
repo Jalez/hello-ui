@@ -122,7 +122,7 @@ div>div {
       question: "Create a flexbox layout",
       answer: "display:flex",
     },
-    dimensions: [
+    scenarioDetails: [
       {
         width: drawBoardWidth,
         height: drawBoardheight,
