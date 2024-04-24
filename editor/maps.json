@@ -1,5 +1,8 @@
 {
-  "newOne": [
-    "League table"
-  ]
+  "newOne": {
+    "levels": [
+      "League table"
+    ],
+    "canUseAI": true
+  }
 }
