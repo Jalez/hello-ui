@@ -3,42 +3,37 @@
 import { drawBoardWidth, drawBoardheight } from "../../constants";
 import { generator } from "../../types";
 
-export const DynamicListGenerator: generator = (
-  primaryColor: string,
-  secondaryColor: string,
-  tertiaryColor?: string
-) => {
-  const instructions = `
-  <section>
-    <h2>Task Overview:</h2>
-    <p>In this exercise, you're provided with the HTML structure and CSS styling for a dynamic list. Your task is to write the JavaScript necessary to dynamically populate the list based on data provided in the JavaScript template.</p>
-  </section>  
-<div style="display:flex; flex-direction: row; gap: 1em;">
-
-  <section>
-    <h2>JavaScript Objectives:</h2>
-    <ul>
-      <li>Understand how to select elements in the DOM using JavaScript.</li>
-      <li>Learn to create new DOM elements and set their properties.</li>
-      <li>Practice adding these elements to the DOM to build a dynamic list.</li>
-    </ul>
-  </section>
-
-  <section>
-    <h2>Key Concepts to Explore:</h2>
-    <p>To complete your task, consider exploring the following JavaScript concepts:</p>
-    <ul>
-      <li>Document Object Model (DOM) manipulation methods such as <code>document.querySelector</code> and <code>document.createElement</code>.</li>
-      <li>Array methods like <code>forEach</code> for iterating over data to create list items.</li>
-    </ul>
-  </section>
-
-  <section>
-    <h2>Challenge:</h2>
-    <p>As an optional challenge, try the interactivity of your list by using the new "Slider/Interactive" toggle. This feature will be used in upcoming gage(s).</p>
-  </section>
-</div>
-`;
+export const DynamicListGenerator: generator = () => {
+  const instructions = [
+    {
+      title: "Task Overview:",
+      content: [
+        "In this exercise, you're provided with the HTML structure and CSS styling for a dynamic list. Your task is to write the JavaScript necessary to dynamically populate the list based on data provided in the JavaScript template.",
+      ],
+    },
+    {
+      title: "JavaScript Objectives:",
+      content: [
+        "Understand how to select elements in the DOM using JavaScript.",
+        "Learn to create new DOM elements and set their properties.",
+        "Practice adding these elements to the DOM to build a dynamic list.",
+      ],
+    },
+    {
+      title: "Key Concepts to Explore:",
+      content: [
+        "To complete your task, consider exploring the following JavaScript concepts:",
+        "Document Object Model (DOM) manipulation methods such as document.querySelector and document.createElement.",
+        "Array methods like forEach for iterating over data to create list items.",
+      ],
+    },
+    {
+      title: "Challenge:",
+      content: [
+        "As an optional challenge, try the interactivity of your list by using the new 'Slider/Interactive' toggle. This feature will be used in upcoming gage(s).",
+      ],
+    },
+  ];
 
   const question_and_answer = {
     question: "What are lists in html?",
@@ -86,12 +81,17 @@ li:hover {
   transition: background-color 0.3s;
 }
 
+li:nth-of-type(odd):hover {
+  background-color: grey; 
+  transition: background-color 0.3s;
+}
+
 `;
 
   const SJS = `const listContainer = document.querySelector('#dynamicContainer');
   const ul = document.createElement('ul');
   
-  const items = ['Item 1', 'Item 4', 'Item 3', 'Item 4', 'Item 5'];
+  const items = ['Item 1', 'Item 2', 'Item 3', 'Item 4', 'Item 5'];
   
   
   items.forEach(item => {
@@ -113,7 +113,8 @@ const items = ['Item 1', 'Item 2', 'Item 3', 'Item 4', 'Item 5'];`;
     SCSS: css,
     TJS: TJS,
     SJS: SJS,
-    difficulty: "Dynamic list",
+    difficulty: "hard",
+    name: "Dynamic list",
     instructions,
     question_and_answer,
     lockCSS: true,
@@ -121,7 +122,7 @@ const items = ['Item 1', 'Item 2', 'Item 3', 'Item 4', 'Item 5'];`;
     lockJS: false,
     percentageTreshold: 90,
     percentageFullPointsTreshold: 98,
-    colors: [primaryColor, secondaryColor],
+    colors: ["#222", "#ffffff", "#f9f9f9", "grey"],
     scenarioDetails: [
       {
         width: drawBoardWidth,

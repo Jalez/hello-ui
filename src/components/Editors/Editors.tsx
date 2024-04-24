@@ -5,16 +5,25 @@ import { css } from "@codemirror/lang-css";
 import { html } from "@codemirror/lang-html";
 import { useEffect, useRef, useState } from "react";
 import { useAppDispatch, useAppSelector } from "../../store/hooks/hooks";
-import { updateCode } from "../../store/slices/levels.slice";
+import {
+  updateCode,
+  updateSolutionCode,
+} from "../../store/slices/levels.slice";
 import { Slider } from "./Slider/Slider";
 import { useTheme } from "@mui/system";
 import { Level } from "../../types";
-import { Box } from "@mui/material";
+import { Box, Typography } from "@mui/material";
 import { javascript } from "@codemirror/lang-javascript";
+
+type EditorsProps = {
+  type: "Solution" | "Template";
+};
 
 const editorMaxHeightLimit = 1000;
 const editorMinHeightLimit = 100;
-export const Editors = () => {
+export const Editors = ({ type }: EditorsProps): JSX.Element => {
+  const options = useAppSelector((state) => state.options);
+  const isCreator = options.creator;
   const theme = useTheme();
   const dispatch = useAppDispatch();
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
@@ -27,29 +36,41 @@ export const Editors = () => {
   const [htmlCode, setHTMLCode] = useState<string>("");
   const [cssCode, setCSSCode] = useState<string>("");
   const [jsCode, setJSCode] = useState<string>("");
-  const [lastHeight, setLastHeight] = useState<number>(
-    document.body.scrollHeight
-  );
-  const [maxPercentage, setMaxPercentage] = useState<number>(0);
+
   const level = levels[currentLevel - 1] as Level;
   const identifier = level?.identifier;
   const editorRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!levels[currentLevel - 1]) return;
-    setHTMLCode(levels[currentLevel - 1].code.html);
-    setCSSCode(levels[currentLevel - 1].code.css);
-    setJSCode(levels[currentLevel - 1].code.js);
+    if (type === "Template") {
+      setHTMLCode(levels[currentLevel - 1].code.html);
+      setCSSCode(levels[currentLevel - 1].code.css);
+      setJSCode(levels[currentLevel - 1].code.js);
+    } else {
+      setHTMLCode(levels[currentLevel - 1].solution.html);
+      setCSSCode(levels[currentLevel - 1].solution.css);
+      setJSCode(levels[currentLevel - 1].solution.js);
+    }
   }, [currentLevel, identifier]);
 
   const codeUpdater = (data: { html?: string; css?: string; js?: string }) => {
     if (!levels[currentLevel - 1]) return;
-    dispatch(
-      updateCode({
-        id: currentLevel,
-        code: { ...levels[currentLevel - 1].code, ...data },
-      })
-    );
+    if (type === "Template") {
+      dispatch(
+        updateCode({
+          id: currentLevel,
+          code: { ...levels[currentLevel - 1].code, ...data },
+        })
+      );
+    } else {
+      dispatch(
+        updateSolutionCode({
+          id: currentLevel,
+          code: { ...levels[currentLevel - 1].solution, ...data },
+        })
+      );
+    }
   };
 
   const onSliderDragHtmlCSS = (e: any) => {
@@ -124,105 +145,116 @@ export const Editors = () => {
   };
 
   return (
-    <Box
-      sx={{
-        height: editorMaxHeight,
-        width: "100%",
-        display: "flex",
-        justifyContent: "flex-end",
-      }}
-    >
+    <>
+      {isCreator && (
+        <Typography
+          variant="h2"
+          align="center"
+          color="primary"
+          sx={{ margin: 2 }}
+        >
+          {type} code:
+        </Typography>
+      )}
       <Box
         sx={{
-          alignSelf: "flex-end",
-          flex: "1 1 100%",
-          height: editorHeight,
+          height: editorMaxHeight,
           width: "100%",
-          margin: "0",
-          zIndex: 100,
+          display: "flex",
         }}
-        ref={editorRef}
       >
-        <Slider
-          sliderValue={50}
-          dragSlider={onEditorHeightUpperSliderDrag}
-          resetSlider={() => {}}
-          needsPress={true}
-          orientation="horizontal"
-        />
         <Box
-          className=""
           sx={{
-            display: "flex",
-            flexDirection: "row",
-            justifyContent: "left",
-            alignItems: "end",
-            flex: "1 1 100%",
-            position: "relative",
-            backgroundColor: theme.palette.secondary.main,
-            // blur out the background behind the editors
-            height: "100%",
-
-            width: "100%",
-            flexWrap: "no-wrap",
-            overflow: "hidden",
             alignSelf: "flex-end",
-            zIndex: 1,
+            flex: "1 1 100%",
+            height: editorHeight,
+            width: "100%",
+            margin: "0",
+            zIndex: 100,
           }}
+          ref={editorRef}
         >
-          <CodeEditor
-            lang={html()}
-            title="HTML"
-            codeUpdater={codeUpdater}
-            template={htmlCode}
-            levelIdentifier={identifier}
-            locked={level.lockHTML}
-            width={htmlEditorWidth}
+          <Slider
+            sliderValue={50}
+            dragSlider={onEditorHeightUpperSliderDrag}
+            resetSlider={() => {}}
+            needsPress={true}
+            orientation="horizontal"
           />
+          <Box
+            className=""
+            sx={{
+              display: "flex",
+              flexDirection: "row",
+              justifyContent: "left",
+              alignItems: "end",
+              flex: "1 1 100%",
+              position: "relative",
+              backgroundColor: theme.palette.secondary.main,
+              // blur out the background behind the editors
+              height: "100%",
 
+              width: "100%",
+              flexWrap: "no-wrap",
+              overflow: "hidden",
+              alignSelf: "flex-end",
+              zIndex: 1,
+            }}
+          >
+            <CodeEditor
+              lang={html()}
+              title="HTML"
+              codeUpdater={codeUpdater}
+              template={htmlCode}
+              levelIdentifier={identifier}
+              locked={level.lockHTML}
+              width={htmlEditorWidth}
+            />
+
+            <Slider
+              sliderValue={33.3}
+              dragSlider={onSliderDragHtmlCSS}
+              resetSlider={() => {}}
+              needsPress={true}
+              orientation="vertical"
+            />
+            <CodeEditor
+              lang={css()}
+              title="CSS"
+              codeUpdater={codeUpdater}
+              levelIdentifier={identifier}
+              template={cssCode}
+              width={cssEditorWidth}
+              locked={level.lockCSS}
+            />
+            <Slider
+              sliderValue={66.6}
+              dragSlider={onSliderDragCSSJS}
+              resetSlider={() => {}}
+              needsPress={true}
+              orientation="vertical"
+            />
+            {/* {level.lockJS ? null : ( */}
+            <CodeEditor
+              lang={javascript()}
+              title="JS"
+              codeUpdater={codeUpdater}
+              levelIdentifier={identifier}
+              template={jsCode}
+              width={jsEditorWidth}
+              locked={false}
+            />
+            {/* )} */}
+          </Box>
           <Slider
-            sliderValue={33.3}
-            dragSlider={onSliderDragHtmlCSS}
+            sliderValue={50}
+            dragSlider={onEditorHeightLowerSliderDrag}
             resetSlider={() => {}}
             needsPress={true}
-            orientation="vertical"
+            orientation="horizontal"
           />
-          <CodeEditor
-            lang={css()}
-            title="CSS"
-            codeUpdater={codeUpdater}
-            levelIdentifier={identifier}
-            template={cssCode}
-            width={cssEditorWidth}
-            locked={level.lockCSS}
-          />
-          <Slider
-            sliderValue={66.6}
-            dragSlider={onSliderDragCSSJS}
-            resetSlider={() => {}}
-            needsPress={true}
-            orientation="vertical"
-          />
-          {/* {level.lockJS ? null : ( */}
-          <CodeEditor
-            lang={javascript()}
-            title="JS"
-            codeUpdater={codeUpdater}
-            levelIdentifier={identifier}
-            template={jsCode}
-            width={jsEditorWidth}
-            locked={false}
-          />
-          {/* )} */}
         </Box>
-        <Slider
-          sliderValue={50}
-          dragSlider={onEditorHeightLowerSliderDrag}
-          resetSlider={() => {}}
-          needsPress={true}
-          orientation="horizontal"
-        />
       </Box>
-    </Box>
+    </>
   );
 };

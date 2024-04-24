@@ -8,10 +8,9 @@ const labelTextDecorations = ["underline", "underline overline", "overline "];
 const buttonTypes = ["submit"];
 const formStyles = ["solid", "outlined", "rounded", "minimal"];
 
-export const fullFormGenerator: generator = (
-  primaryColor: string,
-  secondaryColor: string
-) => {
+export const fullFormGenerator: generator = () => {
+  const primaryColor = "#496989";
+  const secondaryColor = "#58A399";
   // Determine the current time and assign indexes based on time intervals
   const currentTime = new Date();
   const hour = currentTime.getHours();
@@ -24,33 +23,31 @@ export const fullFormGenerator: generator = (
     labelTextDecorations[timeIndex % labelTextDecorations.length];
   const selectedButtonType = buttonTypes[timeIndex % buttonTypes.length];
   const selectedFormStyle = formStyles[timeIndex % formStyles.length];
+  const instructions = [
+    {
+      title: "Requirements:",
+      content: [
+        "You need to modify both the HTML and CSS to create a form layout.",
+        "Use the given custom variables for paddings and margins, and colors.",
+        "Submit the finished form before the end of the exercise session.",
+      ],
+    },
+    {
+      title: "Exploration Suggestions:",
+      content: [
+        ":root : look into what it does and how variables can be used in CSS.",
+        "Experiment with different form elements and their attributes.",
+      ],
+    },
+    {
+      title: "Additional Guidelines:",
+      content: [
+        "When in need of help, ask.",
+        "If group work: Work together as a group to solve this exercise. ",
+      ],
+    },
+  ];
 
-  const instructions = `  <div style="display:flex; flex-direction: row; gap: 1em;">
-  <section>
-    <h2>Requirements:</h2>
-    <ul>
-      <li>You need to modify both the HTML and CSS to create a form layout.</li>
-      <li>Use the given custom variables for paddings and margins, and colors.</li>
-      <li>Submit the finished form before the end of the exercise session.</li>
-    </ul>
-  </section>
-  
-  <section>
-    <h2>Exploration Suggestions:</h2>
-    <ul>
-      <li> :root : look into what it does and how variables can be used in CSS.</li>
-      <li>Experiment with different form elements and their attributes.</li>
-    </ul>
-  </section>
-  
-  <section>
-    <h2>Additional Guidelines:</h2>
-    <ul>
-      <li>When in need of help, ask.</li>
-      <li>If group work: Work together as a group to solve this exercise. </li>
-    </ul>
-  </section>
-  </div>`;
   const question_and_answer = {
     question: "What are forms in html?",
     answer: `HTML forms are used to collect user input. They contain form elements like text fields, checkboxes, radio buttons, submit buttons, etc. Users enter data into these elements, and the data is sent to a server for processing.  `,
@@ -134,7 +131,8 @@ export const fullFormGenerator: generator = (
     SHTML: html,
     TCSS: TCSS,
     SCSS: css,
-    difficulty: "Full form",
+    difficulty: "hard",
+    name: "Hard form",
     instructions,
     question_and_answer,
     lockCSS: false,

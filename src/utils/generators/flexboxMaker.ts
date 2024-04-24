@@ -36,10 +36,9 @@ const flexDirection = [
 
 const flex = ["flex:1"];
 
-export const flexboxMaker: generator = (
-  primaryColor: string,
-  secondaryColor: string
-) => {
+export const flexboxMaker: generator = () => {
+  const primaryColor = "#f1f1f1";
+  const secondaryColor = "#333";
   const randomJustifyContent =
     justifyContent[Math.floor(Math.random() * justifyContent.length)].split(
       ":"
@@ -116,8 +115,17 @@ div>div {
     percentageTreshold: 90,
     percentageFullPointsTreshold: 98,
     colors: [primaryColor, secondaryColor],
-    difficulty: "flex",
-    instructions: "Create a flexbox layout",
+    difficulty: "hard",
+    name: "Exam flex",
+    instructions: [
+      {
+        title: "Requirements",
+        content: [
+          "Create a flexbox layout",
+          "Use flexbox properties familiar to you",
+        ],
+      },
+    ],
     question_and_answer: {
       question: "Create a flexbox layout",
       answer: "display:flex",

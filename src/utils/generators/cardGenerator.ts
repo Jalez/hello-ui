@@ -7,10 +7,10 @@ const cardContents = ["This is card content."];
 const cardStyles = ["solid", "outlined", "rounded", "minimal"];
 const buttonTypes = ["More Info", "Buy Now", "Learn More"];
 
-export const cardGenerator: generator = (
-  primaryColor: string,
-  secondaryColor: string
-) => {
+export const cardGenerator: generator = () => {
+  const primaryColor = "#f1f1f1";
+  const secondaryColor = "#333";
+
   // Determine the current time and assign indexes based on time intervals
   const currentTime = new Date();
   const hour = currentTime.getHours();
@@ -22,7 +22,15 @@ export const cardGenerator: generator = (
   const selectedStyle = cardStyles[timeIndex % cardStyles.length];
   const selectedButtonText = buttonTypes[timeIndex % buttonTypes.length];
 
-  const instructions = `Create a <strong>card</strong> that uses the <strong>${selectedStyle}</strong> class, titled "${selectedTitle}" (see model version for details). The card should have a button with the text "${selectedButtonText}". You must use the correct class names and semantic tags to style the card and its content. For instance, the semantic tags <strong>"header", "section" and "footer"</strong> should be present, each included with appropriate child elements. You can look at the stylesheet and provided picture for reference.`;
+  const instructions = [
+    {
+      title: "Requirements:",
+      content: [
+        `Create a <strong>card</strong> that uses the <strong>${selectedStyle}</strong> class, titled "${selectedTitle}" (see model version for details). The card should have a button with the text "${selectedButtonText}". You must use the correct class names and semantic tags to style the card and its content. For instance, the semantic tags <strong>"header", "section" and "footer"</strong> should be present, each included with appropriate child elements. You can look at the stylesheet and provided picture for reference.`,
+      ],
+    },
+  ];
+
   const question_and_answer = {
     question: "What are cards in html?",
     answer: `A card is a flexible and extensible content container. Often used to display limited information concerning articles, blog posts, and products, they also host interactive elements such as buttons, links and forms. Cards are a popular design pattern because they are easy to use and can be customized to fit a wide range of content and styles.`,
@@ -164,7 +172,8 @@ button {
     SCSS: css,
     instructions,
     question_and_answer,
-    difficulty: "card",
+    difficulty: "easy",
+    name: "Easy card",
     lockCSS: true,
     lockHTML: false,
     lockJS: true,

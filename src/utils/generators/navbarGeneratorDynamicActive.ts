@@ -3,40 +3,34 @@
 import { drawBoardWidth, drawBoardheight } from "../../constants";
 import { generator } from "../../types";
 
-export const ActiveNavbarGenerator: generator = (
-  primaryColor: string,
-  secondaryColor: string,
-  tertiaryColor?: string
-) => {
-  const instructions = `
-  <div style="display:flex; flex-direction: row; gap: 0.2em;">
-  <section>
-  <h2>Requirements:</h2>
-  <ul>
-  <li>Only use 'pixel' units for measurements like margins, padding, and font sizes.</li>
-  <li>Limit your color choices to default colors or those included in the template.</li>
-  <li>Focus on how to position the two lists (store and work) side by side.</li>
-  </ul>
-  </section>  
+export const ActiveNavbarGenerator: generator = () => {
+  const instructions = [
+    {
+      title: "Requirements:",
+      content: [
+        "Only use 'pixel' units for measurements like margins, padding, and font sizes.",
+        "Limit your color choices to default colors or those included in the template.",
+        "Focus on how to position the two lists (store and work) side by side.",
+      ],
+    },
+    {
+      title: "Exploration Suggestions:",
+      content: [
+        "For arranging the lists side by side, consider researching various CSS properties and techniques. Here are some keywords and resources to start your exploration:",
+        "Search for 'CSS Flexbox' on websites like MDN Web Docs or CSS-Tricks for a comprehensive guide.",
+        "Look up 'CSS Float Layout' for understanding the traditional float-based layouts.",
+        "Investigate 'CSS display inline-block' for an alternative approach to layouts.",
+      ],
+    },
+    {
+      title: "Additional Guidelines:",
+      content: [
+        "You are not required to use the same selectors as in our model solution. Experiment with different ones to achieve the layout.",
+        "Feel free to try out various styles for lists, headings, and other elements within the unit and color constraints.",
+      ],
+    },
+  ];
 
-  <section>
-  <h2>Exploration Suggestions:</h2>
-  <p>For arranging the lists side by side, consider researching various CSS properties and techniques. Here are some keywords and resources to start your exploration:</p>
-  <ul>
-  <li>Search for "CSS Flexbox" on websites like MDN Web Docs or CSS-Tricks for a comprehensive guide.</li>
-  <li>Look up "CSS Float Layout" for understanding the traditional float-based layouts.</li>
-  <li>Investigate "CSS display inline-block" for an alternative approach to layouts.</li>
-  </ul>
-  </section>
-
-  <section>
-  <h2>Additional Guidelines:</h2>
-  <ul>
-  <li>You are not required to use the same selectors as in our model solution. Experiment with different ones to achieve the layout.</li>
-  <li>Feel free to try out various styles for lists, headings, and other elements within the unit and color constraints.</li>
-  </ul>
-  </section>
-  `;
   const question_and_answer = {
     question: "What are lists in html?",
     answer: `Lists in HTML are used to present list of information in well formed and semantic way. There are three different types of lists in HTML and each one has a specific purpose and meaning. The three types of lists are: ordered list, unordered list, and definition list.`,
@@ -128,7 +122,8 @@ setupLink('contact', 'Contact Us here.');
     SCSS: css,
     TJS: "",
     SJS: SJS,
-    difficulty: "Active Navbar",
+    difficulty: "medium",
+    name: "Medium Navbar",
     instructions,
     question_and_answer,
     lockCSS: true,
@@ -137,7 +132,7 @@ setupLink('contact', 'Contact Us here.');
     events: ["click"],
     percentageTreshold: 90,
     percentageFullPointsTreshold: 98,
-    colors: [primaryColor, secondaryColor],
+    colors: ["#333", "#fff"],
     scenarioDetails: [
       {
         width: drawBoardWidth,

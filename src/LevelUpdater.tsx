@@ -1,16 +1,25 @@
 /** @format */
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useAppDispatch, useAppSelector } from "./store/hooks/hooks";
+import { sendScoreToParentFrame } from "./store/actions/score.actions";
 import {
-  sendScoreToParentFrame,
-  updatePointsThunk,
-} from "./store/actions/score.actions";
-import { updateAccuracy, updatePoints } from "./store/slices/levels.slice";
-import { getPixelData } from "./utils/imageTools/getPixelData";
+  removeSolutionCode,
+  updateAccuracy,
+  updatePoints,
+} from "./store/slices/levels.slice";
+
 import calculateAccuracy from "./utils/imageTools/calculateAccuracy";
 
+// drawingPixels, solutionPixels should be objects, where key is the scenarioId and value is the ImageData
+type scenarioData = {
+  [key: string]: ImageData;
+};
+
 export const LevelUpdater = () => {
+  // each scenario has a drawing and a solution
+  const [drawingPixels, setDrawingPixels] = useState<scenarioData>();
+  const [solutionPixels, setSolutionPixels] = useState<scenarioData>();
   //  Invisible component that updates the level in the store
   const dispatch = useAppDispatch();
   // get the points from the current level
@@ -20,45 +29,52 @@ export const LevelUpdater = () => {
   // get the points from the current level
 
   const points = level ? level.points : 0;
-
-  // evaluate the level whenever the data urls of the level images change
   useEffect(() => {
-    if (!level) return;
-    const scenarios = level.scenarios;
-    // console.log("GETS HERE");
-    for (const scenario of scenarios) {
-      if (!scenario.drawingUrl || !scenario.solutionUrl) return;
-      let imagesLoaded = 0;
-      const { drawingUrl, solutionUrl, scenarioId } = scenario;
-      const { width, height } = scenario.dimensions;
-      const drawnImage = new Image();
-      drawnImage;
-      const solutionImage = new Image();
+    //console.log("New level", currentLevel);
+    // reset the pixels
+    setDrawingPixels({});
+    setSolutionPixels({});
 
-      drawnImage.src = drawingUrl;
-      drawnImage.onload = imageLoaded;
-
-      solutionImage.src = solutionUrl;
-      solutionImage.onload = imageLoaded;
-
-      // Wait for the image to load
-      function imageLoaded() {
-        imagesLoaded++;
-        if (imagesLoaded == 2) {
-          const drawingPixelData = getPixelData(drawnImage, width, height);
-          const solutionPixelData = getPixelData(solutionImage, width, height);
-          const { diff, accuracy } = calculateAccuracy(
-            drawingPixelData,
-            solutionPixelData
-          );
-          // console.log("accuracy", accuracy);
-          dispatch(
-            updateAccuracy({ currentLevel, scenarioId, diff, accuracy })
-          );
-        }
+    const handlePixelsFromIframe = (event: MessageEvent) => {
+      if (event.data.message !== "pixels") return;
+      // //console.log("HANDLE PIXELS FROM IFRAME", event.data);
+      //console.log("urlname", event.data.urlName);
+      if (event.data.urlName === "solutionUrl") {
+        setSolutionPixels((prev) => ({
+          ...prev,
+          [event.data.scenarioId]: event.data.dataURL,
+        }));
+        dispatch(removeSolutionCode(currentLevel));
+        return;
+      } else if (event.data.urlName === "drawingUrl") {
+        setDrawingPixels((prev) => ({
+          ...prev,
+          [event.data.scenarioId]: event.data.dataURL,
+        }));
       }
+    };
+
+    window.addEventListener("message", handlePixelsFromIframe);
+    return () => {
+      window.removeEventListener("message", handlePixelsFromIframe);
+    };
+  }, [currentLevel]);
+
+  useEffect(() => {
+    if (!drawingPixels || !solutionPixels) return;
+    const scenarios = level?.scenarios;
+    if (!scenarios) return;
+    for (const scenario of scenarios) {
+      //console.log("drawingPixels", drawingPixels);
+      const { scenarioId } = scenario;
+      if (!drawingPixels[scenarioId] || !solutionPixels[scenarioId]) return;
+      const { diff, accuracy } = calculateAccuracy(
+        drawingPixels[scenarioId],
+        solutionPixels[scenarioId]
+      );
+      dispatch(updateAccuracy({ currentLevel, scenarioId, diff, accuracy }));
     }
-  }, [level?.scenarios]);
+  }, [drawingPixels, solutionPixels]);
 
   useEffect(() => {
     dispatch(updatePoints({ currentLevel }));

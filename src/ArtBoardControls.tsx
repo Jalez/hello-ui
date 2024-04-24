@@ -28,13 +28,25 @@ const ArtBoardControls = () => {
         display: "flex",
         flexDirection: "row",
         color: "primary.main",
-        justifyContent: "center",
+        justifyContent: "end",
         alignItems: "center",
         width: "100%",
       }}
     >
       <FormControlLabel
-        control={<Checkbox checked={showHotkeys} onChange={handleHotkeys} />}
+        control={
+          <Checkbox
+            color="primary"
+            sx={{
+              //make sure outline is visible
+              "& .MuiSvgIcon-root": {
+                color: "primary.main",
+              },
+            }}
+            checked={showHotkeys}
+            onChange={handleHotkeys}
+          />
+        }
         color="primary"
         label="Hotkeys"
         sx={{

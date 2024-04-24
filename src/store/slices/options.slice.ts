@@ -4,11 +4,13 @@ import { obfuscate } from "../../utils/obfuscators/obfuscate";
 interface OptionsState {
   darkMode: boolean;
   showWordCloud: boolean;
+  creator: boolean;
 }
 
 const initialState: OptionsState = {
   darkMode: true,
   showWordCloud: false,
+  creator: false,
 };
 
 const storage = obfuscate("options");
@@ -35,9 +37,14 @@ const optionsSlice = createSlice({
       state.showWordCloud = action.payload;
       storage.setItem(storage.key, JSON.stringify(state));
     },
+
+    setCreator(state, action: PayloadAction<boolean>) {
+      state.creator = action.payload;
+    },
   },
 });
 
-export const { setDarkMode, setShowWordCloud } = optionsSlice.actions;
+export const { setDarkMode, setShowWordCloud, setCreator } =
+  optionsSlice.actions;
 
 export default optionsSlice.reducer;

@@ -4,6 +4,7 @@
 import { CSSProperties, useCallback, useState } from "react";
 import { Slider } from "./Slider/Slider";
 import { Box } from "@mui/material";
+import { useAppSelector } from "../../../../store/hooks/hooks";
 
 interface ImageContainerProps {
   slidingComponent: any;
@@ -19,6 +20,8 @@ export const SlideShower = ({
   showStatic,
 }: ImageContainerProps) => {
   const [sliderValue, setSliderValue] = useState(100);
+  const options = useAppSelector((state) => state.options);
+  const isCreator = options.creator;
 
   const dragSlider = useCallback((e: any) => {
     const slider = e.target;

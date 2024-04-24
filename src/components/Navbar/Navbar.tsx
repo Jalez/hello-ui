@@ -89,6 +89,8 @@ export const Navbar = () => {
     setAnchorEl(null);
   }, []);
 
+  if (!level) return null;
+
   return (
     <StyledContainer id="three-navs">
       <StyledNavContainer>
@@ -113,7 +115,7 @@ export const Navbar = () => {
           currentlevel={currentLevel}
           levelHandler={levelChanger}
           maxLevels={Object.keys(levels).length}
-          levelName={level.difficulty}
+          levelName={level.name}
         />
         <StyledFab
           color="secondary"

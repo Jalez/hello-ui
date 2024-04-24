@@ -41,14 +41,7 @@ export const InfoSwitch = ({
   const theme = useTheme();
 
   return (
-    <Stack
-      direction="row"
-      spacing={1}
-      alignItems="center"
-      sx={{
-        color: theme.palette.primary.main,
-      }}
-    >
+    <Stack direction="row" spacing={1} alignItems="center">
       <Typography
         sx={{
           userSelect: "none",

@@ -1,70 +1,35 @@
 /** @format */
 import { ReactElement, useEffect, useRef, useState } from "react";
 import { domToPng } from "modern-screenshot";
-import xss from "xss";
+import { errorObj } from "./types";
+import { ErrorFallback } from "./ErrorFallback";
+import { getPixelData, sendToParent, setStyles } from "./utils";
 
-const sheet = new CSSStyleSheet();
-
-const getPixelData = (img = new Image(), width: number, height: number) => {
-  const canvas = document.createElement("canvas");
-  // Set the width and height of the canvas to the width and height of the image
-  canvas.width = img.width;
-  canvas.height = img.height;
-  // Get the 2D context of the canvas
-  const ctx = canvas.getContext("2d");
-  // Draw the image on the canvas
-  ctx?.drawImage(img, 0, 0);
-  // Get the image data from the canvas
-  const imgData = ctx?.getImageData(0, 0, width, height);
-  // Resolve the promise with the image data
-  return imgData;
-};
-
-function loadImage(base64Url: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = reject;
-    img.src = base64Url;
-  });
-}
-
-type errorObj = {
-  message: string;
-  lineno?: number;
-  colno?: number;
-};
+const urlName = new URLSearchParams(window.location.search).get("name") || "";
+const scenarioId =
+  new URLSearchParams(window.location.search).get("scenarioId") || "";
 
 function App() {
   const [html, setHtml] = useState<ReactElement>();
   const [css, setCss] = useState<string>();
   const [stylesCorrect, setStylesCorrect] = useState<Boolean>(false);
   const [jsCorrect, setJsCorrect] = useState<Boolean>(false);
-  const [urlName, setUrlName] = useState<string>();
-  const [scenarioId, setScenarioId] = useState<string>();
   const [js, setJs] = useState<string>();
   const [error, setError] = useState<null | errorObj>();
 
   useEffect(() => {
+    // //console.log("Drawboard URL sending mounted message");
     window.parent.postMessage("mounted", "*");
   }, []);
 
   useEffect(() => {
     const handlePostMessage = (event: MessageEvent) => {
-      // console.log("Drawboard URL received message and setting error to null");
-      // get the name from query parameter "name"
-      const name = new URLSearchParams(window.location.search).get("name");
-      if (name !== event.data.name) return;
-      // console.log("Drawboard URL event.data", event);
-      // setError(null);
+      if (urlName !== event.data.name) return;
+      // //console.log(urlName, "Drawboard URL event.data", event);
       if (event.data?.message === "reload") {
-        // console.log("Drawboard reloading");
+        // //console.log(urlName, "Drawboard reloading");
         window.location.reload();
         return;
-      }
-      if (event.data.name) {
-        setUrlName(event.data.name);
-        // console.log("name", event.data.name);
       }
       if (event.data.html) {
         // turn the string into a ReactNode element and set it as the state of the component
@@ -74,59 +39,56 @@ function App() {
         setCss(event.data.css);
         setStylesCorrect(false);
       }
-      if (event.data.scenarioId) {
-        setScenarioId(event.data.scenarioId);
-      }
 
       if (event.data.events) {
         // its a stringified array of strings (events), let's go throught them and add them to the window
         const events = JSON.parse(event.data.events);
-        console.log("Drawboard URL setting event:", events);
+        //console.log(urlName, "Drawboard URL setting event:", events);
         events.forEach((event: string) => {
-          // console.log("Drawboard URL setting event:", event);
+          // //console.log("Drawboard URL setting event:", event);
           document.body.addEventListener(event, (e) => {
-            const urlName = new URLSearchParams(window.location.search).get(
-              "name"
-            );
-            const scenarioId = new URLSearchParams(window.location.search).get(
-              "scenarioId"
-            );
-
-            console.log("Drawboard URL event listener:", event);
-            // console.log("Drawboard URL event:", e);
+            //console.log(urlName, "Drawboard URL event listener:", event);
             const board = document.getElementById("root") as HTMLElement;
-            // if (stylesCorrect && jsCorrect && board) {
-            console.log("Drawboard URL sending message");
-            console.log(urlName, scenarioId);
+            //console.log("Drawboard URL sending message");
             domToPng(board).then((dataURL: string) => {
-              window.parent.postMessage({ dataURL, urlName, scenarioId }, "*");
+              const img = new Image();
+              img.src = dataURL;
+              img.onload = () => {
+                const imgData = getPixelData(img);
+                sendToParent(
+                  imgData as unknown as string,
+                  urlName,
+                  scenarioId,
+                  "pixels"
+                );
+                if (urlName === "solutionUrl") {
+                  //console.log("Drawboard URL sending message for solutionUrl");
+                  sendToParent(dataURL, urlName, scenarioId, "data");
+                  return;
+                }
+              };
             });
           });
         });
       }
 
-      // remove empty spaces from js
       if (event.data.js.trim()) {
-        // console.log("Drawboard URL setting js:", event.data.js);
+        //console.log(urlName, "Drawboard URL setting js:", event.data.js);
         setJs(event.data.js);
         setJsCorrect(false);
-        // execute the javascript code
       } else {
         setJsCorrect(true); // we want to do this because if there is no js, we don't want to keep trying to execute it
       }
     };
 
     window.addEventListener("message", handlePostMessage);
-    // Once the component is mounted, send a message to the parent window
-    // console.log("Drawboard URL sending mounted message");
-    // listen for any kind of events
+    // //console.log("Drawboard URL sending mounted message");
     return () => {
       window.removeEventListener("message", handlePostMessage);
     };
   });
 
   useEffect(() => {
-    // Setting up the global error handler
     const handleGlobalError = (
       message: string | Event,
       source?: string,
@@ -134,39 +96,24 @@ function App() {
       colno?: number,
       error?: Error
     ): boolean => {
-      console.log("Drawboard URL error handler");
+      //console.log("Drawboard URL error handler");
       setError({
         message: message.toString(),
         lineno: lineno || 0,
         colno: colno || 0,
       });
-      console.error("Error in executing JS script:", {
-        message,
-        source,
-        lineno,
-        colno,
-        error,
-      });
+      //console.error("Error in executing JS script:", {
+      //   message,
+      //   source,
+      //   lineno,
+      //   colno,
+      //   error,
+      // });
       return true; // Prevent the firing of the default event handler
     };
     window.onerror = handleGlobalError;
 
     if (js && !jsCorrect && stylesCorrect) {
-      // console.log("Drawboard URL executing js");
-      // if (!js.includes("dynamicContainer")) {
-      //   setError({
-      //     message:
-      //       "Please use the element with id 'dynamicContainer' to insert your elements.",
-      //   });
-      //   return;
-      // }
-
-      // const dynamicContainer = document.getElementById("dynamicContainer");
-      // if (dynamicContainer !== null) {
-      //   dynamicContainer.innerHTML = "";
-      // }
-
-      // Remove all existing script elements before adding a new one
       document.querySelectorAll("script").forEach((script) => {
         script.remove();
       });
@@ -177,7 +124,7 @@ function App() {
       const script = document.createElement("script");
       script.src = scriptURL;
       script.onload = () => {
-        console.log("Drawboard URL script loaded");
+        //console.log("Drawboard URL script loaded");
         setJsCorrect(true);
         URL.revokeObjectURL(scriptURL); // Clean up blob URL after script is loaded
       };
@@ -191,78 +138,44 @@ function App() {
   }, [js, jsCorrect, stylesCorrect]);
 
   useEffect(() => {
-    const style = document.querySelector("style") as HTMLStyleElement;
-    style.innerHTML = css || "";
-    setStylesCorrect(true);
-  }, [stylesCorrect]);
+    if (css) {
+      try {
+        setStyles(css);
+        setStylesCorrect(true);
+      } catch (error) {
+        // //console.error("Drawboard URL error setting styles", error);
+        setStylesCorrect(false);
+      }
+    }
+  }, [css]);
 
   useEffect(() => {
     const board = document.getElementById("root");
     if (stylesCorrect && jsCorrect && board) {
-      console.log("Drawboard URL sending message");
+      //console.log("Drawboard URL sending message for urlName", urlName);
       domToPng(board).then((dataURL: string) => {
-        window.parent.postMessage({ dataURL, urlName, scenarioId }, "*");
+        const img = new Image();
+        img.src = dataURL;
+        img.onload = () => {
+          const imgData = getPixelData(img);
+          sendToParent(
+            imgData as unknown as string,
+            urlName,
+            scenarioId,
+            "pixels"
+          );
+          if (urlName === "solutionUrl") {
+            //console.log("Drawboard URL sending message for solutionUrl");
+            sendToParent(dataURL, urlName, scenarioId, "data");
+            return;
+          }
+        };
       });
     }
-  }, [stylesCorrect, jsCorrect, urlName, scenarioId]);
+  }, [stylesCorrect, jsCorrect]);
 
-  // console.log("Drawboard rendering (error)", error);
+  // //console.log("Drawboard rendering (error)", error);
   return <>{error ? <ErrorFallback error={error} /> : html}</>;
 }
 
 export default App;
-
-type FallbackProps = {
-  error: errorObj;
-};
-
-const ErrorFallback = ({ error }: FallbackProps) => {
-  return (
-    <div
-      role="alert"
-      style={{
-        position: "absolute",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        flexDirection: "column",
-        backgroundColor: "rgba(255, 0, 0, 0.5)",
-        color: "white",
-      }}
-    >
-      <h2
-        style={{
-          color: "white",
-          fontSize: "1.5rem",
-          fontWeight: "bold",
-          marginBottom: "1rem",
-        }}
-      >
-        Oops! Something went wrong :(
-      </h2>
-      <pre
-        style={{
-          color: "white",
-          fontSize: "1rem",
-          whiteSpace: "pre-wrap",
-          textAlign: "center",
-          // bold text
-          fontWeight: "bold",
-        }}
-      >
-        {error.message}
-      </pre>
-      <pre>
-        {error.lineno && error.colno && (
-          <span>
-            Line number: {error.lineno}, column number: {error.colno}
-          </span>
-        )}
-      </pre>
-    </div>
-  );
-};

@@ -7,11 +7,10 @@ const listItems = ["Item 1", "Item 2", "Item 3", "Item 4", "Item 5"];
 const listStyles = ["bullet", "numbered", "interactive", "minimal"];
 const listColors = ["red", "blue", "green", "purple", "orange"];
 
-export const easyGridGenerator: generator = (
-  primaryColor: string,
-  secondaryColor: string,
-  tertiaryColor?: string
-) => {
+export const easyGridGenerator: generator = () => {
+  const primaryColor = "#f9f9f9";
+  const secondaryColor = "#333";
+
   const bgColor = primaryColor;
   const textColor = secondaryColor;
   const colors = [
@@ -24,38 +23,33 @@ export const easyGridGenerator: generator = (
     secondaryColor,
   ];
 
-  const instructions = `
-  <div style="display:flex; flex-direction: row; gap: 1em;">
-  <section>
-    <h2>Requirements:</h2>
-    <ul>
-      <li>Utilize CSS Grid for the layout, specifically focusing on 'grid-template-columns' and 'grid-template-rows'.</li>
-      <li>Ensure all measurements for padding, margins, and font sizes are in 'pixels'.</li>
-      <li>Stick to the limited color palette as defined (e.g., #55d4eb, #d5c9e2, etc.).</li>
-    </ul>
-  </section>
+  const instructions = [
+    {
+      title: "Requirements:",
+      content: [
+        "Utilize CSS Grid for the layout, specifically focusing on 'grid-template-columns' and 'grid-template-rows'.",
+        "Ensure all measurements for padding, margins, and font sizes are in 'pixels'.",
+        "Stick to the limited color palette as defined (e.g., #55d4eb, #d5c9e2, etc.).",
+      ],
+    },
+    {
+      title: "Exploration Suggestions:",
+      content: [
+        "To master CSS Grid layout, here are some resources and keywords for your research:",
+        "Explore 'CSS Grid Layout' on platforms like MDN Web Docs or CSS-Tricks for detailed guides and examples.",
+        "Investigate 'CSS grid-gap' to understand spacing within grid layouts.",
+        "Look into 'CSS fr unit' for understanding fractional units in grid layouts.",
+      ],
+    },
+    {
+      title: "Additional Guidelines:",
+      content: [
+        "Feel free to experiment with grid item placement, not just sticking to the example solution's selectors.",
+        "Experiment with styling individual grid items (like .hero, .sidebar) within the specified color and size constraints.",
+      ],
+    },
+  ];
 
-  <section>
-    <h2>Exploration Suggestions:</h2>
-    <p>To master CSS Grid layout, here are some resources and keywords for your research:</p>
-    <ul>
-      <li>Explore "CSS Grid Layout" on platforms like MDN Web Docs or CSS-Tricks for detailed guides and examples.</li>
-      <li>Investigate "CSS grid-gap" to understand spacing within grid layouts.</li>
-      <li>Look into "CSS fr unit" for understanding fractional units in grid layouts.</li>
-    </ul>
-  </section>
-
-  <section>
-    <h2>Additional Guidelines:</h2>
-    <ul>
-      <li>Feel free to experiment with grid item placement, not just sticking to the example solution's selectors.</li>
-      <li>Experiment with styling individual grid items (like .hero, .sidebar) within the specified color and size constraints.</li>
-    </ul>
-  </section>
-</div>
-
-
-  `;
   const question_and_answer = {
     question: "What is the purpose of grid in css?",
     answer: `The CSS Grid Layout Module offers a grid-based layout system, with rows and columns, making it easier to design web pages without having to use floats and positioning. `,
@@ -128,7 +122,8 @@ export const easyGridGenerator: generator = (
     SHTML: html,
     TCSS: TCSS,
     SCSS: css,
-    difficulty: "grid",
+    difficulty: "easy",
+    name: "Easy grid",
     instructions,
     question_and_answer,
     lockCSS: false,
