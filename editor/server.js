@@ -14,6 +14,7 @@ const openai = new OpenAI();
 // - Authentication (for creator, etc.) (username & password + JWT & cookie)
 // - maps: canUseAI (true/false)
 // - levels: remove UI only properties
+// - randomization: select maps randomly
 
 app.use(cors()); // This will enable CORS for all routes
 app.use(bodyParser.json());
