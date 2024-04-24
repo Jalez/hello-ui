@@ -11,11 +11,10 @@ const tableData = [
 ];
 const tableStyles = ["bordered", "striped", "minimal"];
 
-export const tableGenerator: generator = (
-  primaryColor = "#000000",
-  secondaryColor = "#ffffff",
-  tertiaryColor = "#000000"
-) => {
+export const tableGenerator: generator = () => {
+  const primaryColor = "#000000";
+  const secondaryColor = "#ffffff";
+  const tertiaryColor = "#000000";
   const currentTime = new Date();
   const hour = currentTime.getHours();
   const timeIndex = Math.floor(hour / 2);
@@ -24,38 +23,35 @@ export const tableGenerator: generator = (
 
   const selectedStyle = tableStyles[timeIndex % tableStyles.length];
 
-  const instructions = `  
-  <div style="display:flex; flex-direction: row; gap: 0.2em;">  
-  <section>
-  <h2>Requirements:</h2>
-  <ul>
-  <li>Use 'pixel' units for measurements such as padding, font sizes, and borders.</li>
-  <li>Adhere to a color palette based on default colors or those included in the template.</li>
-  <li>Focus on styling table headers, cells, and the footer for clarity and readability.</li>
-  </ul>
-  </section>
+  const instructions = [
+    {
+      title: "Requirements:",
+      content: [
+        "Use 'pixel' units for measurements such as padding, font sizes, and borders.",
+        "Adhere to a color palette based on default colors or those included in the template.",
+        "Focus on styling table headers, cells, and the footer for clarity and readability.",
+      ],
+    },
+    {
+      title: "Styling Suggestions:",
+      content: [
+        "Experiment with padding and font sizes to improve legibility.",
+        "Explore different ways to style table headers (<code>th</code>) and cells (<code>td</code>).",
+        "Think about how to use colors and borders to distinguish table rows or columns.",
+        "Style the table caption and footer to complement the overall table design.",
+      ],
+    },
+    {
+      title: "Exploration Resources:",
+      content: [
+        "To enhance your understanding of CSS styling for tables, you may find the following resources helpful:",
+        "Search 'CSS Table Styling' on MDN Web Docs for a comprehensive guide to table styling in CSS.",
+        "Look up 'Responsive Table Design' to learn how to make tables look good on different screen sizes.",
+        "Investigate 'CSS Pseudo-classes' to discover ways to style specific parts of your table.",
+      ],
+    },
+  ];
 
-  <section>
-  <h2>Styling Suggestions:</h2>
-  <p>Consider these aspects when styling your table:</p>
-  <ul>
-  <li>Experiment with padding and font sizes to improve legibility.</li>
-  <li>Explore different ways to style table headers (<code>th</code>) and cells (<code>td</code>).</li>
-  <li>Think about how to use colors and borders to distinguish table rows or columns.</li>
-  <li>Style the table caption and footer to complement the overall table design.</li>
-  </ul>
-  </section>
-
-  <section>
-  <h2>Exploration Resources:</h2>
-  <p>To enhance your understanding of CSS styling for tables, you may find the following resources helpful:</p>
-  <ul>
-  <li>Search "CSS Table Styling" on MDN Web Docs for a comprehensive guide to table styling in CSS.</li>
-  <li>Look up "Responsive Table Design" to learn how to make tables look good on different screen sizes.</li>
-  <li>Investigate "CSS Pseudo-classes" to discover ways to style specific parts of your table.</li>
-  </ul>
-  </section>
-  `;
   const question_and_answer = {
     question: "What are tables in html?",
     answer: `HTML tables allow web developers to arrange data into rows and columns. They are used to display data in a tabular format and are created using the <table> tag. The <tr> tag is used to define the rows of the table, and the <td> tag is used to define the data cells. The <th> tag is used to define the header cells of the table. The <thead>, <tbody>, and <tfoot> tags are used to group the header, body, and footer of the table, respectively.`,
@@ -195,7 +191,8 @@ export const tableGenerator: generator = (
     SHTML: html,
     TCSS: TCSS,
     SCSS: css,
-    difficulty: "table",
+    difficulty: "easy",
+    name: "Easy table",
     instructions,
     question_and_answer,
     lockCSS: false,

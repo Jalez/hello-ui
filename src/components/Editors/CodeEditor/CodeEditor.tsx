@@ -4,16 +4,20 @@ import { html } from "@codemirror/lang-html";
 import CodeMirror from "@uiw/react-codemirror";
 import { EditorView } from "@codemirror/view";
 import { EditorState } from "@codemirror/state";
-import { Box, Typography } from "@mui/material";
+import { Box, IconButton, Typography } from "@mui/material";
 import { useEffect, useState } from "react";
 import { vscodeDark } from "@uiw/codemirror-theme-vscode";
 import { Compartment } from "@codemirror/state";
 import { keymap } from "@codemirror/view";
 import { githubLight } from "@uiw/codemirror-theme-github";
 import { ReactCodeMirrorProps } from "@uiw/react-codemirror";
-import { useAppSelector } from "../../../store/hooks/hooks";
+import { useAppDispatch, useAppSelector } from "../../../store/hooks/hooks";
 import { getCommentKeymap } from "./getCommentKeyMap";
-
+import LockIcon from "@mui/icons-material/Lock";
+import LockOpenIcon from "@mui/icons-material/LockOpen";
+import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
+import { handleLocking } from "../../../store/slices/levels.slice";
+import EditorMagicButton from "../../CreatorControls/EditorMagicButton";
 interface CodeEditorProps {
   lang: any;
   title: "HTML" | "CSS" | "JS";
@@ -57,6 +61,10 @@ export default function CodeEditor({
   width = 20,
   levelIdentifier,
 }: CodeEditorProps) {
+  const currentLevel = useAppSelector(
+    (state) => state.currentLevel.currentLevel
+  );
+  const dispatch = useAppDispatch();
   const lineNumberCompartment = new Compartment();
   const [code, setCode] = useState<string>(template);
   const options = useAppSelector((state) => state.options);
@@ -67,13 +75,15 @@ export default function CodeEditor({
       // setSavedChanges(false);
     }
   };
+
+  const isCreator = options.creator;
   // const [savedChanges, setSavedChanges] = useState<boolean>(true);
 
   useEffect(() => {
     let timer: NodeJS.Timeout | null = null;
     // if (code !== "" && savedChanges) {
     if (code !== "") {
-      console.log("updating code: ", title.toLowerCase());
+      // console.log("updating code: ", title.toLowerCase());
       timer = setTimeout(() => {
         codeUpdater({ [title.toLowerCase()]: code });
       }, 200);
@@ -151,6 +161,16 @@ export default function CodeEditor({
     placeholder: `Write your ${title} here...`,
   };
 
+  const handleLockUnlock = () => {
+    dispatch(
+      handleLocking({
+        levelId: currentLevel,
+        type: title.toLowerCase(),
+      })
+    );
+    // setLocked((prev) => !prev);
+  };
+
   return (
     <Box
       className="codeEditorContainer"
@@ -190,16 +210,37 @@ export default function CodeEditor({
       )}
       <Typography
         variant="h3"
-        color="primary"
+        color="secondary"
         id="title"
         sx={{
           zIndex: 2,
           margin: "0",
           padding: "0.5rem 0.5rem 0 0.5rem",
           backgroundColor: "secondary.main",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          bgcolor: "primary.main",
         }}
       >
-        {title}
+        {title}{" "}
+        {isCreator && (
+          <Box>
+            <EditorMagicButton
+              EditorCode={code}
+              editorType={title}
+              editorCodeChanger={handleCodeUpdate}
+              disabled={locked}
+            />
+            <IconButton
+              color="secondary"
+              onClick={handleLockUnlock}
+              title={locked ? "Unlock" : "Lock"}
+            >
+              {locked ? <LockIcon /> : <LockOpenIcon />}
+            </IconButton>
+          </Box>
+        )}
         {/* {savedChanges ? "✓" : "*"}{" "} */}
       </Typography>
       <Box

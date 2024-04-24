@@ -7,10 +7,7 @@ const navLinks = ["Home", "About", "Services", "Contact"];
 const widgetTypes = ["search", "newsletter", "profile", "social"];
 const sidebarStyles = ["classic", "modern", "minimal"];
 
-export const sidebarGenerator: generator = (
-  primaryColor: string,
-  secondaryColor: string
-) => {
+export const sidebarGenerator: generator = () => {
   const selectedStyle =
     sidebarStyles[Math.floor(Math.random() * sidebarStyles.length)];
   const selectedWidgets = widgetTypes
@@ -49,8 +46,8 @@ export const sidebarGenerator: generator = (
 .custom-sidebar {
     width: 250px;
     padding: 20px;
-    background-color: ${primaryColor};
-    color: ${secondaryColor};
+    background-color: #f9f9f9;
+    color: #333;
 }
 
 .custom-sidebar ul.nav {
@@ -59,7 +56,7 @@ export const sidebarGenerator: generator = (
 }
 
 .custom-sidebar ul.nav li a {
-    color: ${secondaryColor};
+    color: #333;
     text-decoration: none;
     padding: 5px 0;
     display: block;
@@ -88,7 +85,7 @@ export const sidebarGenerator: generator = (
 }
 
 .custom-sidebar .social a {
-    color: ${secondaryColor};
+    color: #333;
     text-decoration: none;
     display: inline-block;
     margin-right: 10px;
@@ -96,7 +93,7 @@ export const sidebarGenerator: generator = (
 
 .custom-sidebar.classic {
     /* Classic style specific CSS */
-    border: 1px solid ${secondaryColor};
+    border: 1px solid #ccc;
     border-radius: 5px;
     box-shadow: 0 0 5px rgba(0, 0, 0, 0.1);
     background-color: #f1f1f1;
@@ -132,9 +129,20 @@ export const sidebarGenerator: generator = (
     lockJS: true,
     percentageTreshold: 90,
     percentageFullPointsTreshold: 98,
-    colors: [primaryColor, secondaryColor],
-    difficulty: "sidebar",
-    instructions: "Create a sidebar layout",
+    colors: ["#333", "#f1f1f1", "#f9f9f9", "#ccc"],
+    difficulty: "easy",
+    name: "Easy sidebar",
+    instructions: [
+      {
+        title: "Requirements",
+        content: [
+          "Create a sidebar layout with a width of 250px",
+          "Add a navigation menu with links: Home, About, Services, Contact",
+          "Add two widgets of your choice",
+          "Style the sidebar using the provided CSS",
+        ],
+      },
+    ],
     question_and_answer: {
       question: "Create a sidebar layout",
       answer: "aside.custom-sidebar",

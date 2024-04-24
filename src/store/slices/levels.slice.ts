@@ -3,7 +3,7 @@
 import { createSlice } from "@reduxjs/toolkit";
 import confetti from "canvas-confetti";
 import { obfuscate } from "../../utils/obfuscators/obfuscate";
-import { Level, levelNames } from "../../types";
+import { Level, difficulty, levelNames } from "../../types";
 import {
   createLevels,
   generatorNameAndFunction,
@@ -11,10 +11,50 @@ import {
 import { numberTimeToMinutesAndSeconds } from "../../utils/numberTimeToMinutesAndSeconds";
 import { gameMaxTime, mainColor, secondaryColor } from "../../constants";
 
+type scenarioSolutionUrls = {
+  [key: string]: string;
+};
+export const scenarioSolutionUrls: scenarioSolutionUrls = {};
+
 const maxCodeLength = 100000;
 
 let storage: ReturnType<typeof obfuscate> | null = null;
 
+const levelTemplate1 = {
+  question_and_answer: {
+    question: "",
+    answer: "",
+  },
+  week: "all",
+  identifier: Math.random().toString(36).substring(7),
+  instructions: [],
+  events: [],
+  help: {
+    description: "",
+    images: [],
+    usefullCSSProperties: [],
+  },
+  difficulty: "easy" as difficulty,
+  points: 0,
+  maxPoints: 100,
+  percentageTreshold: 90,
+  percentageFullPointsTreshold: 98,
+  accuracy: 0,
+  interactive: false,
+  showModelPicture: false,
+  showHotkeys: false,
+  showScenarioModel: false,
+  lockHTML: false,
+  lockCSS: false,
+  lockJS: false,
+  scenarios: [],
+  timeData: {
+    startTime: 0,
+    pointAndTime: {},
+  },
+  confettiSprinkled: false,
+  completed: "no",
+};
 // let storage = obfuscate("ui-designer-layout-levels");
 const timerStorage = obfuscate("ui-designer-start-time");
 
@@ -48,7 +88,7 @@ const levelsSlice = createSlice({
 
       // if levels have already been created, do nothing
       if (state.length > 0) {
-        console.error("Levels have already been created!");
+        //console.error("Levels have already been created!");
         return state;
       }
 
@@ -58,6 +98,7 @@ const levelsSlice = createSlice({
       storage.setItem(storage.key, JSON.stringify(state));
       return state;
     },
+
     resetLevel(state, action) {
       const level = state[action.payload - 1];
       if (!level) return;
@@ -66,11 +107,7 @@ const levelsSlice = createSlice({
       level.confettiSprinkled = false;
       level.timeData.pointAndTime = {};
       const name = level.name.toString() as levelNames;
-      const newGeneration = generatorNameAndFunction[name](
-        mainColor,
-        secondaryColor,
-        "#888"
-      );
+      const newGeneration = generatorNameAndFunction[name]();
       level.code = {
         html: newGeneration.THTML,
         css: newGeneration.TCSS,
@@ -86,9 +123,6 @@ const levelsSlice = createSlice({
 
       level.scenarios?.forEach((scenario) => {
         scenario.accuracy = 0;
-        scenario.differenceUrl = "";
-        scenario.drawingUrl = "";
-        scenario.solutionUrl = "";
       });
 
       // level.timeData.startTime = new Date().getTime();
@@ -104,7 +138,6 @@ const levelsSlice = createSlice({
       );
       if (!scenario) return;
       scenario.accuracy = accuracy;
-      scenario.differenceUrl = diff;
       storage?.setItem(storage.key, JSON.stringify(state));
     },
     updatePoints(state, action) {
@@ -164,29 +197,37 @@ const levelsSlice = createSlice({
       level.timeData.startTime = new Date().getTime();
       storage?.setItem(storage.key, JSON.stringify(state));
     },
+    updateSolutionCode(state, action) {
+      const { id, code } = action.payload;
+      const level = state[id - 1];
+      if (!level) return;
+      level.solution = code;
+      storage?.setItem(storage.key, JSON.stringify(state));
+    },
 
     updateCode(state, action) {
       const { id, code } = action.payload;
       const level = state[id - 1];
 
       if (!level) return;
-      console.log("updateCode");
+      //console.log("updateCode");
       if (
         (code.html && code.html.length > maxCodeLength) ||
         (code.css && code.css.length > maxCodeLength) ||
         (code.js && code.js.length > maxCodeLength)
       ) {
-        console.error("Code is too long!");
+        //console.error("Code is too long!");
         return;
       }
 
       // go through scenarios and make sure the solution url is not in the code
       for (const scenario of level.scenarios || []) {
+        const scenarioUrl = scenarioSolutionUrls[scenario.scenarioId];
         if (
-          scenario.solutionUrl &&
-          (code.css.includes(scenario.solutionUrl) ||
-            code.html.includes(scenario.solutionUrl) ||
-            code.js.includes(scenario.solutionUrl))
+          scenarioUrl &&
+          (code.css.includes(scenarioUrl) ||
+            code.html.includes(scenarioUrl) ||
+            code.js.includes(scenarioUrl))
         ) {
           console.error(
             "Note: Using the solutions own image url isn't allowed!"
@@ -199,8 +240,8 @@ const levelsSlice = createSlice({
         console.error("Using scripts isn't allowed!");
         return;
       }
-      // console.log("updateCode", code.html, code.css, code.js);
-      // console.log("level.code", code);
+      // //console.log("updateCode", code.html, code.css, code.js);
+      // //console.log("level.code", code);
       level.code = code;
       storage?.setItem(storage.key, JSON.stringify(state));
     },
@@ -216,16 +257,10 @@ const levelsSlice = createSlice({
         (scenario) => scenario.scenarioId === scenarioId
       );
       if (!scenario) return;
-      if (urlName === "drawingUrl") {
-        // console.log("updateUrl drawingUrl");
-        scenario.drawingUrl = dataURL;
-      } else if (urlName === "solutionUrl") {
-        // console.log("updateUrl solutionUrl");
-        scenario.solutionUrl = dataURL;
+      if (urlName === "solutionUrl") {
+        //console.log("STATE updateUrl solutionUrl");
+        scenarioSolutionUrls[scenarioId] = dataURL;
         // Remove solution code from state if it exists
-        if (level.solution.html) level.solution.html = "";
-        if (level.solution.css) level.solution.css = "";
-        if (level.solution.js) level.solution.js = "";
       }
 
       storage?.setItem(storage.key, JSON.stringify(state));
@@ -249,11 +284,200 @@ const levelsSlice = createSlice({
       level.showHotkeys = !level.showHotkeys;
       storage?.setItem(storage.key, JSON.stringify(state));
     },
+    changeLevelDifficulty(state, action) {
+      console.log("Changing level difficulty");
+      const { levelId, difficulty } = action.payload;
+      const level = state[levelId - 1];
+      if (!level) return;
+      console.log("difficulty", difficulty);
+      level.difficulty = difficulty;
+      storage?.setItem(storage.key, JSON.stringify(state));
+    },
+    changeAccuracyTreshold(state, action) {
+      const { levelId, text } = action.payload;
+      const level = state[levelId - 1];
+      if (!level) return;
+      level.percentageTreshold = Number(text);
+      storage?.setItem(storage.key, JSON.stringify(state));
+    },
+    changeMaxPoints(state, action) {
+      const { levelId, text } = action.payload;
+      const level = state[levelId - 1];
+      if (!level) return;
+      level.maxPoints = Number(text);
+      storage?.setItem(storage.key, JSON.stringify(state));
+    },
+    changeScenarioDimensions(state, action) {
+      const { levelId, scenarioId, dimensionType, value } = action.payload;
+      const level = state[levelId - 1];
+      if (!level) return;
+      const scenario = level.scenarios?.find(
+        (scenario) => scenario.scenarioId === scenarioId
+      );
+      if (!scenario) return;
+      console.log("changeScenarioDimensions", dimensionType, value);
+      scenario.dimensions[dimensionType as "width" | "height"] = value;
+      storage?.setItem(storage.key, JSON.stringify(state));
+    },
+    removeSolutionCode(state, action) {
+      const level = state[action.payload - 1];
+      if (!level) return;
+      level.solution.html = "";
+      level.solution.css = "";
+      level.solution.js = "";
+      storage?.setItem(storage.key, JSON.stringify(state));
+    },
+    addNewScenario(state, action: { payload: number }) {
+      const level = state[action.payload - 1];
+      if (!level) return;
+      const newScenario = {
+        scenarioId: Math.random().toString(36).substring(7),
+        dimensions: {
+          width: 300,
+          height: 300,
+        },
+        accuracy: 0,
+        js: "",
+      };
+      level.scenarios?.push(newScenario);
+      storage?.setItem(storage.key, JSON.stringify(state));
+    },
+    removeScenario(
+      state,
+      action: { payload: { levelId: number; scenarioId: string } }
+    ) {
+      const { levelId, scenarioId } = action.payload;
+      const level = state[levelId - 1];
+      if (!level) return;
+      level.scenarios = level.scenarios?.filter(
+        (scenario) => scenario.scenarioId !== scenarioId
+      );
+      storage?.setItem(storage.key, JSON.stringify(state));
+    },
+
+    updateGuideSectionItem(state, action) {
+      const { levelId, sectionIndex, itemIndex, text } = action.payload;
+      const level = state[levelId - 1];
+      if (!level) return;
+      level.instructions[sectionIndex].content[itemIndex] = text;
+      storage?.setItem(storage.key, JSON.stringify(state));
+    },
+
+    updateGuideSectionTitle(state, action) {
+      const { levelId, sectionIndex, text } = action.payload;
+      const level = state[levelId - 1];
+      if (!level) return;
+      level.instructions[sectionIndex].title = text;
+      storage?.setItem(storage.key, JSON.stringify(state));
+    },
+    removeGuideSection(state, action) {
+      const { levelId, sectionIndex } = action.payload;
+      const level = state[levelId - 1];
+      if (!level) return;
+      level.instructions.splice(sectionIndex, 1);
+      storage?.setItem(storage.key, JSON.stringify(state));
+    },
+    removeGuideSectionItem(state, action) {
+      const { levelId, sectionIndex, itemIndex } = action.payload;
+      const level = state[levelId - 1];
+      if (!level) return;
+      level.instructions[sectionIndex].content.splice(itemIndex, 1);
+      storage?.setItem(storage.key, JSON.stringify(state));
+    },
+    addGuideSection(state, action) {
+      const { levelId, title, content } = action.payload;
+      const level = state[levelId - 1];
+      if (!level) return;
+      level.instructions.push({ title, content });
+      storage?.setItem(storage.key, JSON.stringify(state));
+    },
+    addGuideSectionItem(state, action) {
+      const { levelId, sectionIndex, text } = action.payload;
+      const level = state[levelId - 1];
+      if (!level) return;
+      console.log("addGuideSectionItem", sectionIndex, text);
+      level.instructions[sectionIndex].content.push(text);
+      storage?.setItem(storage.key, JSON.stringify(state));
+    },
+    handleLocking(state, action) {
+      //get HTML, CSS or JS from the action, also levelId
+
+      const { levelId, type } = action.payload;
+      //Use type to determine which code to lock/unlock
+      //Find the level from the state
+      const level = state[levelId - 1];
+      if (!level) return;
+      //Change the lock state of the code
+      if (type === "html") {
+        level.lockHTML = !level.lockHTML;
+      }
+      if (type === "css") {
+        level.lockCSS = !level.lockCSS;
+      }
+      if (type === "js") {
+        level.lockJS = !level.lockJS;
+      }
+      //Save the state
+      storage?.setItem(storage.key, JSON.stringify(state));
+    },
+    updateLevelName(state, action) {
+      const { levelId, name } = action.payload;
+      const level = state[levelId - 1];
+      if (!level) return;
+      level.name = name;
+      storage?.setItem(storage.key, JSON.stringify(state));
+    },
+    addThisLevel(state, action) {
+      const levelDetails = action.payload;
+      const parsedLevelDetails = JSON.parse(levelDetails);
+      state.push({ ...parsedLevelDetails, ...levelTemplate1 });
+      storage?.setItem(storage.key, JSON.stringify(state));
+    },
+    addNewLevel(state) {
+      const newLevel: Level = {
+        name: "template",
+        code: {
+          html: "",
+          css: "",
+          js: "",
+        },
+        solution: {
+          html: "",
+          css: "",
+          js: "",
+        },
+        ...levelTemplate1,
+      };
+      state.push(newLevel);
+      storage?.setItem(storage.key, JSON.stringify(state));
+    },
+    removeLevel(state, action) {
+      const levelId = action.payload;
+      const level = state[levelId - 1];
+      if (!level) return;
+      state.splice(levelId - 1, 1);
+
+      storage?.setItem(storage.key, JSON.stringify(state));
+    },
+    updateLevelColors(state, action) {
+      //receives an array of colors
+      const { levelId, colors } = action.payload;
+      console.log("updateLevelColors", colors);
+      console.log("levelId", levelId);
+      const level = state[levelId - 1];
+      if (!level) return;
+      if (level.buildingBlocks) {
+        level.buildingBlocks.colors = colors;
+      } else {
+        level.buildingBlocks = { colors };
+      }
+    },
   },
 });
 
 export const {
   updateCode,
+  updateSolutionCode,
   updateUrl,
   updatePoints,
   updateAccuracy,
@@ -265,6 +489,25 @@ export const {
   toggleImageInteractivity,
   toggleShowScenarioModel,
   toggleShowHotkeys,
+  changeLevelDifficulty,
+  changeAccuracyTreshold,
+  changeScenarioDimensions,
+  changeMaxPoints,
+  addNewScenario,
+  removeScenario,
+  removeSolutionCode,
+  updateGuideSectionItem,
+  updateGuideSectionTitle,
+  removeGuideSection,
+  removeGuideSectionItem,
+  addGuideSection,
+  addGuideSectionItem,
+  handleLocking,
+  updateLevelName,
+  addThisLevel,
+  addNewLevel,
+  removeLevel,
+  updateLevelColors,
 } = levelsSlice.actions;
 
 export default levelsSlice.reducer;

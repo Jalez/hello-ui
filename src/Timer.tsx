@@ -45,7 +45,6 @@ const Timer = () => {
         justifyContent: "center",
         alignItems: "center",
         flexDirection: "column",
-        width: "100%",
         margin: "0",
         zIndex: 10,
       }}

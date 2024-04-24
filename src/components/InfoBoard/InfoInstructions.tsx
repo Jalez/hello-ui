@@ -9,6 +9,7 @@ import {
 } from "@mui/material";
 import { ExpandMoreOutlined } from "@mui/icons-material";
 import Info from "./Info";
+import InfoGuide from "./InfoGuide";
 
 const StyledSection = styled("section")(({ theme }) => ({
   display: "flex",
@@ -28,10 +29,7 @@ const StyledSection = styled("section")(({ theme }) => ({
 export const InfoInstructions = () => {
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const level = useAppSelector((state) => state.levels[currentLevel - 1]);
-  const instructionsHtmlObj = useMemo(
-    () => ({ __html: level?.instructions || "" }),
-    [level?.instructions]
-  );
+  const instructions = level.instructions;
   // <StyledSection>
   // </StyledSection>
   return (
@@ -67,7 +65,7 @@ export const InfoInstructions = () => {
           color: "primary.main",
         }}
       >
-        <p dangerouslySetInnerHTML={instructionsHtmlObj} />
+        <InfoGuide sections={instructions} />
       </AccordionDetails>
     </Accordion>
   );

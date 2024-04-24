@@ -10,7 +10,10 @@ import { Image } from "../../General/Image/Image";
 import { Box } from "@mui/material";
 import { InfoSwitch } from "../../InfoBoard/InfoSwitch";
 import { useCallback } from "react";
-import { toggleShowModelSolution } from "../../../store/slices/levels.slice";
+import {
+  scenarioSolutionUrls,
+  toggleShowModelSolution,
+} from "../../../store/slices/levels.slice";
 
 type ScenarioModelProps = {
   scenario: scenario;
@@ -27,6 +30,7 @@ export const ScenarioModel = ({
   const handleSwitchModel = useCallback(() => {
     dispatch(toggleShowModelSolution(currentLevel));
   }, [currentLevel, dispatch]);
+  const solutionUrl = scenarioSolutionUrls[scenario.scenarioId];
 
   return (
     <Box
@@ -90,7 +94,7 @@ export const ScenarioModel = ({
             {showModel ? (
               <Image
                 name="solution"
-                imageUrl={scenario.solutionUrl}
+                imageUrl={solutionUrl}
                 height={scenario.dimensions.height}
                 width={scenario.dimensions.width}
               />

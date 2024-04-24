@@ -8,10 +8,9 @@ const labelTextDecorations = ["underline", "underline overline", "overline "];
 const buttonTypes = ["submit"];
 const formStyles = ["solid", "outlined", "rounded", "minimal"];
 
-export const formGenerator: generator = (
-  primaryColor: string,
-  secondaryColor: string
-) => {
+export const formGenerator: generator = () => {
+  const primaryColor = "#496989";
+  const secondaryColor = "#58A399";
   // Determine the current time and assign indexes based on time intervals
   const currentTime = new Date();
   const hour = currentTime.getHours();
@@ -25,7 +24,15 @@ export const formGenerator: generator = (
   const selectedButtonType = buttonTypes[timeIndex % buttonTypes.length];
   const selectedFormStyle = formStyles[timeIndex % formStyles.length];
 
-  const instructions = `Create a <strong>form</strong> that uses the <em>${selectedFormStyle}</em> class, with a <em>${selectedInputType}</em> input, a <em>checkbox</em> inside a fieldset and a <em>${selectedButtonType}</em> button. The form should have a label for the input, and the label should have inline styling for ${selectedLabelDecoration}. For parent elements that need their children to be on the same row, you can use the <em>same-row-children</em> class. You must use the correct class names, ids and semantic tags to style the form and its content. For instance, the semantic tags "form", "label", "input" and "button" should be present. header, section and footer should be used. If Ids are required, Id is the same as the <em>type</em> of the element. You can look at the stylesheet and provided picture for reference.`;
+  const instructions = [
+    {
+      title: "Requirements:",
+      content: [
+        `Create a form that uses the ${selectedFormStyle} class, with a ${selectedInputType} input, a checkbox inside a fieldset and a ${selectedButtonType} button. The form should have a label for the input, and the label should have inline styling for ${selectedLabelDecoration}. For parent elements that need their children to be on the same row, you can use the same-row-children class. You must use the correct class names, ids and semantic tags to style the form and its content. For instance, the semantic tags "form", "label", "input" and "button" should be present. header, section and footer should be used. If Ids are required, Id is the same as the type of the element. You can look at the stylesheet and provided picture for reference.`,
+      ],
+    },
+  ];
+
   const question_and_answer = {
     question: "What are forms in html?",
     answer: `HTML forms are used to collect user input. They contain form elements like text fields, checkboxes, radio buttons, submit buttons, etc. Users enter data into these elements, and the data is sent to a server for processing.  `,
@@ -297,7 +304,8 @@ form footer input[type="submit"] {
     SHTML: html,
     TCSS: css,
     SCSS: css,
-    difficulty: "form",
+    difficulty: "medium",
+    name: "Medium form",
     instructions,
     question_and_answer,
     lockCSS: true,

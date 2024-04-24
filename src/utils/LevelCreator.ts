@@ -3,15 +3,17 @@ import { generator, levelNames, scenario } from "../types";
 import { cardGenerator } from "./generators/cardGenerator";
 import { easyFlexGenerator } from "./generators/easyFlexGenerator";
 import { easyGridGenerator } from "./generators/easyGridGenerator";
+import { flexboxMaker } from "./generators/flexboxMaker";
 import { formGenerator } from "./generators/formGenerator";
 import { fullFormGenerator } from "./generators/fullFormGenerator";
+import { generateGridLevel } from "./generators/gridMaker";
 import { harderFlexGenerator } from "./generators/harderFlexGenerator";
 import { harderGridGenerator } from "./generators/harderGridGenerator";
 import { listGenerator } from "./generators/listGenerator";
 import { DynamicListGenerator } from "./generators/listGeneratorDynamic";
 import { ActiveNavbarGenerator } from "./generators/navbarGeneratorDynamicActive";
+import { sidebarGenerator } from "./generators/sidebarGenerator";
 import { tableGenerator } from "./generators/tableGenerator";
-import { testFlexGenerator } from "./generators/testFlexGenerator";
 import { testGenerator } from "./generators/testGenerator";
 
 const initialHtml: string = `<div></div>`;
@@ -59,18 +61,20 @@ type generatorNameAndFunction = {
 
 export const generatorNameAndFunction: generatorNameAndFunction = {
   test: testGenerator,
-  testFlex: testFlexGenerator,
-  card: cardGenerator,
-  form: formGenerator,
-  list: listGenerator,
-  table: tableGenerator,
-  flex: easyFlexGenerator,
-  grid: easyGridGenerator,
-  "Harder Flex": harderFlexGenerator,
-  "Harder Grid": harderGridGenerator,
-  "Full form": fullFormGenerator,
+  "Easy card": cardGenerator,
+  "Easy table": tableGenerator,
+  "Easy sidebar": sidebarGenerator,
+  "Easy flex": easyFlexGenerator,
+  "Easy grid": easyGridGenerator,
+  "Medium form": formGenerator,
+  "Medium list": listGenerator,
+  "Medium Navbar": ActiveNavbarGenerator,
+  "Hard flex": harderFlexGenerator,
+  "Hard grid": harderGridGenerator,
+  "Hard form": fullFormGenerator,
   "Dynamic list": DynamicListGenerator,
-  "Active Navbar": ActiveNavbarGenerator,
+  "Exam flex": flexboxMaker,
+  "Exam grid": generateGridLevel,
 };
 type week =
   | "html_2_es"
@@ -92,14 +96,13 @@ export const createLevels = (week: week) => {
     js_2_es: [DynamicListGenerator],
     js_3_es: [ActiveNavbarGenerator],
     all: [
-      testGenerator,
-      testFlexGenerator,
       cardGenerator,
       formGenerator,
       listGenerator,
       tableGenerator,
       easyFlexGenerator,
       easyGridGenerator,
+      sidebarGenerator,
       harderFlexGenerator,
       harderGridGenerator,
       fullFormGenerator,
@@ -122,11 +125,7 @@ export const createLevels = (week: week) => {
     // add grey as tertiary color
     const tertiaryColor = "#888";
 
-    let generatedLevelDetails = generator(
-      mainColor,
-      secondaryColor,
-      tertiaryColor
-    );
+    let generatedLevelDetails = generator();
     const { scenarioDetails } = generatedLevelDetails;
 
     const scenarios = [] as scenario[];
@@ -135,9 +134,6 @@ export const createLevels = (week: week) => {
       scenarios.push({
         scenarioId: Math.random().toString(36).substring(7),
         accuracy: 0,
-        solutionUrl: "",
-        drawingUrl: "",
-        differenceUrl: "",
         dimensions: {
           width: details.width,
           height: details.height,
@@ -147,7 +143,7 @@ export const createLevels = (week: week) => {
     }
     const level = {
       identifier: Math.random().toString(36).substring(7),
-      name: generatedLevelDetails.difficulty,
+      name: generatedLevelDetails.name,
       scenarios: scenarios,
       buildingBlocks: {
         pictures: randomLevel.pictures,

@@ -30,10 +30,9 @@ function generateGridAreasCSSString(
   return cssString;
 }
 
-export const generateGridLevel: generator = (
-  primaryColor: string,
-  secondaryColor: string
-) => {
+export const generateGridLevel: generator = () => {
+  const primaryColor = "#f9f9f9";
+  const secondaryColor = "#333";
   const columns = 3;
   const rows = 4;
 
@@ -102,17 +101,19 @@ ${generateGridAreasCSSString(selectors, primaryColor)}
     percentageTreshold: 90,
     percentageFullPointsTreshold: 98,
     colors: [primaryColor, secondaryColor],
-    difficulty: "grid",
-    instructions: `
-    <div style="display:flex; flex-direction: row; gap: 0.2em;">
-    <section>
-    <h2>Grid Layout:</h2>
-    <ul>
-    <li>Level specific instructions TODO</li>
-    </ul>
-    </section>
-    </div>
-    `,
+    difficulty: "hard",
+    name: "Exam grid",
+    instructions: [
+      {
+        title: "What this exercise is about?",
+        content: [
+          "This exercise is about creating a grid layout using CSS Grid.",
+          "You will need to create a grid container and assign grid areas to the children elements.",
+          "The grid container should have 3 columns and 4 rows.",
+          "The children elements should have different grid areas.",
+        ],
+      },
+    ],
     question_and_answer: {
       question: "NO QUESTION",
       answer: `NO ANSWER`,

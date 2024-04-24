@@ -2,6 +2,7 @@
 
 import { Typography } from "@mui/material";
 import { styled, Theme } from "@mui/system";
+import packageInfo from "../../../package.json";
 
 const FooterStyled = styled("footer")(
   ({ theme }: { theme: Theme }) => `
@@ -21,7 +22,7 @@ const LinkStyled = styled("a")`
   color: #f5c518;
   text-shadow: 1px 1px 1px #000;
   text-decoration: none;
-  margin: 1rem;
+  margin: 0.5rem;
   pointer-events: visible;
 `;
 
@@ -38,6 +39,7 @@ export const Footer = () => {
           CSS Battle
         </LinkStyled>
       </Typography>
+      <Typography variant="body2">version {packageInfo.version}</Typography>
     </FooterStyled>
   );
 };

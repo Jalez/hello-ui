@@ -6,11 +6,6 @@ type question_and_answer = {
 export type scenario = {
   scenarioId: string;
   accuracy: number;
-  // solutionData: ImageData;
-  solutionUrl: string;
-  // drawingData: ImageData;
-  drawingUrl: string;
-  differenceUrl: string;
   dimensions: {
     width: number;
     height: number;
@@ -18,12 +13,19 @@ export type scenario = {
   js: string;
 };
 
-type instructions = string;
+export type difficulty = "easy" | "medium" | "hard";
+
+type instructionSection = {
+  title: string;
+  content: string[];
+};
+
+type instructions = instructionSection[];
 export interface Level {
   identifier: string;
   week: string;
-  name: string;
-  difficulty: string;
+  name: levelNames;
+  difficulty: difficulty;
   completed: string;
   accuracy: number;
   buildingBlocks?: {
@@ -69,11 +71,7 @@ export interface Level {
   percentageFullPointsTreshold: number;
 }
 
-export type generator = (
-  primaryColor: string,
-  secondaryColor: string,
-  tertiaryColor?: string
-) => {
+export type generator = () => {
   THTML: string;
   SHTML: string;
   TCSS: string;
@@ -83,7 +81,8 @@ export type generator = (
   events?: string[];
   instructions: instructions;
   question_and_answer: question_and_answer;
-  difficulty: string;
+  difficulty: difficulty;
+  name: levelNames;
   lockCSS: boolean;
   lockHTML: boolean;
   lockJS: boolean;
@@ -98,16 +97,19 @@ export type generator = (
 };
 
 export type levelNames =
-  | "card"
-  | "form"
-  | "list"
-  | "table"
+  | "Easy card"
+  | "Medium form"
+  | "Medium list"
+  | "Easy table"
   | "test"
-  | "testFlex"
-  | "flex"
-  | "grid"
-  | "Harder Flex"
-  | "Harder Grid"
-  | "Full form"
+  | "Easy flex"
+  | "Hard flex"
+  | "Easy grid"
+  | "Hard grid"
+  | "Hard form"
   | "Dynamic list"
-  | "Active Navbar";
+  | "Medium Navbar"
+  | "Easy sidebar"
+  | "Exam flex"
+  | "Exam grid"
+  | "template";

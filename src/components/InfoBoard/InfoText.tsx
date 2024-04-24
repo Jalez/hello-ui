@@ -1,6 +1,7 @@
 /** @format */
 
-import { Typography } from "@mui/material";
+import { Box, Typography } from "@mui/material";
+import { useAppDispatch, useAppSelector } from "../../store/hooks/hooks";
 
 // create prop interface
 interface NavTextProps {
@@ -13,6 +14,12 @@ interface NavTextProps {
  * @returns {JSX.Element}
  */
 export const InfoText = ({ children }: NavTextProps) => {
+  const options = useAppSelector((state) => state.options);
+  const isCreator = options.creator;
+  // if in creator mode, show an input instead of text
+  if (isCreator) {
+    return <Box>{children}</Box>;
+  }
   return (
     <Typography
       sx={{
