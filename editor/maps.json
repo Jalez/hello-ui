@@ -3,6 +3,7 @@
     "levels": [
       "League table"
     ],
-    "canUseAI": true
+    "canUseAI": true,
+    "random": 3
   }
 }
