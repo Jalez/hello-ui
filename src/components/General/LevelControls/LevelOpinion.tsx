@@ -4,6 +4,7 @@ import ThumbDownIcon from "@mui/icons-material/ThumbDown";
 import ThumbUpIcon from "@mui/icons-material/ThumbUp";
 import { styled } from "@mui/system";
 import { useAppSelector } from "../../../store/hooks/hooks";
+import PoppingTitle from "../PoppingTitle";
 
 // Styled components for animation
 const AnimatedThumbUpIcon = styled(ThumbUpIcon)(({ theme }) => ({
@@ -35,27 +36,38 @@ const LevelOpinion = () => {
   return (
     <Box
       sx={{
-        display: "flex",
-        flexDirection: "row",
-        justifyContent: "center",
-        alignItems: "center",
+        position: "absolute",
+        zIndex: 200,
       }}
     >
-      <Typography>Opinion on level:</Typography>
-      <IconButton onClick={() => handleOpinionChange("up")}>
-        <AnimatedThumbUpIcon
+      <PoppingTitle bottomTitle="Opinion on level">
+        <Box
           sx={{
-            color: opinion === "up" ? "green" : "black",
+            display: "flex",
+            flexDirection: "row",
+            justifyContent: "center",
+            alignItems: "center",
           }}
-        />
-      </IconButton>
-      <IconButton onClick={() => handleOpinionChange("down")}>
-        <AnimatedThumbDownIcon
-          sx={{
-            color: opinion === "down" ? "red" : "black",
-          }}
-        />
-      </IconButton>
+        >
+          <IconButton title="like" onClick={() => handleOpinionChange("up")}>
+            <AnimatedThumbUpIcon
+              sx={{
+                color: opinion === "up" ? "green" : "black",
+              }}
+            />
+          </IconButton>
+          <IconButton
+            title="dislike"
+            onClick={() => handleOpinionChange("down")}
+          >
+            <AnimatedThumbDownIcon
+              sx={{
+                color: opinion === "down" ? "red" : "black",
+              }}
+            />
+          </IconButton>
+        </Box>
+      </PoppingTitle>
     </Box>
   );
 };

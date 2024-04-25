@@ -104,7 +104,6 @@ const InfoGuideListItem = ({
             onMouseLeave={() => setShowEditDelete(false)}
           >
             <Typography
-              component="li"
               sx={{
                 cursor: "pointer",
               }}

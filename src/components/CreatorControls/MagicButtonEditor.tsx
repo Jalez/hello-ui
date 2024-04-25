@@ -2,16 +2,12 @@ import React, { useState } from "react";
 import {
   Box,
   Button,
-  CircularProgress,
   IconButton,
   Modal,
   Typography,
   TextareaAutosize,
 } from "@mui/material";
 import EditIcon from "@mui/icons-material/Edit";
-import { useDispatch, useSelector } from "react-redux";
-import { useAppDispatch, useAppSelector } from "../../store/hooks/hooks";
-import { addThisLevel } from "../../store/slices/levels.slice";
 
 type MagicButtonEditorProps = {
   prompt: string;
@@ -20,6 +16,7 @@ type MagicButtonEditorProps = {
   handleSystemInputChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
   fetchResponse: () => void;
   disabled?: boolean;
+  color?: string;
 };
 
 const MagicButtonEditor = ({
@@ -29,6 +26,7 @@ const MagicButtonEditor = ({
   handleSystemInputChange,
   fetchResponse,
   disabled = false,
+  color = "secondary",
 }: MagicButtonEditorProps) => {
   const [open, setOpen] = useState(false);
   const handleOpen = () => setOpen(true);
@@ -36,14 +34,7 @@ const MagicButtonEditor = ({
 
   return (
     <>
-      <IconButton
-        color="secondary"
-        sx={{
-          bgcolor: "primary.main",
-        }}
-        onClick={handleOpen}
-        disabled={disabled}
-      >
+      <IconButton color={color as any} onClick={handleOpen} disabled={disabled}>
         <EditIcon />
       </IconButton>
 

@@ -19,7 +19,7 @@ const dividerStyles: any = (orientation: string, hideSlider: boolean) => ({
   width: orientation === "horizontal" ? "100%" : "5px",
   flex: 1,
   position: "relative",
-  backgroundColor: "primary.main",
+  backgroundColor: "primary.main.100",
   zIndex: hideSlider ? 20 : 50,
   cursor: orientation === "horizontal" ? "ns-resize" : "ew-resize",
 });

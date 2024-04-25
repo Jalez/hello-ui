@@ -10,6 +10,7 @@ import {
   ButtonGroup,
   Fab,
   Fade,
+  IconButton,
   Paper,
   Popper,
   Typography,
@@ -22,6 +23,10 @@ import RestoreIcon from "@mui/icons-material/Restore";
 import { setCurrentLevel } from "../../store/slices/currentLevel.slice";
 import { resetLevel } from "../../store/slices/levels.slice";
 import { useCallback, useEffect, useRef, useState } from "react";
+import Info from "../InfoBoard/Info";
+import PoppingTitle from "../General/PoppingTitle";
+import InfoInstructions from "../InfoBoard/InfoInstructions";
+import CreatorControls from "../CreatorControls/CreatorControls";
 
 const StyledContainer = styled("div")(() => ({
   display: "flex",
@@ -94,6 +99,8 @@ export const Navbar = () => {
   return (
     <StyledContainer id="three-navs">
       <StyledNavContainer>
+        {/* <InfoInstructions> */}
+        {/* <Info /> */}
         <NavPopper
           anchorEl={anchorEl}
           paragraph="This is an irreversible action. All progress will be lost, but timer is not affected. Are you sure you want to reset the level?"
@@ -101,15 +108,16 @@ export const Navbar = () => {
           handleConfirmation={handleLevelReset}
           resetAnchorEl={handleAnchorElReset}
         />
-
-        <StyledFab
-          title="Reset Level"
-          ref={arrowRef}
-          color="secondary"
-          onClick={togglePopper}
-        >
-          <RestoreIcon />
-        </StyledFab>
+        <PoppingTitle topTitle="Reset Level">
+          <IconButton
+            title="Reset Level"
+            ref={arrowRef}
+            color="primary"
+            onClick={togglePopper}
+          >
+            <RestoreIcon />
+          </IconButton>
+        </PoppingTitle>
         <HelpModal />
         <LevelControls
           currentlevel={currentLevel}
@@ -117,20 +125,26 @@ export const Navbar = () => {
           maxLevels={Object.keys(levels).length}
           levelName={level.name}
         />
-        <StyledFab
-          color="secondary"
-          onClick={toggleDarkMode}
-          title="Toggle Dark Mode"
-        >
-          <Brightness6Icon />
-        </StyledFab>
-        <StyledFab
-          color="secondary"
-          onClick={toggleWordCloud}
-          title="Toggle Word Cloud"
-        >
-          {options.showWordCloud ? <CloudIcon /> : <CloudOffIcon />}
-        </StyledFab>
+        <PoppingTitle topTitle="Toggle Dark Mode">
+          <IconButton
+            color="primary"
+            onClick={toggleDarkMode}
+            title="Toggle Dark Mode"
+          >
+            <Brightness6Icon />
+          </IconButton>
+        </PoppingTitle>
+        <PoppingTitle topTitle="Toggle Word Cloud">
+          <IconButton
+            color="primary"
+            onClick={toggleWordCloud}
+            title="Toggle Word Cloud"
+          >
+            {options.showWordCloud ? <CloudIcon /> : <CloudOffIcon />}
+          </IconButton>
+        </PoppingTitle>
+        <CreatorControls />
+        {/* </InfoInstructions> */}
       </StyledNavContainer>
     </StyledContainer>
   );

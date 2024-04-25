@@ -8,7 +8,7 @@ import { SlideShower } from "./ImageContainer/SlideShower";
 import { BoardTitle } from "../BoardTitle";
 import { BoardContainer } from "../BoardContainer";
 import { Board } from "../Board";
-import { Box, Button, Input } from "@mui/material";
+import { Box, Button, IconButton, Input } from "@mui/material";
 import { scenario } from "../../../types";
 import { InfoSwitch } from "../../InfoBoard/InfoSwitch";
 import { useCallback, useEffect, useState } from "react";
@@ -19,6 +19,8 @@ import {
   toggleImageInteractivity,
 } from "../../../store/slices/levels.slice";
 import InfoInput from "../../InfoBoard/InfoInput";
+import { Delete } from "@mui/icons-material";
+import PoppingTitle from "../../General/PoppingTitle";
 
 type ScenarioDrawingProps = {
   scenario: scenario;
@@ -119,7 +121,6 @@ export const ScenarioDrawing = ({
       removeScenario({ levelId: currentLevel, scenarioId: scenario.scenarioId })
     );
   };
-  console.log("scenario", scenario);
   return (
     <Box
       // add a listener for when the mouse is outside
@@ -128,8 +129,7 @@ export const ScenarioDrawing = ({
         position: "relative",
         display: "flex",
         justifyContent: "center",
-        marginRight: "2rem",
-        marginLeft: "2rem",
+        margin: "2rem",
       }}
     >
       {isCreator && (
@@ -292,22 +292,24 @@ export const ScenarioDrawing = ({
               color: "secondary.main",
               width: "100%",
               display: "flex",
-              justifyContent: "center",
+              justifyContent: "space-around",
               alignItems: "center",
-              flexDirection: "column",
+              flexDirection: "row",
             }}
           >
             {isCreator ? (
               <>
-                <Button onClick={handleRemoveScenario} color="error">
-                  Remove Scenario
-                </Button>
                 <InfoSwitch
                   rightLabel={"Solution"}
                   leftLabel={"Template"}
                   checked={drawWithSolution}
                   switchHandler={handleSwitchDrawing}
                 />
+                <PoppingTitle topTitle="Remove Scenario">
+                  <IconButton onClick={handleRemoveScenario} color="error">
+                    <Delete />
+                  </IconButton>
+                </PoppingTitle>
               </>
             ) : (
               <InfoSwitch

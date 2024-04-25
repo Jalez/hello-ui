@@ -15,6 +15,8 @@ import {
   changeMaxPoints,
 } from "../../store/slices/levels.slice";
 import Difficulty from "./Difficulty";
+import PoppingTitle from "../General/PoppingTitle";
+import InfoBox from "./InfoBox";
 
 const Info = () => {
   const dispatch = useAppDispatch();
@@ -29,22 +31,7 @@ const Info = () => {
 
   if (!level) return <div>loading...</div>;
   return (
-    <Paper
-      sx={{
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        flexDirection: "column",
-        padding: "0rem",
-        margin: "0",
-        borderRadius: "2rem",
-        // remove shadow
-        zIndex: 10,
-        boxShadow: 0,
-        width: "100%",
-        bgcolor: "secondary.main",
-      }}
-    >
+    <Box>
       <InfoBoard>
         <Box
           sx={{
@@ -53,56 +40,73 @@ const Info = () => {
             justifyContent: "space-around",
             alignItems: "center",
             width: "100%",
-            padding: "1rem",
             flexWrap: "nowrap",
           }}
         >
-          {!isCreator && <Timer />}
-          <Difficulty />
+          {!isCreator && (
+            <InfoBox>
+              <Timer />
+            </InfoBox>
+          )}
 
-          <Box>
-            <InfoText>
-              {isCreator ? "Max" : ""} Points:{" "}
-              <Shaker value={level.points}>
+          <InfoText>
+            <Shaker value={level.points}>
+              <InfoBox>
                 {!isCreator && (
-                  <>
-                    <LevelData reduxState="points" /> /{" "}
-                  </>
+                  <PoppingTitle topTitle={isCreator ? "Set Points" : "Points"}>
+                    <LevelData reduxState="points" />/{" "}
+                  </PoppingTitle>
                 )}
+                <PoppingTitle
+                  topTitle={isCreator ? "Set Max Points" : "Max Points"}
+                >
+                  <LevelData
+                    reduxState="maxPoints"
+                    actionToDispatch={changeMaxPoints}
+                  />
+                </PoppingTitle>
+              </InfoBox>
+            </Shaker>
+          </InfoText>
+          {!isCreator && (
+            <InfoBox>
+              <PoppingTitle topTitle="Best Time">
+                <InfoText>
+                  <Shaker value={level.timeData.pointAndTime[level.points]}>
+                    <InfoTime />
+                  </Shaker>
+                </InfoText>
+              </PoppingTitle>
+            </InfoBox>
+          )}
+          {!isCreator && (
+            <InfoBox>
+              <PoppingTitle topTitle="Accuracy">
+                <InfoText>
+                  <LevelData reduxState="accuracy" />%
+                </InfoText>
+              </PoppingTitle>
+            </InfoBox>
+          )}
+          <InfoBox>
+            <PoppingTitle topTitle="Accuracy Treshold">
+              <InfoText>
                 <LevelData
-                  reduxState="maxPoints"
-                  actionToDispatch={changeMaxPoints}
+                  reduxState="percentageTreshold"
+                  actionToDispatch={changeAccuracyTreshold}
                 />
-              </Shaker>
-            </InfoText>
-            {!isCreator && (
-              <InfoText>
-                Best Time:{" "}
-                <Shaker value={level.timeData.pointAndTime[level.points]}>
-                  <InfoTime />
-                </Shaker>
+                %
               </InfoText>
-            )}
-            {!isCreator && (
-              <InfoText>
-                Accuracy: <LevelData reduxState="accuracy" />%
-              </InfoText>
-            )}
-            <InfoText>
-              Accuracy threshold:{" "}
-              <LevelData
-                reduxState="percentageTreshold"
-                actionToDispatch={changeAccuracyTreshold}
-              />
-              %
-            </InfoText>
-          </Box>
+            </PoppingTitle>
+          </InfoBox>
 
-          <InfoColors />
+          <InfoBox>
+            <InfoColors />
+          </InfoBox>
         </Box>
         {/* <InfoPictures /> */}
       </InfoBoard>
-    </Paper>
+    </Box>
   );
 };
 

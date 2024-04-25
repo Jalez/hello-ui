@@ -6,6 +6,7 @@ import { InfoColor } from "./InfoColor";
 import { useEffect } from "react";
 import { dispatch } from "d3";
 import { updateLevelColors } from "../../store/slices/levels.slice";
+import PoppingTitle from "../General/PoppingTitle";
 
 export const InfoColors = () => {
   const dispatch = useAppDispatch();
@@ -36,8 +37,6 @@ export const InfoColors = () => {
     }
   }, [level.solution]);
 
-  console.log("COLORS:", level.buildingBlocks?.colors);
-  console.log("LEVEL:", level);
   return (
     <Box
       sx={{
@@ -46,20 +45,21 @@ export const InfoColors = () => {
         alignItems: "center",
       }}
     >
-      <Typography variant="h5">Colors</Typography>
-      <Box
-        sx={{
-          display: "flex",
-          // flexDirection: "column",
-        }}
+      <PoppingTitle
+        topTitle="Colors"
+        bottomTitle="Click the color to copy color code"
       >
-        {level.buildingBlocks?.colors?.map((color) => (
-          <InfoColor key={Math.random() * 10000} color={color} />
-        ))}
-      </Box>
-      <Typography variant="body2">
-        Click the color to copy color code
-      </Typography>
+        <Box
+          sx={{
+            display: "flex",
+            // flexDirection: "column",
+          }}
+        >
+          {level.buildingBlocks?.colors?.map((color) => (
+            <InfoColor key={Math.random() * 10000} color={color} />
+          ))}
+        </Box>
+      </PoppingTitle>
     </Box>
   );
 };

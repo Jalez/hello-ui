@@ -2,6 +2,7 @@ import { Box, Rating, Typography } from "@mui/material";
 import { useAppDispatch, useAppSelector } from "../../store/hooks/hooks";
 import { useState } from "react";
 import { changeLevelDifficulty } from "../../store/slices/levels.slice";
+import PoppingTitle from "../General/PoppingTitle";
 //difficulty can eitehr be easy, medium, or hard
 
 interface Difficulties {
@@ -40,33 +41,32 @@ const Difficulty = () => {
         flexDirection: "column",
         justifyContent: "center",
         alignItems: "center",
-        gap: "1rem",
+        m: 0,
+        p: 0,
       }}
     >
-      <Typography component="legend" color="primary">
-        {
-          // if the user is the creator, show the difficulty
-          isCreator ? "Set" : ""
-        }{" "}
-        Difficulty:
-      </Typography>
-      <Rating
-        name="customized-10"
-        // make it so that the stars that are not there are still visible: Change outline color to opposite of primary
-        sx={{
-          "& .MuiRating-iconEmpty": {
-            color: "primary.main",
-          },
-        }}
-        value={stars}
-        max={Object.keys(difficulties).length}
-        disabled={!isCreator}
-        onChange={(event, value) => {
-          const newValue = value ?? difficulties[difficulty]; // fallback to the current difficulty value if null
-          setStars(newValue);
-          handleChange(newValue);
-        }}
-      />
+      <PoppingTitle
+        topTitle={isCreator ? "Set Difficulty" : "Difficulty"}
+        topLocation="left"
+      >
+        <Rating
+          name="customized-10"
+          // make it so that the stars that are not there are still visible: Change outline color to opposite of primary
+          sx={{
+            "& .MuiRating-iconEmpty": {
+              color: "primary.main",
+            },
+          }}
+          value={stars}
+          max={Object.keys(difficulties).length}
+          disabled={!isCreator}
+          onChange={(event, value) => {
+            const newValue = value ?? difficulties[difficulty]; // fallback to the current difficulty value if null
+            setStars(newValue);
+            handleChange(newValue);
+          }}
+        />
+      </PoppingTitle>
     </Box>
   );
 };

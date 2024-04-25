@@ -6,10 +6,13 @@ import {
   AccordionDetails,
   AccordionSummary,
   Box,
+  Button,
 } from "@mui/material";
 import { ExpandMoreOutlined } from "@mui/icons-material";
 import Info from "./Info";
 import InfoGuide from "./InfoGuide";
+import PoppingTitle from "../General/PoppingTitle";
+import InfoIcon from "@mui/icons-material/Info";
 
 const StyledSection = styled("section")(({ theme }) => ({
   display: "flex",
@@ -26,7 +29,11 @@ const StyledSection = styled("section")(({ theme }) => ({
   bgcolor: "secondary.main",
 }));
 
-export const InfoInstructions = () => {
+type InfoInstructionsProps = {
+  children: React.ReactNode;
+};
+
+export const InfoInstructions = ({ children }: InfoInstructionsProps) => {
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const level = useAppSelector((state) => state.levels[currentLevel - 1]);
   const instructions = level.instructions;
@@ -34,25 +41,50 @@ export const InfoInstructions = () => {
   // </StyledSection>
   return (
     <Accordion
+      id="instructions"
       sx={{
         bgcolor: "secondary.main",
         color: "primary.main",
         border: "none",
-        // remove shadow
         boxShadow: "none",
+        p: 0,
+        m: 0,
         width: "100%",
+        "&.Mui-expanded": {
+          margin: 0, // Overrides the default expanded margin
+        },
+        "& .MuiAccordionSummary-root": {
+          m: 0,
+          p: 0,
+          "& .MuiAccordionSummary-content": {
+            m: 0,
+          },
+          "& .Mui-expanded": {
+            minHeight: "auto",
+            margin: 0, // Explicitly override margin here too
+          },
+        },
+        "& .MuiAccordionDetails-root": {
+          p: 0,
+          m: 0,
+          width: "100%",
+        },
       }}
     >
       <Box
+        id="instructions-box"
         sx={{ display: "flex", justifyContent: "center", alignItems: "center" }}
       >
-        <Info />
+        {children}
         <AccordionSummary
           expandIcon={<ExpandMoreOutlined sx={{ color: "primary.main" }} />}
         >
-          <header>
-            <h2>Level Instructions</h2>
-          </header>
+          <PoppingTitle topTitle="Level Instructions">
+            <InfoIcon
+              //  change size of icon
+              fontSize="large"
+            />
+          </PoppingTitle>
         </AccordionSummary>
       </Box>
       <AccordionDetails

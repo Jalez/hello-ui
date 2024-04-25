@@ -15,6 +15,7 @@ import { useAppDispatch, useAppSelector } from "../../store/hooks/hooks";
 import { addThisLevel } from "../../store/slices/levels.slice";
 import { Edit } from "@mui/icons-material";
 import MagicButtonEditor from "./MagicButtonEditor";
+import PoppingTitle from "../General/PoppingTitle";
 
 const MagicButton = () => {
   const dispatch = useAppDispatch();
@@ -126,16 +127,21 @@ The response should be directly in JSON format suitable for immediate integratio
       )}
       {!loading && (
         <>
-          <IconButton color="primary" onClick={fetchResponse}>
-            <AutoAwesomeIcon />
-          </IconButton>
-          <MagicButtonEditor
-            prompt={prompt}
-            systemPrompt={systemPrompt}
-            handleInputChange={handleInputChange}
-            handleSystemInputChange={handleSystemInputChange}
-            fetchResponse={fetchResponse}
-          />
+          <PoppingTitle topTitle="Generate a level">
+            <IconButton color="primary" onClick={fetchResponse}>
+              <AutoAwesomeIcon />
+            </IconButton>
+          </PoppingTitle>
+          <PoppingTitle topTitle="Edit generator prompt">
+            <MagicButtonEditor
+              color="primary"
+              prompt={prompt}
+              systemPrompt={systemPrompt}
+              handleInputChange={handleInputChange}
+              handleSystemInputChange={handleSystemInputChange}
+              fetchResponse={fetchResponse}
+            />
+          </PoppingTitle>
         </>
       )}
       <Modal

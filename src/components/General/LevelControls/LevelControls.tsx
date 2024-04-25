@@ -22,6 +22,7 @@ import LevelOpinion from "./LevelOpinion";
 import { Edit } from "@mui/icons-material";
 import { dispatch } from "d3";
 import { updateLevelName } from "../../../store/slices/levels.slice";
+import Difficulty from "../../InfoBoard/Difficulty";
 
 interface LevelControlsProps {
   maxLevels: number;
@@ -118,11 +119,13 @@ const LevelControls = ({
             flexDirection: "column",
             justifyContent: "center",
             alignItems: "center",
+            margin: "0",
+            padding: "0",
           }}
         >
           <Typography
             sx={{
-              fontSize: "1.5rem",
+              fontSize: "1rem",
               display: "flex",
               flexDirection: "column",
               justifyContent: "center",
@@ -148,7 +151,7 @@ const LevelControls = ({
               "The {name}"
             </Typography>
           )}
-          <LevelOpinion />
+          <Difficulty />
         </Box>
         <IconButton
           disabled={currentlevel === maxLevels}

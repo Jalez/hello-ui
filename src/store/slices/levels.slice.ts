@@ -10,6 +10,7 @@ import {
 } from "../../utils/LevelCreator";
 import { numberTimeToMinutesAndSeconds } from "../../utils/numberTimeToMinutesAndSeconds";
 import { gameMaxTime, mainColor, secondaryColor } from "../../constants";
+import { allLevels } from "../../App";
 
 type scenarioSolutionUrls = {
   [key: string]: string;
@@ -78,10 +79,10 @@ const levelsSlice = createSlice({
   reducers: {
     evaluateLevel(state, action) {},
     updateWeek(state, action) {
-      let week = action.payload;
+      let { levels, mapName } = action.payload;
 
-      if (!week) week = "all";
-      storage = obfuscate(`ui-designer-${week}`);
+      if (!mapName) mapName = "all";
+      storage = obfuscate(`ui-designer-${mapName}`);
       if (storage.getItem(storage.key)) {
         state = JSON.parse(storage.getItem(storage.key) || "[]");
       }
@@ -91,9 +92,7 @@ const levelsSlice = createSlice({
         //console.error("Levels have already been created!");
         return state;
       }
-
-      const levels = createLevels(week) as Level[];
-
+      console.log("updateWeek", levels, mapName);
       state = levels;
       storage.setItem(storage.key, JSON.stringify(state));
       return state;
@@ -106,18 +105,9 @@ const levelsSlice = createSlice({
 
       level.confettiSprinkled = false;
       level.timeData.pointAndTime = {};
-      const name = level.name.toString() as levelNames;
-      const newGeneration = generatorNameAndFunction[name]();
-      level.code = {
-        html: newGeneration.THTML,
-        css: newGeneration.TCSS,
-        js: newGeneration?.TJS || "",
-      };
-      level.solution = {
-        html: newGeneration.SHTML,
-        css: newGeneration.SCSS,
-        js: newGeneration?.SJS || "",
-      };
+      const newGeneration = allLevels[action.payload - 1];
+      level.code = newGeneration.code;
+      level.solution = newGeneration.solution;
       level.instructions = newGeneration.instructions;
       level.question_and_answer = newGeneration.question_and_answer;
 
