@@ -1,9 +1,26 @@
 {
   "newOne": {
     "levels": [
-      "League table"
+      "League table",
+      "My contact form"
     ],
     "canUseAI": true,
-    "random": 3
+    "random": 1,
+    "message": "Map not found"
+  },
+  "test": {
+    "levels": [
+      "Todo list",
+      "flex 1"
+    ],
+    "canUseAI": false,
+    "random": 0
+  },
+  "js": {
+    "levels": [
+      "Todo list"
+    ],
+    "canUseAI": false,
+    "random": 0
   }
 }

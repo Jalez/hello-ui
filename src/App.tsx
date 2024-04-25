@@ -20,6 +20,11 @@ import ArtBoardControls from "./ArtBoardControls";
 import { setCreator } from "./store/slices/options.slice";
 import LevelSaver from "./components/CreatorControls/LevelSaver";
 import CreatorControls from "./components/CreatorControls/CreatorControls";
+import { Level } from "./types";
+import { getMapLevels } from "./utils/network/maps";
+import { getMapLevelsData } from "./utils/network/levels";
+import Info from "./components/InfoBoard/Info";
+import LevelOpinion from "./components/General/LevelControls/LevelOpinion";
 
 const AppStyle = {
   display: "flex",
@@ -34,6 +39,8 @@ const AppStyle = {
   boxSizing: "border-box" as const,
 };
 
+export let allLevels: Level[] = [];
+
 function App() {
   const levels = useAppSelector((state) => state.levels);
   const dispatch = useAppDispatch();
@@ -45,14 +52,23 @@ function App() {
     //Example url: http://localhost:5173/creator?week=test
     // look at the url params to determine the week
     const urlParams = new URLSearchParams(window.location.search);
-    const week = urlParams.get("week");
+    const map = urlParams.get("map");
+
+    const fetchLevels = async (mapName: string) => {
+      allLevels = await getMapLevelsData(mapName);
+      console.log("allLevels", allLevels);
+      dispatch(updateWeek({ levels: allLevels, mapName }));
+    };
+    fetchLevels(map || "all");
+
     // also check whether or not we are in the creator
     const isCreator = window.location.pathname.includes("creator");
     dispatch(setCreator(isCreator));
 
-    dispatch(updateWeek(week));
     dispatch(sendScoreToParentFrame());
   }, []);
+
+  console.log("levels", levels);
 
   return (
     <>
@@ -63,10 +79,12 @@ function App() {
         <GameContainer>
           {levels.length > 0 && (
             <>
-              <CreatorControls />
+              <LevelOpinion />
 
               <Navbar />
-              <InfoInstructions />
+              <InfoInstructions>
+                <Info />
+              </InfoInstructions>
               {options.showWordCloud && <CSSWordCloud />}
               <ArtBoards />
               <ArtBoardControls />

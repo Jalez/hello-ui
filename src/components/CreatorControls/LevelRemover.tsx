@@ -1,10 +1,19 @@
 //Add a material UI Button component that is used to remove the current level and its changes to the backend server running on http://localhost:3000.
 
-import { Box, Button } from "@mui/material";
+import {
+  Box,
+  Button,
+  Fade,
+  IconButton,
+  Paper,
+  Popper,
+  Typography,
+} from "@mui/material";
 import { useAppDispatch, useAppSelector } from "../../store/hooks/hooks";
 import { removeLevel } from "../../store/slices/levels.slice";
 import { setCurrentLevel } from "../../store/slices/currentLevel.slice";
-
+import DeleteIcon from "@mui/icons-material/Delete";
+import PoppingTitle from "../General/PoppingTitle";
 const LevelRemover = () => {
   const currentLevel = useAppSelector(
     (state) => state.currentLevel.currentLevel
@@ -36,14 +45,13 @@ const LevelRemover = () => {
         flexDirection: "column",
         justifyContent: "center",
         alignItems: "center",
-        gap: "1rem",
-        width: "100%",
-        padding: "1rem",
       }}
     >
-      <Button variant="contained" onClick={handleRemove} color="error">
-        Remove Level
-      </Button>
+      <PoppingTitle topTitle="Remove Level">
+        <IconButton onClick={handleRemove} color="error">
+          <DeleteIcon />
+        </IconButton>
+      </PoppingTitle>
     </Box>
   );
 };

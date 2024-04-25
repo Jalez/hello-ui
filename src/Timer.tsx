@@ -5,6 +5,7 @@ import { useAppDispatch, useAppSelector } from "./store/hooks/hooks";
 import { numberTimeToMinutesAndSeconds } from "./utils/numberTimeToMinutesAndSeconds";
 import { Box, Paper, Typography } from "@mui/material";
 import { resetLevel, startLevelTimer } from "./store/slices/levels.slice";
+import PoppingTitle from "./components/General/PoppingTitle";
 
 const Timer = () => {
   const dispatch = useAppDispatch();
@@ -49,28 +50,12 @@ const Timer = () => {
         zIndex: 10,
       }}
     >
-      <Paper
-        sx={{
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          flexDirection: "column",
-          padding: "1rem",
-          borderRadius: "2rem",
-          // remove shadow
-          boxShadow: 0,
-          //   width: "100%",
-          bgcolor: "secondary.main",
-        }}
-      >
-        <Typography style={{ fontSize: "1.5rem" }} color="primary">
-          Timer
-        </Typography>
-        <Typography style={{ fontSize: "1.5rem" }} color="primary">
+      <PoppingTitle topTitle="Time Spent">
+        <Typography color="primary">
           {" "}
           <strong>{timeSpent}</strong>
         </Typography>
-      </Paper>
+      </PoppingTitle>
     </Box>
   );
 };

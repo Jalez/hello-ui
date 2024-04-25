@@ -113,3 +113,9 @@ export type levelNames =
   | "Exam flex"
   | "Exam grid"
   | "template";
+
+export type MapDetails = {
+  levels: string[];
+  canUseAI: boolean;
+  random: number;
+};

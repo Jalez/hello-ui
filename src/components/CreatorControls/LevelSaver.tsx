@@ -1,7 +1,9 @@
 //Add a material UI Button component that is used to save the current level and its changes to the backend server running on http://localhost:3000.
 
-import { Box, Button } from "@mui/material";
+import { Box, Button, IconButton } from "@mui/material";
 import { useAppSelector } from "../../store/hooks/hooks";
+import PoppingTitle from "../General/PoppingTitle";
+import { Save } from "@mui/icons-material";
 
 const LevelSaver = () => {
   const currentLevel = useAppSelector(
@@ -12,8 +14,8 @@ const LevelSaver = () => {
   const handleSave = () => {
     console.log("level", level);
     const name = level.name;
-    fetch("http://localhost:3000/data", {
-      method: "PUT",
+    fetch("http://localhost:3000/levels", {
+      method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
@@ -38,14 +40,13 @@ const LevelSaver = () => {
         flexDirection: "column",
         justifyContent: "center",
         alignItems: "center",
-        gap: "1rem",
-        width: "100%",
-        padding: "1rem",
       }}
     >
-      <Button variant="contained" color="primary" onClick={handleSave}>
-        Save Level
-      </Button>
+      <PoppingTitle topTitle="Save Level">
+        <IconButton onClick={handleSave} color="primary">
+          <Save />
+        </IconButton>
+      </PoppingTitle>
     </Box>
   );
 };
