@@ -12,17 +12,19 @@ type ModelProps = {
 export const Model = ({ scenario }: ModelProps): JSX.Element => {
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const level = useAppSelector((state) => state.levels[currentLevel - 1]);
+  const solutionUrls = useAppSelector((state: any) => state.solutionUrls);
+  const solutionUrl = solutionUrls[scenario.scenarioId];
 
   return (
     <ScreenshotWithRedux
       scenarioId={scenario.scenarioId}
-      imageUrl={scenario.solutionUrl}
+      imageUrl={solutionUrl}
       //   imageUrl={"lol"}
       name="solution"
     >
       <Image
         name="solution"
-        imageUrl={scenario.solutionUrl}
+        imageUrl={solutionUrl}
         height={scenario.dimensions.height}
         width={scenario.dimensions.width}
       />
