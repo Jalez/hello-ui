@@ -71,7 +71,7 @@ The response should be directly in JSON format suitable for immediate integratio
     try {
       handleClose();
       setLoading(true);
-      const response = await fetch(`http://localhost:3000/chatGPT`, {
+      const response = await fetch(`http://localhost:3200/chatGPT`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
