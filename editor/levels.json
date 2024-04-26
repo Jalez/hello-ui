@@ -1,5 +1,5 @@
 {
-  "Easy cards": {
+  "i7fxub": {
     "identifier": "i7fxub",
     "name": "Easy cards",
     "scenarios": [
@@ -76,7 +76,7 @@
     "lockHTML": false,
     "lockJS": true
   },
-  "Level Component": {
+  "7548a7": {
     "name": "Level Component",
     "code": {
       "html": "<div class='level'>\n  <!-- Content goes here -->\n</div>",
@@ -139,7 +139,7 @@
       ]
     }
   },
-  "Login form": {
+  "a7qu64": {
     "name": "Login form",
     "code": {
       "html": "<form class='login-form'>\n  <h2>Login</h2>\n  <div class='form-group'>\n    <label for='username'>Username: </label>\n    <input type='text' id='username' name='username' required>\n  </div>\n  <div class='form-group'>\n    <label for='password'>Password: </label>\n    <input type='password' id='password' name='password' required>\n  </div>\n  <button type='submit'>Login</button>\n</form>",
@@ -202,7 +202,7 @@
       ]
     }
   },
-  "Contact details form": {
+  "ea74m": {
     "name": "Contact details form",
     "code": {
       "html": "<form>\n  <div>\n    <label for=\"first-name\">First Name:</label>\n    <input type=\"text\" id=\"first-name\" name=\"first-name\" required>\n  </div>\n  <div>\n    <label for=\"last-name\">Last Name:</label>\n    <input type=\"text\" id=\"last-name\" name=\"last-name\" required>\n  </div>\n  <div>\n    <label for=\"email\">Email:</label>\n    <input type=\"email\" id=\"email\" name=\"email\" required>\n  </div>\n  <div>\n    <label for=\"phone\">Phone:</label>\n    <input type=\"tel\" id=\"phone\" name=\"phone\" required>\n  </div>\n  <button type=\"submit\">Submit</button>\n</form>",
@@ -265,7 +265,7 @@
       ]
     }
   },
-  "Unicorn card": {
+  "au7h9p": {
     "name": "Unicorn card",
     "code": {
       "html": "<div class='card'><h2>Title</h2><p>Description</p></div>",
@@ -330,7 +330,7 @@
       ]
     }
   },
-  "Funny Presidential Poll": {
+  "pujqzb": {
     "name": "Funny Presidential Poll",
     "code": {
       "html": "<div class='poll-form'>\n  <h2>Who would win in a dance-off?</h2>\n  <div class='choices'>\n    <div class='choice' id='trump'>\n      <img src='trump.jpg' alt='Trump'>\n      <button>Vote for Trump</button>\n    </div>\n    <div class='choice' id='biden'>\n      <img src='biden.jpg' alt='Biden'>\n      <button>Vote for Biden</button>\n    </div>\n  </div>\n  <p class='result'>Total votes: <span id='total-votes'>0</span></p>\n</div>",
@@ -402,7 +402,7 @@
       "colors": []
     }
   },
-  "My contact form": {
+  "1ujcgj": {
     "name": "My contact form",
     "code": {
       "html": "<!-- Template HTML for students goes here -->\n<div class=\"contact-form\">\n  <form id=\"contactForm\">\n    <div class=\"form-group\">\n      <label for=\"name\">Name:</label>\n      <input type=\"text\" id=\"name\" name=\"name\" required>\n    </div>\n    <div class=\"form-group\">\n      <label for=\"email\">Email:</label>\n      <input type=\"email\" id=\"email\" name=\"email\" required>\n    </div>\n    <div class=\"form-group\">\n      <label for=\"message\">Message:</label>\n      <textarea id=\"message\" name=\"message\" required></textarea>\n    </div>\n    <button type=\"submit\">Submit</button>\n  </form>\n</div>",
@@ -464,7 +464,7 @@
       ]
     }
   },
-  "Easy card": {
+  "zqnlk": {
     "identifier": "zqnlk",
     "name": "Easy card",
     "scenarios": [
@@ -534,7 +534,7 @@
     "lockHTML": false,
     "lockJS": true
   },
-  "Remember form": {
+  "2shjs": {
     "identifier": "2shjs",
     "name": "Remember form",
     "scenarios": [
@@ -611,7 +611,7 @@
     "lockHTML": false,
     "lockJS": true
   },
-  "Todo list": {
+  "lsn2ca": {
     "identifier": "lsn2ca",
     "name": "Todo list",
     "scenarios": [
@@ -706,7 +706,7 @@
     "lockHTML": true,
     "lockJS": true
   },
-  "League table": {
+  "pt2ban": {
     "identifier": "pt2ban",
     "name": "League table",
     "scenarios": [
@@ -803,7 +803,7 @@
     "lockHTML": true,
     "lockJS": true
   },
-  "flex 1": {
+  "jmpfyn": {
     "identifier": "jmpfyn",
     "name": "flex 1",
     "scenarios": [
@@ -898,7 +898,7 @@
     "lockHTML": true,
     "lockJS": true
   },
-  "grid 1": {
+  "5a5ykc": {
     "identifier": "5a5ykc",
     "name": "grid 1",
     "scenarios": [
@@ -994,7 +994,7 @@
     "lockHTML": true,
     "lockJS": true
   },
-  "contact form": {
+  "dige7": {
     "identifier": "dige7",
     "name": "contact form",
     "scenarios": [
@@ -1087,7 +1087,7 @@
     "lockHTML": false,
     "lockJS": true
   },
-  "Vappu shopping list": {
+  "e2woeg": {
     "identifier": "e2woeg",
     "name": "Vappu shopping list",
     "scenarios": [
@@ -1187,7 +1187,7 @@
     "lockHTML": false,
     "lockJS": false
   },
-  "Page Navbar": {
+  "95sx2r": {
     "identifier": "95sx2r",
     "name": "Page Navbar",
     "scenarios": [
@@ -1293,7 +1293,7 @@
     "lockHTML": true,
     "lockJS": false
   },
-  "Todo list 2": {
+  "a6ppg5": {
     "name": "Todo list 2",
     "code": {
       "html": "<div class='todo-list'>\n  <h2>Todo List</h2>\n  <input type='text' id='todoInput' placeholder='Add new todo'>\n  <button onclick='addTodo()'>Add</button>\n  <ul id='todoItems'>\n    <!-- Dynamic todo items will be added here -->\n  </ul>\n</div>",
@@ -1378,7 +1378,7 @@
       ]
     }
   },
-  "Feedback Form with Emoji Ratings:": {
+  "30k6c9": {
     "name": "Feedback Form with Emoji Ratings:",
     "code": {
       "html": "<div class=\"feedback-form\">\n  <form id=\"feedbackForm\">\n  <h2>Feedback Form</h2>\n    <div class=\"form-group\">\n      <label for=\"emojiRating\">Rate your experience:</label>\n      <div class=\"emoji-rating\">\n\n      </div>\n    </div>\n    <button type=\"submit\">Submit</button>\n  </form>\n</div>",
@@ -1442,7 +1442,7 @@
       ]
     }
   },
-  "Exam grid": {
+  "ax3h2g": {
     "identifier": "ax3h2g",
     "name": "Exam grid",
     "scenarios": [
@@ -1549,7 +1549,7 @@
     "lockHTML": true,
     "lockJS": true
   },
-  "Exam flex": {
+  "bqbg8": {
     "identifier": "bqbg8",
     "name": "Exam flex",
     "scenarios": [
@@ -1640,103 +1640,5 @@
     "lockCSS": false,
     "lockHTML": true,
     "lockJS": true
-  },
-  "Medium Navbar": {
-    "identifier": "475jps",
-    "name": "Medium Navbar",
-    "scenarios": [
-      {
-        "scenarioId": "s57zld",
-        "accuracy": 0,
-        "dimensions": {
-          "width": 400,
-          "height": 300
-        },
-        "js": "document.getElementById('about').click();"
-      },
-      {
-        "scenarioId": "ki3zre",
-        "accuracy": 0,
-        "dimensions": {
-          "width": 400,
-          "height": 300
-        },
-        "js": "document.getElementById('services').click();"
-      }
-    ],
-    "buildingBlocks": {
-      "pictures": [],
-      "colors": [
-        "#fff",
-        "#333"
-      ]
-    },
-    "week": "js_3_es",
-    "completed": "no",
-    "code": {
-      "html": "<nav id=\"navbar\">\n  <ul>\n      <li><a href=\"#\" id=\"home\">Home</a></li>\n      <li><a href=\"#\" id=\"about\">About</a></li>\n      <li><a href=\"#\" id=\"services\">Services</a></li>\n      <li><a href=\"#\" id=\"contact\">Contact</a></li>\n  </ul>\n</nav>\n<div id=\"dialog\" style=\"display:none;\"></div>",
-      "css": "#root {    \n    margin: 0px;\n    padding: 0px;\n    overflow: hidden;\n    position: relative; \n    background-color: #fff; \n  }\n\nbody {\n  font-family: Arial, sans-serif;\n}\n\nnav#navbar ul {\n  list-style: none;\n  background-color: #333;\n  text-align: center;\n  padding: 0;\n  margin: 0;\n}\n\n\nnav#navbar ul li {\n  display: inline;\n}\n\nnav#navbar ul li a {\n  text-decoration: none;\n  color: white;\n  background-color: #333;\n  padding: 10px 20px;\n  display: inline-block;\n}\n\n#dialog {\n  position: fixed;\n  top: 50%;\n  left: 50%;\n  transform: translate(-50%, -50%);\n  border: 1px solid #333;\n  padding: 20px;\n  background-color: white;\n  box-shadow: 0 0 10px rgba(0,0,0,0.5);\n  z-index: 1000;\n}\n",
-      "js": ""
-    },
-    "points": 2,
-    "maxPoints": 5,
-    "solution": {
-      "html": "<nav id=\"navbar\">\n  <ul>\n      <li><a href=\"#\" id=\"home\">Home</a></li>\n      <li><a href=\"#\" id=\"about\">About</a></li>\n      <li><a href=\"#\" id=\"services\">Services</a></li>\n      <li><a href=\"#\" id=\"contact\">Contact</a></li>\n  </ul>\n</nav>\n<div id=\"dialog\" style=\"display:none;\"></div>",
-      "css": "#root {    \n    margin: 0px;\n    padding: 0px;\n    overflow: hidden;\n    position: relative; \n    background-color: #fff; \n  }\n\nbody {\n  font-family: Arial, sans-serif;\n}\n\nnav#navbar ul {\n  list-style: none;\n  background-color: #333;\n  text-align: center;\n  padding: 0;\n  margin: 0;\n}\n\n\nnav#navbar ul li {\n  display: inline;\n}\n\nnav#navbar ul li a {\n  text-decoration: none;\n  color: white;\n  background-color: #333;\n  padding: 10px 20px;\n  display: inline-block;\n}\n\n#dialog {\n  position: fixed;\n  top: 50%;\n  left: 50%;\n  transform: translate(-50%, -50%);\n  border: 1px solid #333;\n  padding: 20px;\n  background-color: white;\n  box-shadow: 0 0 10px rgba(0,0,0,0.5);\n  z-index: 1000;\n}\n",
-      "js": "const dialog = document.getElementById('dialog');\n\nfunction openDialog(text) {\n    dialog.textContent = text;\n    dialog.style.display = 'block';\n}\n\nfunction setupLink(id, message) {\n    const link = document.getElementById(id);\n    link.addEventListener('click', function(event) {\n        event.preventDefault(); // Prevent default anchor behavior\n        openDialog(message);\n    });\n}\n\n// Setup links\nsetupLink('home', 'Welcome to the Home Page!');\nsetupLink('about', 'Learn more About Us.');\nsetupLink('services', 'Our Services are listed here.');\nsetupLink('contact', 'Contact Us here.');\n\n  "
-    },
-    "confettiSprinkled": false,
-    "instructions": [
-      {
-        "title": "Task Overview:",
-        "content": [
-          "In this exercise, you're provided with a template for setting up interactive links on a webpage. Your task is to write the JavaScript code necessary to handle click events on the links and display corresponding messages in a dialog box."
-        ]
-      },
-      {
-        "title": "JavaScript Objectives:",
-        "content": [
-          "Understand how to select elements in the DOM using JavaScript.",
-          "Learn to set up event listeners to handle user interactions.",
-          "Practice displaying content dynamically based on user actions."
-        ]
-      },
-      {
-        "title": "Key Concepts to Explore:",
-        "content": [
-          "To complete your task, consider exploring the following JavaScript concepts:",
-          "Selecting elements using document.getElementById.",
-          "Setting up event listeners with addEventListener.",
-          "Updating content dynamically by modifying element properties."
-        ]
-      }
-    ],
-    "question_and_answer": {
-      "question": "What are lists in html?",
-      "answer": "Lists in HTML are used to present list of information in well formed and semantic way. There are three different types of lists in HTML and each one has a specific purpose and meaning. The three types of lists are: ordered list, unordered list, and definition list."
-    },
-    "accuracy": 0,
-    "percentageTreshold": 90,
-    "percentageFullPointsTreshold": 98,
-    "difficulty": "medium",
-    "help": {
-      "description": "NO help available",
-      "images": [],
-      "usefullCSSProperties": []
-    },
-    "timeData": {
-      "startTime": 1714123081297,
-      "pointAndTime": {}
-    },
-    "events": [
-      "click"
-    ],
-    "interactive": false,
-    "showScenarioModel": true,
-    "showHotkeys": false,
-    "showModelPicture": true,
-    "lockCSS": true,
-    "lockHTML": true,
-    "lockJS": false
   }
 }
