@@ -1,5 +1,5 @@
 import { Button, FormControl, Input, Typography } from "@mui/material";
-import { postMap } from "../../../utils/network/maps";
+// import { postMap } from "../../../utils/network/maps";
 import { useState } from "react";
 
 type MapAdderProps = {
@@ -12,7 +12,7 @@ const MapAdder = ({ updateMapNames }: MapAdderProps) => {
   const addMap = async () => {
     if (!newMap.trim()) return; // prevent adding empty map names
     try {
-      await postMap(newMap);
+      // await postMap(newMap);
       updateMapNames(newMap);
       setNewMap(""); // reset input after adding
     } catch (error) {

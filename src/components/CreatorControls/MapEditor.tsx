@@ -18,7 +18,7 @@ import MapAdder from "./MapEditor/MapAdder";
 import {
   getMapLevels,
   getMapNames,
-  updateSelectedMap,
+  // updateSelectedMap,
 } from "../../utils/network/maps";
 import SetRandom from "./MapEditor/SetRandom";
 
@@ -44,7 +44,7 @@ const MapEditor = () => {
   useEffect(() => {
     const fetchMapLevels = async () => {
       if (selectedMap) {
-        setSelectedMapDetails(await getMapLevels(selectedMap));
+        // setSelectedMapDetails(await getMapLevels(selectedMap));
       }
     };
     fetchMapLevels();
@@ -52,7 +52,7 @@ const MapEditor = () => {
 
   const updateSelectedMapDetails = async (newDetails: MapDetails) => {
     try {
-      await updateSelectedMap(selectedMap, newDetails);
+      // await updateSelectedMap(selectedMap, newDetails);
       setSelectedMapDetails({ ...newDetails });
     } catch (error) {
       console.error("Error:", error);
