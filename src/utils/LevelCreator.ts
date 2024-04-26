@@ -76,7 +76,7 @@ export const generatorNameAndFunction: generatorNameAndFunction = {
   "Exam flex": flexboxMaker,
   "Exam grid": generateGridLevel,
 };
-type week =
+export type week =
   | "html_2_es"
   | "css_1_es"
   | "css_2_es"
@@ -84,7 +84,21 @@ type week =
   | "js_1_es"
   | "js_2_es"
   | "js_3_es"
-  | "all";
+  | "all"
+  | "exam";
+
+export const availableWeeks = [
+  "test",
+  "html_2_es",
+  "css_1_es",
+  "css_2_es",
+  "css_2",
+  "js_1_es",
+  "js_2_es",
+  "js_3_es",
+  "all",
+  "exam",
+];
 export const createLevels = (week: week) => {
   const weekAndGenerators = {
     test: [testGenerator],
@@ -109,6 +123,7 @@ export const createLevels = (week: week) => {
       DynamicListGenerator,
       ActiveNavbarGenerator,
     ],
+    exam: [flexboxMaker, generateGridLevel],
   };
   const initialState = [];
   const generators = weekAndGenerators[week] as generator[];

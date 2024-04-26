@@ -48,6 +48,7 @@ const PoppingTitle = ({
           {({ TransitionProps }) => (
             <Fade {...TransitionProps} timeout={350}>
               <Typography
+                // component={"span"}
                 // sx={{ p: 2 }}
                 color="primary"
                 // blur background
@@ -55,8 +56,9 @@ const PoppingTitle = ({
                 sx={{
                   // make it wide enough
                   textAlign: "center",
+                  bgColor: "secondary.main",
                   // background blur
-                  backdropFilter: "blur(1px)",
+                  // backdropFilter: "blur(1px)",
                   p: 1,
                 }}
               >

@@ -17,10 +17,15 @@ import { Edit } from "@mui/icons-material";
 import MagicButtonEditor from "./MagicButtonEditor";
 
 type EditorMagicButtonProps = {
+  answerKey?: string;
   EditorCode: string;
   editorCodeChanger: (newCode: string) => void;
   editorType: string;
   disabled?: boolean;
+  newPrompt?: string;
+  newSystemPrompt?: string;
+  exampleResponse?: string;
+  buttonColor?: string;
 };
 
 // function formatHtmlString(escapedHtml: string) {
@@ -34,55 +39,62 @@ type EditorMagicButtonProps = {
 // }
 
 const EditorMagicButton = ({
+  answerKey = "code",
+  buttonColor = "secondary",
   EditorCode,
   editorCodeChanger,
   editorType,
   disabled = false,
+  newPrompt,
+  newSystemPrompt,
+  exampleResponse = "{" + '"code": "/**New and improved code here*/"' + "}",
 }: EditorMagicButtonProps) => {
-  const dispatch = useAppDispatch();
   const currentlevel = useAppSelector(
     (state) => state.currentLevel.currentLevel
   );
   const level = useAppSelector((state) => state.levels[currentlevel - 1]);
   const name = level.name;
   const [open, setOpen] = useState(false);
-  const [openEditor, setOpenEditor] = useState(false);
   const [loading, setLoading] = useState(false);
   const handleOpen = () => setOpen(true);
   const handleClose = () => setOpen(false);
   const [codeChanges, setCodeChanges] = useState<string>("");
+  const defaultSystemPromptAddOn = `Return a json with "${answerKey}"-key that contains the new and improved code for the component.`;
   const [systemPrompt, setSystemPrompt] = useState(
-    `You are an AI trained to assist in creating web development educational content. Please generate code for a given component in ${editorType}. Return a json with a code-key that contains the new code for the component.`
+    newSystemPrompt ||
+      `You are an AI trained to assist in creating web development educational content. Please generate code for a given component in ${editorType}. 
+`
   );
   const [prompt, setPrompt] = useState(
-    `Improve the following ${editorType} for a component named ${name}:
-    
-    code: 
+    newPrompt ||
+      `Improve the following ${editorType} for a component named ${name}:
+Improvements based on the following code: 
+- IF CSS: make it more responsive, move magic numbers to named variables in root. 
+- If HTML: add accessibility attributes, make it more semantic.
+- IF JS: make it more efficient, use more modern syntax.
 
-    '''
-    ${EditorCode}
-    '''
-    `
+`
   );
 
   useEffect(() => {
     setPrompt(
-      `Improve the following ${editorType} for a component named ${name}:
-      
-      code: 
+      newPrompt ||
+        `Improve the following ${editorType} for a component named ${name}:
+Improvements based on the following code: 
+- IF CSS: make it more responsive, move magic numbers to named variables in root. 
+- If HTML: add accessibility attributes, make it more semantic.
+- IF JS: make it more efficient, use more modern syntax.
 
-      '''
-      ${EditorCode}
-      '''
-      `
+`
     );
-  }, [EditorCode]);
+  }, [EditorCode, newPrompt]);
 
   useEffect(() => {
     setSystemPrompt(
-      `You are an AI trained to assist in creating web development educational content. Please generate code for a given component in ${editorType}. Return a json with a code-key that contains the new code for the component.`
+      newSystemPrompt ||
+        `You are an AI trained to assist in creating web development educational content. Please generate code for a given component in ${editorType}.`
     );
-  }, [editorType]);
+  }, [editorType, newSystemPrompt]);
 
   const style = {
     position: "absolute",
@@ -102,22 +114,44 @@ const EditorMagicButton = ({
     try {
       handleClose();
       setLoading(true);
+      console.log("Using systemPrompt:", systemPrompt);
       const response = await fetch(`http://localhost:3000/chatGPT`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ systemPrompt, prompt }),
+        body: JSON.stringify({
+          systemPrompt:
+            systemPrompt +
+            defaultSystemPromptAddOn +
+            "example response:" +
+            "'''" +
+            `{
+              "${answerKey}": "${exampleResponse}"
+            }` +
+            "'''",
+          prompt: prompt + "code to improve:" + "'''" + EditorCode + "'''",
+        }),
       });
       const data = await response.json();
-      console.log("Data:", data);
+
       if (typeof data === "string") {
         console.log("Data is a string");
         const dP = JSON.parse(data);
-        setCodeChanges(dP.code);
+        console.log("Data:", dP);
+        if (typeof dP[answerKey] === "string") {
+          setCodeChanges(
+            dP[answerKey] || `No ${answerKey}-key in response: ${dP}`
+          );
+        } else {
+          // stringifying the object
+          setCodeChanges(
+            JSON.stringify(dP[answerKey]) ||
+              `No ${answerKey}-key in response: ${dP}`
+          );
+        }
       }
-      setCodeChanges(data.code);
-      //open the modal
+
       setLoading(false);
       handleOpen();
     } catch (error) {
@@ -149,13 +183,14 @@ const EditorMagicButton = ({
       {!loading && (
         <>
           <IconButton
-            color="secondary"
+            color={buttonColor as any}
             onClick={fetchResponse}
             disabled={disabled}
           >
             <AutoAwesomeIcon />
           </IconButton>
           <MagicButtonEditor
+            color={buttonColor}
             disabled={disabled}
             prompt={prompt}
             systemPrompt={systemPrompt}
@@ -177,7 +212,7 @@ const EditorMagicButton = ({
           </Typography>
           <TextareaAutosize
             minRows={3}
-            style={{ width: "100%" }}
+            style={{ width: "90vw", overflow: "scroll" }}
             value={codeChanges}
             onChange={handleCodeChanges}
             aria-label="empty textarea"

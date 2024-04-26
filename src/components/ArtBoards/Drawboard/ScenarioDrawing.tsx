@@ -31,6 +31,8 @@ export const ScenarioDrawing = ({
 }: ScenarioDrawingProps): JSX.Element => {
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const level = useAppSelector((state) => state.levels[currentLevel - 1]);
+  const solutionUrls = useAppSelector((state: any) => state.solutionUrls);
+  const solutionUrl = solutionUrls[scenario.scenarioId];
   const dispatch = useAppDispatch();
   const [editDimensions, setEditDimensions] = useState(false);
   const options = useAppSelector((state) => state.options);
@@ -71,7 +73,6 @@ export const ScenarioDrawing = ({
       dispatch(toggleImageInteractivity(currentLevel));
     }
   }, [currentLevel, dispatch, drawWithSolution, isCreator]);
-  const solutionUrl = scenarioSolutionUrls[scenario.scenarioId];
 
   const handleStaticDimensionClick = () => {
     setEditDimensions(!editDimensions);
@@ -205,7 +206,7 @@ export const ScenarioDrawing = ({
                 {scenario.dimensions.height + " px"}
               </Box>
             ) : (
-              <form>
+              <form onSubmit={handleSubmit}>
                 <input
                   color="primary"
                   style={{

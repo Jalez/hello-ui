@@ -5,7 +5,6 @@ const boardsContainerStyle = {
   flexDirection: "row" as const,
   flexWrap: "wrap" as const,
   borderRadius: "10px",
-  padding: "2em",
   justifyContent: "space-evenly",
   alignItems: "center",
   position: "relative" as const,

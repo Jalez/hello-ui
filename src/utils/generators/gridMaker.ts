@@ -14,15 +14,15 @@ const propertiesAndValues = {
 
 function generateGridAreasCSSString(
   selectors: string[],
-  backgroundColor: string
+  backgroundColors: string[]
 ) {
   let cssString = "";
 
-  selectors.forEach((selector) => {
+  selectors.forEach((selector, index) => {
     cssString += `
       .${selector} {
         grid-area: ${selector};
-        background-color: ${backgroundColor};
+        background-color: ${backgroundColors[index]};
       }
     `;
   });
@@ -31,15 +31,24 @@ function generateGridAreasCSSString(
 }
 
 export const generateGridLevel: generator = () => {
-  const primaryColor = "#f9f9f9";
-  const secondaryColor = "#333";
   const columns = 3;
   const rows = 4;
+  const colors = [
+    "#7BDCB5",
+    "#AB83A1",
+    "#E1BC29",
+    "#4A90E2",
+    "#D667CD",
+    "#FF6900",
+    "#36D1DC",
+  ];
+
+  const secondaryColor = colors[colors.length - 1];
 
   const selectors = ["one", "two", "three", "four", "five", "six"];
 
   const gridMatrix = createRandomGrid(columns, rows, selectors);
-
+  const anotherGridMatrix = createRandomGrid(columns, rows, selectors);
   const THTML = `<div class="wrapper">
   <div class="one">One</div>
   <div class="two">Two</div>
@@ -52,29 +61,21 @@ export const generateGridLevel: generator = () => {
   const TCSS = `
 #root {
   background-color: ${secondaryColor};
-  width: ${drawBoardWidth}px;
-  height: ${drawBoardheight}px;
 }
 .wrapper {
 	width: 100%;
 	height: 100%;
 }
 
-div>div {
-	background-color: ${primaryColor};
-	font-size: 40px;
-	text-align: center;
-}
-
-div>div:before {
-	content: "";
-	display: inline-block;
-	height: 100%;
-	vertical-align: middle;
-}
 `;
   const SCSS = `
+#root {
+  background-color: ${secondaryColor};
+}
+
 .wrapper {
+  width: 100%;
+  height: 100%;
 	box-sizing: border-box;
   display: grid;
   gap: 2px;
@@ -87,7 +88,26 @@ div>div:before {
     "${gridMatrix[4][0]} ${gridMatrix[4][1]} ${gridMatrix[4][2]}";
 }
 
-${generateGridAreasCSSString(selectors, primaryColor)}
+${generateGridAreasCSSString(selectors, colors)}
+
+@media (min-height: 600px) {
+  .wrapper {
+    grid-template-areas:
+      "${anotherGridMatrix[1][0]} ${anotherGridMatrix[1][1]} ${
+    anotherGridMatrix[1][2]
+  }"
+      "${anotherGridMatrix[2][0]} ${anotherGridMatrix[2][1]} ${
+    anotherGridMatrix[2][2]
+  }"
+      "${anotherGridMatrix[3][0]} ${anotherGridMatrix[3][1]} ${
+    anotherGridMatrix[3][2]
+  }"
+      "${anotherGridMatrix[4][0]} ${anotherGridMatrix[4][1]} ${
+    anotherGridMatrix[4][2]
+  }";
+  }
+}
+
 `;
 
   return {
@@ -95,22 +115,35 @@ ${generateGridAreasCSSString(selectors, primaryColor)}
     SHTML,
     TCSS,
     SCSS,
-    lockCSS: true,
-    lockHTML: false,
+    lockCSS: false,
+    lockHTML: true,
     lockJS: true,
     percentageTreshold: 90,
     percentageFullPointsTreshold: 98,
-    colors: [primaryColor, secondaryColor],
+    colors: colors,
     difficulty: "hard",
     name: "Exam grid",
     instructions: [
       {
-        title: "What this exercise is about?",
+        title: "Task Overview:",
         content: [
-          "This exercise is about creating a grid layout using CSS Grid.",
-          "You will need to create a grid container and assign grid areas to the children elements.",
-          "The grid container should have 3 columns and 4 rows.",
-          "The children elements should have different grid areas.",
+          "In this exercise, you're provided with the HTML structure and CSS styling for a dynamic grid layout. Your task is to write the CSS necessary to dynamically populate the grid based on data provided in the CSS template.",
+        ],
+      },
+      {
+        title: "CSS Styling Objectives:",
+        content: [
+          "Understand how the grid layout is defined using CSS grid properties.",
+          "Learn how to use grid-template-areas to define the layout of the grid cells.",
+          "Practice using media queries to adjust the grid layout based on the viewport height.",
+        ],
+      },
+      {
+        title: "Key Concepts to Explore:",
+        content: [
+          "To complete your task, consider exploring the following CSS concepts:",
+          "CSS grid properties like grid-template-columns, grid-template-rows, and grid-template-areas.",
+          "Media queries for responsive layout adjustments based on viewport height.",
         ],
       },
     ],
@@ -122,6 +155,10 @@ ${generateGridAreasCSSString(selectors, primaryColor)}
       {
         width: drawBoardWidth,
         height: drawBoardheight,
+      },
+      {
+        width: 400,
+        height: 600,
       },
     ],
   };

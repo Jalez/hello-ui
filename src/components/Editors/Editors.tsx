@@ -12,13 +12,15 @@ import {
 import { Slider } from "./Slider/Slider";
 import { useTheme } from "@mui/system";
 import { Level } from "../../types";
-import { Box, Typography } from "@mui/material";
+import { Box, Tab, Tabs, Typography } from "@mui/material";
 import { javascript } from "@codemirror/lang-javascript";
+import EditorTabs from "./EditorTabs";
 
 type EditorsProps = {
-  type: "Solution" | "Template";
+  type: "Solution" | "index";
 };
 
+const NameOfStudentEditor = "index";
 const editorMaxHeightLimit = 1000;
 const editorMinHeightLimit = 100;
 export const Editors = ({ type }: EditorsProps): JSX.Element => {
@@ -33,30 +35,17 @@ export const Editors = ({ type }: EditorsProps): JSX.Element => {
   const [editorHeight, setEditorHeight] = useState<number>(400);
   const [editorMaxHeight, setEditorMaxHeight] = useState<number>(editorHeight);
   const levels = useAppSelector((state: any) => state.levels);
-  const [htmlCode, setHTMLCode] = useState<string>("");
-  const [cssCode, setCSSCode] = useState<string>("");
-  const [jsCode, setJSCode] = useState<string>("");
 
   const level = levels[currentLevel - 1] as Level;
   const identifier = level?.identifier;
   const editorRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
+  const codeUpdater = (
+    data: { html?: string; css?: string; js?: string },
+    type: string
+  ) => {
     if (!levels[currentLevel - 1]) return;
-    if (type === "Template") {
-      setHTMLCode(levels[currentLevel - 1].code.html);
-      setCSSCode(levels[currentLevel - 1].code.css);
-      setJSCode(levels[currentLevel - 1].code.js);
-    } else {
-      setHTMLCode(levels[currentLevel - 1].solution.html);
-      setCSSCode(levels[currentLevel - 1].solution.css);
-      setJSCode(levels[currentLevel - 1].solution.js);
-    }
-  }, [currentLevel, identifier]);
-
-  const codeUpdater = (data: { html?: string; css?: string; js?: string }) => {
-    if (!levels[currentLevel - 1]) return;
-    if (type === "Template") {
+    if (type === "index") {
       dispatch(
         updateCode({
           id: currentLevel,
@@ -64,6 +53,7 @@ export const Editors = ({ type }: EditorsProps): JSX.Element => {
         })
       );
     } else {
+      console.log("updating solution code with data", data);
       dispatch(
         updateSolutionCode({
           id: currentLevel,
@@ -95,17 +85,11 @@ export const Editors = ({ type }: EditorsProps): JSX.Element => {
   };
 
   const onSliderDragCSSJS = (e: any) => {
-    // get the current width of the event target
-    // get the mouse location
     const sliderXlocation = e.clientX;
     const totalWidth = window.innerWidth;
-
-    // Calculate remaining width for CSS and JS after HTML
     const newJsWidth = 100 - (sliderXlocation / totalWidth) * 100;
     const differenceBetweenPreviousJS = newJsWidth - jsEditorWidth;
     const newCssWidth = cssEditorWidth - differenceBetweenPreviousJS;
-    // if new width is less than 200px for either editor, don't update the width
-    //Because these are percentages, we first need to convert them to pixels
     const widthInPixels = totalWidth / 100;
     const minWidth = 300;
     if (
@@ -144,18 +128,21 @@ export const Editors = ({ type }: EditorsProps): JSX.Element => {
     setEditorHeight(newHeight);
   };
 
+  function getCodeObject(language: "css" | "html" | "js", isCreator: boolean) {
+    const levelCode = levels[currentLevel - 1].code[language];
+    const levelSolution = levels[currentLevel - 1].solution[language];
+
+    return isCreator
+      ? { Solution: levelSolution, index: levelCode }
+      : { index: levelCode };
+  }
+
+  const Css = getCodeObject("css", isCreator);
+  const Html = getCodeObject("html", isCreator);
+  const Js = getCodeObject("js", isCreator);
+
   return (
     <>
-      {isCreator && (
-        <Typography
-          variant="h2"
-          align="center"
-          color="primary"
-          sx={{ margin: 2 }}
-        >
-          {type} code:
-        </Typography>
-      )}
       <Box
         sx={{
           height: editorMaxHeight,
@@ -201,14 +188,15 @@ export const Editors = ({ type }: EditorsProps): JSX.Element => {
               zIndex: 1,
             }}
           >
-            <CodeEditor
-              lang={html()}
+            <EditorTabs
               title="HTML"
+              EditorWidth={htmlEditorWidth}
               codeUpdater={codeUpdater}
-              template={htmlCode}
-              levelIdentifier={identifier}
+              identifier={identifier}
+              lang={html()}
+              fileNames={Object.keys(Html)}
+              fileContent={Html as any}
               locked={level.lockHTML}
-              width={htmlEditorWidth}
             />
 
             <Slider
@@ -218,15 +206,17 @@ export const Editors = ({ type }: EditorsProps): JSX.Element => {
               needsPress={true}
               orientation="vertical"
             />
-            <CodeEditor
-              lang={css()}
+            <EditorTabs
               title="CSS"
+              EditorWidth={cssEditorWidth}
               codeUpdater={codeUpdater}
-              levelIdentifier={identifier}
-              template={cssCode}
-              width={cssEditorWidth}
+              identifier={identifier}
+              lang={css()}
+              fileNames={Object.keys(Css)}
+              fileContent={Css as any}
               locked={level.lockCSS}
             />
+
             <Slider
               sliderValue={66.6}
               dragSlider={onSliderDragCSSJS}
@@ -234,16 +224,17 @@ export const Editors = ({ type }: EditorsProps): JSX.Element => {
               needsPress={true}
               orientation="vertical"
             />
-            {/* {level.lockJS ? null : ( */}
-            <CodeEditor
-              lang={javascript()}
+            <EditorTabs
               title="JS"
+              EditorWidth={jsEditorWidth}
               codeUpdater={codeUpdater}
-              levelIdentifier={identifier}
-              template={jsCode}
-              width={jsEditorWidth}
-              locked={false}
+              identifier={identifier}
+              lang={javascript()}
+              fileNames={Object.keys(Js)}
+              fileContent={Js as any}
+              locked={level.lockJS}
             />
+
             {/* )} */}
           </Box>
           <Slider

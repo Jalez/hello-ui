@@ -6,6 +6,7 @@ import {
 import HelpModal from "../Help/Help";
 import { useAppDispatch, useAppSelector } from "../../store/hooks/hooks";
 import {
+  Box,
   Button,
   ButtonGroup,
   Fab,
@@ -31,7 +32,7 @@ import CreatorControls from "../CreatorControls/CreatorControls";
 const StyledContainer = styled("div")(() => ({
   display: "flex",
   flexDirection: "row",
-  justifyContent: "center",
+  justifyContent: "space-between",
   gap: "10px",
   alignItems: "center",
   flex: "1 0 100%",
@@ -39,14 +40,15 @@ const StyledContainer = styled("div")(() => ({
   margin: "0.2em",
   padding: "0.2em",
   zIndex: 10,
+  width: "100%",
 }));
 
 const StyledNavContainer = styled("div")(({ theme }) => ({
   display: "flex",
   flexDirection: "row",
-  justifyContent: "center",
+  justifyContent: "space-around",
   alignItems: "center",
-  width: "fit-content",
+  width: "100%",
   backgroundColor: theme.palette.secondary.main,
   color: theme.palette.primary.main,
   padding: "0.5em",
@@ -99,6 +101,19 @@ export const Navbar = () => {
   return (
     <StyledContainer id="three-navs">
       <StyledNavContainer>
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "row",
+            gap: "1em",
+            justifyContent: "center",
+            alignItems: "center",
+            flex: "1 0 25%",
+          }}
+        >
+          <CreatorControls />
+        </Box>
+
         {/* <InfoInstructions> */}
         {/* <Info /> */}
         <NavPopper
@@ -108,43 +123,62 @@ export const Navbar = () => {
           handleConfirmation={handleLevelReset}
           resetAnchorEl={handleAnchorElReset}
         />
-        <PoppingTitle topTitle="Reset Level">
-          <IconButton
-            title="Reset Level"
-            ref={arrowRef}
-            color="primary"
-            onClick={togglePopper}
-          >
-            <RestoreIcon />
-          </IconButton>
-        </PoppingTitle>
-        <HelpModal />
-        <LevelControls
-          currentlevel={currentLevel}
-          levelHandler={levelChanger}
-          maxLevels={Object.keys(levels).length}
-          levelName={level.name}
-        />
-        <PoppingTitle topTitle="Toggle Dark Mode">
-          <IconButton
-            color="primary"
-            onClick={toggleDarkMode}
-            title="Toggle Dark Mode"
-          >
-            <Brightness6Icon />
-          </IconButton>
-        </PoppingTitle>
-        <PoppingTitle topTitle="Toggle Word Cloud">
-          <IconButton
-            color="primary"
-            onClick={toggleWordCloud}
-            title="Toggle Word Cloud"
-          >
-            {options.showWordCloud ? <CloudIcon /> : <CloudOffIcon />}
-          </IconButton>
-        </PoppingTitle>
-        <CreatorControls />
-        {/* </InfoInstructions> */}
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "row",
+            gap: "1em",
+            justifyContent: "center",
+            alignItems: "center",
+            flex: " 1 0 50%",
+          }}
+        >
+          <PoppingTitle topTitle="Reset Level">
+            <IconButton
+              title="Reset Level"
+              ref={arrowRef}
+              color="primary"
+              onClick={togglePopper}
+            >
+              <RestoreIcon />
+            </IconButton>
+          </PoppingTitle>
+          <HelpModal />
+          <LevelControls
+            currentlevel={currentLevel}
+            levelHandler={levelChanger}
+            maxLevels={Object.keys(levels).length}
+            levelName={level.name}
+          />
+          <PoppingTitle topTitle="Toggle Dark Mode">
+            <IconButton
+              color="primary"
+              onClick={toggleDarkMode}
+              title="Toggle Dark Mode"
+            >
+              <Brightness6Icon />
+            </IconButton>
+          </PoppingTitle>
+          <PoppingTitle topTitle="Toggle Word Cloud">
+            <IconButton
+              color="primary"
+              onClick={toggleWordCloud}
+              title="Toggle Word Cloud"
+            >
+              {options.showWordCloud ? <CloudIcon /> : <CloudOffIcon />}
+            </IconButton>
+          </PoppingTitle>
+        </Box>
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "row",
+            gap: "1em",
+            justifyContent: "center",
+            alignItems: "center",
+            flex: "1 0 25%",
+          }}
+        ></Box>
       </StyledNavContainer>
     </StyledContainer>
   );

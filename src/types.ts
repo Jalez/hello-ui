@@ -111,8 +111,7 @@ export type levelNames =
   | "Medium Navbar"
   | "Easy sidebar"
   | "Exam flex"
-  | "Exam grid"
-  | "template";
+  | "Exam grid";
 
 export type MapDetails = {
   levels: string[];
