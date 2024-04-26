@@ -121,7 +121,7 @@ div>div {
       {
         title: "Task Overview:",
         content: [
-          "In this exercise, you are provided with CSS styling for a dynamic list. Your task is to write the JavaScript necessary to dynamically populate the list based on data provided in the template.",
+          "In this exercise, you are provided with CSS styling for a dynamic list. Your task is to write the CSS necessary to dynamically populate the list based on data provided in the template.",
         ],
       },
       {

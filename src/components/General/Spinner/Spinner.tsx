@@ -3,6 +3,7 @@
 import { useTheme } from "@mui/system";
 import { secondaryColor } from "../../../constants";
 import "./Spinner.css";
+import { Typography } from "@mui/material";
 
 type SpinnerProps = {
   height: number;
@@ -16,6 +17,7 @@ export const Spinner = ({ height, width }: SpinnerProps): JSX.Element => {
     <div
       style={{
         display: "flex",
+        flexDirection: "column",
         justifyContent: "center",
         alignItems: "center",
         height: height + "px",
@@ -32,6 +34,24 @@ export const Spinner = ({ height, width }: SpinnerProps): JSX.Element => {
       >
         <circle className="path" fill="none" cx="33" cy="33" r="30" />
       </svg>
+      <Typography
+        variant="h6"
+        sx={{
+          color: theme.palette.primary.main,
+        }}
+      >
+        Loading solution image...
+      </Typography>
+      <Typography
+        variant="body1"
+        sx={{
+          color: theme.palette.primary.main,
+          textAlign: "center",
+        }}
+      >
+        (If this takes too long, please refresh the page. This is a known issue
+        and will be fixed in the future.)
+      </Typography>
     </div>
   );
 };

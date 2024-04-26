@@ -135,9 +135,14 @@ const InfoGuide = ({ sections }: { sections: infoSection[] }) => {
                 title={section.title}
                 sectionLocation={index}
               />
-              <Button color="error" onClick={() => handleRemoveSection(index)}>
-                Remove section
-              </Button>
+              {isCreator && (
+                <Button
+                  color="error"
+                  onClick={() => handleRemoveSection(index)}
+                >
+                  Remove section
+                </Button>
+              )}
               <Typography component="ul">
                 {section.content.map((item, idx) => (
                   <InfoGuideListItem
