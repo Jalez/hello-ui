@@ -4,33 +4,6 @@ import { drawBoardWidth, drawBoardheight } from "../../constants";
 import { generator } from "../../types";
 
 export const ActiveNavbarGenerator: generator = () => {
-  const instructions = [
-    {
-      title: "Requirements:",
-      content: [
-        "Only use 'pixel' units for measurements like margins, padding, and font sizes.",
-        "Limit your color choices to default colors or those included in the template.",
-        "Focus on how to position the two lists (store and work) side by side.",
-      ],
-    },
-    {
-      title: "Exploration Suggestions:",
-      content: [
-        "For arranging the lists side by side, consider researching various CSS properties and techniques. Here are some keywords and resources to start your exploration:",
-        "Search for 'CSS Flexbox' on websites like MDN Web Docs or CSS-Tricks for a comprehensive guide.",
-        "Look up 'CSS Float Layout' for understanding the traditional float-based layouts.",
-        "Investigate 'CSS display inline-block' for an alternative approach to layouts.",
-      ],
-    },
-    {
-      title: "Additional Guidelines:",
-      content: [
-        "You are not required to use the same selectors as in our model solution. Experiment with different ones to achieve the layout.",
-        "Feel free to try out various styles for lists, headings, and other elements within the unit and color constraints.",
-      ],
-    },
-  ];
-
   const question_and_answer = {
     question: "What are lists in html?",
     answer: `Lists in HTML are used to present list of information in well formed and semantic way. There are three different types of lists in HTML and each one has a specific purpose and meaning. The three types of lists are: ordered list, unordered list, and definition list.`,
@@ -124,13 +97,37 @@ setupLink('contact', 'Contact Us here.');
     SJS: SJS,
     difficulty: "medium",
     name: "Medium Navbar",
-    instructions,
+    instructions: [
+      {
+        title: "Task Overview:",
+        content: [
+          "In this exercise, you're provided with a template for setting up interactive links on a webpage. Your task is to write the JavaScript code necessary to handle click events on the links and display corresponding messages in a dialog box.",
+        ],
+      },
+      {
+        title: "JavaScript Objectives:",
+        content: [
+          "Understand how to select elements in the DOM using JavaScript.",
+          "Learn to set up event listeners to handle user interactions.",
+          "Practice displaying content dynamically based on user actions.",
+        ],
+      },
+      {
+        title: "Key Concepts to Explore:",
+        content: [
+          "To complete your task, consider exploring the following JavaScript concepts:",
+          "Selecting elements using document.getElementById.",
+          "Setting up event listeners with addEventListener.",
+          "Updating content dynamically by modifying element properties.",
+        ],
+      },
+    ],
     question_and_answer,
     lockCSS: true,
     lockHTML: true,
     lockJS: false,
     events: ["click"],
-    percentageTreshold: 90,
+    percentageTreshold: 95,
     percentageFullPointsTreshold: 98,
     colors: ["#333", "#fff"],
     scenarioDetails: [

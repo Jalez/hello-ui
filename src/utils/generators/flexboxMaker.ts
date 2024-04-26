@@ -119,10 +119,24 @@ div>div {
     name: "Exam flex",
     instructions: [
       {
-        title: "Requirements",
+        title: "Task Overview:",
         content: [
-          "Create a flexbox layout",
-          "Use flexbox properties familiar to you",
+          "In this exercise, you are provided with CSS styling for a dynamic list. Your task is to write the JavaScript necessary to dynamically populate the list based on data provided in the template.",
+        ],
+      },
+      {
+        title: "CSS Objectives:",
+        content: [
+          "Understand the provided CSS styling for the list and how it affects the layout and appearance of the elements.",
+          "Learn to identify the classes and IDs used in the CSS and how they correspond to the HTML structure.",
+        ],
+      },
+      {
+        title: "Key Concepts to Explore:",
+        content: [
+          "To complete your task, consider exploring the following CSS concepts:",
+          "Flexbox properties like flex-wrap, justify-content, flex-direction, align-items, and align-content.",
+          "Pseudo-elements and their usage in styling elements.",
         ],
       },
     ],

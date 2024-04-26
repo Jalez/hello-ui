@@ -49,25 +49,26 @@ const Info = () => {
             </InfoBox>
           )}
 
-          <InfoText>
+          <PoppingTitle
+            topTitle={isCreator ? "Set Max Points" : "Points/Max Points"}
+          >
             <Shaker value={level.points}>
               <InfoBox>
-                {!isCreator && (
-                  <PoppingTitle topTitle={isCreator ? "Set Points" : "Points"}>
-                    <LevelData reduxState="points" />/{" "}
-                  </PoppingTitle>
-                )}
-                <PoppingTitle
-                  topTitle={isCreator ? "Set Max Points" : "Max Points"}
-                >
+                <InfoText>
+                  {!isCreator && (
+                    <>
+                      <LevelData reduxState="points" /> {"/ "}
+                    </>
+                  )}
+
                   <LevelData
                     reduxState="maxPoints"
                     actionToDispatch={changeMaxPoints}
                   />
-                </PoppingTitle>
+                </InfoText>
               </InfoBox>
             </Shaker>
-          </InfoText>
+          </PoppingTitle>
           {!isCreator && (
             <InfoBox>
               <PoppingTitle topTitle="Best Time">

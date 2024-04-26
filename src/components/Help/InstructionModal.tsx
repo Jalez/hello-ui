@@ -41,7 +41,7 @@ const ModalContainer = styled("div")<ModalContainerProps>(({ isVisible }) => ({
 
   width: "100%",
   height: "100%",
-  zIndex: 100,
+  zIndex: 500,
   // top: 80,
   // backgroundColor: "yellow",
   backdropFilter: "blur(5px)", // Static backdropFilter

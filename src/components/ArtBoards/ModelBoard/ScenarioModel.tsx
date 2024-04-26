@@ -26,11 +26,12 @@ export const ScenarioModel = ({
   const level = useAppSelector((state) => state.levels[currentLevel - 1]);
   const showModel = level.showModelPicture;
   const dispatch = useAppDispatch();
+  const solutionUrls = useAppSelector((state: any) => state.solutionUrls);
+  const solutionUrl = solutionUrls[scenario.scenarioId];
 
   const handleSwitchModel = useCallback(() => {
     dispatch(toggleShowModelSolution(currentLevel));
   }, [currentLevel, dispatch]);
-  const solutionUrl = scenarioSolutionUrls[scenario.scenarioId];
 
   return (
     <Box
@@ -38,8 +39,7 @@ export const ScenarioModel = ({
         position: "relative",
         display: "flex",
         justifyContent: "center",
-        marginRight: "2rem",
-        marginLeft: "2rem",
+        margin: "2rem",
       }}
     >
       <Box
@@ -102,12 +102,24 @@ export const ScenarioModel = ({
               <Diff scenario={scenario} />
             )}
           </ModelArtContainer>
-          <InfoSwitch
-            rightLabel={"Show model"}
-            leftLabel={"Show diff"}
-            checked={showModel}
-            switchHandler={handleSwitchModel}
-          />
+          <Box
+            sx={{
+              bgcolor: "primary.main",
+              color: "secondary.main",
+              width: "100%",
+              display: "flex",
+              justifyContent: "space-around",
+              alignItems: "center",
+              flexDirection: "row",
+            }}
+          >
+            <InfoSwitch
+              rightLabel={"Show model"}
+              leftLabel={"Show diff"}
+              checked={showModel}
+              switchHandler={handleSwitchModel}
+            />
+          </Box>
         </Board>
         {/* <BoardTitle side="right">Model version</BoardTitle> */}
       </BoardContainer>

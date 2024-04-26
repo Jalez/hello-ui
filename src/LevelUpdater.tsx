@@ -10,11 +10,14 @@ import {
 } from "./store/slices/levels.slice";
 
 import calculateAccuracy from "./utils/imageTools/calculateAccuracy";
+import { addDifferenceUrl } from "./store/slices/differenceUrls.slice";
 
 // drawingPixels, solutionPixels should be objects, where key is the scenarioId and value is the ImageData
 type scenarioData = {
   [key: string]: ImageData;
 };
+
+export let scenarioDiffs = {};
 
 export const LevelUpdater = () => {
   // each scenario has a drawing and a solution
@@ -72,7 +75,8 @@ export const LevelUpdater = () => {
         drawingPixels[scenarioId],
         solutionPixels[scenarioId]
       );
-      dispatch(updateAccuracy({ currentLevel, scenarioId, diff, accuracy }));
+      dispatch(updateAccuracy({ currentLevel, scenarioId, accuracy }));
+      dispatch(addDifferenceUrl({ scenarioId, diff }));
     }
   }, [drawingPixels, solutionPixels]);
 

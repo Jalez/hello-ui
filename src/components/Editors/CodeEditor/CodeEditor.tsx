@@ -13,18 +13,16 @@ import { githubLight } from "@uiw/codemirror-theme-github";
 import { ReactCodeMirrorProps } from "@uiw/react-codemirror";
 import { useAppDispatch, useAppSelector } from "../../../store/hooks/hooks";
 import { getCommentKeymap } from "./getCommentKeyMap";
-import LockIcon from "@mui/icons-material/Lock";
-import LockOpenIcon from "@mui/icons-material/LockOpen";
-import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
+
 import { handleLocking } from "../../../store/slices/levels.slice";
 import EditorMagicButton from "../../CreatorControls/EditorMagicButton";
 interface CodeEditorProps {
   lang: any;
   title: "HTML" | "CSS" | "JS";
   template?: string;
-  codeUpdater: (data: { html?: string; css?: string }) => void;
+  codeUpdater: (data: { html?: string; css?: string }, type: string) => void;
   locked?: boolean;
-  width?: number;
+  type: string;
   levelIdentifier: string;
 }
 
@@ -58,13 +56,9 @@ export default function CodeEditor({
   template = "",
   codeUpdater,
   locked = false,
-  width = 20,
+  type = "Template",
   levelIdentifier,
 }: CodeEditorProps) {
-  const currentLevel = useAppSelector(
-    (state) => state.currentLevel.currentLevel
-  );
-  const dispatch = useAppDispatch();
   const lineNumberCompartment = new Compartment();
   const [code, setCode] = useState<string>(template);
   const options = useAppSelector((state) => state.options);
@@ -85,7 +79,7 @@ export default function CodeEditor({
     if (code !== "") {
       // console.log("updating code: ", title.toLowerCase());
       timer = setTimeout(() => {
-        codeUpdater({ [title.toLowerCase()]: code });
+        codeUpdater({ [title.toLowerCase()]: code }, type);
       }, 200);
     }
     // listen for keydown events to set unsaved changes to true: ctrl + s
@@ -161,16 +155,6 @@ export default function CodeEditor({
     placeholder: `Write your ${title} here...`,
   };
 
-  const handleLockUnlock = () => {
-    dispatch(
-      handleLocking({
-        levelId: currentLevel,
-        type: title.toLowerCase(),
-      })
-    );
-    // setLocked((prev) => !prev);
-  };
-
   return (
     <Box
       className="codeEditorContainer"
@@ -178,12 +162,30 @@ export default function CodeEditor({
         display: "flex",
         height: "100%",
         flexDirection: "column",
-        width: width + "%",
+        width: "100%",
         position: "relative",
 
         // backgroundColor: theme === "dark" ? secondaryColor : mainColor,
       }}
     >
+      {isCreator && (
+        <Box
+          sx={{
+            position: "absolute",
+            bottom: "0",
+            right: "0",
+            zIndex: 100,
+          }}
+        >
+          <EditorMagicButton
+            buttonColor="primary"
+            EditorCode={code}
+            editorType={title}
+            editorCodeChanger={handleCodeUpdate}
+            disabled={locked}
+          />
+        </Box>
+      )}
       {locked && (
         <Typography
           variant="h3"
@@ -208,47 +210,14 @@ export default function CodeEditor({
           Locked
         </Typography>
       )}
-      <Typography
-        variant="h3"
-        color="secondary"
-        id="title"
-        sx={{
-          zIndex: 2,
-          margin: "0",
-          padding: "0.5rem 0.5rem 0 0.5rem",
-          backgroundColor: "secondary.main",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          bgcolor: "primary.main",
-        }}
-      >
-        {title}{" "}
-        {isCreator && (
-          <Box>
-            <EditorMagicButton
-              EditorCode={code}
-              editorType={title}
-              editorCodeChanger={handleCodeUpdate}
-              disabled={locked}
-            />
-            <IconButton
-              color="secondary"
-              onClick={handleLockUnlock}
-              title={locked ? "Unlock" : "Lock"}
-            >
-              {locked ? <LockIcon /> : <LockOpenIcon />}
-            </IconButton>
-          </Box>
-        )}
-        {/* {savedChanges ? "✓" : "*"}{" "} */}
-      </Typography>
+
       <Box
         className="codeEditor"
         sx={{
           flex: "1 1 20px",
           height: "100%",
           overflow: "auto",
+          position: "relative",
         }}
         title={
           locked ? "You can't edit this code" : " Click on the code to edit it"
@@ -268,6 +237,7 @@ export default function CodeEditor({
             />
           </div>
         )}
+
         <CodeMirror
           {...cmProps}
           value={code}

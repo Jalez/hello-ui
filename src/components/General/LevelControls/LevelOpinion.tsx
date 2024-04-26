@@ -22,6 +22,7 @@ const AnimatedThumbDownIcon = styled(ThumbDownIcon)(({ theme }) => ({
 }));
 
 const LevelOpinion = () => {
+  console.log("LevelOpinion");
   const [opinion, setOpinion] = useState("");
   const options = useAppSelector((state) => state.options);
   const isCreator = options.creator;

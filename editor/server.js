@@ -45,16 +45,18 @@ app.get("/levels", (req, res) => {
 app.get("/levels/:mapName", (req, res) => {
   const mapName = req.params.mapName;
   // if its "all", return all levels
-  if (mapName === "all") {
-    return res.json(readData());
-  }
   const maps = readLevelMaps();
-  if (!maps[mapName]) {
+  let data = readData();
+  if (mapName === "all") {
+    const levelNames = Object.keys(data);
+    const levelsData = levelNames.map((levelName) => data[levelName]);
+    return res.json(levelsData);
+  } else if (!maps[mapName]) {
     return res.status(404).send({ message: "Map not found" });
+  } else {
+    const levelNames = maps[mapName].levels;
+    const levelsData = levelNames.map((levelName) => data[levelName]);
   }
-  const levelNames = maps[mapName].levels;
-  const data = readData();
-  const levelsData = levelNames.map((levelName) => data[levelName]);
   console.log("levelsData", levelsData[0].name);
   res.json(levelsData);
 });

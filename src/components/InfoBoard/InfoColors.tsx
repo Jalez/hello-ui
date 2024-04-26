@@ -26,11 +26,10 @@ export const InfoColors = () => {
       const html = level.solution.html;
       const js = level.solution.js;
       const colors = css.match(
-        /#[0-9a-f]{3,6}|rgb\([0-9]{1,3},[0-9]{1,3},[0-9]{1,3}\)/g
+        /#[0-9a-fA-F]{3,6}|rgb\([0-9]{1,3},[0-9]{1,3},[0-9]{1,3}\)/g
       );
       //Make sure the list of colors only has unique values
       const uniqueColors = Array.from(new Set(colors));
-      console.log("uniqueColors", uniqueColors);
       dispatch(
         updateLevelColors({ levelId: currentLevel, colors: uniqueColors })
       );

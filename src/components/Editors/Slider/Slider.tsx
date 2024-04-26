@@ -17,7 +17,6 @@ const dividerStyles: any = (orientation: string, hideSlider: boolean) => ({
   minHeight: "5px",
   // height: orientation === "vertical" ? "100%" : "5px",
   width: orientation === "horizontal" ? "100%" : "5px",
-  flex: 1,
   position: "relative",
   backgroundColor: "primary.main.100",
   zIndex: hideSlider ? 20 : 50,

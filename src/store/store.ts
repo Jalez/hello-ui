@@ -6,6 +6,8 @@ import currentLevelReducer from "./slices/currentLevel.slice";
 import scoreReducer from "./slices/score.slice";
 import roomReducer from "./slices/room.slice";
 import optionsReducer from "./slices/options.slice";
+import differenceUrlsReducer from "./slices/differenceUrls.slice";
+import solutionUrlsReducer from "./slices/solutionUrls.slice";
 
 export const store = configureStore({
   reducer: {
@@ -14,6 +16,8 @@ export const store = configureStore({
     score: scoreReducer,
     room: roomReducer,
     options: optionsReducer,
+    differenceUrls: differenceUrlsReducer,
+    solutionUrls: solutionUrlsReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

@@ -14,17 +14,13 @@ import { useEffect } from "react";
 import { updateWeek } from "./store/slices/levels.slice";
 import { sendScoreToParentFrame } from "./store/actions/score.actions";
 import { Footer } from "./components/Footer/Footer";
-
 import { Navbar } from "./components/Navbar/Navbar";
-import ArtBoardControls from "./ArtBoardControls";
 import { setCreator } from "./store/slices/options.slice";
-import LevelSaver from "./components/CreatorControls/LevelSaver";
-import CreatorControls from "./components/CreatorControls/CreatorControls";
 import { Level } from "./types";
-import { getMapLevels } from "./utils/network/maps";
 import { getMapLevelsData } from "./utils/network/levels";
 import Info from "./components/InfoBoard/Info";
 import LevelOpinion from "./components/General/LevelControls/LevelOpinion";
+import { availableWeeks, createLevels, week } from "./utils/LevelCreator";
 
 const AppStyle = {
   display: "flex",
@@ -54,12 +50,17 @@ function App() {
     const urlParams = new URLSearchParams(window.location.search);
     const map = urlParams.get("map");
 
-    const fetchLevels = async (mapName: string) => {
-      allLevels = await getMapLevelsData(mapName);
-      console.log("allLevels", allLevels);
-      dispatch(updateWeek({ levels: allLevels, mapName }));
-    };
-    fetchLevels(map || "all");
+    if (availableWeeks.includes(map || "")) {
+      allLevels = createLevels(map as week) as Level[];
+      dispatch(updateWeek({ levels: allLevels, mapName: map }));
+    } else {
+      const fetchLevels = async (mapName: string) => {
+        allLevels = await getMapLevelsData(mapName);
+        console.log("allLevels", allLevels);
+        dispatch(updateWeek({ levels: allLevels, mapName }));
+      };
+      fetchLevels(map || "all");
+    }
 
     // also check whether or not we are in the creator
     const isCreator = window.location.pathname.includes("creator");
@@ -67,8 +68,6 @@ function App() {
 
     dispatch(sendScoreToParentFrame());
   }, []);
-
-  console.log("levels", levels);
 
   return (
     <>
@@ -87,9 +86,7 @@ function App() {
               </InfoInstructions>
               {options.showWordCloud && <CSSWordCloud />}
               <ArtBoards />
-              <ArtBoardControls />
-              {isCreator && <Editors type="Solution" />}
-              <Editors type="Template" />
+              <Editors type="index" />
             </>
           )}
           <Footer />

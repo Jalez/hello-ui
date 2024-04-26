@@ -118,7 +118,7 @@ function App() {
         script.remove();
       });
 
-      const blob = new Blob([`{  ${js} }`], { type: "text/javascript" });
+      const blob = new Blob([`{ ${js} \n }`], { type: "text/javascript" });
       const scriptURL = URL.createObjectURL(blob);
 
       const script = document.createElement("script");

@@ -11,7 +11,7 @@ import {
   SelectChangeEvent,
   Typography,
 } from "@mui/material";
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import ArrowForwardIosIcon from "@mui/icons-material/ArrowForwardIos";
 import ArrowBackIosIcon from "@mui/icons-material/ArrowBackIos";
 import { NavPopper } from "../../Navbar/Navbar";
@@ -23,6 +23,8 @@ import { Edit } from "@mui/icons-material";
 import { dispatch } from "d3";
 import { updateLevelName } from "../../../store/slices/levels.slice";
 import Difficulty from "../../InfoBoard/Difficulty";
+import { LevelData } from "../../InfoBoard/LevelData";
+import { InfoText } from "../../InfoBoard/InfoText";
 
 interface LevelControlsProps {
   maxLevels: number;
@@ -44,6 +46,7 @@ const LevelControls = ({
   const currentLevel = useAppSelector(
     (state) => state.currentLevel.currentLevel
   );
+  const [editName, setEditName] = useState(false);
   const isCreator = options.creator;
   const dispatch = useAppDispatch();
   const [name, setName] = React.useState(levelName || "Unnamed");
@@ -83,7 +86,7 @@ const LevelControls = ({
   };
 
   const updateLevelNameHandler = (name: string) => {
-    dispatch(updateLevelName({ levelId: currentlevel, name }));
+    dispatch(updateLevelName({ levelId: currentlevel, text: name }));
   };
 
   const changeLevelName = (name: string) => {
@@ -147,9 +150,13 @@ const LevelControls = ({
               handleNameChange={changeLevelName}
             />
           )) || (
-            <Typography variant="h6" sx={{ color: "primary.main" }}>
-              "The {name}"
-            </Typography>
+            <InfoText>
+              <LevelData
+                dataType={"string"}
+                reduxState="name"
+                actionToDispatch={updateLevelName}
+              />
+            </InfoText>
           )}
           <Difficulty />
         </Box>
@@ -209,7 +216,6 @@ const LevelSelect = ({
           }}
         >
           <FormControl
-            fullWidth
             sx={{
               display: "flex",
               flexDirection: "row",

@@ -1,65 +1,4 @@
 {
-  "test": {
-    "identifier": "banh25",
-    "name": "test",
-    "scenarios": [],
-    "buildingBlocks": {
-      "pictures": [],
-      "colors": [
-        "#fff",
-        "#000"
-      ]
-    },
-    "week": "test",
-    "completed": "no",
-    "code": {
-      "html": "Wololo",
-      "css": "\n    #root {    \n      margin: 0px;\n      padding: 0px;\n      overflow: hidden;\n      position: relative; \n      background-color: #fff;\n    }\n  ",
-      "js": ""
-    },
-    "points": 5,
-    "maxPoints": 5,
-    "solution": {
-      "html": "Testing",
-      "css": "\n#root {    \n  margin: 0px;\n  padding: 0px;\n  overflow: hidden;\n  position: relative; \n  background-color: #fff;\n}\n  ",
-      "js": ""
-    },
-    "confettiSprinkled": false,
-    "instructions": [
-      {
-        "title": "New title",
-        "content": [
-          "New tiret, click to edit",
-          "New tiret, click to edit"
-        ]
-      }
-    ],
-    "question_and_answer": {
-      "question": "What are lists in html?",
-      "answer": "Lists in HTML are used to present list of information in well formed and semantic way. There are three different types of lists in HTML and each one has a specific purpose and meaning. The three types of lists are: ordered list, unordered list, and definition list."
-    },
-    "accuracy": null,
-    "percentageTreshold": 90,
-    "percentageFullPointsTreshold": 98,
-    "difficulty": "easy",
-    "help": {
-      "description": "NO help available",
-      "images": [],
-      "usefullCSSProperties": []
-    },
-    "timeData": {
-      "startTime": 1713802290255,
-      "pointAndTime": {}
-    },
-    "events": [],
-    "interactive": true,
-    "showScenarioModel": true,
-    "showHotkeys": false,
-    "showModelPicture": true,
-    "lockCSS": false,
-    "lockHTML": false,
-    "lockJS": false
-  },
   "Easy cards": {
     "identifier": "i7fxub",
     "name": "Easy cards",
@@ -1342,6 +1281,452 @@
         "4": "0:0",
         "5": "0:0"
       }
+    },
+    "events": [
+      "click"
+    ],
+    "interactive": false,
+    "showScenarioModel": true,
+    "showHotkeys": false,
+    "showModelPicture": true,
+    "lockCSS": true,
+    "lockHTML": true,
+    "lockJS": false
+  },
+  "Todo list 2": {
+    "name": "Todo list 2",
+    "code": {
+      "html": "<div class='todo-list'>\n  <h2>Todo List</h2>\n  <input type='text' id='todoInput' placeholder='Add new todo'>\n  <button onclick='addTodo()'>Add</button>\n  <ul id='todoItems'>\n    <!-- Dynamic todo items will be added here -->\n  </ul>\n</div>",
+      "css": ":root {\n  --primary-color: #4CAF50;\n  --secondary-color: #f4f4f4;\n  --input-padding: 10px;\n  --button-padding-y: 10px;\n  --button-padding-x: 20px;\n  --button-border-radius: 5px;\n  --list-item-padding: 10px;\n  --list-item-margin-bottom: 5px;\n  --border-radius: 5px;\n}\n\n.todo-list {\n  max-width: 100%;\n  width: 400px;\n  margin: 0 auto;\n  padding: 20px;\n  background-color: var(--secondary-color);\n  border-radius: var(--border-radius);\n}\n\n.todo-list h2 {\n  color: var(--primary-color);\n  text-align: center;\n}\n\ntodo-list input[type='text'] {\n  width: calc(100% - 20px); /* Account for padding */\n  padding: var(--input-padding);\n  margin: 10px 0;\n  box-sizing: border-box;\n}\n\ntodo-list button {\n  background-color: var(--primary-color);\n  color: white;\n  padding: var(--button-padding-y) var(--button-padding-x);\n  border: none;\n  cursor: pointer;\n  width: calc(100% - 40px); /* Account for padding */\n  border-radius: var(--button-border-radius);\n}\n\ntodo-list button:hover {\n  opacity: 0.8;\n}\n\ntodo-list ul {\n  list-style-type: none;\n  padding: 0;\n}\n\ntodo-list li {\n  padding: var(--list-item-padding);\n  background-color: white;\n  margin-bottom: var(--list-item-margin-bottom);\n  border-radius: var(--border-radius);\n}",
+      "js": "function addTodo() {\n}"
+    },
+    "solution": {
+      "html": "<div class='todo-list'>\n  <h2>Todo List</h2>\n  <input type='text' id='todoInput' placeholder='Add new todo'>\n  <button onclick='addTodo()'>Add</button>\n  <ul id='todoItems'>\n    <!-- Dynamic todo items will be added here -->\n  </ul>\n</div>",
+      "css": ":root {\n  --primary-color: #4CAF50;\n  --secondary-color: #f4f4f4;\n  --input-padding: 10px;\n  --button-padding-y: 10px;\n  --button-padding-x: 20px;\n  --button-border-radius: 5px;\n  --list-item-padding: 10px;\n  --list-item-margin-bottom: 5px;\n  --border-radius: 5px;\n}\n\n.todo-list {\n  max-width: 100%;\n  width: 400px;\n  margin: 0 auto;\n  padding: 20px;\n  background-color: var(--secondary-color);\n  border-radius: var(--border-radius);\n}\n\n.todo-list h2 {\n  color: var(--primary-color);\n  text-align: center;\n}\n\ntodo-list input[type='text'] {\n  width: calc(100% - 20px); /* Account for padding */\n  padding: var(--input-padding);\n  margin: 10px 0;\n  box-sizing: border-box;\n}\n\ntodo-list button {\n  background-color: var(--primary-color);\n  color: white;\n  padding: var(--button-padding-y) var(--button-padding-x);\n  border: none;\n  cursor: pointer;\n  width: calc(100% - 40px); /* Account for padding */\n  border-radius: var(--button-border-radius);\n}\n\ntodo-list ul {\n  list-style-type: none;\n  padding: 0;\n}\n\ntodo-list li {\n  padding: var(--list-item-padding);\n  background-color: white;\n  margin-bottom: var(--list-item-margin-bottom);\n  border-radius: var(--border-radius);\n}",
+      "js": "function addTodo() {\n  var todoInput = document.getElementById('todoInput');\n  var todoItems = document.getElementById('todoItems');\n  var li = document.createElement('li');\n  li.appendChild(document.createTextNode(todoInput.value));\n  todoItems.appendChild(li);\n  todoInput.value = '';\n}"
+    },
+    "question_and_answer": {
+      "question": "",
+      "answer": ""
+    },
+    "week": "all",
+    "identifier": "a6ppg5",
+    "instructions": [
+      {
+        "title": "Task Overview:",
+        "content": [
+          "In this exercise, you're tasked with implementing a function to add new todo items to a list dynamically. You'll need to select the input and list elements from the DOM and create new list items based on the input value."
+        ]
+      },
+      {
+        "title": "JavaScript Objectives:",
+        "content": [
+          "Understand how to select elements in the DOM using JavaScript.",
+          "Learn to create new DOM elements and set their properties.",
+          "Practice adding these elements to the DOM to dynamically update the list."
+        ]
+      },
+      {
+        "title": "Key Concepts to Explore:",
+        "content": [
+          "To complete your task, consider exploring the following JavaScript concepts:",
+          "Document Object Model (DOM) manipulation methods such as document.getElementById and document.createElement.",
+          "Adding event listeners to handle user input and trigger the function."
+        ]
+      }
+    ],
+    "events": [],
+    "help": {
+      "description": "",
+      "images": [],
+      "usefullCSSProperties": []
+    },
+    "difficulty": "easy",
+    "points": 0,
+    "maxPoints": 5,
+    "percentageTreshold": 90,
+    "percentageFullPointsTreshold": 98,
+    "accuracy": 0,
+    "interactive": false,
+    "showModelPicture": false,
+    "showHotkeys": false,
+    "showScenarioModel": false,
+    "lockHTML": true,
+    "lockCSS": true,
+    "lockJS": false,
+    "scenarios": [
+      {
+        "scenarioId": "z1gh3",
+        "dimensions": {
+          "width": 300,
+          "height": 300
+        },
+        "accuracy": 0,
+        "js": ""
+      }
+    ],
+    "timeData": {
+      "startTime": 0,
+      "pointAndTime": {}
+    },
+    "confettiSprinkled": false,
+    "completed": "no",
+    "buildingBlocks": {
+      "colors": [
+        "#4CAF50",
+        "#f4f4f4"
+      ]
+    }
+  },
+  "Feedback Form with Emoji Ratings:": {
+    "name": "Feedback Form with Emoji Ratings:",
+    "code": {
+      "html": "<div class=\"feedback-form\">\n  <form id=\"feedbackForm\">\n  <h2>Feedback Form</h2>\n    <div class=\"form-group\">\n      <label for=\"emojiRating\">Rate your experience:</label>\n      <div class=\"emoji-rating\">\n\n      </div>\n    </div>\n    <button type=\"submit\">Submit</button>\n  </form>\n</div>",
+      "css": ":root {\n  --primary-color: #007bff;\n  --emoji-size: 30px;\n}\n\n.feedback-form {\n  max-width: 600px;\n  margin: 0 auto;\n  padding: 20px;\n  background-color: #f4f4f4;\n  border-radius: 8px;\n}\n\n.form-group {\n  margin-bottom: 20px;\n}\n\nlabel {\n  display: block;\n  margin-bottom: 8px;\n}\n\ntextarea {\n  width: 100%;\n  padding: 10px;\n  font-size: 16px;\n  border: 1px solid #ccc;\n  border-radius: 4px;\n}\n\n.emoji-rating {\n  display: flex;\n  align-items: center;\n}\n\n.emoji-rating button {\n  font-size: var(--emoji-size);\n  margin-right: 10px;\n  cursor: pointer;\n  border: none;\n  background: none;\n}\n\nbutton {\n  padding: 10px 20px;\n  font-size: 16px;\n  background-color: var(--primary-color);\n  color: #fff;\n  border: none;\n  border-radius: 4px;\n  cursor: pointer;\n}\n\nbutton:hover {\n  background-color: #0056b3;\n}\n",
+      "js": "console.log()"
+    },
+    "solution": {
+      "html": "<div class=\"feedback-form\">\n  <form id=\"feedbackForm\">\n  <h2>Feedback Form</h2>\n    <div class=\"form-group\">\n      <label for=\"emojiRating\">Rate your experience:</label>\n      <div class=\"emoji-rating\">\n\n      </div>\n    </div>\n    <button type=\"submit\">Submit</button>\n  </form>\n</div>",
+      "css": ":root {\n  --button-primary-color: #007bff;\n  --secondary-color: #f4f4f4;\n  --button-secondary-color: #0056b3;\n  --emoji-size: 30px;\n  --form-group-margin: 20px;\n  --label-margin: 8px;\n  --textarea-padding: 10px;\n  --textarea-font-size: 16px;\n  --textarea-border: 1px solid #ccc;\n  --textarea-border-radius: 4px;\n  --emoji-rating-margin: 10px;\n  --button-padding: 10px 20px;\n  --button-font-size: 16px;\n}\n\n.feedback-form {\n  margin: 0;\n  padding: 0; \n  height: 100%; \n}\n\n\nform {\n  background-color: var(--secondary-color);\n  display: flex;\n  flex-direction: column; \n  justify-content: space-around; \n  align-items: center; \n  height: 100%; \n}\n\n.form-group {\n  margin-bottom: var(--form-group-margin);\n}\n\nlabel {\n  display: block;\n  margin-bottom: var(--label-margin);\n  text-align: center; \n}\n\n.emoji-rating {\n  display: flex;\n  align-items: center;\n  justify-content: center; \n  margin-bottom: var(--emoji-rating-margin);\n}\n\n.emoji-rating button {\n  font-size: var(--emoji-size);\n  margin-right: var(--emoji-rating-margin);\n  cursor: pointer;\n  border: none;\n  background: none;\n}\n\nbutton[type=\"submit\"] {\n  padding: var(--button-padding);\n  font-size: var(--button-font-size);\n  background-color: var(--button-primary-color);\n  color: var(--secondary-color);\n  border: none;\n  cursor: pointer;\n}\n\nbutton[type=\"submit\"]:hover {\n  background-color: var(--button-secondary-color)\n}",
+      "js": "const emoji_array = [\"&#x1F600;\",\"&#x1F603\", \"&#x1F914;\", \"&#x1F614;\", \"&#x1F61E;\"]\n\nconst emojiContainer = document.querySelector(\".emoji-rating\");\n\nemoji_array.forEach((emoji) => {\n  const emojiBtn = document.createElement(\"button\");\n  emojiBtn.innerHTML = emoji; \n  emojiContainer.appendChild(emojiBtn)\n})"
+    },
+    "question_and_answer": {
+      "question": "",
+      "answer": ""
+    },
+    "week": "all",
+    "identifier": "30k6c9",
+    "instructions": [],
+    "events": [],
+    "help": {
+      "description": "",
+      "images": [],
+      "usefullCSSProperties": []
+    },
+    "difficulty": "easy",
+    "points": 0,
+    "maxPoints": 5,
+    "percentageTreshold": 90,
+    "percentageFullPointsTreshold": 98,
+    "accuracy": 0,
+    "interactive": false,
+    "showModelPicture": false,
+    "showHotkeys": false,
+    "showScenarioModel": false,
+    "lockHTML": false,
+    "lockCSS": false,
+    "lockJS": false,
+    "scenarios": [
+      {
+        "scenarioId": "td0yv6",
+        "dimensions": {
+          "width": 300,
+          "height": 300
+        },
+        "accuracy": 0,
+        "js": ""
+      }
+    ],
+    "timeData": {
+      "startTime": 0,
+      "pointAndTime": {}
+    },
+    "confettiSprinkled": false,
+    "completed": "no",
+    "buildingBlocks": {
+      "colors": [
+        "#007bff",
+        "#f4f4f4",
+        "#0056b3",
+        "#ccc"
+      ]
+    }
+  },
+  "Exam grid": {
+    "identifier": "ax3h2g",
+    "name": "Exam grid",
+    "scenarios": [
+      {
+        "scenarioId": "0fz9o",
+        "accuracy": 0,
+        "dimensions": {
+          "width": 400,
+          "height": 300
+        },
+        "js": ""
+      },
+      {
+        "scenarioId": "s96ode",
+        "dimensions": {
+          "width": 300,
+          "height": 600
+        },
+        "accuracy": 0,
+        "js": ""
+      }
+    ],
+    "buildingBlocks": {
+      "pictures": [],
+      "colors": [
+        "#36D1DC",
+        "#7BDCB5",
+        "#AB83A1",
+        "#E1BC29",
+        "#4A90E2",
+        "#D667CD",
+        "#FF6900"
+      ]
+    },
+    "week": "exam",
+    "completed": "no",
+    "code": {
+      "html": "<div class=\"wrapper\">\n  <div class=\"one\">One</div>\n  <div class=\"two\">Two</div>\n  <div class=\"three\">Three</div>\n  <div class=\"four\">Four</div>\n  <div class=\"five\">Five</div>\n  <div class=\"six\">Six</div>\n</div>",
+      "css": "\n#root {\n  background-color: #36D1DC;\n}\n.wrapper {\n\twidth: 100%;\n\theight: 100%;\n}\n\n",
+      "js": ""
+    },
+    "points": 0,
+    "maxPoints": 5,
+    "solution": {
+      "html": "<div class=\"wrapper\">\n  <div class=\"one\">One</div>\n  <div class=\"two\">Two</div>\n  <div class=\"three\">Three</div>\n  <div class=\"four\">Four</div>\n  <div class=\"five\">Five</div>\n  <div class=\"six\">Six</div>\n</div>",
+      "css": "\n#root {\n  background-color: #36D1DC;\n}\n\n.wrapper {\n  width: 100%;\n  height: 100%;\n\tbox-sizing: border-box;\n  display: grid;\n  gap: 2px;\n  grid-template-columns:  repeat(3, 1fr);\n  grid-template-rows: repeat(4, 1fr);\n  grid-template-areas:\n    \". three five\"\n    \". . five\"\n    \"six one four\"\n    \". two .\";\n}\n\n\n      .one {\n        grid-area: one;\n        background-color: #7BDCB5;\n      }\n    \n      .two {\n        grid-area: two;\n        background-color: #AB83A1;\n      }\n    \n      .three {\n        grid-area: three;\n        background-color: #E1BC29;\n      }\n    \n      .four {\n        grid-area: four;\n        background-color: #4A90E2;\n      }\n    \n      .five {\n        grid-area: five;\n        background-color: #D667CD;\n      }\n    \n      .six {\n        grid-area: six;\n        background-color: #FF6900;\n      }\n    \n\n@media (min-height: 600px) {\n  .wrapper {\n    grid-template-areas:\n      \"five four six\"\n      \". . two\"\n      \". one three\"\n      \". one three\";\n  }\n}\n\n",
+      "js": ""
+    },
+    "confettiSprinkled": false,
+    "instructions": [
+      {
+        "title": "Task Overview:",
+        "content": [
+          "In this exercise, you're provided with the HTML structure and CSS styling for a dynamic grid layout. Your task is to write the CSS necessary to dynamically populate the grid based on data provided in the CSS template."
+        ]
+      },
+      {
+        "title": "CSS Styling Objectives:",
+        "content": [
+          "Understand how the grid layout is defined using CSS grid properties.",
+          "Learn how to use grid-template-areas to define the layout of the grid cells.",
+          "Practice using media queries to adjust the grid layout based on the viewport height."
+        ]
+      },
+      {
+        "title": "Key Concepts to Explore:",
+        "content": [
+          "To complete your task, consider exploring the following CSS concepts:",
+          "CSS grid properties like grid-template-columns, grid-template-rows, and grid-template-areas.",
+          "Media queries for responsive layout adjustments based on viewport height."
+        ]
+      }
+    ],
+    "question_and_answer": {
+      "question": "NO QUESTION",
+      "answer": "NO ANSWER"
+    },
+    "accuracy": 0,
+    "percentageTreshold": 90,
+    "percentageFullPointsTreshold": 98,
+    "difficulty": "hard",
+    "help": {
+      "description": "NO help available",
+      "images": [],
+      "usefullCSSProperties": []
+    },
+    "timeData": {
+      "startTime": 0,
+      "pointAndTime": {
+        "0": "0:0",
+        "1": "0:0",
+        "2": "0:0",
+        "3": "0:0",
+        "4": "0:0",
+        "5": "0:0"
+      }
+    },
+    "events": [],
+    "interactive": false,
+    "showScenarioModel": true,
+    "showHotkeys": false,
+    "showModelPicture": true,
+    "lockCSS": false,
+    "lockHTML": true,
+    "lockJS": true
+  },
+  "Exam flex": {
+    "identifier": "bqbg8",
+    "name": "Exam flex",
+    "scenarios": [
+      {
+        "scenarioId": "hl83j",
+        "accuracy": 0,
+        "dimensions": {
+          "width": 400,
+          "height": 300
+        },
+        "js": ""
+      }
+    ],
+    "buildingBlocks": {
+      "pictures": [],
+      "colors": [
+        "#333",
+        "#f1f1f1"
+      ]
+    },
+    "week": "exam",
+    "completed": "no",
+    "code": {
+      "html": "<div class=\"wrapper\">\n  <div class=\"one\">One</div>\n  <div class=\"two\">Two</div>\n  <div class=\"three\">Three</div>\n  <div class=\"four\">Four</div>\n  <div class=\"five\">Five</div>\n  <div class=\"six\">Six</div>\n</div>",
+      "css": "#root {\n\theight: 300px;\n\twidth: 400px;\n\tmargin: 0;\n\tpadding: 0;\n\tbackground-color: #333;\n}\n\ndiv>div {\n\tbackground-color: #f1f1f1;\n\tfont-size: 2em;\n\tvertical-align: middle;\n\ttext-align: center;\n\tmargin: 0.5em;\n\tborder-radius: 5px;\n}\n\ndiv>div:before {\n\tcontent: \"\";\n\tdisplay: inline-block;\n\theight: 100%;\n\tvertical-align: middle;\n}\n\t",
+      "js": ""
+    },
+    "points": 0,
+    "maxPoints": 5,
+    "solution": {
+      "html": "<div class=\"wrapper\">\n  <div class=\"one\">One</div>\n  <div class=\"two\">Two</div>\n  <div class=\"three\">Three</div>\n  <div class=\"four\">Four</div>\n  <div class=\"five\">Five</div>\n  <div class=\"six\">Six</div>\n</div>",
+      "css": "\n.wrapper {\n\theight: 300px;\n\twidth: 400px;\ndisplay: flex;\nflex-wrap: wrap-reverse;\njustify-content: space-evenly;\nflex-direction: row-reverse;\nalign-items: baseline;\nalign-content: flex-end;\n}\ndiv>div {\n\tflex:1;\n}\n\n#root {\n\theight: 300px;\n\twidth: 400px;\n\tmargin: 0;\n\tpadding: 0;\n\tbackground-color: #333;\n}\n\ndiv>div {\n\tbackground-color: #f1f1f1;\n\tfont-size: 2em;\n\tvertical-align: middle;\n\ttext-align: center;\n\tmargin: 0.5em;\n\tborder-radius: 5px;\n}\n\ndiv>div:before {\n\tcontent: \"\";\n\tdisplay: inline-block;\n\theight: 100%;\n\tvertical-align: middle;\n}\n\t",
+      "js": ""
+    },
+    "confettiSprinkled": false,
+    "instructions": [
+      {
+        "title": "Task Overview:",
+        "content": [
+          "In this exercise, you are provided with CSS styling for a dynamic list. Your task is to write the JavaScript necessary to dynamically populate the list based on data provided in the template."
+        ]
+      },
+      {
+        "title": "CSS Objectives:",
+        "content": [
+          "Understand the provided CSS styling for the list and how it affects the layout and appearance of the elements.",
+          "Learn to identify the classes and IDs used in the CSS and how they correspond to the HTML structure."
+        ]
+      },
+      {
+        "title": "Key Concepts to Explore:",
+        "content": [
+          "To complete your task, consider exploring the following CSS concepts:",
+          "Flexbox properties like flex-wrap, justify-content, flex-direction, align-items, and align-content.",
+          "Pseudo-elements and their usage in styling elements."
+        ]
+      }
+    ],
+    "question_and_answer": {
+      "question": "Create a flexbox layout",
+      "answer": "display:flex"
+    },
+    "accuracy": 0,
+    "percentageTreshold": 90,
+    "percentageFullPointsTreshold": 98,
+    "difficulty": "hard",
+    "help": {
+      "description": "NO help available",
+      "images": [],
+      "usefullCSSProperties": []
+    },
+    "timeData": {
+      "startTime": 0,
+      "pointAndTime": {
+        "0": "0:0",
+        "1": "0:0",
+        "2": "0:0",
+        "3": "0:0",
+        "4": "0:0",
+        "5": "0:0"
+      }
+    },
+    "events": [],
+    "interactive": false,
+    "showScenarioModel": true,
+    "showHotkeys": false,
+    "showModelPicture": true,
+    "lockCSS": false,
+    "lockHTML": true,
+    "lockJS": true
+  },
+  "Medium Navbar": {
+    "identifier": "475jps",
+    "name": "Medium Navbar",
+    "scenarios": [
+      {
+        "scenarioId": "s57zld",
+        "accuracy": 0,
+        "dimensions": {
+          "width": 400,
+          "height": 300
+        },
+        "js": "document.getElementById('about').click();"
+      },
+      {
+        "scenarioId": "ki3zre",
+        "accuracy": 0,
+        "dimensions": {
+          "width": 400,
+          "height": 300
+        },
+        "js": "document.getElementById('services').click();"
+      }
+    ],
+    "buildingBlocks": {
+      "pictures": [],
+      "colors": [
+        "#fff",
+        "#333"
+      ]
+    },
+    "week": "js_3_es",
+    "completed": "no",
+    "code": {
+      "html": "<nav id=\"navbar\">\n  <ul>\n      <li><a href=\"#\" id=\"home\">Home</a></li>\n      <li><a href=\"#\" id=\"about\">About</a></li>\n      <li><a href=\"#\" id=\"services\">Services</a></li>\n      <li><a href=\"#\" id=\"contact\">Contact</a></li>\n  </ul>\n</nav>\n<div id=\"dialog\" style=\"display:none;\"></div>",
+      "css": "#root {    \n    margin: 0px;\n    padding: 0px;\n    overflow: hidden;\n    position: relative; \n    background-color: #fff; \n  }\n\nbody {\n  font-family: Arial, sans-serif;\n}\n\nnav#navbar ul {\n  list-style: none;\n  background-color: #333;\n  text-align: center;\n  padding: 0;\n  margin: 0;\n}\n\n\nnav#navbar ul li {\n  display: inline;\n}\n\nnav#navbar ul li a {\n  text-decoration: none;\n  color: white;\n  background-color: #333;\n  padding: 10px 20px;\n  display: inline-block;\n}\n\n#dialog {\n  position: fixed;\n  top: 50%;\n  left: 50%;\n  transform: translate(-50%, -50%);\n  border: 1px solid #333;\n  padding: 20px;\n  background-color: white;\n  box-shadow: 0 0 10px rgba(0,0,0,0.5);\n  z-index: 1000;\n}\n",
+      "js": ""
+    },
+    "points": 2,
+    "maxPoints": 5,
+    "solution": {
+      "html": "<nav id=\"navbar\">\n  <ul>\n      <li><a href=\"#\" id=\"home\">Home</a></li>\n      <li><a href=\"#\" id=\"about\">About</a></li>\n      <li><a href=\"#\" id=\"services\">Services</a></li>\n      <li><a href=\"#\" id=\"contact\">Contact</a></li>\n  </ul>\n</nav>\n<div id=\"dialog\" style=\"display:none;\"></div>",
+      "css": "#root {    \n    margin: 0px;\n    padding: 0px;\n    overflow: hidden;\n    position: relative; \n    background-color: #fff; \n  }\n\nbody {\n  font-family: Arial, sans-serif;\n}\n\nnav#navbar ul {\n  list-style: none;\n  background-color: #333;\n  text-align: center;\n  padding: 0;\n  margin: 0;\n}\n\n\nnav#navbar ul li {\n  display: inline;\n}\n\nnav#navbar ul li a {\n  text-decoration: none;\n  color: white;\n  background-color: #333;\n  padding: 10px 20px;\n  display: inline-block;\n}\n\n#dialog {\n  position: fixed;\n  top: 50%;\n  left: 50%;\n  transform: translate(-50%, -50%);\n  border: 1px solid #333;\n  padding: 20px;\n  background-color: white;\n  box-shadow: 0 0 10px rgba(0,0,0,0.5);\n  z-index: 1000;\n}\n",
+      "js": "const dialog = document.getElementById('dialog');\n\nfunction openDialog(text) {\n    dialog.textContent = text;\n    dialog.style.display = 'block';\n}\n\nfunction setupLink(id, message) {\n    const link = document.getElementById(id);\n    link.addEventListener('click', function(event) {\n        event.preventDefault(); // Prevent default anchor behavior\n        openDialog(message);\n    });\n}\n\n// Setup links\nsetupLink('home', 'Welcome to the Home Page!');\nsetupLink('about', 'Learn more About Us.');\nsetupLink('services', 'Our Services are listed here.');\nsetupLink('contact', 'Contact Us here.');\n\n  "
+    },
+    "confettiSprinkled": false,
+    "instructions": [
+      {
+        "title": "Task Overview:",
+        "content": [
+          "In this exercise, you're provided with a template for setting up interactive links on a webpage. Your task is to write the JavaScript code necessary to handle click events on the links and display corresponding messages in a dialog box."
+        ]
+      },
+      {
+        "title": "JavaScript Objectives:",
+        "content": [
+          "Understand how to select elements in the DOM using JavaScript.",
+          "Learn to set up event listeners to handle user interactions.",
+          "Practice displaying content dynamically based on user actions."
+        ]
+      },
+      {
+        "title": "Key Concepts to Explore:",
+        "content": [
+          "To complete your task, consider exploring the following JavaScript concepts:",
+          "Selecting elements using document.getElementById.",
+          "Setting up event listeners with addEventListener.",
+          "Updating content dynamically by modifying element properties."
+        ]
+      }
+    ],
+    "question_and_answer": {
+      "question": "What are lists in html?",
+      "answer": "Lists in HTML are used to present list of information in well formed and semantic way. There are three different types of lists in HTML and each one has a specific purpose and meaning. The three types of lists are: ordered list, unordered list, and definition list."
+    },
+    "accuracy": 0,
+    "percentageTreshold": 90,
+    "percentageFullPointsTreshold": 98,
+    "difficulty": "medium",
+    "help": {
+      "description": "NO help available",
+      "images": [],
+      "usefullCSSProperties": []
+    },
+    "timeData": {
+      "startTime": 1714123081297,
+      "pointAndTime": {}
     },
     "events": [
       "click"

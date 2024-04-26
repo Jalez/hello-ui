@@ -80,7 +80,7 @@ const levelsSlice = createSlice({
     evaluateLevel(state, action) {},
     updateWeek(state, action) {
       let { levels, mapName } = action.payload;
-
+      console.log("mapName", mapName);
       if (!mapName) mapName = "all";
       storage = obfuscate(`ui-designer-${mapName}`);
       if (storage.getItem(storage.key)) {
@@ -120,7 +120,7 @@ const levelsSlice = createSlice({
       storage?.setItem(storage.key, JSON.stringify(state));
     },
     updateAccuracy(state, action) {
-      const { currentLevel, scenarioId, diff, accuracy } = action.payload;
+      const { currentLevel, scenarioId, accuracy } = action.payload;
       const level = state[currentLevel - 1];
       if (!level) return;
       const scenario = level.scenarios?.find(
@@ -235,26 +235,7 @@ const levelsSlice = createSlice({
       level.code = code;
       storage?.setItem(storage.key, JSON.stringify(state));
     },
-    updateUrl(state, action) {
-      if (!action.payload) return;
 
-      const { levelId, dataURL, urlName, scenarioId } = action.payload;
-      // find the level and scenario
-      const level = state[levelId - 1];
-      if (!level) return;
-
-      const scenario = level.scenarios?.find(
-        (scenario) => scenario.scenarioId === scenarioId
-      );
-      if (!scenario) return;
-      if (urlName === "solutionUrl") {
-        //console.log("STATE updateUrl solutionUrl");
-        scenarioSolutionUrls[scenarioId] = dataURL;
-        // Remove solution code from state if it exists
-      }
-
-      storage?.setItem(storage.key, JSON.stringify(state));
-    },
     toggleImageInteractivity(state, action) {
       const level = state[action.payload - 1];
       if (!level) return;
@@ -344,6 +325,13 @@ const levelsSlice = createSlice({
       );
       storage?.setItem(storage.key, JSON.stringify(state));
     },
+    setGuideSections(state, action) {
+      const { levelId, sections } = action.payload;
+      const level = state[levelId - 1];
+      if (!level) return;
+      level.instructions = sections;
+      storage?.setItem(storage.key, JSON.stringify(state));
+    },
 
     updateGuideSectionItem(state, action) {
       const { levelId, sectionIndex, itemIndex, text } = action.payload;
@@ -411,10 +399,10 @@ const levelsSlice = createSlice({
       storage?.setItem(storage.key, JSON.stringify(state));
     },
     updateLevelName(state, action) {
-      const { levelId, name } = action.payload;
+      const { levelId, text } = action.payload;
       const level = state[levelId - 1];
       if (!level) return;
-      level.name = name;
+      level.name = text;
       storage?.setItem(storage.key, JSON.stringify(state));
     },
     addThisLevel(state, action) {
@@ -468,7 +456,6 @@ const levelsSlice = createSlice({
 export const {
   updateCode,
   updateSolutionCode,
-  updateUrl,
   updatePoints,
   updateAccuracy,
   evaluateLevel,
@@ -498,6 +485,7 @@ export const {
   addNewLevel,
   removeLevel,
   updateLevelColors,
+  setGuideSections,
 } = levelsSlice.actions;
 
 export default levelsSlice.reducer;

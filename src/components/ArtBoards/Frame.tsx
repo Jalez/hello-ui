@@ -1,10 +1,10 @@
 /** @format */
 import { useEffect, useRef } from "react";
 import { styled } from "@mui/system";
-import { updateUrl } from "../../store/slices/levels.slice";
 import { useAppDispatch, useAppSelector } from "../../store/hooks/hooks";
 
 import { scenario } from "../../types";
+import { addSolutionUrl } from "../../store/slices/solutionUrls.slice";
 
 interface FrameProps {
   newHtml: string;
@@ -89,12 +89,9 @@ export const Frame = ({
       //   " in the store"
       // );
       dispatch(
-        updateUrl({
-          dataURL: event.data.dataURL,
-          urlName: event.data.urlName,
-          levelId: currentLevel,
+        addSolutionUrl({
+          solutionUrl: event.data.dataURL,
           scenarioId: event.data.scenarioId,
-          // imgData: event.data.imgData, //non-serializable data should not be sent, because it will not be saved in the state
         })
       );
     };
