@@ -1,7 +1,4 @@
-// export const mainColor = "#fff";
 export let mainColor = "#222";
-
-// export const secondaryColor = "#222";
 export let secondaryColor = "#fff";
 export const drawBoardWidth = 400;
 export const drawBoardheight = 300;
@@ -16,3 +13,5 @@ const difficulties = {
   medium: 2,
   hard: 3,
 };
+
+export const mapUrl = "http://localhost:3000/maps";
