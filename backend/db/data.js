@@ -1,8 +1,8 @@
 const fs = require('fs');
 const path = require('path');
 
-const LEVELS_FILE = path.resolve(__dirname, '../levels.json');
-const LEVEL_MAPS_FILE = path.resolve(__dirname, '../maps.json');
+const LEVELS_FILE = path.resolve(__dirname, 'json/levels.json');
+const LEVEL_MAPS_FILE = path.resolve(__dirname, 'json/maps.json');
 
 const readData = () => {
   return JSON.parse(fs.readFileSync(LEVELS_FILE, 'utf8'));
