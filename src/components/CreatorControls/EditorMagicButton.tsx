@@ -115,7 +115,7 @@ Improvements based on the following code:
       handleClose();
       setLoading(true);
       console.log("Using systemPrompt:", systemPrompt);
-      const response = await fetch(`http://localhost:3000/chatGPT`, {
+      const response = await fetch(`http://localhost:3200/chatGPT`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
