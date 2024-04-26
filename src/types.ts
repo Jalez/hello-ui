@@ -24,7 +24,7 @@ type instructions = instructionSection[];
 export interface Level {
   identifier: string;
   week: string;
-  name: levelNames;
+  name: string;
   difficulty: difficulty;
   completed: string;
   accuracy: number;

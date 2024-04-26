@@ -21,7 +21,7 @@ const maxCodeLength = 100000;
 
 let storage: ReturnType<typeof obfuscate> | null = null;
 
-const levelTemplate1 = {
+const templateWithoutCode = {
   question_and_answer: {
     question: "",
     answer: "",
@@ -408,7 +408,7 @@ const levelsSlice = createSlice({
     addThisLevel(state, action) {
       const levelDetails = action.payload;
       const parsedLevelDetails = JSON.parse(levelDetails);
-      state.push({ ...parsedLevelDetails, ...levelTemplate1 });
+      state.push({ ...parsedLevelDetails, ...templateWithoutCode });
       storage?.setItem(storage.key, JSON.stringify(state));
     },
     addNewLevel(state) {
@@ -424,7 +424,7 @@ const levelsSlice = createSlice({
           css: "",
           js: "",
         },
-        ...levelTemplate1,
+        ...templateWithoutCode,
       };
       state.push(newLevel);
       storage?.setItem(storage.key, JSON.stringify(state));
