@@ -78,7 +78,7 @@ function App() {
         <GameContainer>
           {levels.length > 0 && (
             <>
-              <LevelOpinion />
+              {/* <LevelOpinion /> */}
 
               <Navbar />
               <InfoInstructions>
