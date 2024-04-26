@@ -62,7 +62,7 @@ export const sendScoreToParentFrame = (): AppThunk => (dispatch, getState) => {
     const levelsAndCode = {} as Record<string, {}>;
     // go through all levels and get the code
     for (const level of levels) {
-      const title = level.difficulty;
+      const title = level.name;
       levelsAndCode[title] = {
         code: level.code,
         lockCSS: level.lockCSS,

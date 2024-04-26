@@ -1,4 +1,13 @@
+import { Level } from "../../types";
+
 const url = "http://localhost:3000/levels";
+
+type getLevelNames = () => Promise<string[]>;
+type getLevelById = (id: string) => Promise<Level>;
+type updateLevel = (id: string, level: any) => Promise<Level>;
+type deleteLevel = (id: string) => Promise<Level>;
+type getAllLevels = () => Promise<Level[]>;
+type createLevel = (level: any) => Promise<Level>;
 
 export const getLevelNames = async () => {
   try {
