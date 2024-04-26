@@ -17,7 +17,7 @@ import { Footer } from "./components/Footer/Footer";
 import { Navbar } from "./components/Navbar/Navbar";
 import { setCreator } from "./store/slices/options.slice";
 import { Level } from "./types";
-import { getMapLevelsData } from "./utils/network/levels";
+// import { getMapLevelsData } from "./utils/network/levels";
 import Info from "./components/InfoBoard/Info";
 import LevelOpinion from "./components/General/LevelControls/LevelOpinion";
 import { availableWeeks, createLevels, week } from "./utils/LevelCreator";
@@ -55,7 +55,7 @@ function App() {
       dispatch(updateWeek({ levels: allLevels, mapName: map }));
     } else {
       const fetchLevels = async (mapName: string) => {
-        allLevels = await getMapLevelsData(mapName);
+        // allLevels = await getMapLevelsData(mapName);
         console.log("allLevels", allLevels);
         dispatch(updateWeek({ levels: allLevels, mapName }));
       };
