@@ -107,7 +107,6 @@ const levelsSlice = createSlice({
       level.timeData.pointAndTime = {};
       const newGeneration = allLevels[action.payload - 1];
       level.code = newGeneration.code;
-      level.solution = newGeneration.solution;
       level.instructions = newGeneration.instructions;
       level.question_and_answer = newGeneration.question_and_answer;
 
@@ -290,14 +289,7 @@ const levelsSlice = createSlice({
       scenario.dimensions[dimensionType as "width" | "height"] = value;
       storage?.setItem(storage.key, JSON.stringify(state));
     },
-    removeSolutionCode(state, action) {
-      const level = state[action.payload - 1];
-      if (!level) return;
-      level.solution.html = "";
-      level.solution.css = "";
-      level.solution.js = "";
-      storage?.setItem(storage.key, JSON.stringify(state));
-    },
+
     addNewScenario(state, action: { payload: number }) {
       const level = state[action.payload - 1];
       if (!level) return;
@@ -472,7 +464,6 @@ export const {
   changeMaxPoints,
   addNewScenario,
   removeScenario,
-  removeSolutionCode,
   updateGuideSectionItem,
   updateGuideSectionTitle,
   removeGuideSection,
