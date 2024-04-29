@@ -8,6 +8,9 @@ import {
   Typography,
 } from "@mui/material";
 import { MapDetails } from "../../../types";
+import { getMapByName } from "../../../utils/network/maps";
+import { useAppDispatch } from "../../../store/hooks/hooks";
+import { addNotificationData } from "../../../store/slices/notifications.slice";
 
 type MapSelectorProps = {
   handleNameSelect: (mapName: string) => void;
@@ -22,15 +25,21 @@ const MapSelector = ({
   selectedMap,
   MapNames,
 }: MapSelectorProps) => {
+  const dispatch = useAppDispatch();
   const handleMapSelect = async (event: SelectChangeEvent<string>) => {
     const mapName = event.target.value;
-    handleNameSelect(mapName);
     try {
-      const response = await fetch(`http://localhost:3000/maps/${mapName}`);
-      const data = await response.json();
-      updateDetails(data);
-    } catch (error) {
-      console.error("Error:", error);
+      console.log("mapName", mapName);
+      updateDetails(await getMapByName(mapName));
+      dispatch(
+        addNotificationData({
+          message: "Map selected: " + mapName,
+          type: "success",
+        })
+      );
+      handleNameSelect(mapName);
+    } catch (error: any) {
+      dispatch(addNotificationData({ message: error.message, type: "error" }));
     }
   };
 

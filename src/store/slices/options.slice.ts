@@ -13,7 +13,7 @@ const initialState: OptionsState = {
   creator: false,
 };
 
-const storage = obfuscate("options");
+const storage = obfuscate("options") as any;
 
 const storedOptions = storage.getItem(storage.key);
 if (storedOptions) {

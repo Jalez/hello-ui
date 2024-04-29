@@ -1,6 +1,5 @@
 /** @format */
 
-import CodeEditor from "./CodeEditor/CodeEditor";
 import { css } from "@codemirror/lang-css";
 import { html } from "@codemirror/lang-html";
 import { useEffect, useRef, useState } from "react";

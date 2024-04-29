@@ -3,6 +3,17 @@ type question_and_answer = {
   answer: string;
 };
 
+export type NotificationRaw = {
+  type: string;
+  message: string;
+};
+
+export type Notification = {
+  type: string;
+  message: string;
+  id: string;
+};
+
 export type scenario = {
   scenarioId: string;
   accuracy: number;

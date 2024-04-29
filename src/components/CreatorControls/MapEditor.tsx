@@ -26,7 +26,7 @@ const MapEditor = () => {
   const [open, setOpen] = useState(false);
   const handleOpen = () => setOpen(true);
   const handleClose = () => setOpen(false);
-  const [selectedMap, setSelectedMap] = useState("");
+  const [selectedMapName, setSelectedMapName] = useState("");
   const [MapNames, setMapNames] = useState<string[]>([]);
   const [selectedMapDetails, setSelectedMapDetails] = useState<MapDetails>({
     levels: [],
@@ -43,12 +43,16 @@ const MapEditor = () => {
 
   useEffect(() => {
     const fetchMapLevels = async () => {
-      if (selectedMap) {
+      if (selectedMapName) {
+        const levels = await getMapLevels(selectedMapName);
+        // JATKETAAN TÄSTÄ, EN NYT JAKSA- T: PERJANTAI JAKKE
+        console.log("map levels", levels);
+        //setSelectedMapDetails(levels);
         // setSelectedMapDetails(await getMapLevels(selectedMap));
       }
     };
     fetchMapLevels();
-  }, [selectedMap]);
+  }, [selectedMapName]);
 
   const updateSelectedMapDetails = async (newDetails: MapDetails) => {
     try {
@@ -60,7 +64,7 @@ const MapEditor = () => {
   };
 
   const handleMapNameSelect = (newMapName: string) => {
-    setSelectedMap(newMapName);
+    setSelectedMapName(newMapName);
   };
 
   const handleMapDetailsSelect = (newMapDetails: MapDetails) => {
@@ -107,10 +111,10 @@ const MapEditor = () => {
               MapNames={MapNames}
               handleNameSelect={handleMapNameSelect}
               updateDetails={handleMapDetailsSelect}
-              selectedMap={selectedMap}
+              selectedMap={selectedMapName}
             />
           )}
-          {selectedMap && (
+          {selectedMapName && (
             <Paper
               sx={{
                 display: "flex",
@@ -125,7 +129,7 @@ const MapEditor = () => {
               }}
             >
               <Typography id="edit-prompt-title" variant="h3" component="h2">
-                Selected Map: {selectedMap}
+                Selected Map: {selectedMapName}
               </Typography>
               <Box
                 sx={{
