@@ -9,6 +9,7 @@ import {
 } from "@mui/material";
 import { useEffect, useState } from "react";
 import { MapDetails } from "../../../types";
+import { getLevelNames } from "../../../utils/network/levels";
 
 type LevelAdderProps = {
   updateHandler: (map: MapDetails) => void;
@@ -23,9 +24,7 @@ const LevelAdder = ({ updateHandler, selectedMap }: LevelAdderProps) => {
     // fetch maps from the server
     const fetchLevelNames = async () => {
       try {
-        const response = await fetch("http://localhost:3000/levels/names");
-        const data = await response.json();
-        setLevelNames(data);
+        setLevelNames(await getLevelNames());
       } catch (error) {
         console.error("Error:", error);
       }

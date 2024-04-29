@@ -15,3 +15,5 @@ const difficulties = {
 };
 
 export const mapUrl = "http://localhost:3000/maps";
+export const levelUrl = "http://localhost:3000/levels";
+export const chatGPTURl = "http://localhost:3200/chatGPT";

@@ -21,6 +21,8 @@ import { Level } from "./types";
 import Info from "./components/InfoBoard/Info";
 import LevelOpinion from "./components/General/LevelControls/LevelOpinion";
 import { availableWeeks, createLevels, week } from "./utils/LevelCreator";
+import Notifications from "./components/General/Notifications";
+import { SnackbarProvider } from "notistack";
 
 const AppStyle = {
   display: "flex",
@@ -48,9 +50,10 @@ function App() {
     //Example url: http://localhost:5173/creator?week=test
     // look at the url params to determine the week
     const urlParams = new URLSearchParams(window.location.search);
-    const map = urlParams.get("map");
+    let map = urlParams.get("map");
+    map = map || "all";
 
-    if (availableWeeks.includes(map || "")) {
+    if (availableWeeks.includes(map)) {
       allLevels = createLevels(map as week) as Level[];
       dispatch(updateWeek({ levels: allLevels, mapName: map }));
     } else {
@@ -70,10 +73,11 @@ function App() {
   }, []);
 
   return (
-    <>
+    <SnackbarProvider>
       {!isCreator && <Instruction />}
       <article id="App" style={AppStyle}>
         <LevelUpdater />
+        <Notifications />
 
         <GameContainer>
           {levels.length > 0 && (
@@ -92,7 +96,7 @@ function App() {
           <Footer />
         </GameContainer>
       </article>
-    </>
+    </SnackbarProvider>
   );
 }
 
