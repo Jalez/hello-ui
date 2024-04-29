@@ -99,7 +99,14 @@ export const availableWeeks = [
   "all",
   "exam",
 ];
-export const createLevels = (week: week) => {
+
+interface SolutionMap {
+  [key: string]: {};
+}
+
+export const createLevels = (
+  week: week
+): { levels: any[]; solutions: SolutionMap } | undefined => {
   const weekAndGenerators = {
     test: [testGenerator],
     html_2_es: [cardGenerator, formGenerator],
@@ -126,6 +133,7 @@ export const createLevels = (week: week) => {
     exam: [flexboxMaker, generateGridLevel],
   };
   const initialState = [];
+  const initialSolutions: SolutionMap = {};
   const generators = weekAndGenerators[week] as generator[];
   if (!generators) return;
 
@@ -183,11 +191,7 @@ export const createLevels = (week: week) => {
         images: [],
         usefullCSSProperties: [],
       },
-      solution: {
-        html: generatedLevelDetails.SHTML,
-        css: generatedLevelDetails.SCSS,
-        js: generatedLevelDetails?.SJS || "",
-      },
+
       timeData: {
         startTime: 0,
         pointAndTime: {
@@ -209,6 +213,14 @@ export const createLevels = (week: week) => {
       lockJS: generatedLevelDetails.lockJS,
     };
     initialState.push(level);
+    initialSolutions[level.identifier] = {
+      html: generatedLevelDetails.SHTML,
+      css: generatedLevelDetails.SCSS,
+      js: generatedLevelDetails?.SJS || "",
+    };
   }
-  return initialState;
+  return {
+    levels: initialState,
+    solutions: initialSolutions,
+  };
 };

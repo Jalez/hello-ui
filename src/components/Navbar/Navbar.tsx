@@ -28,6 +28,7 @@ import Info from "../InfoBoard/Info";
 import PoppingTitle from "../General/PoppingTitle";
 import InfoInstructions from "../InfoBoard/InfoInstructions";
 import CreatorControls from "../CreatorControls/CreatorControls";
+import { resetSolutionUrls } from "../../store/slices/solutionUrls.slice";
 
 const StyledContainer = styled("div")(() => ({
   display: "flex",
@@ -86,6 +87,7 @@ export const Navbar = () => {
 
   const handleLevelReset = useCallback(() => {
     dispatch(resetLevel(currentLevel));
+    dispatch(resetSolutionUrls());
   }, [currentLevel]);
 
   const togglePopper = useCallback(() => {

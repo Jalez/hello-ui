@@ -7,24 +7,13 @@ import { ArtContainer } from "../ArtContainer";
 import { useAppSelector } from "../../../store/hooks/hooks";
 import { scenario } from "../../../types";
 import { scenarioSolutionUrls } from "../../../store/slices/levels.slice";
-import { generatorNameAndFunction } from "../../../utils/LevelCreator";
 import { useEffect, useState } from "react";
-import { allLevels } from "../../../App";
+import { Box } from "@mui/material";
 
 type ModelArtContainerProps = {
   children: JSX.Element;
   scenario: scenario;
 };
-
-type solutionObject = {
-  [key: string]: {
-    SCSS: string;
-    SHTML: string;
-    SJS: string;
-  };
-};
-
-const namesAndSolutions: solutionObject = {};
 
 export const ModelArtContainer = ({
   children,
@@ -32,56 +21,52 @@ export const ModelArtContainer = ({
 }: ModelArtContainerProps): JSX.Element => {
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const level = useAppSelector((state) => state.levels[currentLevel - 1]);
-  const [solutionCSS, setSolutionCSS] = useState<solutionObject>({});
-  const [solutionHTML, setSolutionHTML] = useState<solutionObject>({});
-  const [solutionJS, setSolutionJS] = useState<solutionObject>({});
-  if (namesAndSolutions[scenario.scenarioId] === undefined) {
-    const originalLevel = allLevels.find(
-      (defaultlevel) => defaultlevel.name === level.name
-    );
-    namesAndSolutions[scenario.scenarioId] = {
-      SCSS: originalLevel?.solution.css || "",
-      SHTML: originalLevel?.solution.html || "",
-      SJS: originalLevel?.solution.js || "",
-    };
-  }
+  const solutions = useAppSelector((state: any) => state.solutions);
+  const [solutionCSS, setSolutionCSS] = useState<string>("");
+  const [solutionHTML, setSolutionHTML] = useState<string>("");
+  const [solutionJS, setSolutionJS] = useState<string>("");
+  const solutionUrls = useAppSelector((state) => state.solutionUrls);
+  const solutionUrl = solutionUrls[scenario.scenarioId];
 
-  const { SCSS, SHTML, SJS } = namesAndSolutions[scenario.scenarioId];
+  useEffect(() => {
+    // set scss as level solution css
+    console.log("level.identifier", level.identifier);
+    const levelSolutions = solutions[level.identifier] || null;
+    console.log("levelSolutions", levelSolutions);
+    if (levelSolutions) {
+      setSolutionCSS(levelSolutions.css);
+      setSolutionHTML(levelSolutions.html);
+      setSolutionJS(levelSolutions.js);
+    }
+  }, [level, solutions]);
 
-  // useEffect(() => {
-  //   // set scss as level solution css
-  //   setSolutionCSS((prev) => ({ ...prev, [level.name]: SCSS }));
-  //   setSolutionHTML((prev) => ({ ...prev, [level.name]: SHTML }));
-  //   setSolutionJS((prev) => ({ ...prev, [level.name]: SJS || "" }));
-  // }, [currentLevel]);
   if (!level) return <div>loading...</div>;
   // console.log("scenario.solutionUrl", scenario.solutionUrl);
   // decode with base64
-  const solutionUrl = scenarioSolutionUrls[scenario.scenarioId];
   return (
     <ArtContainer
       width={scenario.dimensions.width}
       height={scenario.dimensions.height}
     >
-      {!solutionUrl && SCSS && (
+      {!solutionUrl && (
         <Frame
           id="DrawBoard"
-          newCss={SCSS}
-          newHtml={SHTML}
-          newJs={SJS + "\n" + scenario.js}
+          newCss={solutionCSS}
+          newHtml={solutionHTML}
+          newJs={solutionJS + "\n" + scenario.js}
           events={level.events || []}
           scenario={scenario}
           name="solutionUrl"
         />
       )}
-      <div
-        style={{
+      <Box
+        sx={{
           position: "absolute",
           bottom: 0,
         }}
       >
         {children}
-      </div>
+      </Box>
     </ArtContainer>
   );
 };

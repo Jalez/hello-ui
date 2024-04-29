@@ -13,9 +13,12 @@ const solutionUrlsSlice = createSlice({
       const { solutionUrl, scenarioId } = action.payload;
       state[scenarioId] = solutionUrl;
     },
+    resetSolutionUrls(state) {
+      return initialState;
+    },
   },
 });
 
-export const { addSolutionUrl } = solutionUrlsSlice.actions;
+export const { addSolutionUrl, resetSolutionUrls } = solutionUrlsSlice.actions;
 
 export default solutionUrlsSlice.reducer;

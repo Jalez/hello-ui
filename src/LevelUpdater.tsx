@@ -3,11 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAppDispatch, useAppSelector } from "./store/hooks/hooks";
 import { sendScoreToParentFrame } from "./store/actions/score.actions";
-import {
-  removeSolutionCode,
-  updateAccuracy,
-  updatePoints,
-} from "./store/slices/levels.slice";
+import { updateAccuracy, updatePoints } from "./store/slices/levels.slice";
 
 import calculateAccuracy from "./utils/imageTools/calculateAccuracy";
 import { addDifferenceUrl } from "./store/slices/differenceUrls.slice";
@@ -47,7 +43,6 @@ export const LevelUpdater = () => {
           ...prev,
           [event.data.scenarioId]: event.data.dataURL,
         }));
-        dispatch(removeSolutionCode(currentLevel));
         return;
       } else if (event.data.urlName === "drawingUrl") {
         setDrawingPixels((prev) => ({
@@ -76,7 +71,7 @@ export const LevelUpdater = () => {
         solutionPixels[scenarioId]
       );
       dispatch(updateAccuracy({ currentLevel, scenarioId, accuracy }));
-      dispatch(addDifferenceUrl({ scenarioId, diff }));
+      dispatch(addDifferenceUrl({ scenarioId, differenceUrl: diff }));
     }
   }, [drawingPixels, solutionPixels]);
 

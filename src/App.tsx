@@ -23,6 +23,7 @@ import LevelOpinion from "./components/General/LevelControls/LevelOpinion";
 import { availableWeeks, createLevels, week } from "./utils/LevelCreator";
 import Notifications from "./components/General/Notifications";
 import { SnackbarProvider } from "notistack";
+import { setSolutions } from "./store/slices/solutions.slice";
 
 const AppStyle = {
   display: "flex",
@@ -54,8 +55,12 @@ function App() {
     map = map || "all";
 
     if (availableWeeks.includes(map)) {
-      allLevels = createLevels(map as week) as Level[];
-      dispatch(updateWeek({ levels: allLevels, mapName: map }));
+      const levelsObj = createLevels(map as week);
+      const levels = levelsObj?.levels || [];
+      allLevels = levels;
+      const solutions = levelsObj?.solutions || {};
+      dispatch(updateWeek({ levels, mapName: map }));
+      dispatch(setSolutions(solutions));
     } else {
       const fetchLevels = async (mapName: string) => {
         // allLevels = await getMapLevelsData(mapName);
