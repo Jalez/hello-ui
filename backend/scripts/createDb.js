@@ -14,31 +14,68 @@ const level = require('../models/level.js');
 
   // Levels
   const levelsData = JSON.parse(fs.readFileSync(LEVELS_FILE, 'utf8'));
-  await Promise.all(
-    Object.values(levelsData).map(level =>
-      db.Level.create({
-        identifier: level.identifier,
-        name: level.name,
-        json: level
-      })
-    )
-  );
 
-  // Maps
-  const maps = JSON.parse(fs.readFileSync(LEVEL_MAPS_FILE, 'utf8'));
-  await Promise.all(
-    Object.entries(maps).map(([name, map]) =>
-      db.Map.create({
-        name: name,
-        random: map.random,
-        canUseAI: map.canUseAI ?? false
-      })
-    )
-  );
+  const levelMappings = {};
 
-  (await db.Map.findAll({ include: [db.Level] })).forEach(map => {
-    db.Level.findAll({
-      where: { identifier: maps[map.name]['levels'] }
-    }).then(levels => Promise.all(levels.map(level => map.addLevel(level))));
-  });
+  const transaction = await db.sequelize.transaction();
+
+  try {
+    // Create levels
+    await Promise.all(
+      Object.values(levelsData).map(data => {
+        const json = { ...data };
+        delete json.identifier;
+        delete json.name;
+
+        return db.Level.create(
+          {
+            name: data.name,
+            json: json
+          },
+          { transaction }
+        )
+          .then(level => level.reload({ transaction }))
+          .then(level => (levelMappings[data.identifier] = level.identifier));
+      })
+    );
+
+    const mapsData = JSON.parse(fs.readFileSync(LEVEL_MAPS_FILE, 'utf8'));
+
+    // Create maps
+    await Promise.all(
+      Object.entries(mapsData).map(([name, data]) =>
+        db.Map.create(
+          {
+            name: name,
+            random: data.random,
+            canUseAI: data.canUseAI ?? false
+          },
+          { transaction }
+        )
+      )
+    );
+
+    const maps = await db.Map.findAll({ include: [db.Level], transaction });
+
+    // connect levels to maps
+    await Promise.all(
+      maps.map(map => {
+        const identifiers = mapsData[map.name]['levels'].map(
+          id => levelMappings[id]
+        );
+
+        return db.Level.findAll({
+          where: { identifier: identifiers },
+          transaction
+        }).then(levels =>
+          Promise.all(levels.map(level => map.addLevel(level, { transaction })))
+        );
+      })
+    );
+
+    await transaction.commit();
+  } catch (error) {
+    await transaction.rollback();
+    console.error(error);
+  }
 })();

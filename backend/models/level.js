@@ -31,10 +31,22 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
         get () {
           const rawJson = this.getDataValue('json');
-          return JSON.parse(rawJson);
+          const parsedJSON = JSON.parse(rawJson);
+
+          // add identifier and name back to the json
+          if (this.identifier) parsedJSON.identifier = this.identifier;
+          if (this.name) parsedJSON.name = this.name;
+
+          return parsedJSON;
         },
         set (value) {
-          this.setDataValue('json', JSON.stringify(value));
+          const valueCopy = { ...value };
+
+          // remove identifier and name (do not save them twice in the database)
+          delete valueCopy.identifier;
+          delete valueCopy.name;
+
+          this.setDataValue('json', JSON.stringify(valueCopy));
         }
       }
     },

@@ -1,19 +1,29 @@
-const mapController = require("../controllers/map.js");
-const requireJson = require("../middleware/requireJson.js");
+const mapController = require('../controllers/map.js');
+const requireJson = require('../middleware/requireJson.js');
 
-module.exports = (router) => {
-  // get all map levels
+module.exports = router => {
+  // add/remove levels
   router
-    .route("/maps/levels/:name")
+    .route('/maps/levels/:name/:id')
     .all(requireJson)
-    .get(mapController.getMapLevels);
+    .post(mapController.addMapLevel)
+    .delete(mapController.removeMapLevel);
+
+  // all map levels
+  router
+    .route('/maps/levels/:name')
+    .all(requireJson)
+    .get(mapController.getMapLevels)
+    .post(mapController.setMapLevels)
+    .put(mapController.updateMapLevels)
+    .delete(mapController.deleteMapLevels);
 
   // get map names
-  router.route("/maps/names").all(requireJson).get(mapController.getMapNames);
+  router.route('/maps/names').all(requireJson).get(mapController.getMapNames);
 
   // map CRUD: /maps/:name
   router
-    .route("/maps/:name")
+    .route('/maps/:name')
     .all(requireJson)
     .get(mapController.getMapByName)
     .post(mapController.createMap)
@@ -21,5 +31,5 @@ module.exports = (router) => {
     .delete(mapController.deleteMap);
 
   // get all maps
-  router.route("/maps/").all(requireJson).get(mapController.getAllMaps);
+  router.route('/maps/').all(requireJson).get(mapController.getAllMaps);
 };
