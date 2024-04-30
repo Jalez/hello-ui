@@ -57,7 +57,6 @@ export const ScenarioDrawing = ({
   );
 
   if (!level) return <div>loading...</div>;
-  // console.log("level.code", level.code);
 
   useEffect(() => {
     setCss(drawWithSolution ? level.solution.css : level.code.css);
@@ -67,7 +66,6 @@ export const ScenarioDrawing = ({
 
   const handleSwitchDrawing = useCallback(() => {
     if (isCreator) {
-      console.log("Switching drawing", drawWithSolution);
       setDrawWithSolution(!drawWithSolution);
     } else {
       dispatch(toggleImageInteractivity(currentLevel));
@@ -117,7 +115,6 @@ export const ScenarioDrawing = ({
   const interactive = level.interactive;
 
   const handleRemoveScenario = () => {
-    console.log("Removing scenario", scenario.scenarioId);
     dispatch(
       removeScenario({ levelId: currentLevel, scenarioId: scenario.scenarioId })
     );

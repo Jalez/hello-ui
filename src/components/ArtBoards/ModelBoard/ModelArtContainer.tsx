@@ -22,17 +22,21 @@ export const ModelArtContainer = ({
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const level = useAppSelector((state) => state.levels[currentLevel - 1]);
   const solutions = useAppSelector((state: any) => state.solutions);
-  const [solutionCSS, setSolutionCSS] = useState<string>("");
-  const [solutionHTML, setSolutionHTML] = useState<string>("");
-  const [solutionJS, setSolutionJS] = useState<string>("");
+  const defaultLevelSolutions = solutions[level.identifier] || null;
+  const [solutionCSS, setSolutionCSS] = useState<string>(
+    defaultLevelSolutions?.css || ""
+  );
+  const [solutionHTML, setSolutionHTML] = useState<string>(
+    defaultLevelSolutions?.html || ""
+  );
+  const [solutionJS, setSolutionJS] = useState<string>(
+    defaultLevelSolutions?.js || ""
+  );
   const solutionUrls = useAppSelector((state) => state.solutionUrls);
   const solutionUrl = solutionUrls[scenario.scenarioId];
 
   useEffect(() => {
-    // set scss as level solution css
-    console.log("level.identifier", level.identifier);
-    const levelSolutions = solutions[level.identifier] || null;
-    console.log("levelSolutions", levelSolutions);
+    const levelSolutions = solutions[level.name] || null;
     if (levelSolutions) {
       setSolutionCSS(levelSolutions.css);
       setSolutionHTML(levelSolutions.html);
@@ -41,7 +45,7 @@ export const ModelArtContainer = ({
   }, [level, solutions]);
 
   if (!level) return <div>loading...</div>;
-  // console.log("scenario.solutionUrl", scenario.solutionUrl);
+
   // decode with base64
   return (
     <ArtContainer

@@ -32,7 +32,6 @@ export const SlideShower = ({
   }, []);
 
   const resetSlider = useCallback(() => {
-    // console.log("resetting slider", sliderValue);
     setSliderValue(100);
   }, []);
 

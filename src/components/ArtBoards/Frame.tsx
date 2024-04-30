@@ -54,9 +54,7 @@ export const Frame = ({
 
   useEffect(() => {
     const resendDataAfterMount = (event: MessageEvent) => {
-      // //console.log("CSS-artist received new message");
       if (event.data === "mounted") {
-        //console.log("CSS-artist sending the data");
         iframeRef.current?.contentWindow?.postMessage(
           {
             html: newHtml,
@@ -81,13 +79,8 @@ export const Frame = ({
   useEffect(() => {
     const handleDataFromIframe = async (event: MessageEvent) => {
       if (!event.data.dataURL) return;
-      //console.log("CSS-artist received new message", event.data);
       if (event.data.message !== "data") return;
-      //console.log(
-      //   "CSS-artist updating the",
-      //   event.data.urlName,
-      //   " in the store"
-      // );
+
       dispatch(
         addSolutionUrl({
           solutionUrl: event.data.dataURL,
@@ -107,7 +100,6 @@ export const Frame = ({
     const iframe = iframeRef.current;
 
     if (iframe) {
-      //console.log("CSS-artist telling drawboard to reload");
       iframeRef.current?.contentWindow?.postMessage(
         {
           message: "reload",
@@ -117,7 +109,6 @@ export const Frame = ({
       );
     }
   }, [newHtml, newCss, iframeRef, newJs, name]);
-  // // //console.log("scenario", scenario);
   if (!scenario) {
     return <div>Scenario not found</div>;
   }
@@ -125,7 +116,6 @@ export const Frame = ({
     <StyledIframe
       id={id}
       ref={iframeRef}
-      // add the name as a query parameter, also scenario id
       src={frameUrl + `?name=${name}&scenarioId=${scenario.scenarioId}`}
       width={scenario.dimensions.width}
       height={scenario.dimensions.height}

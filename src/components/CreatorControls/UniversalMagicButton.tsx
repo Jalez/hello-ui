@@ -79,12 +79,9 @@ The response should be directly in JSON format suitable for immediate integratio
         body: JSON.stringify({ systemPrompt, prompt }),
       });
       const data = await response.json();
-      console.log("Data:", data);
       if (typeof data === "string") {
-        console.log("Data already string");
         setNewLevel(data);
       } else {
-        console.log("Data is not string");
         setNewLevel(JSON.stringify(data));
       }
       //open the modal

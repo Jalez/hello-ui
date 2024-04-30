@@ -17,7 +17,6 @@
 
   window.addEventListener('message', receiveMessage, false);
   function receiveMessage(event) {
-    //console.log("received message", event.data)
     if (event.data.message === "loaded") {
       setWeek("html_2_es"); //_es (exercise session), _vh (viikkoharkka), _ex (tentti)
     }

@@ -33,7 +33,6 @@ const InfoInput = ({
     dispatch(actionToDispatch({ levelId: currentLevel, text: value }));
     finishEditHandler && finishEditHandler();
   };
-  console.log("value", value);
   return (
     <form
       onSubmit={(e) => {
