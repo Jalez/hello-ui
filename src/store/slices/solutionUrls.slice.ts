@@ -1,20 +1,34 @@
 import { createSlice } from "@reduxjs/toolkit";
+import { obfuscate } from "../../utils/obfuscators/obfuscate";
+const name = "solutionUrls";
 
 interface solutionUrlsState {
   [key: string]: string;
 }
-const initialState: solutionUrlsState = {};
+const storage = obfuscate(name);
+
+let noState = {};
+
+let initialState: solutionUrlsState = {};
+
+const currentDifferenceUrls = storage.getItem(storage.key);
+
+if (currentDifferenceUrls) {
+  initialState = JSON.parse(currentDifferenceUrls) || {};
+}
 
 const solutionUrlsSlice = createSlice({
-  name: "solutionUrls",
+  name,
   initialState,
   reducers: {
     addSolutionUrl(state, action) {
       const { solutionUrl, scenarioId } = action.payload;
       state[scenarioId] = solutionUrl;
+      storage.setItem(storage.key, JSON.stringify(state));
     },
     resetSolutionUrls(state) {
-      return initialState;
+      storage.setItem(storage.key, JSON.stringify(noState));
+      return noState;
     },
   },
 });
