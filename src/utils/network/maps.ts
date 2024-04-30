@@ -23,7 +23,6 @@ export const getMapNames: getMapNames = async () => {
 };
 
 export const getMapByName: getMapByName = async (name) => {
-  console.log("Get map by name", name);
   const url = `${mapUrl}/${name}`;
   return makeRequest<MapDetails>(url);
 };

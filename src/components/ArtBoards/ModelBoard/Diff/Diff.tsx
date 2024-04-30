@@ -35,7 +35,6 @@ export const Diff = ({ scenario }: DiffProps): JSX.Element => {
   const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
-    console.log("Scenario");
     setLoading(true);
     if (!scenarioDiffUrl) {
       setLoading(false);

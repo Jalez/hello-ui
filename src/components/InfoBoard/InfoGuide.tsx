@@ -27,7 +27,6 @@ const InfoGuide = ({ sections }: { sections: infoSection[] }) => {
   const isCreator = options.creator;
 
   const handleAddTiret = (sectionIndex: number) => {
-    console.log("Add tiret");
     dispatch(
       addGuideSectionItem({
         levelId: currentLevel,

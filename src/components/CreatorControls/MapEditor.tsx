@@ -46,7 +46,6 @@ const MapEditor = () => {
       if (selectedMapName) {
         const levels = await getMapLevels(selectedMapName);
         // JATKETAAN TÄSTÄ, EN NYT JAKSA- T: PERJANTAI JAKKE
-        console.log("map levels", levels);
         //setSelectedMapDetails(levels);
         // setSelectedMapDetails(await getMapLevels(selectedMap));
       }

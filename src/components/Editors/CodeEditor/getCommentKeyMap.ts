@@ -33,7 +33,6 @@ export function getCommentKeymap(lang: "HTML" | "CSS" | "JS") {
         const endLine = view.state.doc.lineAt(main.to).to;
         // if line is already commented, uncomment it
         const line = view.state.doc.sliceString(startLine, endLine);
-        console.log("line", line);
         if (line.startsWith(syntax.blockCommentStart)) {
           // uncomment
           view.dispatch({
@@ -83,7 +82,6 @@ export function getCommentKeymap(lang: "HTML" | "CSS" | "JS") {
         const endLine = view.state.doc.lineAt(main.to).to;
         // if line is already commented, uncomment it
         const line = view.state.doc.sliceString(startLine, endLine);
-        console.log("line", line);
         if (line.startsWith(syntax.blockCommentStart)) {
           // uncomment
           view.dispatch({

@@ -114,7 +114,6 @@ Improvements based on the following code:
     try {
       handleClose();
       setLoading(true);
-      console.log("Using systemPrompt:", systemPrompt);
       const response = await fetch(`http://localhost:3200/chatGPT`, {
         method: "POST",
         headers: {
@@ -136,9 +135,7 @@ Improvements based on the following code:
       const data = await response.json();
 
       if (typeof data === "string") {
-        console.log("Data is a string");
         const dP = JSON.parse(data);
-        console.log("Data:", dP);
         if (typeof dP[answerKey] === "string") {
           setCodeChanges(
             dP[answerKey] || `No ${answerKey}-key in response: ${dP}`
@@ -228,7 +225,6 @@ Improvements based on the following code:
           </Button>
           <Button
             onClick={() => {
-              console.log("Rejecting");
               handleClose();
             }}
           >

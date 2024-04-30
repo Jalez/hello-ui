@@ -164,8 +164,10 @@ export const createLevels = (
         js: details?.js || "",
       } as scenario);
     }
+    const id = Math.random().toString(36).substring(7);
+
     const level = {
-      identifier: Math.random().toString(36).substring(7),
+      identifier: id,
       name: generatedLevelDetails.name,
       scenarios: scenarios,
       buildingBlocks: {
@@ -213,7 +215,7 @@ export const createLevels = (
       lockJS: generatedLevelDetails.lockJS,
     };
     initialState.push(level);
-    initialSolutions[level.identifier] = {
+    initialSolutions[level.name] = {
       html: generatedLevelDetails.SHTML,
       css: generatedLevelDetails.SCSS,
       js: generatedLevelDetails?.SJS || "",

@@ -64,7 +64,6 @@ function App() {
     } else {
       const fetchLevels = async (mapName: string) => {
         // allLevels = await getMapLevelsData(mapName);
-        console.log("allLevels", allLevels);
         dispatch(updateWeek({ levels: allLevels, mapName }));
       };
       fetchLevels(map || "all");

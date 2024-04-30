@@ -91,7 +91,7 @@ export const ScenarioModel = ({
                 name="solutionUrl"
               />
             ) : */}
-            {showModel ? (
+            {showModel && solutionUrl ? (
               <Image
                 name="solution"
                 imageUrl={solutionUrl}

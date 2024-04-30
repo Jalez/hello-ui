@@ -10,7 +10,6 @@ const Notifications = () => {
   const dispatch = useAppDispatch();
   const { enqueueSnackbar } = useSnackbar();
   const notifications = useAppSelector((state) => state.notifications);
-  console.log("notifications", notifications);
 
   useEffect(() => {
     if (notifications.length > 0) {

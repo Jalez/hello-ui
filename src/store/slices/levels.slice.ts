@@ -80,7 +80,6 @@ const levelsSlice = createSlice({
     evaluateLevel(state, action) {},
     updateWeek(state, action) {
       let { levels, mapName } = action.payload;
-      console.log("mapName", mapName);
       if (!mapName) mapName = "all";
       storage = obfuscate(`ui-designer-${mapName}`);
       if (storage.getItem(storage.key)) {
@@ -92,7 +91,6 @@ const levelsSlice = createSlice({
         //console.error("Levels have already been created!");
         return state;
       }
-      console.log("updateWeek", levels, mapName);
       state = levels;
       storage.setItem(storage.key, JSON.stringify(state));
       return state;
@@ -255,11 +253,9 @@ const levelsSlice = createSlice({
       storage?.setItem(storage.key, JSON.stringify(state));
     },
     changeLevelDifficulty(state, action) {
-      console.log("Changing level difficulty");
       const { levelId, difficulty } = action.payload;
       const level = state[levelId - 1];
       if (!level) return;
-      console.log("difficulty", difficulty);
       level.difficulty = difficulty;
       storage?.setItem(storage.key, JSON.stringify(state));
     },
@@ -285,7 +281,6 @@ const levelsSlice = createSlice({
         (scenario) => scenario.scenarioId === scenarioId
       );
       if (!scenario) return;
-      console.log("changeScenarioDimensions", dimensionType, value);
       scenario.dimensions[dimensionType as "width" | "height"] = value;
       storage?.setItem(storage.key, JSON.stringify(state));
     },
@@ -365,7 +360,6 @@ const levelsSlice = createSlice({
       const { levelId, sectionIndex, text } = action.payload;
       const level = state[levelId - 1];
       if (!level) return;
-      console.log("addGuideSectionItem", sectionIndex, text);
       level.instructions[sectionIndex].content.push(text);
       storage?.setItem(storage.key, JSON.stringify(state));
     },
@@ -432,8 +426,6 @@ const levelsSlice = createSlice({
     updateLevelColors(state, action) {
       //receives an array of colors
       const { levelId, colors } = action.payload;
-      console.log("updateLevelColors", colors);
-      console.log("levelId", levelId);
       const level = state[levelId - 1];
       if (!level) return;
       if (level.buildingBlocks) {
