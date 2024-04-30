@@ -18,7 +18,7 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING,
         primaryKey: true,
         allowNull: false,
-        validate: { notEmpty: true }
+        validate: { notEmpty: true, isAlphanumeric: true, not: /^names$/i }
       },
       random: {
         type: DataTypes.INTEGER,

@@ -3,7 +3,6 @@
   "ignore": [
     ".git",
     "db/**/*.json",
-    "db/*.sqlite",
     "static_files/**/*.json",
     "node_modules/*",
     "public/*",
@@ -18,7 +17,7 @@
   "verbose": true,
   "env": {
     "NODE_ENV": "development",
-    "DEBUG": "cais:*"
+    "DEBUG": "ui_designer:*"
   },
   "ext": "js,json",
   "delay": 2500
