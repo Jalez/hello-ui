@@ -4,7 +4,7 @@ import * as React from "react";
 
 import { useAppDispatch, useAppSelector } from "../../store/hooks/hooks";
 import { updateRoom } from "../../store/slices/room.slice";
-import { Fab, Zoom } from "@mui/material";
+import { IconButton, Zoom } from "@mui/material";
 import QuestionMarkIcon from "@mui/icons-material/QuestionMark";
 
 export default function Help() {
@@ -16,8 +16,8 @@ export default function Help() {
 
   return (
     <Zoom in={room.currentRoom !== "Instruction"}>
-      <Fab
-        color="secondary"
+      <IconButton
+        color="primary"
         aria-label="instructions"
         onClick={handleOpen}
         sx={{
@@ -27,7 +27,7 @@ export default function Help() {
         }}
       >
         <QuestionMarkIcon />
-      </Fab>
+      </IconButton>
     </Zoom>
   );
 }

@@ -6,8 +6,8 @@ export const tabsContent = [
     label: "Introduction",
     content: (
       <Typography sx={{ mt: 2 }} variant="body2">
-        Welcome to the UI Designer. In these tasks, we'll test your skills using
-        HTML and CSS to create and design components.
+        Welcome to the UI Designer. In these tasks, we'll test your skills to
+        create and design stylish, interactive and responsive web components.
       </Typography>
     ),
   },
@@ -40,43 +40,43 @@ export const tabsContent = [
     label: "General advice",
     content: (
       <ol>
-          <li>
-            <Typography sx={{ mt: 2 }} variant="body2">
-              <strong>Use the provided CSS/HTML template:</strong> We strongly
-              advise using the existing CSS/HTML template provided, as it
-              contains CSS rules and HTML elements that are suitable for your
-              task. This should be used as a starting point for your work.{" "}
-              <strong>Beware:</strong> HTML is always wrapped in a div with the
-              id "root".
-            </Typography>
-          </li>
-          <li>
-            <Typography sx={{ mt: 2 }} variant="body2">
-              <strong>Evaluating your code:</strong> Evaluation happens
-              automatically. The more accurate web-component you design, the
-              more points you get.
-            </Typography>
-          </li>
-          <li>
-            <Typography sx={{ mt: 2 }} variant="body2">
-              <strong>Submit your points to plussa:</strong> After completing
-              the exam, ensure that you Submit the points to plussa by clicking
-              the "Submit" button located beneath the game.
-            </Typography>
-          </li>
-        </ol>
+        <li>
+          <Typography sx={{ mt: 2 }} variant="body2">
+            <strong>Use the provided CSS/HTML template:</strong> We strongly
+            advise using the existing CSS/HTML template provided, as it contains
+            CSS rules and HTML elements that are suitable for your task. This
+            should be used as a starting point for your work.{" "}
+            <strong>Beware:</strong> HTML is always wrapped in a div with the id
+            "root".
+          </Typography>
+        </li>
+        <li>
+          <Typography sx={{ mt: 2 }} variant="body2">
+            <strong>Evaluating your code:</strong> Evaluation happens
+            automatically. The more accurate web-component you design, the more
+            points you get.
+          </Typography>
+        </li>
+        <li>
+          <Typography sx={{ mt: 2 }} variant="body2">
+            <strong>Submit your points to plussa:</strong> After completing the
+            exam, ensure that you Submit the points to plussa by clicking the
+            "Submit" button located beneath the game.
+          </Typography>
+        </li>
+      </ol>
     ),
   },
   {
     label: "Remember to Submit your work",
     content: (
       <Typography sx={{ mt: 2 }} variant="body2">
-          Once you are finished with the game, remember to Submit the score to
-          plussa by clicking the "Submit" button. If you refreshed the page at
-          any moment in time, make sure you received the points for the tasks.
-          Course Staff are available for questions during official hours through
-          the Course Teams channel. Good luck!
-        </Typography>
+        Once you are finished with the game, remember to Submit the score to
+        plussa by clicking the "Submit" button. If you refreshed the page at any
+        moment in time, make sure you received the points for the tasks. Course
+        Staff are available for questions during official hours through the
+        Course Teams channel. Good luck!
+      </Typography>
     ),
   },
 ];

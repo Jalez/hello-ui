@@ -30,7 +30,6 @@ const PoppingTitle = ({
     <Box>
       {topTitle && (
         <Popper
-          // Note: The following zIndex style is specifically for documentation purposes and may not be necessary in your application.
           sx={{ zIndex: 1200 }}
           open={open}
           anchorEl={anchorEl}
@@ -48,17 +47,10 @@ const PoppingTitle = ({
           {({ TransitionProps }) => (
             <Fade {...TransitionProps} timeout={350}>
               <Typography
-                // component={"span"}
-                // sx={{ p: 2 }}
                 color="primary"
-                // blur background
-
                 sx={{
-                  // make it wide enough
                   textAlign: "center",
-                  bgColor: "secondary.main",
-                  // background blur
-                  // backdropFilter: "blur(1px)",
+                  backgroundColor: "secondary.main",
                   p: 1,
                 }}
               >
@@ -73,8 +65,7 @@ const PoppingTitle = ({
       </Box>
       {bottomTitle && (
         <Popper
-          // Note: The following zIndex style is specifically for documentation purposes and may not be necessary in your application.
-          sx={{ zIndex: 1200 }}
+          sx={{ zIndex: 1200, backgroundColor: "secondary.main" }}
           open={open}
           anchorEl={anchorEl}
           placement={"bottom"}
@@ -90,7 +81,7 @@ const PoppingTitle = ({
         >
           {({ TransitionProps }) => (
             <Fade {...TransitionProps} timeout={350}>
-              <Typography sx={{ p: 1 }} color="primary">
+              <Typography sx={{ p: 1, zIndex: 1500 }} color="primary">
                 {bottomTitle}
               </Typography>
             </Fade>

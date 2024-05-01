@@ -72,7 +72,7 @@ function App() {
         });
       }
 
-      if (event.data.js.trim()) {
+      if (event.data.js && event.data.js.trim()) {
         //console.log(urlName, "Drawboard URL setting js:", event.data.js);
         setJs(event.data.js);
         setJsCorrect(false);

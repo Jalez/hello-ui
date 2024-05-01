@@ -7,7 +7,6 @@ const InfoBox = ({ children }: { children: React.ReactNode }) => {
         display: "flex",
         flexDirection: "row",
         alignItems: "center",
-        margin: 1,
         borderRadius: "1rem",
         paddingRight: "0.5rem",
         paddingLeft: "0.5rem",

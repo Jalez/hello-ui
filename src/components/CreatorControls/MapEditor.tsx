@@ -9,7 +9,7 @@ import {
 } from "@mui/material";
 import PoppingTitle from "../General/PoppingTitle";
 import { useEffect, useState } from "react";
-import { MapDetails } from "../../types";
+import { Level, MapDetails } from "../../types";
 import AIEnabler from "./MapEditor/AIEnabler";
 import LevelAdder from "./MapEditor/LevelAdder";
 import MapLevels from "./MapEditor/MapLevels";
@@ -18,6 +18,7 @@ import MapAdder from "./MapEditor/MapAdder";
 import {
   getMapLevels,
   getMapNames,
+  updateMap,
   // updateSelectedMap,
 } from "../../utils/network/maps";
 import SetRandom from "./MapEditor/SetRandom";
@@ -33,6 +34,7 @@ const MapEditor = () => {
     canUseAI: false,
     random: 0,
   });
+  const [mapLevels, setMapLevels] = useState<Level[]>([]);
   useEffect(() => {
     // fetch maps from the server
     const fetchMapNames = async () => {
@@ -45,8 +47,9 @@ const MapEditor = () => {
     const fetchMapLevels = async () => {
       if (selectedMapName) {
         const levels = await getMapLevels(selectedMapName);
+        console.log("levels", levels);
         // JATKETAAN TÄSTÄ, EN NYT JAKSA- T: PERJANTAI JAKKE
-        //setSelectedMapDetails(levels);
+        setMapLevels(levels);
         // setSelectedMapDetails(await getMapLevels(selectedMap));
       }
     };
@@ -55,8 +58,9 @@ const MapEditor = () => {
 
   const updateSelectedMapDetails = async (newDetails: MapDetails) => {
     try {
-      // await updateSelectedMap(selectedMap, newDetails);
-      setSelectedMapDetails({ ...newDetails });
+      const updatedMap = await updateMap(selectedMapName, newDetails);
+      console.log("Updated map:", updatedMap);
+      setSelectedMapDetails(updatedMap);
     } catch (error) {
       console.error("Error:", error);
     }
@@ -143,7 +147,10 @@ const MapEditor = () => {
                   updateHandler={updateSelectedMapDetails}
                   selectedMap={selectedMapDetails}
                 />
-                <MapLevels selectedMapDetails={selectedMapDetails} />
+                <MapLevels
+                  selectedMapDetails={selectedMapDetails}
+                  levels={mapLevels}
+                />
 
                 {/* add a section for showing the canUseAI state and let it be changed there also */}
                 <Box>

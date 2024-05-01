@@ -54,6 +54,7 @@ const StyledNavContainer = styled("div")(({ theme }) => ({
   color: theme.palette.primary.main,
   padding: "0.5em",
   borderRadius: "2em",
+  flexWrap: "wrap",
 }));
 
 const StyledFab = styled(Fab)({
@@ -69,6 +70,7 @@ export const Navbar = () => {
     (state) => state.currentLevel.currentLevel
   );
   const options = useAppSelector((state) => state.options);
+  const isCreator = options.creator;
   const level = levels[currentLevel - 1];
   const arrowRef = useRef(null);
   const [anchorEl, setAnchorEl] = useState(null);
@@ -103,18 +105,20 @@ export const Navbar = () => {
   return (
     <StyledContainer id="three-navs">
       <StyledNavContainer>
-        <Box
-          sx={{
-            display: "flex",
-            flexDirection: "row",
-            gap: "1em",
-            justifyContent: "center",
-            alignItems: "center",
-            flex: "1 0 25%",
-          }}
-        >
-          <CreatorControls />
-        </Box>
+        {isCreator && (
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "row",
+              gap: "1em",
+              justifyContent: "center",
+              alignItems: "center",
+              flex: "1 0 25%",
+            }}
+          >
+            <CreatorControls />
+          </Box>
+        )}
 
         {/* <InfoInstructions> */}
         {/* <Info /> */}
@@ -145,7 +149,9 @@ export const Navbar = () => {
               <RestoreIcon />
             </IconButton>
           </PoppingTitle>
-          <HelpModal />
+          <PoppingTitle topTitle="Help">
+            <HelpModal />
+          </PoppingTitle>
           <LevelControls
             currentlevel={currentLevel}
             levelHandler={levelChanger}
@@ -171,16 +177,6 @@ export const Navbar = () => {
             </IconButton>
           </PoppingTitle>
         </Box>
-        <Box
-          sx={{
-            display: "flex",
-            flexDirection: "row",
-            gap: "1em",
-            justifyContent: "center",
-            alignItems: "center",
-            flex: "1 0 25%",
-          }}
-        ></Box>
       </StyledNavContainer>
     </StyledContainer>
   );

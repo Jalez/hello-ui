@@ -9,11 +9,9 @@ type AIEnablerProps = {
 const AIEnabler = ({ updateHandler, selectedMap }: AIEnablerProps) => {
   const handleUpdate = () => {
     selectedMap.canUseAI = !selectedMap.canUseAI;
-    console.log("selessctedMap", selectedMap);
     updateHandler(selectedMap);
   };
 
-  console.log("selectedMap", selectedMap);
   return (
     <Box
       sx={{

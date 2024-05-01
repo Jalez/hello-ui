@@ -24,6 +24,8 @@ import { availableWeeks, createLevels, week } from "./utils/LevelCreator";
 import Notifications from "./components/General/Notifications";
 import { SnackbarProvider } from "notistack";
 import { setSolutions } from "./store/slices/solutions.slice";
+import { getAllLevels } from "./utils/network/levels";
+import { getMapLevels } from "./utils/network/maps";
 
 const AppStyle = {
   display: "flex",
@@ -53,18 +55,35 @@ function App() {
     const urlParams = new URLSearchParams(window.location.search);
     let map = urlParams.get("map");
     map = map || "all";
+    let mapName = map as week;
+    let solutions = {};
 
     if (availableWeeks.includes(map)) {
+      console.log();
       const levelsObj = createLevels(map as week);
       const levels = levelsObj?.levels || [];
       allLevels = levels;
       const solutions = levelsObj?.solutions || {};
-      dispatch(updateWeek({ levels, mapName: map }));
+      dispatch(updateWeek({ levels: allLevels, mapName }));
+
       dispatch(setSolutions(solutions));
     } else {
       const fetchLevels = async (mapName: string) => {
-        // allLevels = await getMapLevelsData(mapName);
+        if (mapName === "all") {
+          allLevels = await getAllLevels();
+          return;
+        } else {
+          allLevels = await getMapLevels(mapName);
+        }
+        solutions = allLevels.reduce(
+          (acc: { [key: string]: {} }, level: Level) => {
+            acc[level.identifier as string] = level.solution;
+            return acc;
+          },
+          {} as { [key: string]: string }
+        );
         dispatch(updateWeek({ levels: allLevels, mapName }));
+        dispatch(setSolutions(solutions));
       };
       fetchLevels(map || "all");
     }
