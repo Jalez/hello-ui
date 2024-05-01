@@ -96,7 +96,6 @@ export const availableWeeks = [
   "js_1_es",
   "js_2_es",
   "js_3_es",
-  "all",
   "exam",
 ];
 

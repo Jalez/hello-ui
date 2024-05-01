@@ -10,11 +10,11 @@ const storage = obfuscate(name);
 
 let initialState: differenceUrlsState = {};
 
-const currentDifferenceUrls = storage.getItem(storage.key);
+// const currentDifferenceUrls = storage.getItem(storage.key);
 
-if (currentDifferenceUrls) {
-  initialState = JSON.parse(currentDifferenceUrls) || {};
-}
+// if (currentDifferenceUrls) {
+//   initialState = JSON.parse(currentDifferenceUrls) || {};
+// }
 
 const differenceUrlsSlice = createSlice({
   name,
@@ -22,10 +22,10 @@ const differenceUrlsSlice = createSlice({
   reducers: {
     addDifferenceUrl(state, action) {
       const { differenceUrl, scenarioId } = action.payload;
-
-      if (state[scenarioId]) return;
+      console.log("addDifferenceUrl", differenceUrl, scenarioId);
+      // if (state[scenarioId]) return;
       state[scenarioId] = differenceUrl;
-      storage.setItem(storage.key, JSON.stringify(state));
+      // storage.setItem(storage.key, JSON.stringify(state));
     },
   },
 });

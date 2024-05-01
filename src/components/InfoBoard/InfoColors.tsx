@@ -22,12 +22,24 @@ export const InfoColors = () => {
       //go through the level solution code and extract the colors, should be rgb or hex
       //store the colors in the level object
 
-      const css = level.solution.css;
-      const html = level.solution.html;
-      const js = level.solution.js;
-      const colors = css.match(
-        /#[0-9a-fA-F]{3,6}|rgb\([0-9]{1,3},[0-9]{1,3},[0-9]{1,3}\)/g
-      );
+      const css = level.solution.css || "";
+      const html = level.solution.html || "";
+      const js = level.solution.js || "";
+      const cssColors =
+        css.match(
+          /#[0-9a-fA-F]{3,6}|rgb\([0-9]{1,3},[0-9]{1,3},[0-9]{1,3}\)/g
+        ) || [];
+      const htmlColors =
+        html.match(
+          /#[0-9a-fA-F]{3,6}|rgb\([0-9]{1,3},[0-9]{1,3},[0-9]{1,3}\)/g
+        ) || [];
+
+      const jsColors =
+        js.match(
+          /#[0-9a-fA-F]{3,6}|rgb\([0-9]{1,3},[0-9]{1,3},[0-9]{1,3}\)/g
+        ) || [];
+
+      const colors = [...cssColors, ...htmlColors, ...jsColors];
       //Make sure the list of colors only has unique values
       const uniqueColors = Array.from(new Set(colors));
       dispatch(
@@ -37,28 +49,16 @@ export const InfoColors = () => {
   }, [level.solution]);
 
   return (
-    <Box
-      sx={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-      }}
-    >
-      <PoppingTitle
-        topTitle="Colors"
-        bottomTitle="Click the color to copy color code"
+    <PoppingTitle topTitle="Colors" bottomTitle="Click to copy">
+      <Box
+        sx={{
+          display: "flex",
+        }}
       >
-        <Box
-          sx={{
-            display: "flex",
-            // flexDirection: "column",
-          }}
-        >
-          {level.buildingBlocks?.colors?.map((color) => (
-            <InfoColor key={Math.random() * 10000} color={color} />
-          ))}
-        </Box>
-      </PoppingTitle>
-    </Box>
+        {level.buildingBlocks?.colors?.map((color) => (
+          <InfoColor key={Math.random() * 10000} color={color} />
+        ))}
+      </Box>
+    </PoppingTitle>
   );
 };

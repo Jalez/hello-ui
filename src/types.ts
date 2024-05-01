@@ -3,6 +3,8 @@ type question_and_answer = {
   answer: string;
 };
 
+type levelIdentifier = string;
+
 export type NotificationRaw = {
   type: string;
   message: string;
@@ -33,7 +35,7 @@ type instructionSection = {
 
 type instructions = instructionSection[];
 export interface Level {
-  identifier: string;
+  identifier: levelIdentifier;
   week: string;
   name: string;
   difficulty: difficulty;
@@ -107,6 +109,11 @@ export type generator = () => {
   }[];
 };
 
+export type LevelIdAndName = {
+  // key is the id of the level, value is the name of the level
+  [key: levelIdentifier]: string;
+};
+
 export type levelNames =
   | "Easy card"
   | "Medium form"
@@ -125,7 +132,7 @@ export type levelNames =
   | "Exam grid";
 
 export type MapDetails = {
-  levels: string[];
+  levels: levelIdentifier[];
   canUseAI: boolean;
   random: number;
 };
