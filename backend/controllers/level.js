@@ -10,36 +10,18 @@ const getAllLevels = async (req, res) => {
     const db = req.app.get('db');
     const levels = await db.Level.findAll();
     logger('Found %d levels', levels.length);
-    res.json(levels.map(level => level.json));
+    res.json(
+      levels.map(level => ({
+        identifier: level.identifier,
+        name: level.name,
+        ...level.json
+      }))
+    );
   } catch (error) {
     logger('Error: %O', error);
     res.status(500).send({ message: 'Failed to fetch levels' });
   }
 };
-
-// // get levels by map name /levels/:mapName
-// const getLevelsByMapName = async (req, res) => {
-//   try {
-//     const mapName = req.params.mapName;
-
-//     if (mapName === 'all') {
-//       return getAllLevels(req, res);
-//     }
-
-//     const db = req.app.get('db');
-//     const map = await db.Map.findOne({
-//       where: { name: mapName },
-//       include: [db.Level]
-//     });
-
-//     return map
-//       ? res.json(levels.map(level => level.json))
-//       : res.status(404).send({ message: 'Map not found' });
-//   } catch (error) {
-//     logger('Error: %O', error);
-//     res.status(500).send({ message: 'Failed to fetch levels for map' });
-//   }
-// };
 
 // Get all level names: /levels/names
 const getLevelNames = async (req, res) => {
@@ -61,7 +43,11 @@ const getLevelById = async (req, res) => {
     const db = req.app.get('db');
     const level = await db.Level.findByPk(req.params.id);
     return level
-      ? res.json(level.json)
+      ? res.json({
+          identifier: level.identifier,
+          name: level.name,
+          ...level.json
+        })
       : res.status(404).send({ message: 'Level not found' });
   } catch (error) {
     logger('Error %O', error);
@@ -89,7 +75,11 @@ const updateLevel = async (req, res) => {
 
     level.json = { ...level.json, ...data };
     await level.save();
-    res.json(level.json);
+    res.json({
+      identifier: level.identifier,
+      name: level.name,
+      ...level.json
+    });
   } catch (error) {
     logger('Error %O', error);
     res.status(500).send({ message: 'Failed to update level' });
@@ -123,7 +113,11 @@ const createLevel = async (req, res) => {
     const level = await db.Level.create({ name, json: data });
 
     return level
-      ? res.status(201).send(level.json)
+      ? res.status(201).send({
+          identifier: level.identifier,
+          name: level.name,
+          ...level.json
+        })
       : res.status(500).send({ message: 'Failed to create new level' });
   } catch (error) {
     logger('Error %O', error);

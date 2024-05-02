@@ -51,7 +51,13 @@ const getMapLevels = async (req, res) => {
     });
 
     return map
-      ? res.json(map.Levels.map(level => level.json))
+      ? res.json(
+          map.Levels.map(level => ({
+            identifier: level.identifier,
+            name: level.name,
+            ...level.json
+          }))
+        )
       : res.status(404).send({ message: 'Map not found' });
   } catch (error) {
     logger('Error: %O', error);
