@@ -109,7 +109,11 @@ module.exports = {
     const now = new Date();
     await queryInterface.bulkInsert(
       'Levels',
-      levels.map(level => ({ ...level, createdAt: now, updatedAt: now }))
+      levels.map(level => ({
+        ...level,
+        createdAt: now,
+        updatedAt: now
+      }))
     );
   },
 
