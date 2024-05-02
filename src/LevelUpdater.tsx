@@ -72,7 +72,7 @@ export const LevelUpdater = () => {
       [scenarioId]: pixels,
     });
   };
-  if (!level) return;
+  if (!level) return null;
   const scenarios = level.scenarios;
   // get the points from the current level
 
