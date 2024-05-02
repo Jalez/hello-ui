@@ -86,9 +86,7 @@ const levelsSlice = createSlice({
         state = JSON.parse(storage.getItem(storage.key) || "[]");
       }
 
-      // if levels have already been created, do nothing
       if (state.length > 0) {
-        //console.error("Levels have already been created!");
         return state;
       }
       state = levels;
@@ -127,50 +125,22 @@ const levelsSlice = createSlice({
       scenario.accuracy = accuracy;
       storage?.setItem(storage.key, JSON.stringify(state));
     },
-    updatePoints(state, action) {
-      const { currentLevel } = action.payload;
-      const level = state[currentLevel - 1];
+    sprinkleConfetti(state, action) {
+      const level = state[action.payload - 1];
       if (!level) return;
-      // take the average of the accuracy of all scenarios
-      const accuracy = level.scenarios.reduce(
-        (acc, scenario) => acc + scenario.accuracy,
-        0
-      );
-      const percentage = accuracy / level.scenarios.length;
-      // round percentage to 2 decimal places
-      const roundedPercentage = Math.round(percentage * 100) / 100;
-
-      level.accuracy = roundedPercentage;
-      let newpoints = 0;
-      const percentageTreshold = level.percentageTreshold || 90;
-      const percentageFullPointsTreshold =
-        level.percentageFullPointsTreshold || 98;
-      if (percentage > percentageTreshold) {
-        if (
-          percentage > percentageFullPointsTreshold &&
-          !level.confettiSprinkled
-        ) {
-          confetti({ particleCount: 100 });
-          level.confettiSprinkled = true;
-        }
-        const lastTenPercent = percentage - percentageTreshold;
-        const remainingPercentage = 100 - percentageTreshold;
-        const lastTenPercentPercentage = lastTenPercent / remainingPercentage;
-        newpoints = Math.ceil(lastTenPercentPercentage * level.maxPoints);
-        if (newpoints < level.points) return;
-        level.points = newpoints;
-        const currentTime = new Date().getTime();
-        const timeAndDate = level.timeData.pointAndTime[newpoints];
-        if (!level.timeData.startTime) return;
-        if (timeAndDate == "0:0" || !timeAndDate) {
-          level.timeData.pointAndTime[newpoints] =
-            numberTimeToMinutesAndSeconds(
-              currentTime - level.timeData.startTime
-            );
-        }
-        level.completed = "yes";
-      }
+      if (level.confettiSprinkled) return;
+      confetti({ particleCount: 100 });
+      level.confettiSprinkled = true;
       storage?.setItem(storage.key, JSON.stringify(state));
+    },
+    completeLevel(state, action) {
+      const level = state[action.payload - 1];
+      if (!level) return;
+      level.completed = "yes";
+      storage?.setItem(storage.key, JSON.stringify(state));
+    },
+    updatePoints(state, action) {
+      console.log("STILL CALLING UPDATE-POINTS: DEPRECATED");
     },
     toggleShowModelSolution(state, action) {
       const level = state[action.payload - 1];

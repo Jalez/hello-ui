@@ -1,4 +1,8 @@
 import { useAppSelector } from "../../store/hooks/hooks";
+import PoppingTitle from "../General/PoppingTitle";
+import Shaker from "../General/Shaker/Shaker";
+import InfoBox from "./InfoBox";
+import { InfoText } from "./InfoText";
 
 const numberTimeToMinutesAndSeconds = (time: number) => {
   if (time < 0) return "0:00";
@@ -10,9 +14,20 @@ const numberTimeToMinutesAndSeconds = (time: number) => {
 export const InfoTime = () => {
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const level = useAppSelector((state) => state.levels[currentLevel - 1]);
+  const points = useAppSelector((state) => state.points);
+  const options = useAppSelector((state) => state.options);
+  const isCreator = options.creator;
 
-  const start = level.timeData.startTime;
-  const completionTime = level.timeData.pointAndTime[level.points];
+  return null;
+  const completionTime = points.levels[level.name].bestTime;
 
-  return <>{completionTime}</>;
+  return (
+    <InfoBox>
+      <PoppingTitle topTitle="Best Time">
+        <InfoText>
+          <Shaker value={completionTime}>{completionTime}</Shaker>
+        </InfoText>
+      </PoppingTitle>
+    </InfoBox>
+  );
 };

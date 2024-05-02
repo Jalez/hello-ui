@@ -17,16 +17,16 @@ import {
 import Difficulty from "./Difficulty";
 import PoppingTitle from "../General/PoppingTitle";
 import InfoBox from "./InfoBox";
+import InfoLevelPoints from "./InfoLevelPoints";
+import InfoGamePoints from "./InfoGamePoints";
 
 const Info = () => {
-  const dispatch = useAppDispatch();
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const levels = useAppSelector((state) => state.levels);
   const options = useAppSelector((state) => state.options);
-  const [edit, setEdit] = useState(false);
+  const points = useAppSelector((state) => state.points);
   const level = levels[currentLevel - 1];
-  const showModel = level.showModelPicture;
-  const interactive = level.interactive;
+
   const isCreator = options.creator;
 
   if (!level) return <div>loading...</div>;
@@ -48,44 +48,13 @@ const Info = () => {
               <Timer />
             </InfoBox>
           )}
-
-          <PoppingTitle
-            topTitle={isCreator ? "Set Max Points" : "Points/Max Points"}
-          >
-            <Shaker value={level.points}>
-              <InfoBox>
-                <InfoText>
-                  {!isCreator && (
-                    <>
-                      <LevelData reduxState="points" /> {"/ "}
-                    </>
-                  )}
-
-                  <LevelData
-                    reduxState="maxPoints"
-                    actionToDispatch={changeMaxPoints}
-                  />
-                </InfoText>
-              </InfoBox>
-            </Shaker>
-          </PoppingTitle>
-          {!isCreator && (
-            <InfoBox>
-              <PoppingTitle topTitle="Best Time">
-                <InfoText>
-                  <Shaker value={level.timeData.pointAndTime[level.points]}>
-                    <InfoTime />
-                  </Shaker>
-                </InfoText>
-              </PoppingTitle>
-            </InfoBox>
-          )}
+          <InfoLevelPoints />
+          <InfoGamePoints />
+          <InfoTime />
           {!isCreator && (
             <InfoBox>
               <PoppingTitle topTitle="Accuracy">
-                <InfoText>
-                  <LevelData reduxState="accuracy" />%
-                </InfoText>
+                <InfoText>{points.levels[level.name].accuracy}%</InfoText>
               </PoppingTitle>
             </InfoBox>
           )}

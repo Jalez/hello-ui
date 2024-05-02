@@ -26,6 +26,7 @@ import { SnackbarProvider } from "notistack";
 import { setSolutions } from "./store/slices/solutions.slice";
 import { getAllLevels } from "./utils/network/levels";
 import { getMapLevels } from "./utils/network/maps";
+import { initializePoints } from "./store/slices/points.slice";
 
 const AppStyle = {
   display: "flex",
@@ -53,8 +54,7 @@ function App() {
     //Example url: http://localhost:5173/creator?week=test
     // look at the url params to determine the week
     const urlParams = new URLSearchParams(window.location.search);
-    let map = urlParams.get("map");
-    map = map || "all";
+    const map = urlParams.get("map") || "all";
     let mapName = map as week;
     let solutions = {};
 
@@ -65,24 +65,27 @@ function App() {
       allLevels = levels;
       const solutions = levelsObj?.solutions || {};
       dispatch(updateWeek({ levels: allLevels, mapName }));
+      dispatch(initializePoints(allLevels));
 
       dispatch(setSolutions(solutions));
     } else {
       const fetchLevels = async (mapName: string) => {
         if (mapName === "all") {
+          console.log("fetching all levels");
           allLevels = await getAllLevels();
-          return;
+          console.log("all levels", allLevels);
         } else {
           allLevels = await getMapLevels(mapName);
         }
         solutions = allLevels.reduce(
           (acc: { [key: string]: {} }, level: Level) => {
-            acc[level.identifier as string] = level.solution;
+            acc[level.name as string] = level.solution;
             return acc;
           },
           {} as { [key: string]: string }
         );
         dispatch(updateWeek({ levels: allLevels, mapName }));
+        dispatch(initializePoints(allLevels));
         dispatch(setSolutions(solutions));
       };
       fetchLevels(map || "all");
