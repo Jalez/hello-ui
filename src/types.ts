@@ -33,11 +33,16 @@ type instructionSection = {
   content: string[];
 };
 
+export type scenarioAccuracy = {
+  scenarioId: string;
+  accuracy: number;
+};
+
 type instructions = instructionSection[];
 export interface Level {
   identifier: levelIdentifier;
   week: string;
-  name: string;
+  name: levelNames;
   difficulty: difficulty;
   completed: string;
   accuracy: number;
@@ -115,11 +120,13 @@ export type LevelIdAndName = {
 };
 
 export type levelNames =
+  | "template"
   | "Easy card"
   | "Medium form"
   | "Medium list"
   | "Easy table"
   | "test"
+  | "test2"
   | "Easy flex"
   | "Hard flex"
   | "Easy grid"

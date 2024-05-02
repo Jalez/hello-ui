@@ -10,6 +10,7 @@ import differenceUrlsReducer from "./slices/differenceUrls.slice";
 import solutionUrlsReducer from "./slices/solutionUrls.slice";
 import notificationsReducer from "./slices/notifications.slice";
 import solutionsReducer from "./slices/solutions.slice";
+import pointsReducer from "./slices/points.slice";
 
 export const store = configureStore({
   reducer: {
@@ -22,6 +23,7 @@ export const store = configureStore({
     solutionUrls: solutionUrlsReducer,
     notifications: notificationsReducer,
     solutions: solutionsReducer,
+    points: pointsReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

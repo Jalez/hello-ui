@@ -15,6 +15,7 @@ import { ActiveNavbarGenerator } from "./generators/navbarGeneratorDynamicActive
 import { sidebarGenerator } from "./generators/sidebarGenerator";
 import { tableGenerator } from "./generators/tableGenerator";
 import { testGenerator } from "./generators/testGenerator";
+import { testGenerator2 } from "./generators/testGenerator2";
 
 const initialHtml: string = `<div></div>`;
 const initialCss: string = `body {
@@ -61,6 +62,7 @@ type generatorNameAndFunction = {
 
 export const generatorNameAndFunction: generatorNameAndFunction = {
   test: testGenerator,
+  test2: testGenerator2,
   "Easy card": cardGenerator,
   "Easy table": tableGenerator,
   "Easy sidebar": sidebarGenerator,
@@ -75,6 +77,7 @@ export const generatorNameAndFunction: generatorNameAndFunction = {
   "Dynamic list": DynamicListGenerator,
   "Exam flex": flexboxMaker,
   "Exam grid": generateGridLevel,
+  template: cardGenerator,
 };
 export type week =
   | "html_2_es"
@@ -107,7 +110,7 @@ export const createLevels = (
   week: week
 ): { levels: any[]; solutions: SolutionMap } | undefined => {
   const weekAndGenerators = {
-    test: [testGenerator],
+    test: [testGenerator, testGenerator2],
     html_2_es: [cardGenerator, formGenerator],
     css_1_es: [listGenerator, tableGenerator],
     css_2: [easyFlexGenerator, easyGridGenerator],
@@ -152,10 +155,12 @@ export const createLevels = (
 
     const scenarios = [] as scenario[];
     //  go through the dimensions
+    const scenarioIds = ["Matti", "Teppo"];
     for (const details of scenarioDetails) {
       scenarios.push({
-        scenarioId: Math.random().toString(36).substring(7),
-        accuracy: 0,
+        // scenarioId: Math.random().toString(36).substring(7),
+        scenarioId: scenarioIds.pop() || "",
+        // accuracy: 0,
         dimensions: {
           width: details.width,
           height: details.height,

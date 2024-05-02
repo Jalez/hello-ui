@@ -55,6 +55,16 @@ export const Frame = ({
   useEffect(() => {
     const resendDataAfterMount = (event: MessageEvent) => {
       if (event.data === "mounted") {
+        if (name === "solutionUrl") {
+          // console.log(
+          //   "solutionUrl",
+          //   newHtml,
+          //   newCss,
+          //   newJs,
+          //   events,
+          //   scenario.scenarioId
+          // );
+        }
         iframeRef.current?.contentWindow?.postMessage(
           {
             html: newHtml,

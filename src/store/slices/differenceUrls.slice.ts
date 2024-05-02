@@ -22,7 +22,6 @@ const differenceUrlsSlice = createSlice({
   reducers: {
     addDifferenceUrl(state, action) {
       const { differenceUrl, scenarioId } = action.payload;
-      console.log("addDifferenceUrl", differenceUrl, scenarioId);
       // if (state[scenarioId]) return;
       state[scenarioId] = differenceUrl;
       // storage.setItem(storage.key, JSON.stringify(state));
