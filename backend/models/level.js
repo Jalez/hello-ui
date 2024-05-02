@@ -28,26 +28,7 @@ module.exports = (sequelize, DataTypes) => {
       },
       json: {
         type: DataTypes.JSON,
-        allowNull: false,
-        get () {
-          const rawJson = this.getDataValue('json');
-          const parsedJSON = JSON.parse(rawJson);
-
-          // add identifier and name back to the json
-          if (this.identifier) parsedJSON.identifier = this.identifier;
-          if (this.name) parsedJSON.name = this.name;
-
-          return parsedJSON;
-        },
-        set (value) {
-          const valueCopy = { ...value };
-
-          // remove identifier and name (do not save them twice in the database)
-          delete valueCopy.identifier;
-          delete valueCopy.name;
-
-          this.setDataValue('json', JSON.stringify(valueCopy));
-        }
+        allowNull: false
       }
     },
     {
