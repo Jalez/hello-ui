@@ -16,3 +16,5 @@
 //   // Make sure to pass the buffer within an object and specify the buffer in a transfer list
 //   self.postMessage({ buffer }, [buffer]); // Correctly transferring the buffer back
 // };
+
+export {};
