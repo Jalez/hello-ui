@@ -155,11 +155,11 @@ export const createLevels = (
 
     const scenarios = [] as scenario[];
     //  go through the dimensions
-    const scenarioIds = ["Matti", "Teppo"];
+    // const scenarioIds = ["Matti", "Teppo"];
     for (const details of scenarioDetails) {
       scenarios.push({
-        // scenarioId: Math.random().toString(36).substring(7),
-        scenarioId: scenarioIds.pop() || "",
+        scenarioId: Math.random().toString(36).substring(7),
+        // scenarioId: scenarioIds.pop() || "",
         // accuracy: 0,
         dimensions: {
           width: details.width,

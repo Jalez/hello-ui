@@ -50,15 +50,10 @@ export const ArtBoards = (): JSX.Element => {
 
             {scenarios.length > 0 &&
               scenarios.map((scenario) => (
-                <Box key={scenario.scenarioId}>
-                  <Typography variant="h3" align="center" color="primary">
-                    {scenario.scenarioId}
-                  </Typography>
-                  <ScenarioDrawing
-                    key={scenario.scenarioId}
-                    scenario={scenario}
-                  />
-                </Box>
+                <ScenarioDrawing
+                  key={scenario.scenarioId}
+                  scenario={scenario}
+                />
               ))}
             {isCreator && (
               <Button
