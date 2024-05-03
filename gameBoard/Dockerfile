@@ -18,13 +18,16 @@ RUN npm install
 
 # Bundle app source
 COPY . .
-RUN rm -fr ./drawBoard \
-  && sed -i 's#http://localhost:3500#https://tie-lukioplus.rd.tuni.fi/drawboard#' src/components/ArtBoards/Frame.tsx \
-  && sed -i 's#http://localhost:3500#https://tie-lukioplus.rd.tuni.fi/drawboard#' src/components/ArtBoards/Drawboard/ScenarioDrawing.tsx \
-  && echo LOCAL_TESTING_URL="https://tie-lukioplus.rd.tuni.fi" >./.env \
-  && echo LOCAL_TESTING_URL="https://tie-lukioplus.rd.tuni.fi" >./.env.example \
+
+ARG DRABOARD_URL="https://tie-lukioplus.rd.tuni.fi/drawboard"
+ARG LOCAL_TESTING_URL="https://tie-lukioplus.rd.tuni.fi"
+
+RUN sed -i "s#http://localhost:3500#${DRABOARD_URL}#" src/components/ArtBoards/Frame.tsx \
+  && sed -i "s#http://localhost:3500#${DRABOARD_URL}#" src/components/ArtBoards/Drawboard/ScenarioDrawing.tsx \
+  && echo LOCAL_TESTING_URL="${LOCAL_TESTING_URL}" >./.env \
+  && echo LOCAL_TESTING_URL="${LOCAL_TESTING_URL}" >./.env.example \
   && npm run build \
   && npx import-meta-env -x .env.example -p dist/index.html
 
 EXPOSE 3000
-CMD [ "npm", "start" ]
+ENTRYPOINT [ "npm", "start" ]

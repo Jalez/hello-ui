@@ -1,0 +1,61 @@
+version: '3'
+
+services:
+  ui-designer:
+    container_name: cssartist
+    image: cssartist:latest
+    build:
+      context: ./gameBoard
+      dockerfile: Dockerfile
+      args:
+        DRABOARD_URL: 'http://localhost:3500'
+        LOCAL_TESTING_URL: 'http://localhost:5173'
+    ports:
+      - 54322:3000
+    environment:
+      TZ: Europe/Helsinki
+      NODE_ENV: development
+    restart: always
+    networks:
+      ui-designer-network:
+    depends_on:
+      - drawboard
+      - backend
+
+  drawboard:
+    container_name: drawboard
+    image: drawboard:latest
+    build:
+      context: ./drawBoard
+      dockerfile: Dockerfile
+    ports:
+      - 3500:3000
+    environment:
+      TZ: Europe/Helsinki
+      NODE_ENV: development
+    restart: always
+    networks:
+      ui-designer-network:
+
+  backend:
+    container_name: cssartist.backend
+    image: cssartist-backend:latest
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        HOST_UID: ${HOST_UID}
+        HOST_GID: ${HOST_GID}
+    ports:
+      - 3000:3000
+    environment:
+      TZ: Europe/Helsinki
+      NODE_ENV: development
+    restart: always
+    volumes:
+      - ./backend/db:/usr/src/app/db:z
+    networks:
+      ui-designer-network:
+
+networks:
+  ui-designer-network:
