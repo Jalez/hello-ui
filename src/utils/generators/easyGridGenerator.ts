@@ -136,6 +136,7 @@ export const easyGridGenerator: generator = () => {
       {
         width: drawBoardWidth,
         height: drawBoardheight,
+        id: "easyGrid1",
       },
     ],
   };

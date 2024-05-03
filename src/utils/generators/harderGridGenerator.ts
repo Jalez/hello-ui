@@ -162,10 +162,12 @@ export const harderGridGenerator: generator = () => {
       {
         width: 500,
         height: 200,
+        id: "hardGrid1",
       },
       {
         width: 200,
         height: 500,
+        id: "hardGrid2",
       },
     ],
   };

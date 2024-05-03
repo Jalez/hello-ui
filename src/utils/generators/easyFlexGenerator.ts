@@ -121,6 +121,7 @@ width: 20%;
       {
         width: 400,
         height: 300,
+        id: "easyFlex1",
       },
     ],
   };

@@ -1,6 +1,6 @@
 /** @format */
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useAppDispatch, useAppSelector } from "./store/hooks/hooks";
 import { sendScoreToParentFrame } from "./store/actions/score.actions";
 
@@ -80,16 +80,54 @@ export const LevelUpdater = () => {
     <>
       {scenarios.map((scenario) => {
         return (
-          <ScenarioUpdater
-            key={Math.random() * 1000 + scenario.scenarioId}
-            scenario={scenario}
-            drawingPixels={drawingPixels[scenario.scenarioId] || undefined}
-            solutionPixels={solutionPixels[scenario.scenarioId] || undefined}
-            handleSolutionPixelUpdate={handleSolutionPixelUpdate}
-            handleDrawingPixelUpdate={handleDrawingPixelUpdate}
-          />
+          <ErrorBoundary key={Math.random() * 1000 + scenario.scenarioId}>
+            <ScenarioUpdater
+              scenario={scenario}
+              drawingPixels={drawingPixels[scenario.scenarioId] || undefined}
+              solutionPixels={solutionPixels[scenario.scenarioId] || undefined}
+              handleSolutionPixelUpdate={handleSolutionPixelUpdate}
+              handleDrawingPixelUpdate={handleDrawingPixelUpdate}
+            />
+          </ErrorBoundary>
         );
       })}
     </>
   );
 };
+
+type ErrorBoundaryState = {
+  hasError: boolean;
+};
+
+type ErrorBoundaryProps = {
+  children: React.ReactNode;
+};
+
+class ErrorBoundary extends React.Component<
+  ErrorBoundaryProps,
+  ErrorBoundaryState
+> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(_: Error): ErrorBoundaryState {
+    // Update state so the next render will show the fallback UI.
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    // You can also log the error to an error reporting service
+    console.error("ErrorBoundary caught an error", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      // You can render any custom fallback UI
+      return <h1>Something went wrong.</h1>;
+    }
+
+    return this.props.children;
+  }
+}

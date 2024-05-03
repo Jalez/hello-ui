@@ -206,6 +206,7 @@ export const tableGenerator: generator = () => {
         width: drawBoardWidth,
         height: drawBoardheight,
         js: "",
+        id: "easyTable1",
       },
     ],
   };

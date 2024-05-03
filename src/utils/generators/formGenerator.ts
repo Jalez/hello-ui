@@ -316,6 +316,7 @@ form footer input[type="submit"] {
     colors: [primaryColor, secondaryColor],
     scenarioDetails: [
       {
+        id: "mediumForm1",
         width: drawBoardWidth,
         height: drawBoardheight,
       },

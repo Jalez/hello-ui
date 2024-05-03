@@ -146,6 +146,7 @@ div>div {
     },
     scenarioDetails: [
       {
+        id: "flex1",
         width: drawBoardWidth,
         height: drawBoardheight,
       },

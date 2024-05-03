@@ -2,18 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { useAppDispatch, useAppSelector } from "./store/hooks/hooks";
-import { sendScoreToParentFrame } from "./store/actions/score.actions";
-import { updateAccuracy, updatePoints } from "./store/slices/levels.slice";
-
-import calculateAccuracy from "./utils/imageTools/calculateAccuracy";
-import { addDifferenceUrl } from "./store/slices/differenceUrls.slice";
-import { scenario } from "./types";
-import { getPixelData } from "./utils/imageTools/getPixelData";
 import {
-  refreshPoints,
   updateLevelAccuracy,
+  refreshPoints,
 } from "./store/slices/points.slice";
-import { addNotificationData } from "./store/slices/notifications.slice";
+import { addDifferenceUrl } from "./store/slices/differenceUrls.slice";
+import { getPixelData } from "./utils/imageTools/getPixelData";
+import { batch } from "react-redux";
+import { scenario } from "./types";
 
 // drawingPixels, solutionPixels should be objects, where key is the scenarioId and value is the ImageData
 type scenarioData = {
@@ -44,55 +40,76 @@ export const ScenarioUpdater = ({
   const scenarioId = scenario.scenarioId;
 
   useEffect(() => {
-    const completeRest = () => {
-      if (!solutionPixels) {
-        return;
-      }
-      if (!drawingPixels) {
-        return;
-      }
-      const { diff, accuracy } = calculateAccuracy(
-        drawingPixels,
-        solutionPixels
-      );
-      dispatch(
-        updateLevelAccuracy({
-          level: level,
-          scenarioId: scenario.scenarioId,
-          accuracy: accuracy,
-        })
-      );
-      dispatch(refreshPoints());
-      dispatch(addDifferenceUrl({ scenarioId, differenceUrl: diff }));
-    };
-    //console.log("drawingPixels", drawingPixels);
-    const { scenarioId } = scenario;
-    if (!drawingPixels) {
+    const solutionUrl = solutionUrls[scenario.scenarioId];
+    if (!solutionUrl || solutionPixels) {
       return;
     }
 
-    if (!solutionPixels) {
-      // take the solutionUrl, and use that to create the solutionPixels
-      const img = new Image();
-      const solutionUrl = solutionUrls[scenarioId];
-      // console.log("solutionUrl", solutionUrl, scenarioId);
-      if (solutionUrl === undefined)
-        console.log("solutionUrl is undefined", scenarioId);
+    const img = new Image();
+    img.src = solutionUrl;
+    img.onload = () => {
+      const imageData = getPixelData(
+        img,
+        scenario.dimensions.width,
+        scenario.dimensions.height
+      );
+      handleSolutionPixelUpdate(scenario.scenarioId, imageData);
+    };
+  }, [solutionUrls, scenario, solutionPixels]);
 
-      img.src = solutionUrl;
-      img.onload = () => {
-        const imageData = getPixelData(
-          img,
-          scenario.dimensions.width,
-          scenario.dimensions.height
-        );
-        handleSolutionPixelUpdate(scenarioId, imageData);
-      };
-      // return;
-    } else {
-      completeRest();
+  useEffect(() => {
+    if (!drawingPixels || !solutionPixels) {
+      return;
     }
-  }, [drawingPixels, solutionPixels, scenario]);
+
+    const worker = new Worker(
+      new URL("./utils/workers/imageComparisonWorker.ts", import.meta.url),
+      { type: "module" }
+    );
+
+    worker.onmessage = ({ data }) => {
+      const { accuracy, diff } = data;
+
+      batch(() => {
+        dispatch(
+          updateLevelAccuracy({
+            level: level,
+            scenarioId: scenarioId,
+            accuracy: accuracy,
+          })
+        );
+        dispatch(refreshPoints());
+        dispatch(
+          addDifferenceUrl({
+            scenarioId: scenarioId,
+            differenceUrl: diff,
+          })
+        );
+      });
+      worker.terminate();
+    };
+
+    worker.onerror = (error) => {
+      console.error("Worker error:", error.message);
+      worker.terminate();
+    };
+
+    // Copy buffers before transferring
+    const drawingBuffer = drawingPixels.data.buffer.slice(0);
+    const solutionBuffer = solutionPixels.data.buffer.slice(0);
+
+    worker.postMessage(
+      {
+        drawingBuffer: drawingBuffer,
+        solutionBuffer: solutionBuffer,
+        width: drawingPixels.width,
+        height: drawingPixels.height,
+      },
+      [drawingBuffer, solutionBuffer]
+    );
+
+    return () => worker.terminate(); // Cleanup the worker on unmount or dependency change
+  }, [drawingPixels, solutionPixels, level, dispatch, scenarioId]);
 
   return <></>;
 };

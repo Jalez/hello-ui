@@ -155,10 +155,12 @@ ${generateGridAreasCSSString(selectors, colors)}
       {
         width: drawBoardWidth,
         height: drawBoardheight,
+        id: "grid1",
       },
       {
         width: 400,
         height: 600,
+        id: "grid2",
       },
     ],
   };

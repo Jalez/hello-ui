@@ -102,10 +102,12 @@ export const harderFlexGenerator: generator = () => {
       {
         width: 500,
         height: 200,
+        id: "hardFlex1"
       },
       {
         width: 200,
         height: 500,
+        id: "hardFlex2"
       },
     ],
   };
