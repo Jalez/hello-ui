@@ -13,6 +13,7 @@ import {
   refreshPoints,
   updateLevelAccuracy,
 } from "./store/slices/points.slice";
+import { addNotificationData } from "./store/slices/notifications.slice";
 
 // drawingPixels, solutionPixels should be objects, where key is the scenarioId and value is the ImageData
 type scenarioData = {
