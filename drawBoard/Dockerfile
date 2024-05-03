@@ -1,5 +1,8 @@
 FROM node:18
 
+# Run as regular user
+USER node
+
 # Create app directory
 WORKDIR /usr/src/app
 
