@@ -184,6 +184,7 @@ button {
       {
         width: 400,
         height: 300,
+        id: "easyCard1",
       },
     ],
   };

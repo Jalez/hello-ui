@@ -151,6 +151,7 @@ export const sidebarGenerator: generator = () => {
       {
         width: drawBoardWidth,
         height: drawBoardheight,
+        id: "easySidebar",
       },
     ],
   };

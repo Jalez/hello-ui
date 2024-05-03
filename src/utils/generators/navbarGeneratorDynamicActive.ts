@@ -135,11 +135,13 @@ setupLink('contact', 'Contact Us here.');
         width: drawBoardWidth,
         height: drawBoardheight,
         js: "document.getElementById('about').click();",
+        id: "mediumNavbar1",
       },
       {
         width: drawBoardWidth,
         height: drawBoardheight,
         js: "document.getElementById('services').click();",
+        id: "mediumNavbar2",
       },
       // {
       //   width: drawBoardheight,

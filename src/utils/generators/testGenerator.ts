@@ -44,10 +44,12 @@ export const testGenerator: generator = () => {
       {
         width: 250,
         height: 250,
+        id: "test1",
       },
       {
         width: 300,
         height: 300,
+        id: "test2",
       },
     ],
   };

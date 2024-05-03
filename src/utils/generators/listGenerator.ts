@@ -168,6 +168,7 @@ text-decoration: underline;
       {
         width: drawBoardWidth,
         height: drawBoardheight,
+        id: "mediumList1",
       },
     ],
   };

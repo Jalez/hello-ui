@@ -141,7 +141,7 @@ export const createLevels = (
 
   let i = 0;
   // loop through the generators and create levels
-  const scenarioIds = ["Sauli", "Teppo", "Matti", "Mirjam"];
+  // const scenarioIds = ["Sauli", "Teppo", "Matti", "Mirjam"];
   for (const generator of generators) {
     i++;
     let randomLevel = {
@@ -159,8 +159,8 @@ export const createLevels = (
     // const scenarioIds = ["Matti", "Teppo"];
     for (const details of scenarioDetails) {
       scenarios.push({
-        // scenarioId: Math.random().toString(36).substring(7),
-        scenarioId: scenarioIds.pop() || "",
+        scenarioId: details?.id || Math.random().toString(36).substring(7),
+        // scenarioId: scenarioIds.pop() || "",
         // accuracy: 0,
         dimensions: {
           width: details.width,

@@ -111,6 +111,7 @@ export type generator = () => {
     width: number;
     height: number;
     js?: string;
+    id?: string;
   }[];
 };
 

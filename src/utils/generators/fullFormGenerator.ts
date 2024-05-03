@@ -143,6 +143,7 @@ export const fullFormGenerator: generator = () => {
     colors: colors,
     scenarioDetails: [
       {
+        id: "hardForm1",
         width: drawBoardWidth,
         height: drawBoardheight,
       },
