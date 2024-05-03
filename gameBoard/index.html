@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/svg+xml" href="/ui.svg" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UI Designer</title>
+  <style>
+    body {
+      margin: 0px;
+      padding: 0px;
+
+      font-family: Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif;
+
+    }
+
+    /* Add Bungee spice as a font 
+     */
+    @font-face {
+      font-family: "Kontakt";
+      src: url("./fonts/Kontakt.ttf");
+    }
+
+    /* Add Cyberpunk  as font*/
+
+
+    #root {
+      font-family: "Kontakt";
+      margin: 0;
+      padding: 0;
+
+    }
+
+    p {
+      font-family: "Arial";
+    }
+
+    /* h1, */
+  </style>
+</head>
+
+<body>
+  <div id="root"></div>
+  <script>
+    globalThis.import_meta_env = JSON.parse('"import_meta_env_placeholder"');
+  </script>
+  <script type="module" src="/src/main.tsx"></script>
+  <script>
+    let lastHeight = 0;
+    const maxHeight = 2500;
+
+    const resizeObserver = new ResizeObserver(entries => {
+      for (let entry of entries) {
+        const currentHeight = entry.target.scrollHeight;
+        if (lastHeight !== currentHeight && currentHeight < maxHeight) {
+          window.parent.postMessage({
+            action: 'resizeIframe',
+            frameHeight: currentHeight
+          }, '*');  // Replace '*' with the origin of the parent window for better security if known
+
+          lastHeight = currentHeight;
+        }
+      }
+    });
+
+    resizeObserver.observe(document.body);
+  </script>
+</body>
+
+</html>

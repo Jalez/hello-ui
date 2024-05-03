@@ -1,0 +1,49 @@
+/** @format */
+
+import { Box, Typography, useTheme } from "@mui/material";
+import { secondaryColor } from "../../constants";
+
+interface InfoHeadingProps {
+  children: React.ReactNode;
+  variant: "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
+}
+
+/**
+ * @description InfoHeading is a component that displays a heading for the InfoBoard
+ * @param {InfoHeadingProps} props - props for component,
+ * @returns {JSX.Element}
+ */
+export const InfoHeading = ({ children, variant }: InfoHeadingProps) => {
+  const theme = useTheme();
+
+  return (
+    <Box
+      sx={{
+        display: "flex",
+        justifyContent: "center",
+        // width: '100%',
+        position: "relative",
+      }}
+    >
+      <Typography
+        variant={variant}
+        // color='primary'
+        // Add styling
+        sx={{
+          bgcolor: theme.palette.secondary.main || secondaryColor,
+          userSelect: "none",
+          boxSizing: "border-box",
+          borderBottom: "3px solid rgb(17, 17, 17)",
+          borderLeft: "3px solid rgb(17, 17, 17)",
+          borderRight: "3px solid rgb(17, 17, 17)",
+          padding: "0.25em",
+          borderBottomLeftRadius: "0.3em",
+          borderBottomRightRadius: "0.3em",
+          zIndex: 2,
+        }}
+      >
+        {children}
+      </Typography>
+    </Box>
+  );
+};
