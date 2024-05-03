@@ -44,10 +44,13 @@ First, clone the repository to your local machine.
 
         git clone git@github.com:Jalez/CSS-artist.git
 
-1. Open the repository in your terminal.
-2. Run `npm install` to install the required packages and libraries.
-3. Run `npm run dev` -- --open to start the application.
-4. The application will automatically open in your default browser at http://localhost:5173.
+To start the gameBoard, follow these steps:
+
+1. Change directory to **./gameBoard**.
+2. Open the repository in your terminal.
+3. Run `npm install` to install the required packages and libraries.
+4. Run `npm run dev` -- --open to start the application.
+5. The application will automatically open in your default browser at http://localhost:5173.
 
 To use the drawboards feature, follow these steps:
 
