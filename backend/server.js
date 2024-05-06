@@ -12,6 +12,9 @@ const db = require('./models/index.js');
 const logger = debug('ui_designer:server');
 
 const PORT = 3200;
+const nodeEnv = process.env.NODE_ENV ?? 'development';
+
+app.set('environment', nodeEnv);
 
 // save db to app
 app.set('db', db);
