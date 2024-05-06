@@ -2,6 +2,8 @@
   "restartable": "rs",
   "ignore": [
     ".git",
+    "Dockerfile",
+    ".dockerignore",
     "db/**/*.json",
     "static_files/**/*.json",
     "node_modules/*",
