@@ -1,7 +1,14 @@
 FROM node:18
 
+ARG HOST_UID=1000
+ARG HOST_GID=1000
+
+# Change the "node" user's UID & GID to match the host user
+# Makes sure any mounted files will not become owned by the root
+RUN groupmod -g ${HOST_GID} node && usermod -u ${HOST_UID} -g ${HOST_GID} node
+
 # Run as regular user
-USER node
+USER node:node
 
 # Create app directory
 WORKDIR /usr/src/app
@@ -24,5 +31,5 @@ COPY . .
 
 RUN npm run build
 
-EXPOSE 3000
-CMD [ "npm", "start" ]
+EXPOSE 3500
+ENTRYPOINT [ "npm", "start" ]

@@ -11,7 +11,7 @@ const db = require('./models/index.js');
 // (Better console.log with colors and does not show any output in production)
 const logger = debug('ui_designer:server');
 
-const PORT = 3000;
+const PORT = 3200;
 
 // save db to app
 app.set('db', db);
