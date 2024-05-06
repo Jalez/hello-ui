@@ -1,4 +1,4 @@
-FROM node:18
+FROM node:20-bullseye
 
 ARG HOST_UID=1000
 ARG HOST_GID=1000
@@ -13,23 +13,13 @@ USER node:node
 # Create app directory
 WORKDIR /usr/src/app
 
-# Install app dependencies
-# A wildcard is used to ensure both package.json AND package-lock.json are copied
-# where available (npm@5+)
-COPY package.json .
-
-# RUN npm install -g npm@latest \
-#   && npm install
+# Install dependencies
+COPY package.json ./
 
 RUN npm install
 
-# Get vulnerability reports
-# RUN npm audit
-
-# Bundle app source
+# COPY app source
 COPY . .
 
-RUN npm run build
-
-EXPOSE 3500
-ENTRYPOINT [ "npm", "start" ]
+EXPOSE 3200
+ENTRYPOINT ["./docker-entrypoint.sh"]
