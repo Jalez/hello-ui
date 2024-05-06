@@ -1,0 +1,90 @@
+version: '3'
+
+services:
+  ui-designer:
+    container_name: cssartist
+    image: cssartist:latest
+    build:
+      context: ./gameBoard
+      dockerfile: Dockerfile
+      args:
+        HOST_UID: ${HOST_UID}
+        HOST_GID: ${HOST_GID}
+        DRABOARD_URL: 'http://172.16.238.11:3500'
+        LOCAL_TESTING_URL: 'http://172.16.238.10:3000'
+    ports:
+      # - 54322:3000
+      - 3000:3000
+    environment:
+      TZ: Europe/Helsinki
+      NODE_ENV: development
+    entrypoint:
+      - npm
+      - run
+      - dev
+    restart: always
+    volumes:
+      - ./gameBoard:/usr/src/app:z
+    networks:
+      ui-designer-network:
+        ipv4_address: 172.16.238.10
+    depends_on:
+      - drawboard
+      - backend
+
+  drawboard:
+    container_name: drawboard
+    image: drawboard:latest
+    build:
+      context: ./drawBoard
+      dockerfile: Dockerfile
+      args:
+        HOST_UID: ${HOST_UID}
+        HOST_GID: ${HOST_GID}
+    ports:
+      - 3500:3500
+    environment:
+      TZ: Europe/Helsinki
+      NODE_ENV: development
+    entrypoint:
+      - npm
+      - run
+      - dev
+    restart: always
+    volumes:
+      - ./drawBoard/db:/usr/src/app/db:z
+    networks:
+      ui-designer-network:
+        ipv4_address: 172.16.238.11
+
+  backend:
+    container_name: cssartist.backend
+    image: cssartist-backend:latest
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        HOST_UID: ${HOST_UID}
+        HOST_GID: ${HOST_GID}
+    ports:
+      - 3200:3200
+    environment:
+      TZ: Europe/Helsinki
+      NODE_ENV: development
+    entrypoint:
+      - npm
+      - run
+      - nodemon
+    restart: always
+    volumes:
+      - ./backend:/usr/src/app:z
+    networks:
+      ui-designer-network:
+
+networks:
+  ui-designer-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.16.238.0/24
+          gateway: 172.16.238.1
