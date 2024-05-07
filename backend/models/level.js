@@ -33,7 +33,8 @@ module.exports = (sequelize, DataTypes) => {
     },
     {
       sequelize,
-      modelName: 'Level'
+      modelName: 'Level',
+      timestamps: true
     }
   );
   return Level;

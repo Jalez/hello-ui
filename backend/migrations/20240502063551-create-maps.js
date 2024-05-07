@@ -19,6 +19,18 @@ module.exports = {
         allowNull: false,
         defaultValue: false
       },
+      easyLevelPoints: {
+        type: Sequelize.DataTypes.INTEGER,
+        allowNull: false
+      },
+      mediumLevelPoints: {
+        type: Sequelize.DataTypes.INTEGER,
+        allowNull: false
+      },
+      hardLevelPoints: {
+        type: Sequelize.DataTypes.INTEGER,
+        allowNull: false
+      },
       createdAt: {
         type: Sequelize.DataTypes.DATE,
         allowNull: false
