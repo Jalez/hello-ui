@@ -1,9 +1,20 @@
 const debug = require('debug');
-const level = require('../models/level.js');
+const { idSchema: levelIdSchema } = require('../models/validators/level.js');
+const {
+  nameSchema,
+  levelsSchema,
+  mapSchema
+} = require('../models/validators/map.js');
 
 // Create logger for debugging
 // (Better console.log with colors and does not show any output in production)
 const logger = debug('ui_designer:controller:map');
+
+const respondWithErrorMessages = (req, res, err) => {
+  logger('%O', err);
+  res.status(400);
+  return res.json({ error: err.message });
+};
 
 // get all maps: /maps
 const getAllMaps = async (req, res) => {
@@ -43,7 +54,8 @@ const getMapNames = async (req, res) => {
 const getMapLevels = async (req, res) => {
   try {
     const db = req.app.get('db');
-    const name = req.params.name;
+    const { value: name, error } = nameSchema().validate(req.params.name);
+    if (error) return respondWithErrorMessages(req, res, error);
 
     const map = await db.Map.findOne({
       where: { name },
@@ -69,8 +81,14 @@ const getMapLevels = async (req, res) => {
 const setMapLevels = async (req, res) => {
   try {
     const db = req.app.get('db');
-    const name = req.params.name;
-    const identifiers = req.body;
+    const { value: name, error: nameError } = nameSchema().validate(
+      req.params.name
+    );
+    if (nameError) return respondWithErrorMessages(req, res, nameError);
+
+    const { value: identifiers, error } = levelsSchema().validate(req.body);
+    if (error) return respondWithErrorMessages(req, res, error);
+
     const map = await db.Map.findByPk(name);
 
     if (!map) {
@@ -105,18 +123,18 @@ const setMapLevels = async (req, res) => {
 const updateMapLevels = async (req, res) => {
   try {
     const db = req.app.get('db');
-    const name = req.params.name;
-    const identifiers = req.body;
+    const { value: name, error: nameError } = nameSchema().validate(
+      req.params.name
+    );
+    if (nameError) return respondWithErrorMessages(req, res, nameError);
+
+    const { value: identifiers, error } = levelsSchema().validate(req.body);
+    if (error) return respondWithErrorMessages(req, res, error);
+
     const map = await db.Map.findByPk(name, { include: [db.Level] });
 
     if (!map) {
       return res.status(404).send({ message: 'Map not found' });
-    }
-
-    if (!identifiers || identifiers.length === 0) {
-      return res
-        .status(400)
-        .send({ message: 'Failed to add levels. Missing level identifiers.' });
     }
 
     // Begin transaction to update map and connections to levels
@@ -168,9 +186,12 @@ const updateMapLevels = async (req, res) => {
 
 // Delete all levels from a map: /maps/levels/:name (DELETE)
 const deleteMapLevels = async (req, res) => {
+  // FIXME: Add transaction
   try {
     const db = req.app.get('db');
-    const name = req.params.name;
+    const { value: name, error } = nameSchema().validate(req.params.name);
+    if (error) return respondWithErrorMessages(req, res, error);
+
     const map = await db.Map.findByPk(name, { include: [db.Level] });
 
     if (!map) {
@@ -191,8 +212,15 @@ const deleteMapLevels = async (req, res) => {
 const addMapLevel = async (req, res) => {
   try {
     const db = req.app.get('db');
-    const name = req.params.name;
-    const identifier = req.params.id;
+    const { value: name, error: nameError } = nameSchema().validate(
+      req.params.name
+    );
+    if (nameError) return respondWithErrorMessages(req, res, nameError);
+
+    const { value: identifier, error } = levelIdSchema().validate(
+      req.params.id
+    );
+    if (error) return respondWithErrorMessages(req, res, error);
 
     const map = await db.Map.findByPk(name);
     const level = await db.Level.findByPk(identifier);
@@ -227,8 +255,15 @@ const addMapLevel = async (req, res) => {
 const removeMapLevel = async (req, res) => {
   try {
     const db = req.app.get('db');
-    const name = req.params.name;
-    const identifier = req.params.id;
+    const { value: name, error: nameError } = nameSchema().validate(
+      req.params.name
+    );
+    if (nameError) return respondWithErrorMessages(req, res, nameError);
+
+    const { value: identifier, error } = levelIdSchema().validate(
+      req.params.id
+    );
+    if (error) return respondWithErrorMessages(req, res, error);
 
     const map = await db.Map.findByPk(name);
     const level = await db.Level.findByPk(identifier);
@@ -263,7 +298,10 @@ const removeMapLevel = async (req, res) => {
 const getMapByName = async (req, res) => {
   try {
     const db = req.app.get('db');
-    const map = await db.Map.findByPk(req.params.name, { include: [db.Level] });
+    const { value: name, error } = nameSchema().validate(req.params.name);
+    if (error) return respondWithErrorMessages(req, res, error);
+
+    const map = await db.Map.findByPk(name, { include: [db.Level] });
 
     if (!map) {
       return res.status(404).send({ message: 'Map not found' });
@@ -284,25 +322,25 @@ const getMapByName = async (req, res) => {
 const createMap = async (req, res) => {
   try {
     const db = req.app.get('db');
-    const name = req.params.name;
-    const data = req.body;
-    delete data.levels; // add levels via a separate endpoint
+    const { value: name, error: nameError } = nameSchema().validate(
+      req.params.name
+    );
+    if (nameError) return respondWithErrorMessages(req, res, nameError);
 
-    if (!name) {
-      return res
-        .status(400)
-        .send({ message: 'Failed to create map: map name is missing' });
-    } else {
-      const map = await db.Map.findByPk(name);
-      if (map) {
-        return res.status(409).send({
-          message:
-            'Failed to create map: a map with the same name already exists'
-        });
-      }
+    const { value: data, error } = mapSchema
+      .tailor('create')
+      .validate(req.body);
+    if (error) return respondWithErrorMessages(req, res, error);
+
+    let map = await db.Map.findByPk(name);
+
+    if (map) {
+      return res.status(409).send({
+        message: 'Failed to create map: a map with the same name already exists'
+      });
     }
 
-    const map = await db.Map.create({ name, ...data });
+    map = await db.Map.create({ name, ...data });
     return res.status(201).json({ ...map.toJSON(), levels: [] });
   } catch (error) {
     logger('Error %O', error);
@@ -315,13 +353,15 @@ const createMap = async (req, res) => {
 const updateMap = async (req, res) => {
   try {
     const db = req.app.get('db');
-    const name = req.params.name;
-    const data = req.body;
+    const { value: name, error: nameError } = nameSchema().validate(
+      req.params.name
+    );
+    if (nameError) return respondWithErrorMessages(req, res, nameError);
 
-    // do not allow modifying name (PK) or levels
-    // use separate endpoints to modify levels
-    delete data.levels;
-    delete data.name;
+    const { value: data, error } = mapSchema
+      .tailor('update')
+      .validate(req.body);
+    if (error) return respondWithErrorMessages(req, res, error);
 
     const map = await db.Map.findByPk(name, { include: [db.Level] });
 
@@ -329,8 +369,7 @@ const updateMap = async (req, res) => {
       return res.status(404).send({ message: 'Map not found' });
     }
 
-    Object.entries(data).forEach(([column, value]) => (map[column] = value));
-    await map.save();
+    await map.update({ ...data });
 
     // build response JSON (include level identifiers)
     const mapJson = map.toJSON();
@@ -349,7 +388,10 @@ const updateMap = async (req, res) => {
 const deleteMap = async (req, res) => {
   try {
     const db = req.app.get('db');
-    const map = await db.Map.findByPk(req.params.id);
+    const { value: name, error } = nameSchema().validate(req.params.name);
+    if (error) return respondWithErrorMessages(req, res, error);
+
+    const map = await db.Map.findByPk(name);
 
     if (!map) {
       return res.status(404).send({ message: 'Map not found' });
