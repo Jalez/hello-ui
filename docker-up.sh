@@ -19,6 +19,10 @@ if [[ "$(hostname)" =~ tie-lukioplus.rd.tuni.fi ]]; then
   export HOST_GID=$(cut -d: -f3 < <(getent group docker))
   COMPOSE_YML="production.docker-compose.yml"
   COMPOSE_OPTIONS+=("-d")
+
+  # server has a very old version of docker and docker-compose
+  docker-compose --file ${COMPOSE_YML} up ${COMPOSE_OPTIONS[@]}
+else
+  docker compose --file ${COMPOSE_YML} up ${COMPOSE_OPTIONS[@]}
 fi
 
-docker compose --file ${COMPOSE_YML} up ${COMPOSE_OPTIONS[@]}
