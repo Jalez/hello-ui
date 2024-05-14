@@ -144,9 +144,7 @@ function App() {
     if (css) {
       try {
         setStyles(css);
-        setTimeout(() => {
-          setStylesCorrect(true);
-        }, 500);
+        setStylesCorrect(true);
         // setStylesCorrect(true);
       } catch (error) {
         // //console.error("Drawboard URL error setting styles", error);
