@@ -5,6 +5,7 @@ import { useAppDispatch, useAppSelector } from "./store/hooks/hooks";
 import { sendScoreToParentFrame } from "./store/actions/score.actions";
 
 import { ScenarioUpdater } from "./ScenarioUpdater";
+import { updateDrawnState } from "./store/slices/solutions.slice";
 
 // drawingPixels, solutionPixels should be objects, where key is the scenarioId and value is the ImageData
 type scenarioData = {
@@ -58,6 +59,29 @@ export const LevelUpdater = () => {
   useEffect(() => {
     dispatch(sendScoreToParentFrame());
   }, [points.allPoints]);
+
+  useEffect(() => {
+    // if both of the scenarios for this level have solution pixels now, we are ready for the comparison
+    // look for the scenarioIds in the solutionPixels object
+    // const scenarioIds = Object.keys(solutionPixels);
+    // if (!level) return;
+    // const scenarios = level.scenarios;
+    // // go through each of the scenarios and check if the solutionPixels object has the scenarioId
+    // let hasAllPixels = true;
+    // for (const scenario of scenarios) {
+    //   if (!scenarioIds.includes(scenario.scenarioId)) {
+    //     hasAllPixels = false;
+    //     break;
+    //   }
+    // }
+    // if (!hasAllPixels) return;
+    // dispatch(
+    //   updateDrawnState({
+    //     levelId: level.name,
+    //     drawn: true,
+    //   })
+    // );
+  }, [solutionPixels]);
 
   const handleSolutionPixelUpdate = (scenarioId: string, pixels: ImageData) => {
     setSolutionPixels({
