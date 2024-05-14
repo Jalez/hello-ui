@@ -102,8 +102,12 @@ export const availableWeeks = [
   "exam",
 ];
 
-interface SolutionMap {
-  [key: string]: {};
+export interface SolutionMap {
+  [key: string]: {
+    html: string;
+    css: string;
+    js?: string;
+  };
 }
 
 export const createLevels = (
