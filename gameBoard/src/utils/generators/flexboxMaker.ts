@@ -78,6 +78,7 @@ div>div {
 	text-align: center;
 	margin: 0.5em;
 	border-radius: 5px;
+  min-width: fit-content; 
 }
 
 div>div:before {
