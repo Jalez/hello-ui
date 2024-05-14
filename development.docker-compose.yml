@@ -52,7 +52,7 @@ services:
       - dev
     restart: always
     volumes:
-      - ./drawBoard/db:/usr/src/app/db:z
+      - ./drawBoard:/usr/src/app:z
     networks:
       ui-designer-network:
         ipv4_address: 172.16.238.11

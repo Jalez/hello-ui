@@ -4,17 +4,26 @@ const maps = [
   {
     name: 'newOne',
     random: 1,
-    canUseAI: true
+    canUseAI: true,
+    easyLevelPoints: 5,
+    mediumLevelPoints: 10,
+    hardLevelPoints: 15
   },
   {
     name: 'test',
     random: 0,
-    canUseAI: false
+    canUseAI: false,
+    easyLevelPoints: 1,
+    mediumLevelPoints: 2,
+    hardLevelPoints: 3
   },
   {
     name: 'js',
     random: 0,
-    canUseAI: false
+    canUseAI: false,
+    easyLevelPoints: 10,
+    mediumLevelPoints: 20,
+    hardLevelPoints: 30
   }
 ];
 

@@ -7,11 +7,14 @@ ARG HOST_GID=1000
 # Makes sure any mounted files will not become owned by the root
 RUN groupmod -g ${HOST_GID} node && usermod -u ${HOST_UID} -g ${HOST_GID} node
 
-# Run as regular user
-USER node:node
-
 # Create app directory
 WORKDIR /usr/src/app
+
+# Change ownership of the app directory
+RUN chown node:node /usr/src/app
+
+# Run as regular user
+USER node:node
 
 # Install app dependencies
 # A wildcard is used to ensure both package.json AND package-lock.json are copied

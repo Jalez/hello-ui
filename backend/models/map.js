@@ -18,7 +18,7 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING,
         primaryKey: true,
         allowNull: false,
-        validate: { notEmpty: true, isAlphanumeric: true, not: /^names$/i }
+        validate: { notEmpty: true, isAlphanumeric: true, not: /^names|all$/i }
       },
       random: {
         type: DataTypes.INTEGER,
@@ -30,11 +30,27 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.BOOLEAN,
         allowNull: false,
         defaultValue: false
+      },
+      easyLevelPoints: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        validate: { isInt: true, min: 1 }
+      },
+      mediumLevelPoints: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        validate: { isInt: true, min: 1 }
+      },
+      hardLevelPoints: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        validate: { isInt: true, min: 1 }
       }
     },
     {
       sequelize,
-      modelName: 'Map'
+      modelName: 'Map',
+      timestamps: true
     }
   );
   return Map;

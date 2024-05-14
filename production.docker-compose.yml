@@ -34,7 +34,7 @@ services:
         HOST_UID: ${HOST_UID}
         HOST_GID: ${HOST_GID}
     ports:
-      - 54320:3000
+      - 54320:3500
     environment:
       TZ: Europe/Helsinki
       NODE_ENV: production
