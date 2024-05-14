@@ -16,6 +16,8 @@ function App() {
   const [jsCorrect, setJsCorrect] = useState<Boolean>(false);
   const [js, setJs] = useState<string>();
   const [error, setError] = useState<null | errorObj>();
+  const [imgUrl, setImgUrl] = useState<string>();
+  const [interactive, setInteractive] = useState<Boolean>(false);
 
   useEffect(() => {
     // //console.log("Drawboard URL sending mounted message");
@@ -39,6 +41,7 @@ function App() {
         setCss(event.data.css);
         setStylesCorrect(false);
       }
+      setInteractive(event.data.interactive);
 
       if (event.data.events) {
         // its a stringified array of strings (events), let's go throught them and add them to the window
@@ -141,7 +144,10 @@ function App() {
     if (css) {
       try {
         setStyles(css);
-        setStylesCorrect(true);
+        setTimeout(() => {
+          setStylesCorrect(true);
+        }, 500);
+        // setStylesCorrect(true);
       } catch (error) {
         // //console.error("Drawboard URL error setting styles", error);
         setStylesCorrect(false);
@@ -164,6 +170,7 @@ function App() {
             scenarioId,
             "pixels"
           );
+          setImgUrl(dataURL);
           if (urlName === "solutionUrl") {
             //console.log("Drawboard URL sending message for solutionUrl");
             sendToParent(dataURL, urlName, scenarioId, "data");
@@ -175,7 +182,17 @@ function App() {
   }, [stylesCorrect, jsCorrect]);
 
   // //console.log("Drawboard rendering (error)", error);
-  return <>{error ? <ErrorFallback error={error} /> : html}</>;
+  return (
+    <>
+      {error ? (
+        <ErrorFallback error={error} />
+      ) : imgUrl && !interactive ? (
+        <img src={imgUrl} alt="screenshot" />
+      ) : (
+        html
+      )}
+    </>
+  );
 }
 
 export default App;

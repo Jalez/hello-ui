@@ -15,14 +15,10 @@ import { Box, Tab, Tabs, Typography } from "@mui/material";
 import { javascript } from "@codemirror/lang-javascript";
 import EditorTabs from "./EditorTabs";
 
-type EditorsProps = {
-  type: "Solution" | "index";
-};
-
 const NameOfStudentEditor = "index";
 const editorMaxHeightLimit = 1000;
 const editorMinHeightLimit = 100;
-export const Editors = ({ type }: EditorsProps): JSX.Element => {
+export const Editors = (): JSX.Element => {
   const options = useAppSelector((state) => state.options);
   const isCreator = options.creator;
   const theme = useTheme();
@@ -34,8 +30,10 @@ export const Editors = ({ type }: EditorsProps): JSX.Element => {
   const [editorHeight, setEditorHeight] = useState<number>(400);
   const [editorMaxHeight, setEditorMaxHeight] = useState<number>(editorHeight);
   const levels = useAppSelector((state: any) => state.levels);
+  const solutions = useAppSelector((state: any) => state.solutions);
 
   const level = levels[currentLevel - 1] as Level;
+  const solution = solutions[level?.identifier];
   const identifier = level?.identifier;
   const editorRef = useRef<HTMLDivElement>(null);
 
@@ -52,7 +50,6 @@ export const Editors = ({ type }: EditorsProps): JSX.Element => {
         })
       );
     } else {
-      console.log("updating solution code with data", data);
       dispatch(
         updateSolutionCode({
           id: currentLevel,

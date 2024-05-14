@@ -22,7 +22,7 @@ export const ModelArtContainer = ({
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const level = useAppSelector((state) => state.levels[currentLevel - 1]);
   const solutions = useAppSelector((state: any) => state.solutions);
-  const defaultLevelSolutions = solutions[level.identifier] || null;
+  const defaultLevelSolutions = solutions[level.name] || null;
   const [solutionCSS, setSolutionCSS] = useState<string>(
     defaultLevelSolutions?.css || ""
   );

@@ -19,8 +19,12 @@ import { setCreator } from "./store/slices/options.slice";
 import { Level } from "./types";
 // import { getMapLevelsData } from "./utils/network/levels";
 import Info from "./components/InfoBoard/Info";
-import LevelOpinion from "./components/General/LevelControls/LevelOpinion";
-import { availableWeeks, createLevels, week } from "./utils/LevelCreator";
+import {
+  SolutionMap,
+  availableWeeks,
+  createLevels,
+  week,
+} from "./utils/LevelCreator";
 import Notifications from "./components/General/Notifications";
 import { SnackbarProvider } from "notistack";
 import { setSolutions } from "./store/slices/solutions.slice";
@@ -53,37 +57,65 @@ function App() {
     // once it's mounted, send a message to the parent window
     //Example url: http://localhost:5173/creator?week=test
     // look at the url params to determine the week
+    const isCreator = window.location.pathname.includes("creator");
+
     const urlParams = new URLSearchParams(window.location.search);
     const map = urlParams.get("map") || "all";
     let mapName = map as week;
-    let solutions = {};
+    let solutions: SolutionMap = {};
 
     if (availableWeeks.includes(map)) {
       console.log();
       const levelsObj = createLevels(map as week);
       const levels = levelsObj?.levels || [];
       allLevels = levels;
-      const solutions = levelsObj?.solutions || {};
+      solutions = levelsObj?.solutions || {};
+      if (isCreator) {
+        allLevels = allLevels.map((level) => {
+          level.solution = {
+            html: solutions[level.name]?.html || "",
+            css: solutions[level.name]?.css || "",
+            js: solutions[level.name]?.js || "",
+          };
+          return level as Level;
+        });
+      }
       dispatch(updateWeek({ levels: allLevels, mapName }));
       dispatch(initializePoints(allLevels));
-
       dispatch(setSolutions(solutions));
     } else {
       const fetchLevels = async (mapName: string) => {
         if (mapName === "all") {
-          console.log("fetching all levels");
           allLevels = await getAllLevels();
-          console.log("all levels", allLevels);
         } else {
           allLevels = await getMapLevels(mapName);
         }
-        solutions = allLevels.reduce(
-          (acc: { [key: string]: {} }, level: Level) => {
-            acc[level.name as string] = level.solution;
-            return acc;
-          },
-          {} as { [key: string]: string }
-        );
+        if (!isCreator) {
+          // allLevels = allLevels.map((level) => {
+          //   level.solution = { html: "", css: "", js: "" };
+          //   return level as Level;
+          // });
+        }
+        solutions = allLevels.reduce((acc, level) => {
+          acc[level.name] = {
+            html: level.solution.html,
+            css: level.solution.css,
+            js: level.solution.js,
+          };
+          return acc;
+        }, {} as SolutionMap);
+
+        if (isCreator) {
+          allLevels = allLevels.map((level) => {
+            level.solution = {
+              html: solutions[level.name]?.html || "",
+              css: solutions[level.name]?.css || "",
+              js: solutions[level.name]?.js || "",
+            };
+            return level as Level;
+          });
+        }
+        console.log("solutions", solutions);
         dispatch(updateWeek({ levels: allLevels, mapName }));
         dispatch(initializePoints(allLevels));
         dispatch(setSolutions(solutions));
@@ -92,7 +124,6 @@ function App() {
     }
 
     // also check whether or not we are in the creator
-    const isCreator = window.location.pathname.includes("creator");
     dispatch(setCreator(isCreator));
 
     dispatch(sendScoreToParentFrame());
@@ -116,7 +147,7 @@ function App() {
               </InfoInstructions>
               {options.showWordCloud && <CSSWordCloud />}
               <ArtBoards />
-              <Editors type="index" />
+              <Editors />
             </>
           )}
           <Footer />

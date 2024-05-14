@@ -52,6 +52,8 @@ export const Frame = ({
   const dispatch = useAppDispatch();
   const { currentLevel } = useAppSelector((state: any) => state.currentLevel);
 
+  const level = useAppSelector((state: any) => state.levels[currentLevel - 1]);
+  const interactive = level.interactive;
   useEffect(() => {
     const resendDataAfterMount = (event: MessageEvent) => {
       if (event.data === "mounted") {
@@ -73,6 +75,7 @@ export const Frame = ({
             events: JSON.stringify(events),
             scenarioId: scenario.scenarioId,
             name,
+            interactive,
           },
           "*"
         );
@@ -84,7 +87,7 @@ export const Frame = ({
     return () => {
       window.removeEventListener("message", resendDataAfterMount);
     };
-  }, [newHtml, newCss, name, newJs, scenario]);
+  }, [newHtml, newCss, name, newJs, scenario, interactive]);
 
   useEffect(() => {
     const handleDataFromIframe = async (event: MessageEvent) => {
@@ -118,7 +121,7 @@ export const Frame = ({
         "*"
       );
     }
-  }, [newHtml, newCss, iframeRef, newJs, name]);
+  }, [newHtml, newCss, iframeRef, newJs, name, interactive]);
   if (!scenario) {
     return <div>Scenario not found</div>;
   }

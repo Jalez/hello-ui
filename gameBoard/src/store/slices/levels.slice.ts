@@ -3,13 +3,8 @@
 import { createSlice } from "@reduxjs/toolkit";
 import confetti from "canvas-confetti";
 import { obfuscate } from "../../utils/obfuscators/obfuscate";
-import { Level, difficulty, levelNames } from "../../types";
-import {
-  createLevels,
-  generatorNameAndFunction,
-} from "../../utils/LevelCreator";
-import { numberTimeToMinutesAndSeconds } from "../../utils/numberTimeToMinutesAndSeconds";
-import { gameMaxTime, mainColor, secondaryColor } from "../../constants";
+import { Level, difficulty } from "../../types";
+import { gameMaxTime } from "../../constants";
 import { allLevels } from "../../App";
 
 type scenarioSolutionUrls = {
