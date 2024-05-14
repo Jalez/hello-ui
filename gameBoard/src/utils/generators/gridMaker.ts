@@ -65,6 +65,7 @@ export const generateGridLevel: generator = () => {
 .wrapper {
 	width: 100%;
 	height: 100%;
+  font-size: 1.2em;
 }
 
 `;
@@ -76,6 +77,7 @@ export const generateGridLevel: generator = () => {
 .wrapper {
   width: 100%;
   height: 100%;
+  font-size: 1.2em;
 	box-sizing: border-box;
   display: grid;
   gap: 2px;
@@ -90,7 +92,7 @@ export const generateGridLevel: generator = () => {
 
 ${generateGridAreasCSSString(selectors, colors)}
 
-@media (min-height: 600px) {
+@media (min-height: 500px) {
   .wrapper {
     grid-template-areas:
       "${anotherGridMatrix[1][0]} ${anotherGridMatrix[1][1]} ${
@@ -153,13 +155,13 @@ ${generateGridAreasCSSString(selectors, colors)}
     },
     scenarioDetails: [
       {
-        width: drawBoardWidth,
-        height: drawBoardheight,
+        width: 200,
+        height: 300,
         id: "grid1",
       },
       {
-        width: 400,
-        height: 600,
+        width: 300,
+        height: 500,
         id: "grid2",
       },
     ],

@@ -1,6 +1,6 @@
 /** @format */
 
-import { drawBoardWidth, drawBoardheight } from "../../constants";
+// import { drawBoardWidth, drawBoardheight } from "../../constants";
 import { generator } from "../../types";
 
 const justifyContent = [
@@ -37,6 +37,8 @@ const flexDirection = [
 const flex = ["flex:1"];
 
 export const flexboxMaker: generator = () => {
+  const drawBoardWidth = 300;
+  const drawBoardheight = 200;
   const primaryColor = "#f1f1f1";
   const secondaryColor = "#333";
   const randomJustifyContent =
@@ -63,32 +65,33 @@ export const flexboxMaker: generator = () => {
   <div class="six">Six</div>
 </div>`;
 
-  const tcss = `#root {
-	height: ${drawBoardheight}px;
-	width: ${drawBoardWidth}px;
-	margin: 0;
-	padding: 0;
-	background-color: ${secondaryColor};
+  const tcss = `
+:root {
+  --element-gap: 1em;
+}
+  
+#root {
+  height: ${drawBoardheight}px;
+  width: ${drawBoardWidth}px;
+  margin: 0;
+  padding: 0;
+  background-color: ${secondaryColor};
 }
 
 div>div {
-	background-color: ${primaryColor};
-	font-size: 2em;
-	vertical-align: middle;
-	text-align: center;
-	margin: 0.5em;
-	border-radius: 5px;
+  background-color: ${primaryColor};
+  font-size: 1.2em;
+  vertical-align: middle;
+  text-align: center;
+  padding: 0.5em;
+  border-radius: 5px;
   min-width: fit-content; 
 }
 
-div>div:before {
-	content: "";
-	display: inline-block;
-	height: 100%;
-	vertical-align: middle;
-}
 	`;
   const scss = `
+
+${tcss}
 .wrapper {
 	height: ${drawBoardheight}px;
 	width: ${drawBoardWidth}px;
@@ -98,9 +101,11 @@ justify-content: ${randomJustifyContent};
 flex-direction: ${randomFlexDirection};
 align-items: ${randomAlignItems};
 align-content: ${randomAlignContent};
+gap: 1em; 
 }
 div>div {
 	${flex[Math.floor(Math.random() * flex.length)]};
+  flex: 1;
 }
 `;
   const THTML = html;
