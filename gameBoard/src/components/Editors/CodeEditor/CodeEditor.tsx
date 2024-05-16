@@ -16,6 +16,7 @@ import { getCommentKeymap } from "./getCommentKeyMap";
 
 import { handleLocking } from "../../../store/slices/levels.slice";
 import EditorMagicButton from "../../CreatorControls/EditorMagicButton";
+import { yellow } from "@mui/material/colors";
 interface CodeEditorProps {
   lang: any;
   title: "HTML" | "CSS" | "JS";
@@ -162,7 +163,7 @@ export default function CodeEditor({
         display: "flex",
         height: "100%",
         flexDirection: "column",
-        width: "100%",
+        width: "fit-content",
         position: "relative",
 
         // backgroundColor: theme === "dark" ? secondaryColor : mainColor,
@@ -186,36 +187,12 @@ export default function CodeEditor({
           />
         </Box>
       )}
-      {locked && (
-        <Typography
-          variant="h3"
-          color="primary"
-          id="title"
-          sx={{
-            color: "red",
-            position: "absolute",
-            // put this in the middle of the editor and at a 45 degree angle
-            top: "50%",
-            left: "50%",
-            transform: "translate(-50%, -50%) rotate(-45deg)",
-            fontSize: "5rem",
-            opacity: 0.2,
-            zIndex: 1,
-            // disable select
-            userSelect: "none",
-            // create a line background around everything else around it
-            overflow: "hidden",
-          }}
-        >
-          Locked
-        </Typography>
-      )}
 
       <Box
         className="codeEditor"
         sx={{
           flex: "1 1 20px",
-          height: "100%",
+          height: "fit-content",
           overflow: "auto",
           position: "relative",
         }}
@@ -223,6 +200,33 @@ export default function CodeEditor({
           locked ? "You can't edit this code" : " Click on the code to edit it"
         }
       >
+        {locked && (
+          <Typography
+            variant="h3"
+            color="primary"
+            id="title"
+            sx={{
+              color: "red",
+              position: "absolute",
+              // put this in the middle of the editor and at a 45 degree angle
+              top: "20%",
+              left: "50%",
+              transform: "translate(-50%, -50%) rotate(-45deg)",
+              fontSize: "3rem",
+              opacity: 0.2,
+              zIndex: 1,
+              // disable select
+              userSelect: "none",
+              // create a line background around everything else around it
+              overflow: "hidden",
+              //Add a shadow to the text
+              textShadow: "2px 2px 2px #000",
+              //make background black
+            }}
+          >
+            Locked
+          </Typography>
+        )}
         {title === "HTML" && (
           <div title="You can't edit this code">
             <CodeMirror

@@ -99,15 +99,17 @@ const InfoGuide = ({ sections }: { sections: infoSection[] }) => {
         flexDirection: "column",
         gap: "2em",
         //center the sections
-        justifyContent: "center",
+        justifyContent: "start",
         alignItems: "center",
+        maxHeight: "200px",
+        overflowY: "auto",
       }}
     >
       <Typography variant="h2">Instructions</Typography>
       <Box
         sx={{
           display: "flex",
-          flexDirection: "row",
+          flexDirection: "column",
           gap: "2em",
           margin: "1em",
           justifyContent: "center",

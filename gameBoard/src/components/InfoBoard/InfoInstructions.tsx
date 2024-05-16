@@ -14,21 +14,6 @@ import InfoGuide from "./InfoGuide";
 import PoppingTitle from "../General/PoppingTitle";
 import InfoIcon from "@mui/icons-material/Info";
 
-const StyledSection = styled("section")(({ theme }) => ({
-  display: "flex",
-  flexDirection: "column",
-  width: "100%",
-  flex: "1 1 auto",
-  justifyContent: "center",
-  alignItems: "center",
-  color: theme.palette.primary.main, // Assuming mainColor corresponds to primary color in the theme
-  backgroundColor: theme.palette.secondary.main, // Assuming secondaryColor corresponds to secondary color in the theme
-  padding: "1rem",
-  borderRadius: "1rem",
-  zIndex: 10,
-  bgcolor: "secondary.main",
-}));
-
 type InfoInstructionsProps = {
   children: React.ReactNode;
 };
@@ -49,7 +34,7 @@ export const InfoInstructions = ({ children }: InfoInstructionsProps) => {
         boxShadow: "none",
         p: 0,
         m: 0,
-        width: "100%",
+        // width: "100%",
         "&.Mui-expanded": {
           margin: 0, // Overrides the default expanded margin
         },
@@ -67,7 +52,7 @@ export const InfoInstructions = ({ children }: InfoInstructionsProps) => {
         "& .MuiAccordionDetails-root": {
           p: 0,
           m: 0,
-          width: "100%",
+          // width: "100%",
         },
       }}
     >

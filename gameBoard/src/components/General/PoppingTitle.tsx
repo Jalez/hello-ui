@@ -26,8 +26,10 @@ const PoppingTitle = ({
     setAnchorEl(event.currentTarget);
   };
 
+  const borderStyle = open ? "none" : "none";
+
   return (
-    <Box>
+    <Box sx={{}}>
       {topTitle && (
         <Popper
           sx={{ zIndex: 1200 }}
@@ -51,7 +53,9 @@ const PoppingTitle = ({
                 sx={{
                   textAlign: "center",
                   backgroundColor: "secondary.main",
-                  p: 1,
+                  padding: "0",
+                  borderRadius: "10px",
+                  border: borderStyle,
                 }}
               >
                 {topTitle}
@@ -65,7 +69,13 @@ const PoppingTitle = ({
       </Box>
       {bottomTitle && (
         <Popper
-          sx={{ zIndex: 1200, backgroundColor: "secondary.main" }}
+          sx={{
+            zIndex: 1200,
+            backgroundColor: "secondary.main",
+            borderRadius: "10px",
+            margin: "0",
+            border: borderStyle,
+          }}
           open={open}
           anchorEl={anchorEl}
           placement={"bottom"}
@@ -81,7 +91,13 @@ const PoppingTitle = ({
         >
           {({ TransitionProps }) => (
             <Fade {...TransitionProps} timeout={350}>
-              <Typography sx={{ p: 1, zIndex: 1500 }} color="primary">
+              <Typography
+                sx={{
+                  p: 0,
+                  zIndex: 1500,
+                }}
+                color="primary"
+              >
                 {bottomTitle}
               </Typography>
             </Fade>

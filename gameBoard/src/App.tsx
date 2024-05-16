@@ -31,6 +31,8 @@ import { setSolutions } from "./store/slices/solutions.slice";
 import { getAllLevels } from "./utils/network/levels";
 import { getMapLevels } from "./utils/network/maps";
 import { initializePoints } from "./store/slices/points.slice";
+import { Box } from "@mui/material";
+import NewEditors from "./components/Editors/EditorsNew";
 
 const AppStyle = {
   display: "flex",
@@ -141,13 +143,27 @@ function App() {
             <>
               {/* <LevelOpinion /> */}
 
-              <Navbar />
-              <InfoInstructions>
-                <Info />
-              </InfoInstructions>
-              {options.showWordCloud && <CSSWordCloud />}
-              <ArtBoards />
-              <Editors />
+              <Box
+                sx={{
+                  display: "flex",
+                  flexDirection: "row",
+                  flexWrap: "wrap",
+                  justifyContent: "center",
+                  width: "100%",
+                }}
+              >
+                <Box>
+                  <Navbar />
+                  <InfoInstructions>
+                    <Info />
+                  </InfoInstructions>
+                  {options.showWordCloud && <CSSWordCloud />}
+                  <ArtBoards />
+                </Box>
+                {/* <Editors />
+                 */}
+                <NewEditors />
+              </Box>
             </>
           )}
           <Footer />
