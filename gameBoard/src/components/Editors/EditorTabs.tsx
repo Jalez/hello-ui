@@ -17,7 +17,7 @@ function EditorTabs({
   title,
 }: {
   title: "HTML" | "CSS" | "JS";
-  EditorWidth: number;
+  EditorWidth?: number;
   lang: any;
   fileNames: string[];
   fileContent: {
@@ -49,8 +49,12 @@ function EditorTabs({
         type: title.toLowerCase(),
       })
     );
-    // setLocked((prev) => !prev);
   };
+
+  //If template is empty, it is locked and we are not in the creator, dont show it
+  if (!fileContent[value] && locked && !isCreator) {
+    return <Box></Box>;
+  }
 
   const createCodeEditorForFile = (code: string) => {
     return (
@@ -75,7 +79,9 @@ function EditorTabs({
         m: 0,
         p: 0,
         flex: 1,
+        minHeight: "300px",
         height: "100%",
+        minWidth: "200px",
         position: "relative",
       }}
     >
@@ -88,7 +94,7 @@ function EditorTabs({
           m: 0,
           p: 0,
           flex: 1,
-          height: "100%",
+          height: "fit-content",
           position: "relative",
         }}
       >

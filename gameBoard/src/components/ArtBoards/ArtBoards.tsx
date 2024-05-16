@@ -9,6 +9,8 @@ import { KeyBindings } from "../Editors/KeyBindings";
 import { addNewScenario } from "../../store/slices/levels.slice";
 import ScenarioAdder from "./ScenarioAdder";
 import ArtTabs from "./ArtTabs";
+import DrawBoard from "./Drawboard/DrawBoard";
+import ModelBoard from "./ModelBoard/ModelBoard";
 
 const artBoardStyle = {
   width: "100%",
@@ -17,7 +19,6 @@ const artBoardStyle = {
 export const ArtBoards = (): JSX.Element => {
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const level = useAppSelector((state) => state.levels[currentLevel - 1]);
-  const dispatch = useAppDispatch();
   const showHotkeys = level.showHotkeys;
 
   const options = useAppSelector((state) => state.options);
@@ -29,53 +30,19 @@ export const ArtBoards = (): JSX.Element => {
   }
 
   return (
-    <Box sx={artBoardStyle}>
-      {/* <ArtTabs
-        tabContents={[
-          <Typography variant="h2" align="center" color="primary">
-            {!isCreator ? "Your solution" : `Level scenarios:`}
-          </Typography>,
-          <Typography variant="h2" align="center" color="primary">
-            Model solution
-          </Typography>,
-        ]}
-        tabNames={["Draw", "Model"]}
-      /> */}
-      <BoardsContainer>
-        <Box>
-          <Typography variant="h2" align="center" color="primary">
-            {!isCreator ? "Your solution" : `Level scenarios:`}
-          </Typography>
-          <BoardsContainer>
-            {scenarios.length === 0 ? (
-              <Typography variant="h3" align="center" color="primary">
-                No scenarios found. Add a new scenario to get started.
-              </Typography>
-            ) : (
-              scenarios.map((scenario) => (
-                <ScenarioDrawing
-                  key={scenario.scenarioId}
-                  scenario={scenario}
-                />
-              ))
-            )}
-            <ScenarioAdder />
-          </BoardsContainer>
-        </Box>
-        {!isCreator && (
-          <Box>
-            <Typography variant="h2" align="center" color="primary">
-              Model solution
-            </Typography>
-            <BoardsContainer>
-              {scenarios.map((scenario) => (
-                <ScenarioModel key={scenario.scenarioId} scenario={scenario} />
-              ))}
-            </BoardsContainer>
-          </Box>
-        )}
-        {showHotkeys && <KeyBindings />}
-      </BoardsContainer>
-    </Box>
+    <>
+      <Box sx={artBoardStyle}>
+        <BoardsContainer>
+          <ArtTabs
+            tabContents={[<ModelBoard />, <DrawBoard />]}
+            tabNames={["Model solution", "Your design"]}
+            startTab={0}
+          />
+          {/* <DrawBoard />
+          <ModelBoard /> */}
+          {showHotkeys && <KeyBindings />}
+        </BoardsContainer>
+      </Box>
+    </>
   );
 };

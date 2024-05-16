@@ -63,24 +63,24 @@ export const LevelUpdater = () => {
   useEffect(() => {
     // if both of the scenarios for this level have solution pixels now, we are ready for the comparison
     // look for the scenarioIds in the solutionPixels object
-    // const scenarioIds = Object.keys(solutionPixels);
-    // if (!level) return;
-    // const scenarios = level.scenarios;
-    // // go through each of the scenarios and check if the solutionPixels object has the scenarioId
-    // let hasAllPixels = true;
-    // for (const scenario of scenarios) {
-    //   if (!scenarioIds.includes(scenario.scenarioId)) {
-    //     hasAllPixels = false;
-    //     break;
-    //   }
-    // }
-    // if (!hasAllPixels) return;
-    // dispatch(
-    //   updateDrawnState({
-    //     levelId: level.name,
-    //     drawn: true,
-    //   })
-    // );
+    const scenarioIds = Object.keys(solutionPixels);
+    if (!level) return;
+    const scenarios = level.scenarios;
+    // go through each of the scenarios and check if the solutionPixels object has the scenarioId
+    let hasAllPixels = true;
+    for (const scenario of scenarios) {
+      if (!scenarioIds.includes(scenario.scenarioId)) {
+        hasAllPixels = false;
+        break;
+      }
+    }
+    if (!hasAllPixels) return;
+    dispatch(
+      updateDrawnState({
+        levelId: level.name,
+        drawn: true,
+      })
+    );
   }, [solutionPixels]);
 
   const handleSolutionPixelUpdate = (scenarioId: string, pixels: ImageData) => {

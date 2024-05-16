@@ -53,9 +53,7 @@ const ThemedApp = () => {
 
   return (
     <ThemeProvider theme={theme}>
-      {/* <App />
-       */}
-      <div>Kekkonen</div>
+      <App />
     </ThemeProvider>
   );
 };

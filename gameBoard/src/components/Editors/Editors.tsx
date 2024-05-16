@@ -220,6 +220,7 @@ export const Editors = (): JSX.Element => {
               needsPress={true}
               orientation="vertical"
             />
+
             <EditorTabs
               title="JS"
               EditorWidth={jsEditorWidth}
