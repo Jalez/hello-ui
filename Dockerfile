@@ -4,12 +4,15 @@
 FROM node:20-bullseye
 WORKDIR /app
 
+# Force ASCII output — old docker-compose chokes on Unicode progress bars
+ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
+
 # Install pnpm
 RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
 
 # Install dependencies
 COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --reporter=append-only
 
 # Copy source and build
 COPY . .

@@ -25,7 +25,9 @@ if [[ "$(hostname)" =~ tie-lukioplus.rd.tuni.fi ]]; then
   # 2. Run migrations via the db-init container
   echo "Running database migrations..."
   docker build -t ui-designer-db-init -f Dockerfile.db-init .
-  docker run --rm --network css-artist_ui-designer-net \
+  # Network name is <project>_<network>; project = directory name
+  NETWORK_NAME="$(basename "${SCRIPT_DIR}")_ui-designer-net"
+  docker run --rm --network "${NETWORK_NAME}" \
     -e DATABASE_URL=postgresql://postgres:postgres@db:5432/ui_designer \
     ui-designer-db-init
   echo "Migrations complete."
