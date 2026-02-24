@@ -1,11 +1,11 @@
 # Single-stage build for Next.js standalone output
 # Compatible with Docker 1.13.x (no multi-stage support)
 
-FROM node:21
+FROM node:20-bullseye
 WORKDIR /app
 
 # Install pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
 
 # Install dependencies
 COPY package.json pnpm-lock.yaml ./
