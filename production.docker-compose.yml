@@ -31,7 +31,6 @@ services:
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/ui_designer
       DB_CLIENT: postgres
-      NEXT_PUBLIC_BASE_PATH: /css-artist
       TZ: Europe/Helsinki
       NODE_ENV: production
     depends_on:
