@@ -1,13 +1,16 @@
 /** @format */
-import { ReactElement, useEffect, useRef, useState } from "react";
+import { ReactElement, useEffect, useState } from "react";
 import { domToPng } from "modern-screenshot";
 import { errorObj } from "./types";
 import { ErrorFallback } from "./ErrorFallback";
 import { getPixelData, sendToParent, setStyles } from "./utils";
 
-const urlName = new URLSearchParams(window.location.search).get("name") || "";
-const scenarioId =
-  new URLSearchParams(window.location.search).get("scenarioId") || "";
+const params = new URLSearchParams(window.location.search);
+const urlName = params.get("name") || "";
+const scenarioId = params.get("scenarioId") || "";
+const scenarioWidth = parseInt(params.get("width") || "0", 10);
+const scenarioHeight = parseInt(params.get("height") || "0", 10);
+
 
 function App() {
   const [html, setHtml] = useState<ReactElement>();
@@ -18,41 +21,45 @@ function App() {
   const [error, setError] = useState<null | errorObj>();
   const [imgUrl, setImgUrl] = useState<string>();
   const [interactive, setInteractive] = useState<Boolean>(false);
+  const [dataReceived, setDataReceived] = useState(false);
 
+  // Keep sending "mounted" until the parent responds with data
   useEffect(() => {
-    // //console.log("Drawboard URL sending mounted message");
+    if (dataReceived) return;
     window.parent.postMessage("mounted", "*");
-  }, []);
+    const interval = setInterval(() => {
+      window.parent.postMessage("mounted", "*");
+    }, 200);
+    return () => clearInterval(interval);
+  }, [dataReceived]);
 
   useEffect(() => {
     const handlePostMessage = (event: MessageEvent) => {
       if (urlName !== event.data.name) return;
-      // //console.log(urlName, "Drawboard URL event.data", event);
       if (event.data?.message === "reload") {
-        // //console.log(urlName, "Drawboard reloading");
         window.location.reload();
         return;
       }
+      // Data received from parent - stop sending "mounted"
+      setDataReceived(true);
       if (event.data.html) {
-        // turn the string into a ReactNode element and set it as the state of the component
         setHtml(<kbd dangerouslySetInnerHTML={{ __html: event.data.html }} />);
       }
       if (event.data.css) {
         setCss(event.data.css);
         setStylesCorrect(false);
+      } else {
+        // No CSS to apply - styles are trivially correct
+        setStylesCorrect(true);
       }
       setInteractive(event.data.interactive);
 
       if (event.data.events) {
-        // its a stringified array of strings (events), let's go throught them and add them to the window
         const events = JSON.parse(event.data.events);
-        //console.log(urlName, "Drawboard URL setting event:", events);
-        events.forEach((event: string) => {
-          // //console.log("Drawboard URL setting event:", event);
-          document.body.addEventListener(event, (e) => {
-            //console.log(urlName, "Drawboard URL event listener:", event);
+        events.forEach((evt: string) => {
+          document.body.addEventListener(evt, () => {
             const board = document.getElementById("root") as HTMLElement;
-            //console.log("Drawboard URL sending message");
+            if (!board) return;
             domToPng(board).then((dataURL: string) => {
               const img = new Image();
               img.src = dataURL;
@@ -65,9 +72,7 @@ function App() {
                   "pixels"
                 );
                 if (urlName === "solutionUrl") {
-                  //console.log("Drawboard URL sending message for solutionUrl");
                   sendToParent(dataURL, urlName, scenarioId, "data");
-                  return;
                 }
               };
             });
@@ -76,16 +81,14 @@ function App() {
       }
 
       if (event.data.js && event.data.js.trim()) {
-        //console.log(urlName, "Drawboard URL setting js:", event.data.js);
         setJs(event.data.js);
         setJsCorrect(false);
       } else {
-        setJsCorrect(true); // we want to do this because if there is no js, we don't want to keep trying to execute it
+        setJsCorrect(true);
       }
     };
 
     window.addEventListener("message", handlePostMessage);
-    // //console.log("Drawboard URL sending mounted message");
     return () => {
       window.removeEventListener("message", handlePostMessage);
     };
@@ -99,20 +102,12 @@ function App() {
       colno?: number,
       error?: Error
     ): boolean => {
-      //console.log("Drawboard URL error handler");
       setError({
         message: message.toString(),
         lineno: lineno || 0,
         colno: colno || 0,
       });
-      //console.error("Error in executing JS script:", {
-      //   message,
-      //   source,
-      //   lineno,
-      //   colno,
-      //   error,
-      // });
-      return true; // Prevent the firing of the default event handler
+      return true;
     };
     window.onerror = handleGlobalError;
 
@@ -127,14 +122,12 @@ function App() {
       const script = document.createElement("script");
       script.src = scriptURL;
       script.onload = () => {
-        //console.log("Drawboard URL script loaded");
         setJsCorrect(true);
-        URL.revokeObjectURL(scriptURL); // Clean up blob URL after script is loaded
+        URL.revokeObjectURL(scriptURL);
       };
       document.body.appendChild(script);
     }
 
-    // Cleanup function to remove the global error handler when the component unmounts or dependencies change
     return () => {
       window.onerror = null;
     };
@@ -145,9 +138,7 @@ function App() {
       try {
         setStyles(css);
         setStylesCorrect(true);
-        // setStylesCorrect(true);
       } catch (error) {
-        // //console.error("Drawboard URL error setting styles", error);
         setStylesCorrect(false);
       }
     }
@@ -156,7 +147,6 @@ function App() {
   useEffect(() => {
     const board = document.getElementById("root");
     if (stylesCorrect && jsCorrect && board) {
-      //console.log("Drawboard URL sending message for urlName", urlName);
       domToPng(board).then((dataURL: string) => {
         const img = new Image();
         img.src = dataURL;
@@ -170,16 +160,13 @@ function App() {
           );
           setImgUrl(dataURL);
           if (urlName === "solutionUrl") {
-            //console.log("Drawboard URL sending message for solutionUrl");
             sendToParent(dataURL, urlName, scenarioId, "data");
-            return;
           }
         };
       });
     }
   }, [stylesCorrect, jsCorrect]);
 
-  // //console.log("Drawboard rendering (error)", error);
   return (
     <>
       {error ? (
