@@ -16,6 +16,9 @@ if [[ "$(hostname)" =~ tie-lukioplus.rd.tuni.fi ]]; then
   # - docker-compose crashes on Unicode build output, so build images with docker directly
   # - docker-compose strips hyphens from project name for network names
 
+  # 0. Stop any running containers for a clean start
+  docker-compose --file ${COMPOSE_YML} down
+
   # 1. Build all images first (bypasses docker-compose Unicode crash)
   echo "Building images..."
   docker build -t ui-designer-app:latest \
