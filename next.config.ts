@@ -4,9 +4,9 @@ const nextConfig: NextConfig = {
   // Produce a self-contained build for Docker deployment
   output: "standalone",
 
-  // Asset prefix for reverse proxy — Apache strips /css-artist before forwarding,
-  // but the browser needs /css-artist prefix on asset URLs so they route through Apache
-  assetPrefix: process.env.NEXT_PUBLIC_ASSET_PREFIX || "",
+  // Base path for reverse proxy deployment — Apache proxies /css-artist to this app.
+  // The proxy-wrapper.js script re-adds the prefix that Apache strips.
+  basePath: process.env.NEXT_PUBLIC_BASE_PATH || "",
 
   // External packages that should be handled by the server runtime
   serverExternalPackages: ['@neondatabase/serverless', 'pg', 'pg-pool', 'lti-v1.0-node-library'],
