@@ -4,6 +4,9 @@ const nextConfig: NextConfig = {
   // Produce a self-contained build for Docker deployment
   output: "standalone",
 
+  // Base path for reverse proxy deployment (e.g. /css-artist)
+  basePath: process.env.NEXT_PUBLIC_BASE_PATH || "",
+
   // External packages that should be handled by the server runtime
   serverExternalPackages: ['@neondatabase/serverless', 'pg', 'pg-pool', 'lti-v1.0-node-library'],
 
