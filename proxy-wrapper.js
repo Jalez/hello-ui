@@ -2,9 +2,8 @@
 // Apache strips the /css-artist prefix before forwarding requests.
 // This wrapper re-adds it so Next.js (with basePath: "/css-artist") can handle them.
 //
-// It also rewrites Location headers in redirects — Next.js includes the basePath
-// in redirect URLs, but since Apache already adds it back, we must strip it to
-// prevent double-prefixing and redirect loops.
+// Redirect Location headers are rewritten to account for the prefix that
+// Apache will re-add on the browser's next request.
 //
 // Without BASE_PATH set, this simply starts Next.js normally.
 
@@ -26,7 +25,10 @@ if (!BASE_PATH) {
   // Proxy that re-adds basePath to incoming requests
   const proxy = http.createServer((req, res) => {
     const url = req.url || "/";
-    const prefixedUrl = url.startsWith(BASE_PATH) ? url : BASE_PATH + url;
+
+    // Did we need to add the prefix, or was it already there?
+    const alreadyPrefixed = url.startsWith(BASE_PATH);
+    const prefixedUrl = alreadyPrefixed ? url : BASE_PATH + url;
 
     const proxyReq = http.request(
       {
@@ -39,12 +41,21 @@ if (!BASE_PATH) {
       (proxyRes) => {
         const headers = { ...proxyRes.headers };
 
-        // Strip basePath from Location headers to prevent redirect loops.
-        // Next.js sends "Location: /css-artist/foo" but the browser already
-        // requests via /css-artist (through Apache), so we need "Location: /foo".
-        // Apache will then route /css-artist/foo back to us as /foo.
-        if (headers.location && headers.location.startsWith(BASE_PATH)) {
+        // Rewrite Location headers for redirects.
+        // If we added the basePath ourselves (Apache stripped it), then Next.js
+        // redirect locations will have basePath that the browser doesn't need
+        // (Apache will re-add it). Strip it.
+        // If the request already had basePath (direct hit), leave Location as-is.
+        if (!alreadyPrefixed && headers.location && headers.location.startsWith(BASE_PATH)) {
           headers.location = headers.location.slice(BASE_PATH.length) || "/";
+        }
+
+        // Also fix the refresh header if present
+        if (!alreadyPrefixed && headers.refresh) {
+          headers.refresh = headers.refresh.replace(
+            `url=${BASE_PATH}`,
+            "url="
+          );
         }
 
         res.writeHead(proxyRes.statusCode, headers);

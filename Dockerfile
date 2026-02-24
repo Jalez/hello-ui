@@ -18,15 +18,14 @@ RUN pnpm install --frozen-lockfile --reporter=append-only
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 ARG NEXT_PUBLIC_DRAWBOARD_URL=http://localhost:3500
-ARG NEXT_PUBLIC_BASE_PATH=
+ARG NEXT_PUBLIC_ASSET_PREFIX=
 ENV NEXT_PUBLIC_DRAWBOARD_URL=$NEXT_PUBLIC_DRAWBOARD_URL
-ENV NEXT_PUBLIC_BASE_PATH=$NEXT_PUBLIC_BASE_PATH
+ENV NEXT_PUBLIC_ASSET_PREFIX=$NEXT_PUBLIC_ASSET_PREFIX
 RUN pnpm build
 
 # Next.js standalone needs static files and public dir alongside server.js
 RUN cp -r .next/static .next/standalone/.next/static && \
-    cp -r public .next/standalone/public && \
-    cp proxy-wrapper.js .next/standalone/proxy-wrapper.js
+    cp -r public .next/standalone/public
 
 # Set up production runner
 ENV NODE_ENV=production
@@ -37,4 +36,4 @@ WORKDIR /app/.next/standalone
 
 EXPOSE 3000
 
-CMD ["node", "proxy-wrapper.js"]
+CMD ["node", "server.js"]
