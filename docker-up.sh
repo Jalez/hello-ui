@@ -13,6 +13,24 @@ if [[ "$(hostname)" =~ tie-lukioplus.rd.tuni.fi ]]; then
   COMPOSE_OPTIONS+=("-d")
 
   # server has a very old version of docker and docker-compose
+
+  # 1. Start the database first
+  docker-compose --file ${COMPOSE_YML} up -d --build db
+  echo "Waiting for database to be ready..."
+  until docker exec ui-designer.db pg_isready -U postgres -d ui_designer > /dev/null 2>&1; do
+    sleep 2
+  done
+  echo "Database is ready."
+
+  # 2. Run migrations via the db-init container
+  echo "Running database migrations..."
+  docker build -t ui-designer-db-init -f Dockerfile.db-init .
+  docker run --rm --network css-artist_ui-designer-net \
+    -e DATABASE_URL=postgresql://postgres:postgres@db:5432/ui_designer \
+    ui-designer-db-init
+  echo "Migrations complete."
+
+  # 3. Bring up all services
   docker-compose --file ${COMPOSE_YML} up ${COMPOSE_OPTIONS[@]}
 else
   docker compose --file ${COMPOSE_YML} up ${COMPOSE_OPTIONS[@]}

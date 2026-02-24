@@ -1,3 +1,5 @@
+version: '3'
+
 services:
   db:
     image: postgres:16-alpine
@@ -8,30 +10,9 @@ services:
       POSTGRES_DB: ui_designer
     volumes:
       - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d ui_designer"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
     restart: always
     networks:
       - ui-designer-net
-
-  migrate:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: build
-    container_name: ui-designer.migrate
-    command: ["pnpm", "db:migrate"]
-    environment:
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/ui_designer
-    depends_on:
-      db:
-        condition: service_healthy
-    networks:
-      - ui-designer-net
-    restart: "no"
 
   app:
     build:
@@ -53,8 +34,7 @@ services:
       TZ: Europe/Helsinki
       NODE_ENV: production
     depends_on:
-      migrate:
-        condition: service_completed_successfully
+      - db
     restart: always
     networks:
       - ui-designer-net
@@ -71,11 +51,6 @@ services:
       PORT: 8080
       CORS_ORIGIN: https://tie-lukioplus.rd.tuni.fi
       TZ: Europe/Helsinki
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
     restart: always
     networks:
       - ui-designer-net
@@ -85,4 +60,3 @@ volumes:
 
 networks:
   ui-designer-net:
-    driver: bridge
