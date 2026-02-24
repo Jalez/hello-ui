@@ -32,6 +32,8 @@ export const sendToParent = (
 };
 
 export const setStyles = (css: string) => {
-  const style = document.querySelector("style") as HTMLStyleElement;
-  style.innerHTML = css || "";
+  const style = document.getElementById("user-styles") as HTMLStyleElement;
+  if (style) {
+    style.innerHTML = css || "";
+  }
 };

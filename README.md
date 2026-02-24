@@ -1,68 +1,245 @@
-<!-- @format -->
+# 🎨 UI Designer
 
-# UI designer
+An interactive, gamified platform for learning and mastering CSS, HTML, and modern UI design patterns. Build beautiful interfaces through hands-on challenges, real-time feedback, and AI-powered assistance.
 
-This project is an interactive web-based platform designed to teach web development through engaging coding challenges. It combines educational content with an interactive drawing and coding environment, allowing users to learn HTML, CSS, and JavaScript in a hands-on manner. The platform is structured around levels and scenarios, each presenting unique challenges that encourage users to apply their knowledge to solve real-world problems.
+![UI Designer Preview](https://img.shields.io/badge/Next.js-16.0.1-black)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind-4.0-38B2AC)
 
-UI designer is an application that challenges users to design web components using their knowledge of CSS properties. It is designed for students or anyone Looking to hone their skills with CSS, HTML or JavaScript.
+## ✨ Features
 
-## Technologies Used
+### 🎯 Interactive Learning Experience
+- **Progressive Levels**: Start with basic layouts and advance to complex responsive designs
+- **Gamified Learning**: Earn points, track progress, and unlock new challenges
+- **Real-time Feedback**: Instant visual comparison between your designs and target layouts
+- **Multiple Difficulty Levels**: From beginner-friendly to expert challenges
 
-CSS Artist is built using the following technologies:
+### 🛠️ Powerful Design Tools
+- **Live Code Editors**: CodeMirror-powered editors with syntax highlighting and themes
+- **Visual Artboards**: Interactive drawing and design canvases
+- **CSS Generators**: AI-powered code generation for layouts, forms, and components
+- **Component Library**: Pre-built UI components for rapid prototyping
 
-- HTML
-- CSS
-- JavaScript
-- Node.js
-- React
-- Redux
-- TypeScript
-- Vite.js
-- Material UI
+### 🤖 AI-Powered Assistance
+- **Smart Code Generation**: Get help with CSS layouts, flexbox, grid, and more
+- **Contextual Hints**: Receive intelligent suggestions based on your current challenge
+- **Code Optimization**: Improve your CSS with AI recommendations
 
-## Features
+### 🎮 Game Mechanics
+- **Point System**: Earn points for completing challenges and accuracy
+- **Progress Tracking**: Monitor your improvement across different skill areas
+- **Achievement System**: Unlock badges and special challenges
+- **Leaderboards**: Compare your progress with other designers
 
-- **Educational Challenges**: Structured levels with specific scenarios focused on teaching different aspects of web development.
-- **Interactive Art and Coding Environment**: A dynamic environment where users can code and immediately see the results of their work, enhancing the learning experience.
-- **Customizable Challenges**: Each level can be customized with specific code challenges, time limits, and the option to view model solutions, providing a tailored learning journey.
-- **State Management**: Utilizes Redux for efficient state management across the application, ensuring a smooth user experience.
-- **User Interface Components**: Includes a variety of UI components like Navbar, Footer, and Instruction panels, focusing on accessibility and user engagement.
-- **Integration with External Systems**: Designed to integrate seamlessly with external systems or services for hosting or educational content delivery.
-- **Deployment and Environment Configuration**: Supports multiple environments (development, testing, production) with Docker and environment variable configurations.
+## 🚀 Tech Stack
 
-## Testing the program
+- **Frontend**: Next.js 16, React 19, TypeScript
+- **Styling**: Tailwind CSS 4.0, Radix UI components
+- **State Management**: Redux Toolkit
+- **Database**: SQLite with Sequelize ORM
+- **Code Editing**: CodeMirror with multiple themes
+- **Visualization**: D3.js for charts and word clouds
+- **AI Integration**: OpenAI API
+- **Real-time Collaboration**: Hocuspocus
 
-As of 04/2024, the application is still in development. [A version of UI designer is currently available online. ](https://tie-lukioplus.rd.tuni.fi/css-artist/)
+## 🏃 Getting Started
 
-## Running the Application locally
+### Prerequisites
+- Node.js 18+ or Bun
+- pnpm, npm, or yarn package manager
 
-To run CSS Artist, follow these steps:
+### Installation
 
-First, clone the repository to your local machine.
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/Jalez/ui-designer.git
+   cd ui-designer
+   ```
 
- <!-- add a code snippet inside which is the git clone command-->
+2. **Install dependencies**
+   ```bash
+   pnpm install
+   # or
+   npm install
+   # or
+   yarn install
+   ```
 
-        git clone git@github.com:Jalez/CSS-artist.git
+3. **Set up the database**
+   ```bash
+   # The SQLite database is included in the repo
+   # Migrations will run automatically on first startup
+   ```
 
-To start the gameBoard, follow these steps:
+4. **Start the development server**
+   ```bash
+   pnpm dev
+   # or
+   npm run dev
+   # or
+   yarn dev
+   ```
 
-1. Change directory to **./gameBoard**.
-2. Open the repository in your terminal.
-3. Run `npm install` to install the required packages and libraries.
-4. Run `npm run dev` -- --open to start the application.
-5. The application will automatically open in your default browser at http://localhost:5173.
+5. **Open your browser**
+   ```
+   http://localhost:3000
+   ```
 
-To use the drawboards feature, follow these steps:
+## 🐳 Running with Docker
 
-1. Change directory to **./drawBoard**.
-2. Run `npm install` to install the required packages and libraries.
-3. Run `npm run dev` to start the drawboard.
-4. The drawboard will be accessible in your browser at http://localhost:3500.
+### Prerequisites
 
-## Contributing
+- [Docker](https://docs.docker.com/get-docker/) and Docker Compose
+- A `.env.local` file in the project root (copy from `.env.local.example` and fill in your values)
 
-Contributions to UI designer are always welcome. If you have any suggestions for new features or would like to report a bug, please create an issue in the GitHub repository.
+```bash
+cp .env.local.example .env.local
+# Edit .env.local with your credentials
+```
 
-## License
+### Start the app
 
-CSS Artist is licensed under the MIT License. You are free to use, modify, and distribute the code as you see fit.
+```bash
+docker compose up --build
+```
+
+The app will be available at `http://localhost:3000`.
+
+The first run takes a few minutes as it installs dependencies and builds the Next.js app inside the container.
+
+### Common commands
+
+```bash
+# Start without rebuilding (if images already exist)
+docker compose up
+
+# Run in the background
+docker compose up --build -d
+
+# Stop everything
+docker compose down
+
+# Stop and wipe the database volume
+docker compose down -v
+```
+
+### Services
+
+| Service   | Port | Description                     |
+|-----------|------|---------------------------------|
+| app       | 3000 | Next.js application             |
+| ws-server | 3100 | WebSocket collaboration server  |
+| db        | 5433 | PostgreSQL database             |
+
+> **Note:** The container loads variables from `.env.local` automatically. The database connection is overridden internally to point to the Docker `db` service — you do not need to change `DATABASE_URL` in `.env.local` for Docker.
+
+## 📁 Project Structure
+
+```
+ui-designer/
+├── app/                    # Next.js app directory
+│   ├── api/               # Backend API routes
+│   ├── drawboard/         # Main drawing interface
+│   └── help/              # Help and documentation
+├── components/            # React components
+│   ├── ArtBoards/         # Design canvas components
+│   ├── Editors/           # Code editors
+│   ├── InfoBoard/         # Progress and info panels
+│   └── ui/                # Reusable UI components
+├── lib/                   # Utility functions
+│   ├── generators/        # CSS/HTML generators
+│   ├── utils/            # Helper functions
+│   └── models/           # Database models
+├── store/                # Redux store configuration
+├── types.ts              # TypeScript definitions
+└── db/                   # SQLite database
+```
+
+## 🎯 How It Works
+
+1. **Choose a Challenge**: Select from various design challenges (forms, layouts, navigation, etc.)
+2. **Code Your Solution**: Write HTML and CSS in the live editors
+3. **See Real-time Results**: Watch your design appear instantly in the artboard
+4. **Get Feedback**: Compare your work with the target design
+5. **Earn Points**: Improve accuracy and unlock new challenges
+
+## 🤝 Contributing
+
+We welcome contributions! Here's how you can help:
+
+1. **Fork the repository**
+2. **Create a feature branch**: `git checkout -b feature/amazing-feature`
+3. **Make your changes** and test thoroughly
+4. **Commit your changes**: `git commit -m 'Add amazing feature'`
+5. **Push to the branch**: `git push origin feature/amazing-feature`
+6. **Open a Pull Request**
+
+### Development Guidelines
+- Use TypeScript for all new code
+- Follow the existing component patterns
+- Add tests for new features
+- Update documentation as needed
+- Keep commits focused and descriptive
+
+## 📝 Available Scripts
+
+```bash
+# Development
+pnpm dev          # Start development server
+pnpm build        # Build for production
+pnpm start        # Start production server
+pnpm lint         # Run ESLint
+
+# Database
+pnpm db:migrate   # Run database migrations
+pnpm db:seed      # Seed database with sample data
+```
+
+## 🎨 Challenge Types
+
+- **Layout Challenges**: Flexbox, CSS Grid, positioning
+- **Form Design**: Input styling, validation, accessibility
+- **Navigation**: Menus, breadcrumbs, responsive navbars
+- **Component Design**: Buttons, cards, modals, tabs
+- **Responsive Design**: Mobile-first, breakpoints, media queries
+- **Animation**: CSS transitions, transforms, keyframes
+
+## 📊 Progress Tracking
+
+Track your learning journey with:
+- Skill level progression
+- Challenge completion rates
+- Code accuracy metrics
+- Time spent on challenges
+- Personal best scores
+
+## 🔧 Configuration
+
+The app can be configured through `config/config.json`:
+- Challenge difficulty settings
+- AI model parameters
+- UI theme preferences
+- Database connection settings
+
+## 📄 License
+
+This project is open source and available under the [MIT License](LICENSE).
+
+## ☕ Support the Project
+
+If you find UI Designer helpful for your learning journey, consider supporting the project:
+
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-%23FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://www.buymeacoffee.com/jalez)
+
+Your support helps maintain and improve the platform!
+
+## 🙏 Acknowledgments
+
+- Built with [Next.js](https://nextjs.org/)
+- UI components from [Radix UI](https://www.radix-ui.com/)
+- Code editing powered by [CodeMirror](https://codemirror.net/)
+- Icons from [Lucide React](https://lucide.dev/)
+
+---
+
+**Happy designing! 🎨** Turn your CSS skills into masterpieces with UI Designer.
