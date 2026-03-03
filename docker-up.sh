@@ -9,6 +9,7 @@ COMPOSE_OPTIONS=("--build")
 COMPOSE_YML="docker-compose.yml"
 
 if [[ "$(hostname)" =~ tie-lukioplus.rd.tuni.fi ]]; then
+  set -e
   COMPOSE_YML="production.docker-compose.yml"
   COMPOSE_OPTIONS+=("-d")
 
