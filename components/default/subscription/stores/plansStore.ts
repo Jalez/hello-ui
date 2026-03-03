@@ -1,3 +1,4 @@
+import { apiUrl } from "@/lib/apiUrl";
 import { create } from "zustand";
 
 let memoryPlansCache: PricingPlan[] | null = null;
@@ -68,7 +69,7 @@ export const usePlansStore = create<PlansStore>((set, get) => ({
     set({ isLoadingPlans: true, plansError: null });
 
     try {
-      const response = await fetch("/api/stripe/plans/read");
+      const response = await fetch(apiUrl("/api/stripe/plans/read"));
       if (!response.ok) {
         throw new Error("Failed to fetch plans");
       }

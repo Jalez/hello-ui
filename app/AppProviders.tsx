@@ -71,6 +71,11 @@ export default function Providers({ children, session }: ProvidersProps) {
     <TooltipProvider delayDuration={200}>
       <SessionProvider
         session={session}
+        basePath={
+          process.env.NEXT_PUBLIC_BASE_PATH
+            ? `${process.env.NEXT_PUBLIC_BASE_PATH}/api/auth`
+            : undefined
+        }
         refetchOnWindowFocus={true}
         refetchInterval={0}
         refetchWhenOffline={false}

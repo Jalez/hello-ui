@@ -1,3 +1,5 @@
+import { apiUrl } from "@/lib/apiUrl";
+
 /**
  * Fetch user default models from the API
  */
@@ -7,7 +9,7 @@ export async function getUserDefaults(userId: string): Promise<{
   imageOCRModel: string | null;
   pdfOCRModel: string | null;
 }> {
-  const response = await fetch(`/api/user/settings/models/read`);
+  const response = await fetch(apiUrl("/api/user/settings/models/read"));
 
   if (!response.ok) {
     if (response.status === 401) {

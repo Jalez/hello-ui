@@ -1,10 +1,11 @@
+import { apiUrl } from "@/lib/apiUrl";
 import type { Provider } from "../types";
 
 /**
  * Create a new provider
  */
 export async function createProvider(provider: Omit<Provider, "slug">): Promise<Provider> {
-  const response = await fetch("/api/ai/providers/create", {
+  const response = await fetch(apiUrl("/api/ai/providers/create"), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

@@ -1,3 +1,5 @@
+import { apiUrl } from "@/lib/apiUrl";
+
 /**
  * Fetch user credits from the API
  */
@@ -13,7 +15,7 @@ export interface CreditsApiResponse {
  */
 export async function fetchCredits(userId: string): Promise<CreditsApiResponse> {
   try {
-    const response = await fetch(`/api/user/credits/read`);
+    const response = await fetch(apiUrl("/api/user/credits/read"));
 
     if (!response.ok) {
       const errorText = await response.text();

@@ -1,3 +1,5 @@
+import { apiUrl } from "@/lib/apiUrl";
+
 export let mainColor = "#222";
 export let secondaryColor = "#fff";
 export const drawBoardWidth = 400;
@@ -14,7 +16,7 @@ const difficulties = {
   hard: 3,
 };
 
-export const mapUrl = "/api/maps";
-export const levelUrl = "/api/levels";
-export const chatGPTURl = "/api/ai";
+export const mapUrl = apiUrl("/api/maps");
+export const levelUrl = apiUrl("/api/levels");
+export const chatGPTURl = apiUrl("/api/ai");
 export const appVersion = "0.1.0";

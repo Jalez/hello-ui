@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from "react";
+import { apiUrl } from "@/lib/apiUrl";
 import Link from "next/link";
 import { Globe, Loader2 } from "lucide-react";
 
@@ -22,7 +23,7 @@ export default function GamesPage() {
   useEffect(() => {
     const fetchGames = async () => {
       try {
-        const res = await fetch("/api/games");
+        const res = await fetch(apiUrl("/api/games"));
         if (!res.ok) throw new Error("Failed to fetch games");
         const data = await res.json();
         setGames(data);

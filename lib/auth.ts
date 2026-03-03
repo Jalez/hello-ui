@@ -179,6 +179,10 @@ export const authOptions = {
     signIn: "/auth/signin",
     error: "/auth/error", // Use dedicated error page
   },
+  // When app is served under a path prefix (e.g. /css-artist), auth API is at prefix/api/auth
+  basePath: process.env.NEXT_PUBLIC_BASE_PATH
+    ? `${process.env.NEXT_PUBLIC_BASE_PATH}/api/auth`
+    : undefined,
   debug: process.env.NODE_ENV === "development",
 };
 

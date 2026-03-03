@@ -1,10 +1,11 @@
+import { apiUrl } from "@/lib/apiUrl";
 import type { Provider } from "../types";
 
 /**
  * Fetch all providers from the API
  */
 export async function getProviders(): Promise<Provider[]> {
-  const response = await fetch("/api/ai/providers/read");
+  const response = await fetch(apiUrl("/api/ai/providers/read"));
 
   if (!response.ok) {
     throw new Error(`Failed to fetch providers: ${response.statusText}`);
@@ -26,7 +27,7 @@ export async function getProviderBySlug(slug: string): Promise<Provider | null> 
  * Update providers from OpenRouter API
  */
 export async function updateProvidersFromOpenRouter(): Promise<void> {
-  const response = await fetch("/api/ai/providers/update", {
+  const response = await fetch(apiUrl("/api/ai/providers/update"), {
     method: "POST",
   });
 
