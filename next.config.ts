@@ -11,6 +11,18 @@ const nextConfig: NextConfig = {
   // Base path for routing and links when served under a prefix (e.g. /css-artist)
   basePath: process.env.NEXT_PUBLIC_BASE_PATH || "",
 
+  // NextAuth sometimes redirects to /error; our page is at /auth/error (redirect preserves query)
+  redirects: async () =>
+    process.env.NEXT_PUBLIC_BASE_PATH
+      ? [
+          {
+            source: "/error",
+            destination: "/auth/error",
+            permanent: false,
+          },
+        ]
+      : [],
+
   // External packages that should be handled by the server runtime that should be handled by the server runtime
   serverExternalPackages: ['@neondatabase/serverless', 'pg', 'pg-pool', 'lti-v1.0-node-library'],
 
