@@ -225,8 +225,9 @@ export async function POST(
       }
     }
 
-    // App root URL for redirects (must include /css-artist when deployed under a path).
+    // App root URL for redirects. Prefer APP_ROOT_URL (server-only) so prod redirects stay correct behind a proxy.
     const appRootUrl =
+      process.env.APP_ROOT_URL ||
       process.env.NEXT_PUBLIC_APP_URL ||
       (process.env.NEXTAUTH_URL?.replace(/\/api\/auth\/?$/, "") ?? `http://${request.headers.get("host") || "localhost:3000"}`);
     const isSecure = appRootUrl.startsWith("https");
