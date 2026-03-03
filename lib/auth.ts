@@ -188,7 +188,7 @@ export const authOptions = {
   basePath: process.env.NEXT_PUBLIC_BASE_PATH
     ? `${process.env.NEXT_PUBLIC_BASE_PATH}/api/auth`
     : undefined,
-  debug: process.env.NODE_ENV === "development",
+  debug: true,
 };
 
 const handler = NextAuth(authOptions);
