@@ -249,7 +249,10 @@ export async function POST(
     // Redirect with a one-time code instead of the JWT in the URL (code is exchanged server-side for the token).
     const dest = `/group/${group.id}?mode=game`;
     const code = createOneTimeCode(ltiSignInToken, dest);
-    const loginUrl = new URL("/auth/lti-login", appRootUrl);
+    // Include base path so redirect stays under app root (e.g. /css-artist/auth/lti-login).
+    const basePath = (process.env.NEXT_PUBLIC_BASE_PATH || "").replace(/\/+$/, "");
+    const loginPath = `${basePath}/auth/lti-login`.replace(/\/+/g, "/") || "/auth/lti-login";
+    const loginUrl = new URL(loginPath, appRootUrl);
     loginUrl.searchParams.set("code", code);
     loginUrl.searchParams.set("dest", dest);
 
