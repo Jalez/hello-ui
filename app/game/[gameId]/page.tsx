@@ -4,6 +4,7 @@ import { use, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import App from "@/components/App";
 import { useGameStore } from "@/components/default/games";
+import { CollaborationProvider } from "@/lib/collaboration";
 
 interface GamePageProps {
   params: Promise<{
@@ -76,5 +77,20 @@ export default function GamePage({ params }: GamePageProps) {
     );
   }
 
-  return <App />;
+  // Wrap in CollaborationProvider so components using useCollaboration() don't throw.
+  // No group context on /game/[gameId], so collaboration stays disabled (no WebSocket).
+  const user = session?.user
+    ? {
+        id: session.userId || session.user.email || "",
+        email: session.user.email || "",
+        name: session.user.name ?? undefined,
+        image: session.user.image ?? undefined,
+      }
+    : null;
+
+  return (
+    <CollaborationProvider groupId={null} user={user}>
+      <App />
+    </CollaborationProvider>
+  );
 }
