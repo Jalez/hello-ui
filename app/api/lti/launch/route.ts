@@ -10,6 +10,7 @@ import {
 } from "@/app/api/_lib/services/groupService";
 import { getSql } from "@/app/api/_lib/db";
 import { logDebug } from "@/lib/debug-logger";
+import { createOneTimeCode } from "@/lib/lti/one-time-code";
 
 export async function POST(request: NextRequest) {
   try {
@@ -182,12 +183,12 @@ export async function POST(request: NextRequest) {
       redirectDest: "/",
     });
 
-    // Build the lti-login redirect URL (under app root so it has the /css-artist prefix when deployed).
-    // dest = home page — the user is logging in, not launching a specific embedded game.
-    // (Specific game embedding uses the game's own share/play URL, not LTI launch.)
+    // Redirect with a one-time code instead of the JWT in the URL (code is exchanged server-side for the token).
+    const dest = "/";
+    const code = createOneTimeCode(ltiSignInToken, dest);
     const loginUrl = new URL("/auth/lti-login", appRootUrl);
-    loginUrl.searchParams.set("token", ltiSignInToken);
-    loginUrl.searchParams.set("dest", "/");
+    loginUrl.searchParams.set("code", code);
+    loginUrl.searchParams.set("dest", dest);
 
     const response = NextResponse.redirect(loginUrl);
 
@@ -202,7 +203,7 @@ export async function POST(request: NextRequest) {
     });
 
     logDebug("lti_launch_redirect", {
-      redirectUrl: loginUrl.toString(),
+      redirectUrl: loginUrl.origin + loginUrl.pathname + "?code=...&dest=" + encodeURIComponent(dest),
       cookieSet: true,
     });
 
