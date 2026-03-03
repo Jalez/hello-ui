@@ -33,6 +33,7 @@ services:
       DB_CLIENT: postgres
       TZ: Europe/Helsinki
       NODE_ENV: production
+      NEXT_PUBLIC_BASE_PATH: "/css-artist"
     depends_on:
       - db
     restart: always

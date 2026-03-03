@@ -24,6 +24,7 @@ if [[ "$(hostname)" =~ tie-lukioplus.rd.tuni.fi ]]; then
   docker build -t ui-designer-app:latest \
     --build-arg NEXT_PUBLIC_DRAWBOARD_URL=https://tie-lukioplus.rd.tuni.fi/drawboard \
     --build-arg NEXT_PUBLIC_ASSET_PREFIX=/css-artist \
+    --build-arg NEXT_PUBLIC_BASE_PATH=/css-artist \
     -f Dockerfile .
   docker build -t ui-designer-ws:latest -f ws-server/Dockerfile ./ws-server
   docker build -t ui-designer-db-init -f Dockerfile.db-init .
