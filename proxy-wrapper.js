@@ -1,9 +1,7 @@
 // Lightweight proxy wrapper for Next.js standalone server.
 // Apache strips the /css-artist prefix before forwarding requests.
 // This wrapper re-adds it so Next.js (with basePath: "/css-artist") can handle them.
-//
-// Redirect Location headers are rewritten to account for the prefix that
-// Apache will re-add on the browser's next request.
+// Redirect Location headers are passed through unchanged so the browser stays under the app path.
 //
 // Without BASE_PATH set, this simply starts Next.js normally.
 
@@ -11,18 +9,25 @@ const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH || "";
 
 if (!BASE_PATH) {
   // No proxy needed — start Next.js directly
+  console.log("> Starting Next.js (no base path)");
   require("./server.js");
 } else {
   const http = require("http");
   const PORT = parseInt(process.env.PORT || "3000", 10);
   const NEXT_PORT = PORT + 1;
+  console.log(`> Proxy mode: basePath=${BASE_PATH}, next on ${NEXT_PORT}, proxy on ${PORT}`);
 
   // Start Next.js on an internal port
   process.env.PORT = String(NEXT_PORT);
   process.env.HOSTNAME = "127.0.0.1";
-  require("./server.js");
+  try {
+    require("./server.js");
+  } catch (err) {
+    console.error("> Failed to start Next.js:", err);
+    process.exit(1);
+  }
 
-  // Proxy that re-adds basePath to incoming requests
+  // Proxy that re-adds basePath to incoming requests (listen immediately so Apache always has a backend)
   const proxy = http.createServer((req, res) => {
     const url = req.url || "/";
 
@@ -41,22 +46,9 @@ if (!BASE_PATH) {
       (proxyRes) => {
         const headers = { ...proxyRes.headers };
 
-        // Rewrite Location headers for redirects.
-        // If we added the basePath ourselves (Apache stripped it), then Next.js
-        // redirect locations will have basePath that the browser doesn't need
-        // (Apache will re-add it). Strip it.
-        // If the request already had basePath (direct hit), leave Location as-is.
-        if (!alreadyPrefixed && headers.location && headers.location.startsWith(BASE_PATH)) {
-          headers.location = headers.location.slice(BASE_PATH.length) || "/";
-        }
-
-        // Also fix the refresh header if present
-        if (!alreadyPrefixed && headers.refresh) {
-          headers.refresh = headers.refresh.replace(
-            `url=${BASE_PATH}`,
-            "url="
-          );
-        }
+        // Leave Location (and Refresh) as-is so the browser stays under /css-artist.
+        // Next.js sends e.g. Location: /css-artist or /css-artist/account; we must
+        // not strip the prefix or the browser would go to the site root.
 
         res.writeHead(proxyRes.statusCode, headers);
         proxyRes.pipe(res, { end: true });
