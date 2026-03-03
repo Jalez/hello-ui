@@ -161,8 +161,9 @@ export async function POST(request: NextRequest) {
     };
 
     // App root URL for redirects (browsers must hit this, not Docker-internal request.url).
-    // Use NEXT_PUBLIC_APP_URL when set; else derive from NEXTAUTH_URL (e.g. .../api/auth → ...).
+    // Prefer APP_ROOT_URL (server-only, never inlined) so prod redirects stay correct behind a proxy.
     const appRootUrl =
+      process.env.APP_ROOT_URL ||
       process.env.NEXT_PUBLIC_APP_URL ||
       (process.env.NEXTAUTH_URL?.replace(/\/api\/auth\/?$/, "") ?? `http://${request.headers.get("host") || "localhost:3000"}`);
     const isSecure = appRootUrl.startsWith("https");
