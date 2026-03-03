@@ -36,6 +36,10 @@ RUN npm install
 # Bundle app source
 COPY . .
 
+# Base path: built assets at /drawboard/assets/...; server strips /drawboard from request path
+ENV VITE_BASE_PATH=/drawboard/
+ENV BASE_PATH=/drawboard
+
 # LANG=C prevents Vite from emitting Unicode (e.g. ✓) that crashes docker-compose 1.18
 RUN LANG=C npm run build
 
