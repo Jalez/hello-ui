@@ -33,7 +33,14 @@ if (!BASE_PATH) {
 
     // Did we need to add the prefix, or was it already there?
     const alreadyPrefixed = url.startsWith(BASE_PATH);
-    const prefixedUrl = alreadyPrefixed ? url : BASE_PATH + url;
+    let prefixedUrl = alreadyPrefixed ? url : BASE_PATH + url;
+
+    // Next.js default is trailingSlash: false, so it 308-redirects /base/ -> /base.
+    // When Apache sends path "/" for the app root, use /base (no trailing slash)
+    // so Next.js serves the page instead of redirecting (which would loop).
+    if (prefixedUrl === BASE_PATH + "/" || prefixedUrl === BASE_PATH + "") {
+      prefixedUrl = BASE_PATH;
+    }
 
     const proxyReq = http.request(
       {
