@@ -8,7 +8,10 @@ const nextConfig: NextConfig = {
   // but the browser needs /css-artist prefix on asset URLs so they route through Apache
   assetPrefix: process.env.NEXT_PUBLIC_ASSET_PREFIX || "",
 
-  // External packages that should be handled by the server runtime
+  // Base path for routing and links when served under a prefix (e.g. /css-artist)
+  basePath: process.env.NEXT_PUBLIC_BASE_PATH || "",
+
+  // External packages that should be handled by the server runtime that should be handled by the server runtime
   serverExternalPackages: ['@neondatabase/serverless', 'pg', 'pg-pool', 'lti-v1.0-node-library'],
 
   // Environment variables to expose to the browser
