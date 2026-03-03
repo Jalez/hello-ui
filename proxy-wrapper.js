@@ -30,17 +30,21 @@ if (!BASE_PATH) {
   // Proxy that re-adds basePath to incoming requests (listen immediately so Apache always has a backend)
   const proxy = http.createServer((req, res) => {
     const url = req.url || "/";
+    const [pathPart, ...queryParts] = url.split("?");
+    const queryString = queryParts.length ? "?" + queryParts.join("?") : "";
 
     // Did we need to add the prefix, or was it already there?
-    const alreadyPrefixed = url.startsWith(BASE_PATH);
-    let prefixedUrl = alreadyPrefixed ? url : BASE_PATH + url;
+    const alreadyPrefixed = pathPart.startsWith(BASE_PATH);
+    let path = alreadyPrefixed ? pathPart : BASE_PATH + (pathPart === "" ? "/" : pathPart);
 
     // Next.js default is trailingSlash: false, so it 308-redirects /base/ -> /base.
-    // When Apache sends path "/" for the app root, use /base (no trailing slash)
+    // When path is app root (with or without trailing slash), use /base (no slash)
     // so Next.js serves the page instead of redirecting (which would loop).
-    if (prefixedUrl === BASE_PATH + "/" || prefixedUrl === BASE_PATH + "") {
-      prefixedUrl = BASE_PATH;
+    if (path === BASE_PATH + "/" || path === BASE_PATH || path === BASE_PATH + "") {
+      path = BASE_PATH;
     }
+
+    const prefixedUrl = path + queryString;
 
     const proxyReq = http.request(
       {
