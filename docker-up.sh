@@ -27,6 +27,7 @@ if [[ "$(hostname)" =~ tie-lukioplus.rd.tuni.fi ]]; then
     --build-arg NEXT_PUBLIC_BASE_PATH=/css-artist \
     -f Dockerfile .
   docker build -t ui-designer-ws:latest -f ws-server/Dockerfile ./ws-server
+  docker build -t ui-designer-drawboard:latest -f drawBoard/Dockerfile ./drawBoard
   docker build -t ui-designer-db-init -f Dockerfile.db-init .
   echo "Images built."
 
