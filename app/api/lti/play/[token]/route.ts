@@ -224,10 +224,11 @@ export async function POST(
       }
     }
 
-    const appBaseUrl =
-      process.env.NEXTAUTH_URL ||
-      `http://${request.headers.get("host") || "localhost:3000"}`;
-    const isSecure = appBaseUrl.startsWith("https");
+    // App root URL for redirects (must include /css-artist when deployed under a path).
+    const appRootUrl =
+      process.env.NEXT_PUBLIC_APP_URL ||
+      (process.env.NEXTAUTH_URL?.replace(/\/api\/auth\/?$/, "") ?? `http://${request.headers.get("host") || "localhost:3000"}`);
+    const isSecure = appRootUrl.startsWith("https");
 
     // Issue a short-lived JWT so /auth/lti-login can create a real NextAuth session
     const ltiSignInToken = jwt.sign(
@@ -245,7 +246,7 @@ export async function POST(
 
     // Redirect to the GROUP page — it has CollaborationProvider, so all group
     // members see each other's presence. The game linked above is what loads.
-    const loginUrl = new URL("/auth/lti-login", appBaseUrl);
+    const loginUrl = new URL("/auth/lti-login", appRootUrl);
     loginUrl.searchParams.set("token", ltiSignInToken);
     loginUrl.searchParams.set("dest", `/group/${group.id}?mode=game`);
 

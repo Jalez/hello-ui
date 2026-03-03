@@ -159,10 +159,12 @@ export async function POST(request: NextRequest) {
       },
     };
 
-    // Use NEXTAUTH_URL for the redirect base — request.url is the Docker-internal
-    // bind address (0.0.0.0) which browsers can't navigate to.
-    const appBaseUrl = process.env.NEXTAUTH_URL || `http://${request.headers.get("host") || "localhost:3000"}`;
-    const isSecure = appBaseUrl.startsWith("https");
+    // App root URL for redirects (browsers must hit this, not Docker-internal request.url).
+    // Use NEXT_PUBLIC_APP_URL when set; else derive from NEXTAUTH_URL (e.g. .../api/auth → ...).
+    const appRootUrl =
+      process.env.NEXT_PUBLIC_APP_URL ||
+      (process.env.NEXTAUTH_URL?.replace(/\/api\/auth\/?$/, "") ?? `http://${request.headers.get("host") || "localhost:3000"}`);
+    const isSecure = appRootUrl.startsWith("https");
 
     // Issue a short-lived signed JWT so the /auth/lti-login page can create
     // a real NextAuth session (via CredentialsProvider), making the user
@@ -180,10 +182,10 @@ export async function POST(request: NextRequest) {
       redirectDest: "/",
     });
 
-    // Build the lti-login redirect URL.
+    // Build the lti-login redirect URL (under app root so it has the /css-artist prefix when deployed).
     // dest = home page — the user is logging in, not launching a specific embedded game.
     // (Specific game embedding uses the game's own share/play URL, not LTI launch.)
-    const loginUrl = new URL("/auth/lti-login", appBaseUrl);
+    const loginUrl = new URL("/auth/lti-login", appRootUrl);
     loginUrl.searchParams.set("token", ltiSignInToken);
     loginUrl.searchParams.set("dest", "/");
 
