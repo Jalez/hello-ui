@@ -33,8 +33,18 @@ if [[ "$(hostname)" =~ tie-lukioplus.rd.tuni.fi ]]; then
   # 2. Start the database
   docker-compose --file ${COMPOSE_YML} up -d db
   echo "Waiting for database to be ready..."
-  until docker exec ui-designer.db pg_isready -U postgres -d ui_designer > /dev/null 2>&1; do
+  WAIT_MAX=90
+  WAIT_SEC=0
+  while ! docker exec ui-designer.db pg_isready -U postgres -d ui_designer > /dev/null 2>&1; do
     sleep 2
+    WAIT_SEC=$((WAIT_SEC + 2))
+    if [ "$((WAIT_SEC % 10))" -eq 0 ] && [ "$WAIT_SEC" -gt 0 ]; then
+      echo "  ... still waiting (${WAIT_SEC}s)"
+    fi
+    if [ "$WAIT_SEC" -ge "$WAIT_MAX" ]; then
+      echo "ERROR: Database did not become ready within ${WAIT_MAX}s. Check: docker ps -a; docker logs ui-designer.db"
+      exit 1
+    fi
   done
   echo "Database is ready."
 

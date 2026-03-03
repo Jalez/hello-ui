@@ -2,7 +2,7 @@ version: '3'
 
 services:
   db:
-    image: postgres:16-alpine
+    image: postgres:latest
     container_name: ui-designer.db
     environment:
       POSTGRES_USER: postgres
@@ -18,20 +18,6 @@ services:
     restart: always
     networks:
       - ui-designer-net
-
-  migrate:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: ui-designer.migrate
-    command: ["pnpm", "db:migrate"]
-    environment:
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/ui_designer
-    depends_on:
-      - db
-    networks:
-      - ui-designer-net
-    restart: "no"
 
   app:
     build:
@@ -56,7 +42,7 @@ services:
       # Server-only: LTI redirect base (not inlined at build time, so prod always uses this)
       APP_ROOT_URL: "https://tie-lukioplus.rd.tuni.fi/css-artist"
     depends_on:
-      - migrate
+      - db
     restart: always
     networks:
       - ui-designer-net
