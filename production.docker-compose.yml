@@ -19,6 +19,21 @@ services:
     networks:
       - ui-designer-net
 
+  drawboard:
+    build:
+      context: ./drawBoard
+      dockerfile: Dockerfile
+    container_name: ui-designer.drawboard
+    image: ui-designer-drawboard:latest
+    ports:
+      - "54320:3500"
+    environment:
+      TZ: Europe/Helsinki
+      NODE_ENV: production
+    restart: always
+    networks:
+      - ui-designer-net
+
   app:
     build:
       context: .
