@@ -1,6 +1,5 @@
 "use client";
 
-import { Analytics } from "@vercel/analytics/react";
 import { SessionProvider, useSession } from "next-auth/react";
 import type { Session } from "next-auth";
 import { ThemeProvider, useTheme } from "next-themes";
@@ -87,7 +86,6 @@ export default function Providers({ children, session }: ProvidersProps) {
               <AppInitializer />
               <ToasterProvider />
               {children}
-              <Analytics />
             </ReduxProvider>
           </LoadingProvider>
         </ThemeProvider>

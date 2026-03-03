@@ -175,9 +175,14 @@ export const authOptions = {
       return true;
     },
   },
+  // With basePath, NextAuth must get full paths so redirects go to /css-artist/auth/error not /css-artist/error
   pages: {
-    signIn: "/auth/signin",
-    error: "/auth/error", // Use dedicated error page
+    signIn: process.env.NEXT_PUBLIC_BASE_PATH
+      ? `${process.env.NEXT_PUBLIC_BASE_PATH}/auth/signin`
+      : "/auth/signin",
+    error: process.env.NEXT_PUBLIC_BASE_PATH
+      ? `${process.env.NEXT_PUBLIC_BASE_PATH}/auth/error`
+      : "/auth/error",
   },
   // When app is served under a path prefix (e.g. /css-artist), auth API is at prefix/api/auth
   basePath: process.env.NEXT_PUBLIC_BASE_PATH
