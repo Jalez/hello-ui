@@ -207,21 +207,26 @@ export async function POST(
       },
     };
 
-    // Look up the game by shareToken and link it to the LTI group so that
-    // /group/[groupId] loads this specific game (instead of creating a new one).
-    // Only update if the game has no group yet — first LTI launcher wins.
+    // Look up the game by shareToken and decide routing mode:
+    // - group: link to group and redirect to /group/[groupId]
+    // - individual: keep users on /play/[token] for solo instances
+    let collaborationMode: "individual" | "group" = "individual";
     const gameResult = await sql.query(
-      "SELECT id, group_id FROM projects WHERE share_token = $1 LIMIT 1",
+      "SELECT id, group_id, collaboration_mode FROM projects WHERE share_token = $1 LIMIT 1",
       [shareToken]
     );
     const gameRows = (gameResult as any).rows ?? gameResult;
     if (gameRows?.length) {
-      const gameGroupId = gameRows[0].group_id;
-      if (!gameGroupId) {
-        await sql.query(
-          "UPDATE projects SET group_id = $1 WHERE id = $2 AND group_id IS NULL",
-          [group.id, gameRows[0].id]
-        );
+      collaborationMode = gameRows[0].collaboration_mode === "group" ? "group" : "individual";
+
+      if (collaborationMode === "group") {
+        const gameGroupId = gameRows[0].group_id;
+        if (!gameGroupId) {
+          await sql.query(
+            "UPDATE projects SET group_id = $1 WHERE id = $2 AND group_id IS NULL",
+            [group.id, gameRows[0].id]
+          );
+        }
       }
     }
 
@@ -244,13 +249,15 @@ export async function POST(
       jwtEmail: user.email,
       jwtName: user.name || userInfo.name || user.email,
       redirectGroupId: group.id,
+      collaborationMode,
     });
 
+    const dest =
+      collaborationMode === "group" ? `/group/${group.id}?mode=game` : `/play/${shareToken}?mode=game`;
+
     // Redirect with a one-time code instead of the JWT in the URL (code is exchanged server-side for the token).
-    const dest = `/group/${group.id}?mode=game`;
     const code = createOneTimeCode(ltiSignInToken, dest);
     // Use base path from app root URL so redirect stays under app root (e.g. /css-artist/auth/lti-login).
-    // Derive from appRootUrl so it works even when NEXT_PUBLIC_BASE_PATH is not set at runtime (e.g. Docker).
     const appRootParsed = new URL(appRootUrl);
     const basePath = (appRootParsed.pathname || "/").replace(/\/+$/, "") || "";
     const loginPath = `${basePath}/auth/lti-login`.replace(/\/+/g, "/") || "/auth/lti-login";

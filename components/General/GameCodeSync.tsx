@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useContext, useEffect, useRef } from 'react';
 import { apiUrl } from '@/lib/apiUrl';
 import { useAppSelector } from '@/store/hooks/hooks';
-import { useCollaboration } from '@/lib/collaboration/CollaborationProvider';
+import { CollaborationContext } from '@/lib/collaboration/CollaborationProvider';
 import { useGameStore } from '@/components/default/games';
 
 const SAVE_DEBOUNCE_MS = 5000;
@@ -13,7 +13,8 @@ const SAVE_DEBOUNCE_MS = 5000;
  * Only active when the user is in a group collaboration session.
  */
 export function GameCodeSync() {
-  const { groupId } = useCollaboration();
+  const collaboration = useContext(CollaborationContext);
+  const groupId = collaboration?.groupId ?? null;
   const levels = useAppSelector((state) => state.levels);
   const currentGame = useGameStore((state) => state.getCurrentGame());
   const updateGameProgress = useGameStore((state) => state.updateGameProgress);
