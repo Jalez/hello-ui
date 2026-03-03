@@ -1,3 +1,5 @@
+import { apiUrl } from "@/lib/apiUrl";
+
 /**
  * Save user default models to the API
  */
@@ -7,7 +9,7 @@ export async function saveUserDefaults(userId: string, defaults: {
   imageOCRModel?: string | null;
   pdfOCRModel?: string | null;
 }): Promise<void> {
-  const response = await fetch(`/api/settings/${userId}/models/update`, {
+  const response = await fetch(apiUrl(`/api/settings/${userId}/models/update`), {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",

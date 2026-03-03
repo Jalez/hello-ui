@@ -1,3 +1,4 @@
+import { apiUrl } from "@/lib/apiUrl";
 import { useCreditsStore } from "../store/creditsStore";
 
 /**
@@ -36,7 +37,7 @@ export interface CreditsCheckResult {
  */
 export async function fetchServiceCosts(): Promise<ServiceCostsResponse> {
   try {
-    const response = await fetch("/api/service-costs");
+    const response = await fetch(apiUrl("/api/service-costs"));
 
     if (!response.ok) {
       const errorText = await response.text();

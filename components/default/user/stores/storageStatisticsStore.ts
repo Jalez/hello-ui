@@ -1,3 +1,4 @@
+import { apiUrl } from "@/lib/apiUrl";
 import { create } from "zustand";
 
 interface StorageStatisticsState {
@@ -30,7 +31,7 @@ export const useStorageStatisticsStore = create<StorageStatisticsState>((set, ge
 
     set({ isLoading: true });
     try {
-      const response = await fetch(`/api/statistics/${userId}/read?days=30`);
+      const response = await fetch(apiUrl(`/api/statistics/${userId}/read?days=30`));
       if (response.ok) {
         const data = await response.json();
         set({

@@ -1,3 +1,4 @@
+import { apiUrl } from "@/lib/apiUrl";
 import type { Game } from "../../types";
 
 export interface CreateGameOptions {
@@ -9,7 +10,7 @@ export async function createGame(options: CreateGameOptions): Promise<Game> {
   try {
     const { mapName, title = "New Game" } = options;
 
-    const response = await fetch(`/api/games`, {
+    const response = await fetch(apiUrl("/api/games"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ mapName, title }),

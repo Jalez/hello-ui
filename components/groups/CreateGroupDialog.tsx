@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { apiUrl } from "@/lib/apiUrl";
 import {
   Dialog,
   DialogContent,
@@ -43,7 +44,7 @@ export function CreateGroupDialog({
     setIsLoading(true);
 
     try {
-      const response = await fetch("/api/groups", {
+      const response = await fetch(apiUrl("/api/groups"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: name.trim() }),

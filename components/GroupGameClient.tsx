@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { apiUrl } from "@/lib/apiUrl";
 import { CollaborationProvider } from "@/lib/collaboration";
 import { useGameStore } from "@/components/default/games";
 import App from "@/components/App";
@@ -59,7 +60,7 @@ export function GroupGameClient({ groupId, gameId, user: ssrUser }: GroupGameCli
       return;
     }
 
-    fetch(`/api/groups/${groupId}/game`)
+    fetch(apiUrl(`/api/groups/${groupId}/game`))
       .then((r) => r.json())
       .then(({ game }) => {
         if (game) {

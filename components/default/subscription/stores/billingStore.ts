@@ -1,3 +1,4 @@
+import { apiUrl } from "@/lib/apiUrl";
 import { create } from "zustand";
 import type { Invoice } from "@/app/api/_lib/services/stripeService/subscriptionService";
 
@@ -44,7 +45,7 @@ export const useBillingStore = create<BillingStore>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const response = await fetch("/api/stripe/subscriptions/history", {
+      const response = await fetch(apiUrl("/api/stripe/subscriptions/history"), {
         cache: "no-cache", // Ensure fresh data for billing history
       });
 
