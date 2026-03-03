@@ -187,8 +187,10 @@ export async function POST(request: NextRequest) {
     // Redirect with a one-time code instead of the JWT in the URL (code is exchanged server-side for the token).
     const dest = "/";
     const code = createOneTimeCode(ltiSignInToken, dest);
-    // Include base path so redirect stays under app root (e.g. /css-artist/auth/lti-login).
-    const basePath = (process.env.NEXT_PUBLIC_BASE_PATH || "").replace(/\/+$/, "");
+    // Use base path from app root URL so redirect stays under app root (e.g. /css-artist/auth/lti-login).
+    // Derive from appRootUrl so it works even when NEXT_PUBLIC_BASE_PATH is not set at runtime (e.g. Docker).
+    const appRootParsed = new URL(appRootUrl);
+    const basePath = (appRootParsed.pathname || "/").replace(/\/+$/, "") || "";
     const loginPath = `${basePath}/auth/lti-login`.replace(/\/+/g, "/") || "/auth/lti-login";
     const loginUrl = new URL(loginPath, appRootUrl);
     loginUrl.searchParams.set("code", code);
