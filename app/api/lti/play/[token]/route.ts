@@ -19,6 +19,7 @@ import {
 import { getSql } from "@/app/api/_lib/db";
 import { logDebug } from "@/lib/debug-logger";
 import { authOptions } from "@/lib/auth";
+import { createOneTimeCode } from "@/lib/lti/one-time-code";
 
 // POST /api/lti/play/[token]
 // LTI 1.0 launch endpoint for a specific game (identified by its share token).
@@ -244,11 +245,12 @@ export async function POST(
       redirectGroupId: group.id,
     });
 
-    // Redirect to the GROUP page — it has CollaborationProvider, so all group
-    // members see each other's presence. The game linked above is what loads.
+    // Redirect with a one-time code instead of the JWT in the URL (code is exchanged server-side for the token).
+    const dest = `/group/${group.id}?mode=game`;
+    const code = createOneTimeCode(ltiSignInToken, dest);
     const loginUrl = new URL("/auth/lti-login", appRootUrl);
-    loginUrl.searchParams.set("token", ltiSignInToken);
-    loginUrl.searchParams.set("dest", `/group/${group.id}?mode=game`);
+    loginUrl.searchParams.set("code", code);
+    loginUrl.searchParams.set("dest", dest);
 
     const response = NextResponse.redirect(loginUrl);
 
@@ -272,7 +274,7 @@ export async function POST(
     }
 
     logDebug("lti_play_redirect", {
-      redirectUrl: loginUrl.toString(),
+      redirectUrl: loginUrl.origin + loginUrl.pathname + "?code=...&dest=" + encodeURIComponent(dest),
       cookieSet: true,
     });
 

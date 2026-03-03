@@ -34,6 +34,8 @@ services:
       TZ: Europe/Helsinki
       NODE_ENV: production
       NEXT_PUBLIC_BASE_PATH: "/css-artist"
+      # So LTI and other server-side redirects use the public URL, not request Host (e.g. localhost behind proxy)
+      NEXT_PUBLIC_APP_URL: "https://tie-lukioplus.rd.tuni.fi/css-artist"
     depends_on:
       - db
     restart: always

@@ -3,6 +3,7 @@
 import { Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
+import { apiUrl } from "@/lib/apiUrl";
 import { PageLoadingSpinner } from "@/components/scriba/ui/PageLoadingSpinner";
 import { setClientStorageScope } from "@/lib/utils/storageScope";
 
@@ -28,27 +29,42 @@ function LtiLoginContent() {
   const searchParams = useSearchParams();
 
   useEffect(() => {
-    const token = searchParams.get("token");
-    const dest = searchParams.get("dest") || "/";
+    const code = searchParams.get("code");
+    const destParam = searchParams.get("dest") || "/";
 
-    if (!token) {
-      router.replace("/auth/signin");
+    if (!code) {
+      router.replace(apiUrl("/auth/signin"));
       return;
     }
 
-    const payload = decodeJwtPayload(token);
-    setClientStorageScope({
-      userId: typeof payload?.userId === "string" ? payload.userId : null,
-      groupId: getGroupIdFromDest(dest),
-    });
+    fetch(apiUrl("/api/lti/exchange"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code }),
+    })
+      .then((res) => {
+        if (!res.ok) return res.json().then((data) => Promise.reject(new Error(data?.error || "Exchange failed")));
+        return res.json();
+      })
+      .then(({ token, dest }: { token: string; dest: string }) => {
+        const finalDest = dest || destParam;
+        const payload = decodeJwtPayload(token);
+        setClientStorageScope({
+          userId: typeof payload?.userId === "string" ? payload.userId : null,
+          groupId: getGroupIdFromDest(finalDest),
+        });
 
-    signIn("lti", { ltiToken: token, redirect: false }).then((result) => {
-      if (result?.ok) {
-        router.replace(dest);
-      } else {
-        router.replace("/auth/signin");
-      }
-    });
+        return signIn("lti", { ltiToken: token, redirect: false }).then((result) => {
+          if (result?.ok) {
+            router.replace(finalDest);
+          } else {
+            router.replace(apiUrl("/auth/signin"));
+          }
+        });
+      })
+      .catch(() => {
+        router.replace(apiUrl("/auth/signin"));
+      });
   }, [router, searchParams]);
 
   return <PageLoadingSpinner text="Signing in..." fullPage={true} />;
