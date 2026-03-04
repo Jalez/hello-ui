@@ -1,10 +1,11 @@
+import { apiUrl } from "@/lib/apiUrl";
 import type { Model } from "../types";
 
 /**
  * Create a new model
  */
 export async function createModel(model: Model): Promise<Model> {
-  const response = await fetch("/api/ai/models/create", {
+  const response = await fetch(apiUrl("/api/ai/models/create"), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

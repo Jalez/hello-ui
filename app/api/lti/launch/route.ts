@@ -10,6 +10,7 @@ import {
 } from "@/app/api/_lib/services/groupService";
 import { getSql } from "@/app/api/_lib/db";
 import { logDebug } from "@/lib/debug-logger";
+import { createOneTimeCode } from "@/lib/lti/one-time-code";
 
 export async function POST(request: NextRequest) {
   try {
@@ -159,10 +160,13 @@ export async function POST(request: NextRequest) {
       },
     };
 
-    // Use NEXTAUTH_URL for the redirect base — request.url is the Docker-internal
-    // bind address (0.0.0.0) which browsers can't navigate to.
-    const appBaseUrl = process.env.NEXTAUTH_URL || `http://${request.headers.get("host") || "localhost:3000"}`;
-    const isSecure = appBaseUrl.startsWith("https");
+    // App root URL for redirects (browsers must hit this, not Docker-internal request.url).
+    // Prefer APP_ROOT_URL (server-only, never inlined) so prod redirects stay correct behind a proxy.
+    const appRootUrl =
+      process.env.APP_ROOT_URL ||
+      process.env.NEXT_PUBLIC_APP_URL ||
+      (process.env.NEXTAUTH_URL?.replace(/\/api\/auth\/?$/, "") ?? `http://${request.headers.get("host") || "localhost:3000"}`);
+    const isSecure = appRootUrl.startsWith("https");
 
     // Issue a short-lived signed JWT so the /auth/lti-login page can create
     // a real NextAuth session (via CredentialsProvider), making the user
@@ -180,12 +184,17 @@ export async function POST(request: NextRequest) {
       redirectDest: "/",
     });
 
-    // Build the lti-login redirect URL.
-    // dest = home page — the user is logging in, not launching a specific embedded game.
-    // (Specific game embedding uses the game's own share/play URL, not LTI launch.)
-    const loginUrl = new URL("/auth/lti-login", appBaseUrl);
-    loginUrl.searchParams.set("token", ltiSignInToken);
-    loginUrl.searchParams.set("dest", "/");
+    // Redirect with a one-time code instead of the JWT in the URL (code is exchanged server-side for the token).
+    const dest = "/";
+    const code = createOneTimeCode(ltiSignInToken, dest);
+    // Use base path from app root URL so redirect stays under app root (e.g. /css-artist/auth/lti-login).
+    // Derive from appRootUrl so it works even when NEXT_PUBLIC_BASE_PATH is not set at runtime (e.g. Docker).
+    const appRootParsed = new URL(appRootUrl);
+    const basePath = (appRootParsed.pathname || "/").replace(/\/+$/, "") || "";
+    const loginPath = `${basePath}/auth/lti-login`.replace(/\/+/g, "/") || "/auth/lti-login";
+    const loginUrl = new URL(loginPath, appRootUrl);
+    loginUrl.searchParams.set("code", code);
+    loginUrl.searchParams.set("dest", dest);
 
     const response = NextResponse.redirect(loginUrl);
 
@@ -200,7 +209,7 @@ export async function POST(request: NextRequest) {
     });
 
     logDebug("lti_launch_redirect", {
-      redirectUrl: loginUrl.toString(),
+      redirectUrl: loginUrl.origin + loginUrl.pathname + "?code=...&dest=" + encodeURIComponent(dest),
       cookieSet: true,
     });
 

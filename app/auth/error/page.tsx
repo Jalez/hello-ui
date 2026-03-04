@@ -4,6 +4,7 @@ import { AlertCircle, RefreshCw } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { Suspense, useEffect, useState } from "react";
+import { apiUrl } from "@/lib/apiUrl";
 import { PageContainer } from "@/components/scriba/ui/PageContainer";
 import { PageLoadingSpinner } from "@/components/scriba/ui/PageLoadingSpinner";
 
@@ -20,6 +21,15 @@ function AuthErrorContent() {
       console.error("Auth error page: Error parameter found:", errorParam);
 
       switch (errorParam) {
+        case "OAuthSignin":
+          setError(
+            "Sign-in could not be started. If this app is served under a path (e.g. /css-artist), " +
+              "ensure the Google OAuth redirect URI in Google Cloud Console is exactly: " +
+              (typeof window !== "undefined"
+                ? `${window.location.origin}${apiUrl("/api/auth/callback/google")}`
+                : "…/api/auth/callback/google")
+          );
+          break;
         case "OAuthCallback":
           setError("Authentication callback failed. This usually means there was an issue with the OAuth flow.");
           break;
@@ -41,9 +51,9 @@ function AuthErrorContent() {
   const handleRetry = async () => {
     setIsRetrying(true);
     try {
-      await signIn("google", { callbackUrl: "/" });
-    } catch (error) {
-      console.error("Retry sign in failed:", error);
+      await signIn("google", { callbackUrl: apiUrl("/") });
+    } catch (err) {
+      console.error("Retry sign in failed:", err);
       setIsRetrying(false);
     }
   };
@@ -84,7 +94,7 @@ function AuthErrorContent() {
 
           <button
             type="button"
-            onClick={() => router.push("/")}
+            onClick={() => router.push(apiUrl("/"))}
             className="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
           >
             Go Back Home

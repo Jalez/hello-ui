@@ -1,12 +1,14 @@
 // Admin utility functions for client-side admin checks
 // This mirrors the server-side admin logic for consistency
 
+import { apiUrl } from "@/lib/apiUrl";
+
 // Note: Admin emails are stored server-side only for security
 // We'll check admin status by attempting to access admin routes
 
 export async function checkAdminStatus(): Promise<boolean> {
   try {
-    const response = await fetch("/api/admin/check-status", {
+    const response = await fetch(apiUrl("/api/admin/check-status"), {
       method: "GET",
     });
 

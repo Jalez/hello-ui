@@ -19,6 +19,7 @@ import {
 import { getSql } from "@/app/api/_lib/db";
 import { logDebug } from "@/lib/debug-logger";
 import { authOptions } from "@/lib/auth";
+import { createOneTimeCode } from "@/lib/lti/one-time-code";
 
 // POST /api/lti/play/[token]
 // LTI 1.0 launch endpoint for a specific game (identified by its share token).
@@ -229,10 +230,12 @@ export async function POST(
       }
     }
 
-    const appBaseUrl =
-      process.env.NEXTAUTH_URL ||
-      `http://${request.headers.get("host") || "localhost:3000"}`;
-    const isSecure = appBaseUrl.startsWith("https");
+    // App root URL for redirects. Prefer APP_ROOT_URL (server-only) so prod redirects stay correct behind a proxy.
+    const appRootUrl =
+      process.env.APP_ROOT_URL ||
+      process.env.NEXT_PUBLIC_APP_URL ||
+      (process.env.NEXTAUTH_URL?.replace(/\/api\/auth\/?$/, "") ?? `http://${request.headers.get("host") || "localhost:3000"}`);
+    const isSecure = appRootUrl.startsWith("https");
 
     // Issue a short-lived JWT so /auth/lti-login can create a real NextAuth session
     const ltiSignInToken = jwt.sign(
@@ -249,12 +252,18 @@ export async function POST(
       collaborationMode,
     });
 
-    const destination =
+    const dest =
       collaborationMode === "group" ? `/group/${group.id}?mode=game` : `/play/${shareToken}?mode=game`;
 
-    const loginUrl = new URL("/auth/lti-login", appBaseUrl);
-    loginUrl.searchParams.set("token", ltiSignInToken);
-    loginUrl.searchParams.set("dest", destination);
+    // Redirect with a one-time code instead of the JWT in the URL (code is exchanged server-side for the token).
+    const code = createOneTimeCode(ltiSignInToken, dest);
+    // Use base path from app root URL so redirect stays under app root (e.g. /css-artist/auth/lti-login).
+    const appRootParsed = new URL(appRootUrl);
+    const basePath = (appRootParsed.pathname || "/").replace(/\/+$/, "") || "";
+    const loginPath = `${basePath}/auth/lti-login`.replace(/\/+/g, "/") || "/auth/lti-login";
+    const loginUrl = new URL(loginPath, appRootUrl);
+    loginUrl.searchParams.set("code", code);
+    loginUrl.searchParams.set("dest", dest);
 
     const response = NextResponse.redirect(loginUrl);
 
@@ -278,7 +287,7 @@ export async function POST(
     }
 
     logDebug("lti_play_redirect", {
-      redirectUrl: loginUrl.toString(),
+      redirectUrl: loginUrl.origin + loginUrl.pathname + "?code=...&dest=" + encodeURIComponent(dest),
       cookieSet: true,
     });
 

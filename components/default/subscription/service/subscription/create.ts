@@ -1,3 +1,4 @@
+import { apiUrl } from "@/lib/apiUrl";
 import type { PricingPlan } from "../../components/Plan/PlanContext";
 
 export interface CreateCheckoutSessionData {
@@ -19,7 +20,7 @@ export interface CheckoutSessionResult {
  * Returns the portal URL
  */
 export async function createPortalSession(): Promise<string> {
-  const response = await fetch("/api/stripe/portal", {
+  const response = await fetch(apiUrl("/api/stripe/portal"), {
     method: "POST",
   });
 
@@ -42,7 +43,7 @@ export function getPriceId(plan: PricingPlan, isYearly: boolean = false): string
  * Create a Stripe checkout session for purchasing a plan
  */
 export async function createCheckoutSession(priceId: string, planId: string): Promise<CheckoutSessionResult> {
-  const response = await fetch("/api/stripe/checkout", {
+  const response = await fetch(apiUrl("/api/stripe/checkout"), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

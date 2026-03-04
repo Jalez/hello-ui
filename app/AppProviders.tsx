@@ -1,6 +1,5 @@
 "use client";
 
-import { Analytics } from "@vercel/analytics/react";
 import { SessionProvider, useSession } from "next-auth/react";
 import type { Session } from "next-auth";
 import { ThemeProvider, useTheme } from "next-themes";
@@ -41,6 +40,11 @@ export default function Providers({ children, session }: ProvidersProps) {
     <TooltipProvider delayDuration={200}>
       <SessionProvider
         session={session}
+        basePath={
+          process.env.NEXT_PUBLIC_BASE_PATH
+            ? `${process.env.NEXT_PUBLIC_BASE_PATH}/api/auth`
+            : undefined
+        }
         refetchOnWindowFocus={true}
         refetchInterval={0}
         refetchWhenOffline={false}
@@ -52,7 +56,6 @@ export default function Providers({ children, session }: ProvidersProps) {
               <AppInitializer />
               <ToasterProvider />
               {children}
-              <Analytics />
             </ReduxProvider>
           </LoadingProvider>
         </ThemeProvider>

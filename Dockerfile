@@ -1,45 +1,42 @@
-# syntax=docker/dockerfile:1
-# Multi-stage build for Next.js standalone output
+# Single-stage build for Next.js standalone output
+# Compatible with Docker 1.13.x (no multi-stage support)
 
-# ── base ────────────────────────────────────────────────────────────────────
-FROM node:22-alpine AS base
-RUN corepack enable && corepack prepare pnpm@latest --activate
+FROM node:20-bullseye
 WORKDIR /app
 
-# ── deps ────────────────────────────────────────────────────────────────────
-FROM base AS deps
-COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
+# Force ASCII output — old docker-compose chokes on Unicode progress bars
+ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
 
-# ── build ───────────────────────────────────────────────────────────────────
-FROM base AS build
-COPY --from=deps /app/node_modules ./node_modules
+# Install pnpm
+RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
+
+# Install dependencies
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile --reporter=append-only
+
+# Copy source and build
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
-# Next.js inlines NEXT_PUBLIC_* vars at build time
 ARG NEXT_PUBLIC_DRAWBOARD_URL=http://localhost:3500
+ARG NEXT_PUBLIC_ASSET_PREFIX=
+ARG NEXT_PUBLIC_BASE_PATH=
 ENV NEXT_PUBLIC_DRAWBOARD_URL=$NEXT_PUBLIC_DRAWBOARD_URL
+ENV NEXT_PUBLIC_ASSET_PREFIX=$NEXT_PUBLIC_ASSET_PREFIX
+ENV NEXT_PUBLIC_BASE_PATH=$NEXT_PUBLIC_BASE_PATH
 RUN pnpm build
 
-# ── runner ──────────────────────────────────────────────────────────────────
-FROM node:22-alpine AS runner
-WORKDIR /app
+# Next.js standalone needs static files and public dir alongside server.js
+RUN cp -r .next/static .next/standalone/.next/static && \
+    cp -r public .next/standalone/public && \
+    cp /app/proxy-wrapper.js .next/standalone/
 
+# Set up production runner
 ENV NODE_ENV=production
-ENV NEXT_TELEMETRY_DISABLED=1
-
-RUN addgroup --system --gid 1001 nodejs && \
-    adduser --system --uid 1001 nextjs
-
-# Copy standalone output
-COPY --from=build --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=build --chown=nextjs:nodejs /app/.next/static ./.next/static
-COPY --from=build --chown=nextjs:nodejs /app/public ./public
-
-USER nextjs
-
-EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-CMD ["node", "server.js"]
+WORKDIR /app/.next/standalone
+
+EXPOSE 3000
+
+CMD ["node", "proxy-wrapper.js"]

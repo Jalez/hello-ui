@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from "react";
+import { apiUrl } from "@/lib/apiUrl";
 import {
   Settings,
   Copy,
@@ -116,7 +117,7 @@ export const GameSettings = () => {
 
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   const shareUrl = game?.shareToken ? `${origin}/play/${game.shareToken}` : null;
-  const ltiLaunchUrl = game?.shareToken ? `${origin}/api/lti/play/${game.shareToken}` : null;
+  const ltiLaunchUrl = game?.shareToken ? `${origin}${apiUrl(`/api/lti/play/${game.shareToken}`)}` : null;
 
   const handleTogglePublic = useCallback(async () => {
     if (!game) return;

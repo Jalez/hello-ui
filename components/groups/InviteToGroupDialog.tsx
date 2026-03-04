@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { apiUrl } from "@/lib/apiUrl";
 import {
   Dialog,
   DialogContent,
@@ -55,7 +56,7 @@ export function InviteToGroupDialog({
     setIsLoading(true);
 
     try {
-      const response = await fetch(`/api/groups/${groupId}/members`, {
+      const response = await fetch(apiUrl(`/api/groups/${groupId}/members`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim(), role }),

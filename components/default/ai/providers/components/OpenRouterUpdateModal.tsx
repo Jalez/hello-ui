@@ -2,6 +2,7 @@
 
 import { Check, RefreshCw, HelpCircle } from "lucide-react";
 import { useEffect, useState } from "react";
+import { apiUrl } from "@/lib/apiUrl";
 import {
   Command,
   CommandDialog,
@@ -109,7 +110,7 @@ export function OpenRouterUpdateModal({
       let modelErrors: string[] = [];
 
       if (providersToSync.length > 0) {
-        const providerResponse = await fetch("/api/ai/providers/update", {
+        const providerResponse = await fetch(apiUrl("/api/ai/providers/update"), {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -129,7 +130,7 @@ export function OpenRouterUpdateModal({
       }
 
       if (modelsToSync.length > 0) {
-        const modelResponse = await fetch("/api/ai/models/update/create", {
+        const modelResponse = await fetch(apiUrl("/api/ai/models/update/create"), {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

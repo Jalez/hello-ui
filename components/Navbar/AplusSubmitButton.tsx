@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from "react";
+import { apiUrl } from "@/lib/apiUrl";
 import { Send, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,7 +34,7 @@ export const AplusSubmitButton = () => {
   const points = useAppSelector((state) => state.points);
 
   useEffect(() => {
-    fetch("/api/games/lti-session")
+    fetch(apiUrl("/api/games/lti-session"))
       .then((res) => res.json())
       .then((data) => {
         setLtiInfo(data);
@@ -51,7 +52,7 @@ export const AplusSubmitButton = () => {
     setResult(null);
 
     try {
-      const response = await fetch("/api/games/submit-grade", {
+      const response = await fetch(apiUrl("/api/games/submit-grade"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

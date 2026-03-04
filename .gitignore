@@ -20,6 +20,7 @@ ws-server/node_modules
 
 # production
 /build
+drawBoard/dist
 
 # misc
 .DS_Store

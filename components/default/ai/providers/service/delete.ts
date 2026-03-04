@@ -1,8 +1,10 @@
+import { apiUrl } from "@/lib/apiUrl";
+
 /**
  * Delete a provider
  */
 export async function deleteProvider(slug: string): Promise<void> {
-  const response = await fetch("/api/ai/providers/delete", {
+  const response = await fetch(apiUrl("/api/ai/providers/delete"), {
     method: "DELETE",
     headers: {
       "Content-Type": "application/json",
@@ -20,7 +22,7 @@ export async function deleteProvider(slug: string): Promise<void> {
  * Delete multiple providers
  */
 export async function deleteProviders(slugs: string[]): Promise<void> {
-  const response = await fetch("/api/ai/providers/delete", {
+  const response = await fetch(apiUrl("/api/ai/providers/delete"), {
     method: "DELETE",
     headers: {
       "Content-Type": "application/json",
