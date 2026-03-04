@@ -1,10 +1,11 @@
+import { apiUrl } from "@/lib/apiUrl";
 import type { Provider } from "../types";
 
 /**
  * Update an existing provider
  */
 export async function updateProvider(slug: string, updates: Partial<Provider>): Promise<Provider> {
-  const response = await fetch("/api/ai/providers/update-item", {
+  const response = await fetch(apiUrl("/api/ai/providers/update-item"), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

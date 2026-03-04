@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { apiUrl } from "@/lib/apiUrl";
 import {
   Select,
   SelectContent,
@@ -36,7 +37,7 @@ export function GroupSelector({
   const fetchGroups = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch("/api/groups");
+      const response = await fetch(apiUrl("/api/groups"));
 
       if (!response.ok) {
         throw new Error("Failed to fetch groups");

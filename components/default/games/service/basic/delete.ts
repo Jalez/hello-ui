@@ -1,6 +1,8 @@
+import { apiUrl } from "@/lib/apiUrl";
+
 export async function deleteGame(id: string): Promise<void> {
   try {
-    const response = await fetch(`/api/games/${id}`, {
+    const response = await fetch(apiUrl(`/api/games/${id}`), {
       method: "DELETE",
     });
 

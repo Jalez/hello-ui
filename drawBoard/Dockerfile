@@ -8,6 +8,9 @@ ARG HOST_GID=1000
 RUN getent group ${HOST_GID} && groupdel $(getent group ${HOST_GID} | cut -d: -f1) || true && \
     groupmod -g ${HOST_GID} node && usermod -u ${HOST_UID} -g ${HOST_GID} node
 
+# Force ASCII build output so old docker-compose (1.18) does not crash on Unicode (e.g. Vite checkmark)
+ENV LANG=C.UTF-8 LC_ALL=C.UTF-8 CI=1
+
 # Create app directory
 WORKDIR /usr/src/app
 
@@ -33,7 +36,12 @@ RUN npm install
 # Bundle app source
 COPY . .
 
-RUN npm run build
+# Base path: built assets at /drawboard/assets/...; server strips /drawboard from request path
+ENV VITE_BASE_PATH=/drawboard/
+ENV BASE_PATH=/drawboard
+
+# LANG=C prevents Vite from emitting Unicode (e.g. ✓) that crashes docker-compose 1.18
+RUN LANG=C npm run build
 
 EXPOSE 3500
 ENTRYPOINT [ "npm", "start" ]

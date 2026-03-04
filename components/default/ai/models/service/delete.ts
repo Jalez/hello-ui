@@ -1,8 +1,10 @@
+import { apiUrl } from "@/lib/apiUrl";
+
 /**
  * Delete a model
  */
 export async function deleteModel(id: string): Promise<void> {
-  const response = await fetch(`/api/ai/models/${encodeURIComponent(id)}/delete`, {
+  const response = await fetch(apiUrl(`/api/ai/models/${encodeURIComponent(id)}/delete`), {
     method: "DELETE",
   });
 

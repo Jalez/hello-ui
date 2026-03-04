@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { create } from "zustand";
+import { apiUrl } from "@/lib/apiUrl";
 import { fetchSubscriptionData, createCheckoutSession, getPriceId } from "../service/subscription";
 import { cancelSubscription } from "../service/subscription/cancel";
 import { handleCheckoutResponse } from "../utils/checkoutHandler";
@@ -113,7 +114,7 @@ export const useSubscriptionStore = create<SubscriptionStore>()(
       manageSubscription: async () => {
         set({ managing: true });
         try {
-          const response = await fetch("/api/stripe/portal", {
+          const response = await fetch(apiUrl("/api/stripe/portal"), {
             method: "POST",
           });
 

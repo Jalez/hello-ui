@@ -1,10 +1,11 @@
+import { apiUrl } from "@/lib/apiUrl";
 import type { Model } from "../types";
 
 /**
  * Fetch all models from the API
  */
 export async function getModels(): Promise<Model[]> {
-  const response = await fetch("/api/ai/models/read");
+  const response = await fetch(apiUrl("/api/ai/models/read"));
 
   if (!response.ok) {
     throw new Error(`Failed to fetch models: ${response.statusText}`);
@@ -18,7 +19,7 @@ export async function getModels(): Promise<Model[]> {
  * Fetch a single model by ID
  */
 export async function getModelById(id: string): Promise<Model | null> {
-  const response = await fetch(`/api/ai/models/${encodeURIComponent(id)}/read`);
+  const response = await fetch(apiUrl(`/api/ai/models/${encodeURIComponent(id)}/read`));
 
   if (!response.ok) {
     if (response.status === 404) {
@@ -35,7 +36,7 @@ export async function getModelById(id: string): Promise<Model | null> {
  * Update models from OpenRouter API
  */
 export async function updateModelsFromOpenRouter(): Promise<void> {
-  const response = await fetch("/api/ai/models/update/create", {
+  const response = await fetch(apiUrl("/api/ai/models/update/create"), {
     method: "POST",
   });
 

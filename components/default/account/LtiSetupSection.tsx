@@ -1,5 +1,6 @@
 "use client";
 
+import { apiUrl } from "@/lib/apiUrl";
 import { useEffect, useState } from "react";
 import { Copy, Eye, EyeOff, RefreshCw } from "lucide-react";
 import { Button } from "@/components/tailwind/ui/button";
@@ -46,11 +47,11 @@ export function LtiSetupSection() {
 
   const launchUrl =
     typeof window !== "undefined"
-      ? `${window.location.origin}/api/lti/launch`
-      : "/api/lti/launch";
+      ? `${window.location.origin}${apiUrl("/api/lti/launch")}`
+      : apiUrl("/api/lti/launch");
 
   useEffect(() => {
-    fetch("/api/lti/credentials")
+    fetch(apiUrl("/api/lti/credentials"))
       .then((res) => {
         if (!res.ok) throw new Error("Failed to load credentials");
         return res.json();
@@ -69,7 +70,7 @@ export function LtiSetupSection() {
     setRegenerating(true);
     setDialogOpen(false);
     try {
-      const res = await fetch("/api/lti/credentials", {
+      const res = await fetch(apiUrl("/api/lti/credentials"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "regenerate" }),

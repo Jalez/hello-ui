@@ -1,6 +1,7 @@
 'use client';
 
 import { useContext, useEffect, useRef } from 'react';
+import { apiUrl } from '@/lib/apiUrl';
 import { useAppSelector } from '@/store/hooks/hooks';
 import { CollaborationContext } from '@/lib/collaboration/CollaborationProvider';
 import { useGameStore } from '@/components/default/games';
@@ -44,7 +45,7 @@ export function GameCodeSync() {
     saveTimeoutRef.current = setTimeout(() => {
       lastSavedRef.current = serialized;
       const savePromise = groupId
-        ? fetch(`/api/groups/${groupId}/game`, {
+        ? fetch(apiUrl(`/api/groups/${groupId}/game`), {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ progressData: { levels: levelCodes } }),

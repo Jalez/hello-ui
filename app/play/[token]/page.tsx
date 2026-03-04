@@ -1,6 +1,7 @@
 'use client';
 
 import { use, useEffect, useState } from "react";
+import { apiUrl } from "@/lib/apiUrl";
 import App from "@/components/App";
 import { useGameStore } from "@/components/default/games";
 import { useSidebarCollapse } from "@/components/default/sidebar/context/SidebarCollapseContext";
@@ -45,7 +46,7 @@ export default function PlayPage({ params }: PlayPageProps) {
     const load = async () => {
       try {
         const query = accessKey ? `?key=${encodeURIComponent(accessKey)}` : "";
-        const res = await fetch(`/api/games/play/${token}${query}`);
+        const res = await fetch(apiUrl(`/api/games/play/${token}${query}`));
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
           if (res.status === 403 && data.requiresAccessKey) {

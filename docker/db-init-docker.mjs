@@ -37,6 +37,10 @@ async function main() {
   client.release();
   console.log("DB-INIT: connected\n");
 
+  // Enable pgcrypto for gen_random_uuid() on older Postgres versions
+  await pool.query("CREATE EXTENSION IF NOT EXISTS pgcrypto;");
+  console.log("  [ok]    pgcrypto extension enabled\n");
+
   const sqlDir = path.join(__dirname, "scripts", "sql");
 
   const required = [

@@ -1,3 +1,4 @@
+import { apiUrl } from "@/lib/apiUrl";
 import type { Invoice } from "@/app/api/_lib/services/stripeService/subscriptionService";
 import type { Subscription } from "../../stores";
 
@@ -5,7 +6,7 @@ import type { Subscription } from "../../stores";
  * Fetch subscription data from the API
  */
 export async function fetchSubscriptionData(): Promise<Subscription> {
-  const response = await fetch("/api/stripe/subscriptions/read", {
+  const response = await fetch(apiUrl("/api/stripe/subscriptions/read"), {
     cache: "no-cache", // Disable caching to ensure fresh data
   });
 
@@ -28,7 +29,7 @@ export async function fetchSubscriptionData(): Promise<Subscription> {
  * Fetch billing history from the API
  */
 export async function fetchBillingHistory(): Promise<Invoice[]> {
-  const response = await fetch("/api/stripe/subscriptions/history", {
+  const response = await fetch(apiUrl("/api/stripe/subscriptions/history"), {
     cache: "no-cache", // Disable caching to ensure fresh data
   });
 

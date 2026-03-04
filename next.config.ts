@@ -4,7 +4,26 @@ const nextConfig: NextConfig = {
   // Produce a self-contained build for Docker deployment
   output: "standalone",
 
-  // External packages that should be handled by the server runtime
+  // Asset prefix for reverse proxy — Apache strips /css-artist before forwarding,
+  // but the browser needs /css-artist prefix on asset URLs so they route through Apache
+  assetPrefix: process.env.NEXT_PUBLIC_ASSET_PREFIX || "",
+
+  // Base path for routing and links when served under a prefix (e.g. /css-artist)
+  basePath: process.env.NEXT_PUBLIC_BASE_PATH || "",
+
+  // NextAuth sometimes redirects to /error; our page is at /auth/error (redirect preserves query)
+  redirects: async () =>
+    process.env.NEXT_PUBLIC_BASE_PATH
+      ? [
+          {
+            source: "/error",
+            destination: "/auth/error",
+            permanent: false,
+          },
+        ]
+      : [],
+
+  // External packages that should be handled by the server runtime that should be handled by the server runtime
   serverExternalPackages: ['@neondatabase/serverless', 'pg', 'pg-pool', 'lti-v1.0-node-library'],
 
   // Environment variables to expose to the browser
@@ -16,7 +35,12 @@ const nextConfig: NextConfig = {
 
   // Image domains for external images
   images: {
-    domains: ["oaidalleapiprodscus.blob.core.windows.net"], // OpenAI images
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "oaidalleapiprodscus.blob.core.windows.net",
+      },
+    ],
   },
 
   webpack: (config, { isServer }) => {

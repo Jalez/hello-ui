@@ -1,3 +1,4 @@
+import { apiUrl } from "@/lib/apiUrl";
 import type { Model } from "../types";
 
 /**
@@ -41,7 +42,7 @@ export async function updateModel(id: string, updates: Partial<Model>): Promise<
     // Note: We don't delete architecture as other fields might be used elsewhere
   }
   
-  const response = await fetch(`/api/ai/models/${encodeURIComponent(id)}/update`, {
+  const response = await fetch(apiUrl(`/api/ai/models/${encodeURIComponent(id)}/update`), {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",

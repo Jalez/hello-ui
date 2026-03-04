@@ -1,8 +1,9 @@
+import { apiUrl } from "@/lib/apiUrl";
 import type { Game } from "../../types";
 
 export async function loadGames(): Promise<Game[]> {
   try {
-    const response = await fetch(`/api/games`, {
+    const response = await fetch(apiUrl("/api/games"), {
       method: "GET",
       headers: { "Content-Type": "application/json" },
     });
@@ -23,7 +24,7 @@ export async function loadGames(): Promise<Game[]> {
 
 export async function getGame(id: string): Promise<Game> {
   try {
-    const response = await fetch(`/api/games/${id}`, {
+    const response = await fetch(apiUrl(`/api/games/${id}`), {
       method: "GET",
       headers: { "Content-Type": "application/json" },
     });

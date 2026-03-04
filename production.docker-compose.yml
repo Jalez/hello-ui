@@ -1,6 +1,8 @@
+version: '3'
+
 services:
   db:
-    image: postgres:16-alpine
+    image: postgres:latest
     container_name: ui-designer.db
     environment:
       POSTGRES_USER: postgres
@@ -17,21 +19,20 @@ services:
     networks:
       - ui-designer-net
 
-  migrate:
+  drawboard:
     build:
-      context: .
+      context: ./drawBoard
       dockerfile: Dockerfile
-      target: build
-    container_name: ui-designer.migrate
-    command: ["pnpm", "db:migrate"]
+    container_name: ui-designer.drawboard
+    image: ui-designer-drawboard:latest
+    ports:
+      - "54320:3500"
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/ui_designer
-    depends_on:
-      db:
-        condition: service_healthy
+      TZ: Europe/Helsinki
+      NODE_ENV: production
+    restart: always
     networks:
       - ui-designer-net
-    restart: "no"
 
   app:
     build:
@@ -52,9 +53,13 @@ services:
       DB_CLIENT: postgres
       TZ: Europe/Helsinki
       NODE_ENV: production
+      NEXT_PUBLIC_BASE_PATH: "/css-artist"
+      # Server-only: LTI redirect base (not inlined at build time, so prod always uses this)
+      APP_ROOT_URL: "https://tie-lukioplus.rd.tuni.fi/css-artist"
+      # Optional: set to "true" to log [DEBUG] to console and write debug-*.jsonl to ./logs
+      # DEBUG_LOGS: "true"
     depends_on:
-      migrate:
-        condition: service_completed_successfully
+      - db
     restart: always
     networks:
       - ui-designer-net
