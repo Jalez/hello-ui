@@ -267,32 +267,42 @@ export default function CodeEditor({
   const isCreator = options.creator;
   // const [savedChanges, setSavedChanges] = useState<boolean>(true);
 
-  const templateRef = useRef(template);
-  templateRef.current = template;
-
   useEffect(() => {
     let timer: NodeJS.Timeout | null = null;
+    // if (code !== "" && savedChanges) {
     if (code !== "") {
-      // Only dispatch if the code actually differs from what the store has
-      // This breaks the loop: template→setCode→codeUpdater→updateCode→template
-      if (code !== templateRef.current) {
-        timer = setTimeout(() => {
-          codeUpdater({ [title.toLowerCase()]: code }, type);
-        }, LOCAL_CODE_UPDATE_DEBOUNCE_MS);
-      }
+      // console.log("updating code: ", title.toLowerCase());
+      timer = setTimeout(() => {
+        codeUpdater({ [title.toLowerCase()]: code }, type);
+      }, LOCAL_CODE_UPDATE_DEBOUNCE_MS);
     }
+    // listen for keydown events to set unsaved changes to true: ctrl + s
+
     return () => {
       if (timer) clearTimeout(timer);
     };
   }, [code, codeUpdater, title, type]);
+  // }, [code, savedChanges]);
+
+  // useEffect(() => {
+  //   const handleKeyDown = (e: KeyboardEvent) => {
+  //     if (e.ctrlKey && e.key === "s") {
+  //       // can I prevent the default behavior of the browser here?
+  //       e.preventDefault();
+  //       // setSavedChanges(true);
+  //     }
+  //   };
+  //   document.addEventListener("keydown", handleKeyDown);
+  //   return () => {
+  //     document.removeEventListener("keydown", handleKeyDown);
+  //   };
+  // }, [savedChanges]);
 
   useEffect(() => {
-    // Only sync from template if it actually differs from current code
-    if (template !== code) {
-      setCode(template);
+    if (code !== template) {
+      queueMicrotask(() => setCode(template));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [template, levelIdentifier]);
+  }, [template, levelIdentifier, code]);
 
   const cmProps: CodeMirrorProps = {
     options: {
@@ -383,10 +393,10 @@ export default function CodeEditor({
     placeholder: `Write your ${title} here...`,
   };
 
-  return (
-    <div
-      className="codeEditorContainer flex flex-1 flex-col w-full h-full relative min-h-0"
-    >
+      return (
+        <div
+          className="codeEditorContainer flex flex-1 flex-col w-full h-full relative min-h-0"
+        >
       {isCreator && (
         <div className="absolute bottom-0 right-0 z-[100]">
           <EditorMagicButton
