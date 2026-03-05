@@ -48,6 +48,7 @@ async function main() {
     "credits-schema.sql",
     "admin-schema.sql",
     "ui-designer-schema.sql",
+    "drop-map-level-points.sql",
     "projects-schema.sql",
     "webhook-schema.sql",
   ];
@@ -75,8 +76,8 @@ async function main() {
   // Seed: ensure default map entry exists
   console.log("\nSeeding default map entry...");
   await pool.query(`
-    INSERT INTO maps (name, easy_level_points, medium_level_points, hard_level_points)
-    VALUES ('all', 1, 2, 3)
+    INSERT INTO maps (name, random, can_use_ai)
+    VALUES ('all', 0, true)
     ON CONFLICT (name) DO NOTHING
   `);
   console.log("  [ok]    default map 'all'");

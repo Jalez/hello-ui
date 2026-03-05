@@ -17,9 +17,6 @@ CREATE TABLE IF NOT EXISTS maps (
   name TEXT PRIMARY KEY CHECK (name <> '' AND name !~* '^names$'),
   random INTEGER NOT NULL DEFAULT 0 CHECK (random >= 0),
   can_use_ai BOOLEAN NOT NULL DEFAULT false,
-  easy_level_points INTEGER NOT NULL CHECK (easy_level_points >= 1),
-  medium_level_points INTEGER NOT NULL CHECK (medium_level_points >= 1),
-  hard_level_points INTEGER NOT NULL CHECK (hard_level_points >= 1),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

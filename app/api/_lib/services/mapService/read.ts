@@ -9,9 +9,8 @@ export async function getMapByName(name: string): Promise<Map | null> {
   const sqlInstance = await sql();
 
   const result = await sqlInstance`
-    SELECT 
-      name, random, can_use_ai, easy_level_points, 
-      medium_level_points, hard_level_points, created_at, updated_at
+    SELECT
+      name, random, can_use_ai, created_at, updated_at
     FROM maps
     WHERE name = ${name}
     LIMIT 1
@@ -27,9 +26,6 @@ export async function getMapByName(name: string): Promise<Map | null> {
     name: rows[0].name,
     random: rows[0].random,
     can_use_ai: rows[0].can_use_ai,
-    easy_level_points: rows[0].easy_level_points,
-    medium_level_points: rows[0].medium_level_points,
-    hard_level_points: rows[0].hard_level_points,
     created_at: rows[0].created_at,
     updated_at: rows[0].updated_at,
   };
@@ -42,9 +38,8 @@ export async function getAllMaps(): Promise<Map[]> {
   const sqlInstance = await sql();
 
   const result = await sqlInstance`
-    SELECT 
-      name, random, can_use_ai, easy_level_points, 
-      medium_level_points, hard_level_points, created_at, updated_at
+    SELECT
+      name, random, can_use_ai, created_at, updated_at
     FROM maps
     ORDER BY created_at DESC
   `;
@@ -55,9 +50,6 @@ export async function getAllMaps(): Promise<Map[]> {
     name: row.name,
     random: row.random,
     can_use_ai: row.can_use_ai,
-    easy_level_points: row.easy_level_points,
-    medium_level_points: row.medium_level_points,
-    hard_level_points: row.hard_level_points,
     created_at: row.created_at,
     updated_at: row.updated_at,
   }));
@@ -88,9 +80,8 @@ export async function getMapWithLevels(mapName: string): Promise<MapWithLevels |
 
   // Get map first
   const mapResult = await sqlInstance`
-    SELECT 
-      name, random, can_use_ai, easy_level_points, 
-      medium_level_points, hard_level_points, created_at, updated_at
+    SELECT
+      name, random, can_use_ai, created_at, updated_at
     FROM maps
     WHERE name = ${mapName}
     LIMIT 1
@@ -117,9 +108,6 @@ export async function getMapWithLevels(mapName: string): Promise<MapWithLevels |
     name: mapRows[0].name,
     random: mapRows[0].random,
     can_use_ai: mapRows[0].can_use_ai,
-    easy_level_points: mapRows[0].easy_level_points,
-    medium_level_points: mapRows[0].medium_level_points,
-    hard_level_points: mapRows[0].hard_level_points,
     created_at: mapRows[0].created_at,
     updated_at: mapRows[0].updated_at,
     levels: levelRows.map((row) => ({

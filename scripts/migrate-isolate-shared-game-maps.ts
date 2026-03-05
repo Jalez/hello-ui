@@ -31,9 +31,6 @@ type MapRow = {
   name: string;
   random: number;
   can_use_ai: boolean;
-  easy_level_points: number;
-  medium_level_points: number;
-  hard_level_points: number;
 };
 
 type SourceLevelRow = {
@@ -89,7 +86,7 @@ async function loadGamesForMap(client: PoolClient, mapName: string): Promise<Pro
 async function loadMap(client: PoolClient, mapName: string): Promise<MapRow | null> {
   const result = await client.query<MapRow>(
     `
-      SELECT name, random, can_use_ai, easy_level_points, medium_level_points, hard_level_points
+      SELECT name, random, can_use_ai
       FROM maps
       WHERE name = $1
       LIMIT 1
@@ -160,16 +157,13 @@ async function ensureTargetMap(client: PoolClient, sourceMapName: string, target
 
   await client.query(
     `
-      INSERT INTO maps (name, random, can_use_ai, easy_level_points, medium_level_points, hard_level_points)
-      VALUES ($1, $2, $3, $4, $5, $6)
+      INSERT INTO maps (name, random, can_use_ai)
+      VALUES ($1, $2, $3)
     `,
     [
       targetMapName,
       source.random,
       source.can_use_ai,
-      source.easy_level_points,
-      source.medium_level_points,
-      source.hard_level_points,
     ],
   );
 

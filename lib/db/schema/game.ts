@@ -18,9 +18,6 @@ export const maps = pgTable(
     name: text("name").primaryKey(),
     random: integer("random").notNull().default(0),
     canUseAi: boolean("can_use_ai").notNull().default(false),
-    easyLevelPoints: integer("easy_level_points").notNull(),
-    mediumLevelPoints: integer("medium_level_points").notNull(),
-    hardLevelPoints: integer("hard_level_points").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   }

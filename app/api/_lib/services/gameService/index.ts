@@ -1,7 +1,7 @@
 import { and, desc, eq, inArray, or, sql as drizzleSql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { projectCollaborators, projects } from "@/lib/db/schema";
-import { cloneMapWithLevels, getMapByName } from "@/app/api/_lib/services/mapService";
+import { cloneMapWithLevels, createMap, getMapByName } from "@/app/api/_lib/services/mapService";
 import type { CreateGameOptions, Game, GameCollaborator, UpdateGameOptions } from "./types";
 
 export * from "./types";
@@ -111,25 +111,26 @@ function evaluateShareAccess(game: Game, accessKey?: string | null): ShareAccess
   return undefined;
 }
 
+export function evaluateGameRouteAccess(game: Game, accessKey?: string | null): ShareAccessError | undefined {
+  return evaluateShareAccess(game, accessKey);
+}
+
 export async function createGame(options: CreateGameOptions): Promise<Game> {
   const db = getDb();
-  const requestedMapName = typeof options.mapName === "string" ? options.mapName.trim() : "";
-  const sourceMapName = requestedMapName && requestedMapName !== "all" ? requestedMapName : "all";
-  const sourceMap = await getMapByName(sourceMapName);
+  // New games always get a unique empty map; options.mapName is intentionally ignored.
+  const targetMapName = `game-${crypto.randomUUID()}`;
 
-  if (!sourceMap) {
-    throw new Error(`Map '${sourceMapName}' not found`);
-  }
-
-  const isolatedMap = await cloneMapWithLevels(sourceMapName, {
-    targetMapName: `game-${crypto.randomUUID()}`,
-  });
+  // Create an empty map for new games (no levels cloned)
+    const map = await createMap({
+      name: targetMapName,
+      can_use_ai: true,
+    });
 
   const result = await db
     .insert(projects)
     .values({
       userId: options.userId,
-      mapName: isolatedMap.mapName,
+      mapName: map.name,
       title: options.title,
       progressData: options.progressData ?? {},
     })
@@ -193,6 +194,30 @@ export async function getGameById(id: string, actor: string | string[]): Promise
 
   const game = mapGame(result[0].project);
   return withPermissions(game, actorCandidates, result[0].collaboratorUserId);
+}
+
+export async function getGameByIdForGameplay(id: string, actor?: string | string[]): Promise<Game | null> {
+  const db = getDb();
+
+  if (actor) {
+    const actorScoped = await getGameById(id, actor);
+    if (actorScoped) {
+      return actorScoped;
+    }
+  }
+
+  const publicResult = await db
+    .select()
+    .from(projects)
+    .where(and(eq(projects.id, id), eq(projects.isPublic, true)))
+    .limit(1);
+
+  if (publicResult.length === 0) {
+    return null;
+  }
+
+  const game = mapGame(publicResult[0]);
+  return withPermissions(game, actor ?? []);
 }
 
 export async function getGamesByUserId(actor: string | string[]): Promise<Game[]> {
