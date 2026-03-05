@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
-import { and, asc, ilike, notInArray } from "drizzle-orm";
+import { and, asc, ilike, notInArray, or } from "drizzle-orm";
 import { authOptions } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { users } from "@/lib/db/schema";
@@ -51,17 +51,28 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   }
 
   const db = getDb();
+  const pattern = `%${q}%`;
+  const baseWhere = or(ilike(users.email, pattern), ilike(users.name, pattern));
+
   const whereClause =
     excludedEmails.size > 0
-      ? and(ilike(users.email, `${q}%`), notInArray(users.email, Array.from(excludedEmails)))
-      : ilike(users.email, `${q}%`);
+      ? and(baseWhere, notInArray(users.email, Array.from(excludedEmails)))
+      : baseWhere;
 
   const rows = await db
-    .select({ email: users.email })
+    .select({
+      email: users.email,
+      name: users.name
+    })
     .from(users)
     .where(whereClause)
     .orderBy(asc(users.email))
     .limit(MAX_RESULTS);
 
-  return NextResponse.json({ suggestions: rows.map((row) => row.email) });
+  return NextResponse.json({
+    suggestions: rows.map((row) => ({
+      email: row.email,
+      name: row.name
+    }))
+  });
 }

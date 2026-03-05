@@ -78,6 +78,8 @@ export const GameSettingsButton = ({ displayMode = "icon" }: GameSettingsButtonP
   const [collaboratorError, setCollaboratorError] = useState<string | null>(null);
   const [accessStartsAtInput, setAccessStartsAtInput] = useState("");
   const [accessEndsAtInput, setAccessEndsAtInput] = useState("");
+  const [collaboratorSuggestions, setCollaboratorSuggestions] = useState<{ email: string; name: string | null }[]>([]);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
 
   const { getCurrentGame, updateGame } = useGameStore();
   const solutionUrls = useAppSelector((state) => state.solutionUrls);
@@ -115,6 +117,40 @@ export const GameSettingsButton = ({ displayMode = "icon" }: GameSettingsButtonP
         setCollaboratorError(error instanceof Error ? error.message : "Failed to load collaborators");
       });
   }, [open, game, canManageCollaborators]);
+
+  useEffect(() => {
+    if (!open || !game?.id || !canManageCollaborators) {
+      setCollaboratorSuggestions([]);
+      setLoadingSuggestions(false);
+      return;
+    }
+
+    const query = collaboratorEmail.trim();
+    if (query.length < 2) {
+      setCollaboratorSuggestions([]);
+      setLoadingSuggestions(false);
+      return;
+    }
+
+    const timerId = setTimeout(async () => {
+      try {
+        setLoadingSuggestions(true);
+        const response = await fetch(
+          apiUrl(`/api/games/${game.id}/collaborators/suggestions?q=${encodeURIComponent(query)}`),
+        );
+        if (response.ok) {
+          const data = await response.json();
+          setCollaboratorSuggestions(Array.isArray(data.suggestions) ? data.suggestions : []);
+        }
+      } catch {
+        setCollaboratorSuggestions([]);
+      } finally {
+        setLoadingSuggestions(false);
+      }
+    }, 180);
+
+    return () => clearTimeout(timerId);
+  }, [open, collaboratorEmail, canManageCollaborators, game?.id]);
 
   const handleOpen = () => {
     setOpen(true);
@@ -233,6 +269,7 @@ export const GameSettingsButton = ({ displayMode = "icon" }: GameSettingsButtonP
 
       setCollaborators(Array.isArray(data.collaborators) ? data.collaborators : collaborators);
       setCollaboratorEmail("");
+      setCollaboratorSuggestions([]);
     } catch (error: unknown) {
       setCollaboratorError(error instanceof Error ? error.message : "Failed to add collaborator");
     }
@@ -452,8 +489,17 @@ export const GameSettingsButton = ({ displayMode = "icon" }: GameSettingsButtonP
                 <Input
                   value={collaboratorEmail}
                   onChange={(event) => setCollaboratorEmail(event.target.value)}
+                  list="nav-collaborator-email-suggestions"
+                  autoComplete="off"
                   placeholder="creator@example.com"
                 />
+                <datalist id="nav-collaborator-email-suggestions">
+                  {collaboratorSuggestions.map((s) => (
+                    <option key={s.email} value={s.email}>
+                      {s.name ? `${s.name} (${s.email})` : s.email}
+                    </option>
+                  ))}
+                </datalist>
                 <Button variant="outline" onClick={handleAddCollaborator}>
                   <UserPlus className="h-4 w-4 mr-1" /> Add
                 </Button>

@@ -108,36 +108,37 @@ export const Navbar = () => {
   if (!level) return null;
 
   return (
-      <div
-        className="flex flex-row justify-around items-center w-full h-fit gap-2"
-      >
-        {/* Sidebar Toggle Button - Only visible on small screens */}
-        {shouldShowMobileSidebarToggle && (
-          <div className="lg:hidden">
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              className="h-8 w-8"
-              onClick={openOverlay}
-              title="Open sidebar"
-            >
-              <PanelLeft className="h-5 w-5" />
-            </Button>
-          </div>
+    <div
+      className="flex flex-row justify-around items-center w-full h-fit gap-2"
+    >
+      {/* Sidebar Toggle Button - Only visible on small screens */}
+      {shouldShowMobileSidebarToggle && (
+        <div className="lg:hidden">
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="h-8 w-8"
+            onClick={openOverlay}
+            title="Open sidebar"
+          >
+            <PanelLeft className="h-5 w-5" />
+          </Button>
+        </div>
+      )}
+
+      {/* Compact nav: text-first menus (no icon-only mode). Hide Game and Level menus on game route. */}
+      <div className="flex 2xl:hidden items-center gap-1">
+        {isCreator && !isGameRoute && (
+          <>
+            <CreatorControls displayMode="menu" />
+            {renderGameMenu()}
+          </>
         )}
 
-        {/* Compact nav: text-first menus (no icon-only mode). Hide Game and Level menus on game route. */}
-        <div className="flex 2xl:hidden items-center gap-1">
-          {isCreator && !isGameRoute && (
-            <>
-              <CreatorControls displayMode="menu" />
-              {renderGameMenu()}
-            </>
-          )}
+        <ModeToggleButton displayMode="icon-label" />
 
-          <ModeToggleButton displayMode="icon-label" />
-
+        {isGameRoute && (
           <Button
             type="button"
             size="sm"
@@ -149,30 +150,32 @@ export const Navbar = () => {
             <RotateCcw className="h-4 w-4" />
             <span>Reset</span>
           </Button>
+        )}
 
-          <InfoGamePoints />
-          <AplusSubmitButton displayMode="icon-label" />
+        <InfoGamePoints />
+        <AplusSubmitButton displayMode="icon-label" />
+      </div>
+
+      {/* Left section - Creator controls or Art tab switch. Hide creator tools on game route. */}
+      <div className="hidden 2xl:flex flex-row gap-2 justify-center items-center flex-[1_0_25%]">
+        {isCreator && !isGameRoute ? (
+          <CreatorControls displayMode="icon-label" />
+        ) : (
+          <PoppingTitle topTitle={activeArtTab === 0 ? "Model solution" : "Your design"}>
+            <Switch checked={activeArtTab === 1} onCheckedChange={handleArtTabSwitch} />
+          </PoppingTitle>
+        )}
+      </div>
+
+      {/* Center section - Mode toggle, Reset, and Level controls */}
+      <div className="flex flex-row gap-2 lg:gap-3 justify-center items-center flex-1 2xl:flex-[1_0_50%]">
+        {/* Mode switch */}
+        <div className="hidden 2xl:flex gap-1 items-center">
+          <ModeToggleButton displayMode="icon-label" />
         </div>
 
-        {/* Left section - Creator controls or Art tab switch. Hide creator tools on game route. */}
-        <div className="hidden 2xl:flex flex-row gap-2 justify-center items-center flex-[1_0_25%]">
-          {isCreator && !isGameRoute ? (
-            <CreatorControls displayMode="icon-label" />
-          ) : (
-            <PoppingTitle topTitle={activeArtTab === 0 ? "Model solution" : "Your design"}>
-              <Switch checked={activeArtTab === 1} onCheckedChange={handleArtTabSwitch} />
-            </PoppingTitle>
-          )}
-        </div>
-
-        {/* Center section - Mode toggle, Reset, and Level controls */}
-        <div className="flex flex-row gap-2 lg:gap-3 justify-center items-center flex-1 2xl:flex-[1_0_50%]">
-          {/* Mode switch */}
-          <div className="hidden 2xl:flex gap-1 items-center">
-            <ModeToggleButton displayMode="icon-label" />
-          </div>
-
-          {/* Reset button */}
+        {/* Reset button */}
+        {isGameRoute && (
           <div className="hidden 2xl:block">
             <Button
               size="sm"
@@ -186,34 +189,35 @@ export const Navbar = () => {
               <span>Reset</span>
             </Button>
           </div>
+        )}
 
-          {/* Level controls - Always visible */}
-          <LevelControls
-            currentlevel={currentLevel}
-            levelHandler={levelChanger}
-            maxLevels={Object.keys(levels).length}
-            levelName={level.name}
-          />
-        </div>
-
-        {/* Right section - Game points + A+ submit */}
-        <div className="hidden 2xl:flex flex-[1_0_25%] justify-center items-center gap-2">
-          <InfoGamePoints />
-          <AplusSubmitButton displayMode="icon-label" />
-        </div>
-
-        {/* Game Levels dialog controlled from navbar menu */}
-        <MapEditor ref={mapEditorRef} renderButton={false} />
-
-        {/* Dialog for reset confirmation */}
-        <NavPopper
-          anchorEl={anchorEl}
-          paragraph="This is an irreversible action. All progress will be lost, but timer is not affected. Are you sure you want to reset the level?"
-          title="Reset Level"
-          handleConfirmation={handleLevelReset}
-          resetAnchorEl={handleAnchorElReset}
+        {/* Level controls - Always visible */}
+        <LevelControls
+          currentlevel={currentLevel}
+          levelHandler={levelChanger}
+          maxLevels={Object.keys(levels).length}
+          levelName={level.name}
         />
       </div>
+
+      {/* Right section - Game points + A+ submit */}
+      <div className="hidden 2xl:flex flex-[1_0_25%] justify-center items-center gap-2">
+        <InfoGamePoints />
+        <AplusSubmitButton displayMode="icon-label" />
+      </div>
+
+      {/* Game Levels dialog controlled from navbar menu */}
+      <MapEditor ref={mapEditorRef} renderButton={false} />
+
+      {/* Dialog for reset confirmation */}
+      <NavPopper
+        anchorEl={anchorEl}
+        paragraph="This is an irreversible action. All progress will be lost, but timer is not affected. Are you sure you want to reset the level?"
+        title="Reset Level"
+        handleConfirmation={handleLevelReset}
+        resetAnchorEl={handleAnchorElReset}
+      />
+    </div>
   );
 };
 

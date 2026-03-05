@@ -126,7 +126,7 @@ export default function CreatorSettingsPage({ params }: CreatorSettingsPageProps
   const [collaboratorEmail, setCollaboratorEmail] = useState("");
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
   const [collaboratorError, setCollaboratorError] = useState<string | null>(null);
-  const [collaboratorSuggestions, setCollaboratorSuggestions] = useState<string[]>([]);
+  const [collaboratorSuggestions, setCollaboratorSuggestions] = useState<{ email: string; name: string | null }[]>([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
 
   const game = getCurrentGame();
@@ -611,8 +611,10 @@ export default function CreatorSettingsPage({ params }: CreatorSettingsPageProps
                     placeholder="creator@example.com"
                   />
                   <datalist id="collaborator-email-suggestions">
-                    {collaboratorSuggestions.map((email) => (
-                      <option key={email} value={email} />
+                    {collaboratorSuggestions.map((s) => (
+                      <option key={s.email} value={s.email}>
+                        {s.name ? `${s.name} (${s.email})` : s.email}
+                      </option>
                     ))}
                   </datalist>
                   <Button variant="outline" onClick={handleAddCollaborator}>

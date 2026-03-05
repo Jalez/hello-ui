@@ -13,12 +13,11 @@ import { Button } from "@/components/ui/button";
 // import { useSubscriptionStore } from "../subscription/stores";
 import { useSidebarCollapse } from ".";
 import { useMobileSidebar } from "./Sidebar";
+import { apiUrl } from "@/lib/apiUrl";
 import { UserDropdownContent } from "./UserDropdownContent";
 
 // Stub for subscription store until subscription system is fully integrated
 const useSubscriptionStore = () => ({ subscription: null });
-
-
 
 export const UserProfileMenu: React.FC = () => {
   const { isCollapsed: contextCollapsed } = useSidebarCollapse();
@@ -43,7 +42,7 @@ export const UserProfileMenu: React.FC = () => {
   };
 
   const handleSignOut = () => {
-    signOut({ callbackUrl: "/" });
+    signOut({ callbackUrl: apiUrl("/") });
   };
 
   // Determine avatar content and styling

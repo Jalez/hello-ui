@@ -43,9 +43,6 @@ export const Footer = () => {
           <HelpModal />
         </PoppingTitle>
       </div>
-      <InfoInstructions>
-        <Info />
-      </InfoInstructions>
       <div className="flex items-center gap-4">
         {options.creator && (
           <span className="text-xs text-muted-foreground flex items-center gap-1.5">
