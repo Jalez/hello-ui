@@ -1,60 +1,75 @@
 'use client';
 
+import { useEffect, useRef } from "react";
 import { useAppSelector, useAppDispatch } from "@/store/hooks/hooks";
 import { levelUrl } from "@/constants";
 import { updateLevelIdentifier } from "@/store/slices/levels.slice";
+import { setAutoSaveLevels, setIsSavingLevel, setLastSaved } from "@/store/slices/options.slice";
+import { addLevelsToMap } from "@/lib/utils/network/maps";
+import { useGameStore } from "@/components/default/games";
 
-// UUID validation regex: matches standard UUID format (8-4-4-4-12 hexadecimal digits)
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const AUTO_SAVE_DELAY_MS = 1500;
 
-const isValidUUID = (str: string): boolean => {
-  return UUID_REGEX.test(str);
-};
+const isValidUUID = (str: string): boolean => UUID_REGEX.test(str);
+
+// Module-level guard: prevents duplicate POST requests when multiple hook instances
+// exist (e.g. two <CreatorControls> rendered for responsive layouts).
+let globalCreateInFlight = false;
 
 export const useLevelSaver = () => {
   const dispatch = useAppDispatch();
-  const currentLevel = useAppSelector(
-    (state) => state.currentLevel.currentLevel
-  );
+  const currentLevel = useAppSelector((state) => state.currentLevel.currentLevel);
   const level = useAppSelector((state) => state.levels[currentLevel - 1]);
+  const isCreator = useAppSelector((state) => state.options.creator);
+  const autoSaveEnabled = useAppSelector((state) => state.options.autoSaveLevels);
+  const currentGame = useGameStore((state) => state.getCurrentGame());
 
-  const handleSave = async () => {
-    if (!level) {
-      alert("No level selected");
-      return;
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isMounted = useRef(false);
+  const lastSavedSnapshotRef = useRef<string | null>(null);
+  const pendingSaveCountRef = useRef(0);
+  const autoSaveScheduledRef = useRef(false);
+  const createInFlightRef = useRef(false);
+
+  const serializeLevel = (levelToSerialize: typeof level): string =>
+    JSON.stringify(levelToSerialize ?? null);
+
+  const saveLevel = async (levelToSave: typeof level): Promise<void> => {
+    if (!levelToSave) {
+      throw new Error("No level selected");
     }
 
-    console.log("level", level);
-    
-    try {
-      // Validate identifier: if it exists, it must be a valid UUID
-      // If no identifier, we'll create a new level (POST)
-      // If valid UUID, we'll update the existing level (PUT)
-      if (level.identifier && !isValidUUID(level.identifier)) {
-        throw new Error(
-          `Invalid identifier format: "${level.identifier}" is not a valid UUID. ` +
-          `The identifier must be a UUID (e.g., "123e4567-e89b-12d3-a456-426614174000"). ` +
+    if (levelToSave.identifier && !isValidUUID(levelToSave.identifier)) {
+      throw new Error(
+        `Invalid identifier format: "${levelToSave.identifier}" is not a valid UUID. ` +
           `Remove the identifier to create a new level, or use a valid UUID to update an existing level.`
-        );
-      }
+      );
+    }
 
-      const isUpdate = level.identifier && isValidUUID(level.identifier);
-      const url = isUpdate ? `${levelUrl}/${level.identifier}` : levelUrl;
-      const method = isUpdate ? "PUT" : "POST";
+    const isUpdate = !!levelToSave.identifier && isValidUUID(levelToSave.identifier);
+    if (!isUpdate && (createInFlightRef.current || globalCreateInFlight)) {
+      // Avoid duplicate creates for a brand-new unsaved level while create request is in flight.
+      return;
+    }
+    const url = isUpdate ? `${levelUrl}/${levelToSave.identifier}` : levelUrl;
+    const method = isUpdate ? "PUT" : "POST";
 
-      // Prepare the request body: API expects { name, ...json }
-      // where json contains all level properties except name and identifier
-      const { identifier, name, ...json } = level;
-      const body = {
-        name,
-        ...json,
-      };
+    const { identifier, name, ...json } = levelToSave;
+    const body = { name, ...json };
 
+    pendingSaveCountRef.current += 1;
+    if (pendingSaveCountRef.current === 1) {
+      dispatch(setIsSavingLevel(true));
+    }
+    if (!isUpdate) {
+      createInFlightRef.current = true;
+      globalCreateInFlight = true;
+    }
+    try {
       const response = await fetch(url, {
         method,
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
 
@@ -65,9 +80,7 @@ export const useLevelSaver = () => {
           const errorJson = JSON.parse(errorText);
           errorMessage = errorJson.message || errorJson.error || errorMessage;
         } catch {
-          if (errorText) {
-            errorMessage += `: ${errorText}`;
-          }
+          if (errorText) errorMessage += `: ${errorText}`;
         }
         throw new Error(errorMessage);
       }
@@ -75,35 +88,106 @@ export const useLevelSaver = () => {
       const contentType = response.headers.get("content-type");
       if (contentType?.includes("application/json")) {
         const data = await response.json();
-        console.log("Level saved successfully:", data);
-        
-        // If this was a create operation, update the level in Redux with the new UUID identifier
         if (!isUpdate && data.identifier) {
-          dispatch(updateLevelIdentifier({
-            levelId: currentLevel,
-            identifier: data.identifier
-          }));
+          if (currentGame?.mapName) {
+            await addLevelsToMap(currentGame.mapName, [data.identifier]);
+          }
+          dispatch(updateLevelIdentifier({ levelId: currentLevel, identifier: data.identifier }));
         }
-        
-        alert(`Level ${isUpdate ? "updated" : "created"} successfully!`);
-      } else {
-        const text = await response.text();
-        console.log("Level saved successfully:", text);
-        alert(`Level ${isUpdate ? "updated" : "created"} successfully!`);
       }
-    } catch (error) {
-      console.error("Error saving level:", error);
-      if (error instanceof Error) {
-        alert(`Failed to save level: ${error.message}`);
-      } else {
-        alert("Failed to save level. Please check the console for details.");
+
+      lastSavedSnapshotRef.current = serializeLevel(levelToSave);
+      dispatch(setLastSaved(Date.now()));
+    } finally {
+      if (!isUpdate) {
+        createInFlightRef.current = false;
+        globalCreateInFlight = false;
+      }
+      pendingSaveCountRef.current = Math.max(0, pendingSaveCountRef.current - 1);
+      if (pendingSaveCountRef.current === 0) {
+        dispatch(setIsSavingLevel(false));
       }
     }
   };
 
-  return { handleSave };
+  const handleSave = async () => {
+    if (!level) {
+      alert("No level selected");
+      return;
+    }
+    try {
+      await saveLevel(level);
+      alert(`Level ${level.identifier && isValidUUID(level.identifier) ? "updated" : "created"} successfully!`);
+    } catch (error) {
+      console.error("Error saving level:", error);
+      alert(`Failed to save level: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+  };
+
+  const toggleAutoSave = () => {
+    dispatch(setAutoSaveLevels(!autoSaveEnabled));
+  };
+
+  useEffect(() => {
+    if (!isCreator || !autoSaveEnabled || !level) return;
+
+    const currentSnapshot = serializeLevel(level);
+    if (!isMounted.current) {
+      isMounted.current = true;
+      lastSavedSnapshotRef.current = currentSnapshot;
+      return;
+    }
+    if (lastSavedSnapshotRef.current === currentSnapshot) {
+      if (autoSaveTimer.current) {
+        clearTimeout(autoSaveTimer.current);
+        autoSaveTimer.current = null;
+      }
+      if (autoSaveScheduledRef.current && pendingSaveCountRef.current === 0) {
+        autoSaveScheduledRef.current = false;
+        dispatch(setIsSavingLevel(false));
+      }
+      return;
+    }
+
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    if (!autoSaveScheduledRef.current && pendingSaveCountRef.current === 0) {
+      autoSaveScheduledRef.current = true;
+      dispatch(setIsSavingLevel(true));
+    }
+    autoSaveTimer.current = setTimeout(async () => {
+      try {
+        await saveLevel(level);
+        console.log("[auto-save] level saved");
+      } catch (error) {
+        console.warn("[auto-save] failed:", error);
+      } finally {
+        autoSaveScheduledRef.current = false;
+      }
+    }, AUTO_SAVE_DELAY_MS);
+
+    return () => {
+      if (autoSaveTimer.current) {
+        clearTimeout(autoSaveTimer.current);
+        autoSaveTimer.current = null;
+      }
+    };
+  }, [level, isCreator, autoSaveEnabled, dispatch]);
+
+  useEffect(() => {
+    if (isCreator && autoSaveEnabled) return;
+    if (autoSaveTimer.current) {
+      clearTimeout(autoSaveTimer.current);
+      autoSaveTimer.current = null;
+    }
+    autoSaveScheduledRef.current = false;
+    if (pendingSaveCountRef.current === 0) {
+      dispatch(setIsSavingLevel(false));
+    }
+  }, [isCreator, autoSaveEnabled, dispatch]);
+
+  return {
+    handleSave,
+    autoSaveEnabled,
+    toggleAutoSave,
+  };
 };
-
-
-
-
