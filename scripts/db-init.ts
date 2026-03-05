@@ -33,6 +33,7 @@ const GROUPS_SCHEMA = resolve(SCRIPT_DIR, "sql/groups-schema.sql");
 const WEBHOOK_SCHEMA = resolve(SCRIPT_DIR, "sql/webhook-schema.sql");
 const AI_SCHEMA = resolve(SCRIPT_DIR, "sql/ai-schema.sql");
 const LTI_CREDENTIALS_SCHEMA = resolve(SCRIPT_DIR, "sql/lti-credentials-schema.sql");
+const DROP_MAP_LEVEL_POINTS_MIGRATION = resolve(SCRIPT_DIR, "sql/drop-map-level-points.sql");
 
 // Extract database name from DATABASE_URL for creation check
 const dbUrlMatch = DATABASE_URL.match(/\/([^/?]+)(\?|$)/);
@@ -116,6 +117,8 @@ async function initializeDatabase() {
     console.log("🎮 Step 4/9: Applying UI Designer schema (levels, maps, sessions)...");
     const uiDesignerSQL = readFileSync(UI_DESIGNER_SCHEMA, "utf-8");
     await client.query(uiDesignerSQL);
+    const dropMapLevelPointsSQL = readFileSync(DROP_MAP_LEVEL_POINTS_MIGRATION, "utf-8");
+    await client.query(dropMapLevelPointsSQL);
 
     console.log("");
     console.log("🗂️  Step 5/9: Applying projects schema (projects table)...");
@@ -260,12 +263,9 @@ async function initializeDatabase() {
       INSERT INTO maps (
         name, 
         random, 
-        can_use_ai, 
-        easy_level_points, 
-        medium_level_points, 
-        hard_level_points
+        can_use_ai
       )
-      VALUES ('all', 0, true, 10, 20, 30)
+      VALUES ('all', 0, true)
       ON CONFLICT (name) DO NOTHING
     `);
     

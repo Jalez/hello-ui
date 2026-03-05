@@ -56,6 +56,8 @@ services:
       NEXT_PUBLIC_BASE_PATH: "/css-artist"
       # Server-only: LTI redirect base (not inlined at build time, so prod always uses this)
       APP_ROOT_URL: "https://tie-lukioplus.rd.tuni.fi/css-artist"
+      # Admin: grant sidebar admin link to this email (e.g. when DB admin_roles not seeded). Match is case-insensitive.
+      ADMIN_EMAIL: "raitsu11@gmail.com"
       # Optional: set to "true" to log [DEBUG] to console and write debug-*.jsonl to ./logs
       # DEBUG_LOGS: "true"
     depends_on:

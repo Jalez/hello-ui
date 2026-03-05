@@ -10,28 +10,21 @@ export async function createMap(options: CreateMapOptions): Promise<Map> {
 
   const result = await sqlInstance`
     INSERT INTO maps (
-      name, 
-      random, 
-      can_use_ai, 
-      easy_level_points, 
-      medium_level_points, 
-      hard_level_points
+      name,
+      random,
+      can_use_ai
     )
     VALUES (
-      ${options.name}, 
-      ${options.random ?? 0}, 
-      ${options.can_use_ai ?? false}, 
-      ${options.easy_level_points}, 
-      ${options.medium_level_points}, 
-      ${options.hard_level_points}
+      ${options.name},
+      ${options.random ?? 0},
+      ${options.can_use_ai ?? false}
     )
-    RETURNING 
-      name, random, can_use_ai, easy_level_points, 
-      medium_level_points, hard_level_points, created_at, updated_at
+    RETURNING
+      name, random, can_use_ai, created_at, updated_at
   `;
 
   const rows = extractRows(result);
-  
+
   if (rows.length === 0) {
     throw new Error("Failed to create map");
   }
@@ -40,9 +33,6 @@ export async function createMap(options: CreateMapOptions): Promise<Map> {
     name: rows[0].name,
     random: rows[0].random,
     can_use_ai: rows[0].can_use_ai,
-    easy_level_points: rows[0].easy_level_points,
-    medium_level_points: rows[0].medium_level_points,
-    hard_level_points: rows[0].hard_level_points,
     created_at: rows[0].created_at,
     updated_at: rows[0].updated_at,
   };

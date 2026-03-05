@@ -107,7 +107,7 @@ async function checkDatabase() {
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     try {
       const maps = await client.query(`
-        SELECT name, can_use_ai, easy_level_points, medium_level_points, hard_level_points
+        SELECT name, random, can_use_ai
         FROM maps
         ORDER BY name
       `);

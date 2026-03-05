@@ -54,11 +54,6 @@ export async function POST(
 
     const body = await request.json();
     
-    // Validate required fields
-    if (!body.easy_level_points || !body.medium_level_points || !body.hard_level_points) {
-      return respondWithError(new Error('easy_level_points, medium_level_points, and hard_level_points are required'));
-    }
-
     const existingMap = await getMapByName(name);
 
     if (existingMap) {
@@ -71,13 +66,10 @@ export async function POST(
       );
     }
 
-    const map = await createMap({ 
-      name, 
+    const map = await createMap({
+      name,
       random: body.random,
       can_use_ai: body.can_use_ai,
-      easy_level_points: body.easy_level_points,
-      medium_level_points: body.medium_level_points,
-      hard_level_points: body.hard_level_points,
     });
     
     return NextResponse.json({ ...map, levels: [] }, {
@@ -114,9 +106,6 @@ export async function PUT(
     const updatedMap = await updateMap(name, {
       random: body.random,
       can_use_ai: body.can_use_ai,
-      easy_level_points: body.easy_level_points,
-      medium_level_points: body.medium_level_points,
-      hard_level_points: body.hard_level_points,
     });
 
     if (!updatedMap) {

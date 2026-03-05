@@ -61,6 +61,8 @@ services:
       NEXT_PUBLIC_WEBSOCKET_URL: ${NEXT_PUBLIC_WEBSOCKET_URL:-ws://localhost:3100}
       NEXT_PUBLIC_DRAWBOARD_URL: ${NEXT_PUBLIC_DRAWBOARD_URL:-http://localhost:3500}
       WS_SERVICE_TOKEN: ${WS_SERVICE_TOKEN:-ws-service-secret}
+      # Admin: show sidebar admin link for this email (case-insensitive). Set in .env.local or here.
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-raitsu11@gmail.com}
     depends_on:
       db-init:
         condition: service_completed_successfully

@@ -64,9 +64,6 @@ export async function cloneMapWithLevels(
       name: targetMapName,
       random: sourceMap.random,
       can_use_ai: sourceMap.can_use_ai,
-      easy_level_points: sourceMap.easy_level_points,
-      medium_level_points: sourceMap.medium_level_points,
-      hard_level_points: sourceMap.hard_level_points,
     });
   }
 
