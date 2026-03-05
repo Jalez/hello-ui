@@ -93,21 +93,22 @@ export async function POST(request: NextRequest) {
     const userId = session.userId || session.user.email;
     const body = await request.json();
 
-    if (!body.mapName || !body.title) {
-      return respondWithError(new Error('mapName and title are required'));
+    if (!body.title) {
+      return respondWithError(new Error('title is required'));
     }
-
-    const map = await getMapByName(body.mapName);
+    const requestedMapName = typeof body.mapName === "string" ? body.mapName.trim() : "";
+    const sourceMapName = requestedMapName && requestedMapName !== "all" ? requestedMapName : "all";
+    const map = await getMapByName(sourceMapName);
     if (!map) {
       return NextResponse.json(
-        { error: 'Map not found' },
+        { error: `Map '${sourceMapName}' not found` },
         { status: 404 }
       );
     }
 
     const game = await createGame({
       userId,
-      mapName: body.mapName,
+      mapName: sourceMapName,
       title: body.title,
       progressData: body.progressData || {},
     });

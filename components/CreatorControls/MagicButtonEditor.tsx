@@ -55,10 +55,10 @@ const MagicButtonEditor = ({
       )}
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="w-[80%] max-w-4xl bg-secondary border-2 border-black shadow-[0_0_24px] p-4">
+        <DialogContent className="max-w-4xl">
           <DialogHeader>
             <DialogTitle id="edit-prompt-title" className="text-3xl">
-              Prompts sent to ChatGPT
+              Generation prompts
             </DialogTitle>
           </DialogHeader>
           

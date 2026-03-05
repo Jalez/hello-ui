@@ -1,7 +1,7 @@
 "use client";
 
 import { Settings, Users } from "lucide-react";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 import type React from "react";
 import { useEffect, createContext, useContext } from "react";
 import { Drawer, DrawerContentLeft } from "@/components/tailwind/ui/drawer";
@@ -38,11 +38,15 @@ export const Sidebar: React.FC<LeftSidebarProps> = ({ isUserAdmin, sidebarHeader
   const getCurrentGame = useGameStore((state) => state.getCurrentGame);
   const game = getCurrentGame();
 
-  const searchParams = useSearchParams();
-  const isGameMode = options.mode === "game" || searchParams.get("mode") === "game";
+  const isCreatorRoute = pathname.startsWith("/creator/");
+  const isGameRoute = pathname.startsWith("/game/");
   const isPlayRoute = pathname.startsWith("/play/");
   const isAuthRoute = pathname.startsWith("/auth/");
-  const shouldHideSidebar = Boolean(game?.hideSidebar) || isGameMode || isPlayRoute || isAuthRoute;
+  const isPlayerRoute = isGameRoute || isPlayRoute;
+  const showInlineSidebarOnMobile = !isPlayerRoute && !isAuthRoute;
+  const shouldHideForPlayerContext = isPlayerRoute && options.mode !== "creator" && Boolean(game?.hideSidebar);
+  const shouldHideSidebar =
+    (!isCreatorRoute && shouldHideForPlayerContext) || isAuthRoute;
 
   useEffect(() => {
     setIsVisible(!shouldHideSidebar);
@@ -144,7 +148,7 @@ export const Sidebar: React.FC<LeftSidebarProps> = ({ isUserAdmin, sidebarHeader
     <>
       {/* Desktop Sidebar */}
       <div
-        className={`hidden md:flex flex-col items-start justify-start gap-2 relative group h-full bg-muted/30 transition-all duration-300 ease-in-out ${
+        className={`${showInlineSidebarOnMobile ? "flex" : "hidden md:flex"} min-w-0 overflow-hidden flex-col items-start justify-start gap-2 relative group h-full bg-muted/30 transition-[width] duration-300 ease-in-out ${
           isCollapsed ? "w-16" : "w-64"
         }`}
         data-sidebar

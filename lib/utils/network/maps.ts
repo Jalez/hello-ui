@@ -11,6 +11,8 @@ type createMap = (map: MapDetails) => Promise<MapDetails>;
 type updateMap = (name: string, map: MapDetails) => Promise<MapDetails>;
 type deleteMap = (name: string) => Promise<MapDetails>;
 type getAllMaps = () => Promise<MapDetails[]>;
+type addLevelsToMap = (mapName: string, levelIds: string[]) => Promise<void>;
+type removeLevelFromMap = (mapName: string, levelId: string) => Promise<void>;
 
 /**
  * @description Get the levels of a map
@@ -94,4 +96,29 @@ export const deleteMap: deleteMap = async (name) => {
  */
 export const getAllMaps: getAllMaps = async () => {
   return makeRequest<MapDetails[]>(url);
+};
+
+/**
+ * @description Add one or more levels to a map by identifier.
+ */
+export const addLevelsToMap: addLevelsToMap = async (mapName, levelIds) => {
+  const endpoint = `${mapUrl}/levels/${mapName}`;
+  await makeRequest(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ levels: levelIds }),
+  });
+};
+
+/**
+ * @description Remove a level from a map by identifier.
+ */
+export const removeLevelFromMap: removeLevelFromMap = async (mapName, levelId) => {
+  const endpoint = `${mapUrl}/levels/${encodeURIComponent(mapName)}/${encodeURIComponent(levelId)}`;
+  const response = await fetch(endpoint, { method: "DELETE" });
+  if (!response.ok) {
+    throw new Error(`${response.status} ${response.statusText}`);
+  }
 };

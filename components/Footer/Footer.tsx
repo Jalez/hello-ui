@@ -7,6 +7,7 @@ import PoppingTitle from "@/components/General/PoppingTitle";
 import InfoInstructions from "../InfoBoard/InfoInstructions";
 import Info from "../InfoBoard/Info";
 import { useEffect, useState } from "react";
+import { Loader2 } from "lucide-react";
 
 function useRelativeTime(timestamp: number | null): string | null {
   const [label, setLabel] = useState<string | null>(null);
@@ -47,8 +48,15 @@ export const Footer = () => {
       </InfoInstructions>
       <div className="flex items-center gap-4">
         {options.creator && (
-          <span className="text-xs text-muted-foreground">
-            {lastSavedLabel ? `Saved ${lastSavedLabel}` : "Unsaved"}
+          <span className="text-xs text-muted-foreground flex items-center gap-1.5">
+            {options.isSavingLevel ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <span>Saving changes...</span>
+              </>
+            ) : (
+              <span>{lastSavedLabel ? `Saved ${lastSavedLabel}` : "Unsaved"}</span>
+            )}
           </span>
         )}
         <p className="text-sm">

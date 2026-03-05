@@ -208,15 +208,17 @@ export async function POST(
     };
 
     // Look up the game by shareToken and decide routing mode:
-    // - group: link to group and redirect to /group/[groupId]
-    // - individual: keep users on /play/[token] for solo instances
+    // - group: redirect to /game/[gameId] with required groupId context
+    // - individual: redirect to /game/[gameId]
     let collaborationMode: "individual" | "group" = "individual";
+    let resolvedGameId: string | null = null;
     const gameResult = await sql.query(
       "SELECT id, group_id, collaboration_mode FROM projects WHERE share_token = $1 LIMIT 1",
       [shareToken]
     );
     const gameRows = (gameResult as any).rows ?? gameResult;
     if (gameRows?.length) {
+      resolvedGameId = gameRows[0].id;
       collaborationMode = gameRows[0].collaboration_mode === "group" ? "group" : "individual";
 
       if (collaborationMode === "group") {
@@ -252,8 +254,13 @@ export async function POST(
       collaborationMode,
     });
 
-    const dest =
-      collaborationMode === "group" ? `/group/${group.id}?mode=game` : `/play/${shareToken}?mode=game`;
+    const dest = resolvedGameId
+      ? (
+        collaborationMode === "group"
+          ? `/game/${resolvedGameId}?mode=game&groupId=${group.id}`
+          : `/game/${resolvedGameId}?mode=game`
+      )
+      : `/play/${shareToken}?mode=game`;
 
     // Redirect with a one-time code instead of the JWT in the URL (code is exchanged server-side for the token).
     const code = createOneTimeCode(ltiSignInToken, dest);

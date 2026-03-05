@@ -1,6 +1,7 @@
-import { and, desc, eq, inArray, or } from "drizzle-orm";
+import { and, desc, eq, inArray, or, sql as drizzleSql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { projectCollaborators, projects } from "@/lib/db/schema";
+import { cloneMapWithLevels, getMapByName } from "@/app/api/_lib/services/mapService";
 import type { CreateGameOptions, Game, GameCollaborator, UpdateGameOptions } from "./types";
 
 export * from "./types";
@@ -112,12 +113,23 @@ function evaluateShareAccess(game: Game, accessKey?: string | null): ShareAccess
 
 export async function createGame(options: CreateGameOptions): Promise<Game> {
   const db = getDb();
+  const requestedMapName = typeof options.mapName === "string" ? options.mapName.trim() : "";
+  const sourceMapName = requestedMapName && requestedMapName !== "all" ? requestedMapName : "all";
+  const sourceMap = await getMapByName(sourceMapName);
+
+  if (!sourceMap) {
+    throw new Error(`Map '${sourceMapName}' not found`);
+  }
+
+  const isolatedMap = await cloneMapWithLevels(sourceMapName, {
+    targetMapName: `game-${crypto.randomUUID()}`,
+  });
 
   const result = await db
     .insert(projects)
     .values({
       userId: options.userId,
-      mapName: options.mapName,
+      mapName: isolatedMap.mapName,
       title: options.title,
       progressData: options.progressData ?? {},
     })
@@ -125,6 +137,34 @@ export async function createGame(options: CreateGameOptions): Promise<Game> {
 
   if (result.length === 0) {
     throw new Error("Failed to create game");
+  }
+
+  return mapGame(result[0]);
+}
+
+export async function countGamesUsingMap(mapName: string): Promise<number> {
+  const db = getDb();
+  const result = await db
+    .select({ count: drizzleSql<number>`count(*)::int` })
+    .from(projects)
+    .where(eq(projects.mapName, mapName));
+
+  return Number(result[0]?.count ?? 0);
+}
+
+export async function updateGameMapName(id: string, mapName: string): Promise<Game | null> {
+  const db = getDb();
+  const result = await db
+    .update(projects)
+    .set({
+      mapName,
+      updatedAt: new Date(),
+    })
+    .where(eq(projects.id, id))
+    .returning();
+
+  if (result.length === 0) {
+    return null;
   }
 
   return mapGame(result[0]);

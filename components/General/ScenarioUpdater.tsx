@@ -36,6 +36,7 @@ export const ScenarioUpdater = ({
   const currentLevelRef = useRef(currentLevel);
   currentLevelRef.current = currentLevel;
   const scenarioId = scenario.scenarioId;
+  const lastLoadedSolutionUrlRef = useRef<string | null>(null);
 
   // Select only primitive dimension values to avoid reference-change re-renders
   const dimWidth = useAppSelector((state) => {
@@ -52,9 +53,16 @@ export const ScenarioUpdater = ({
   useEffect(() => {
     const solutionUrl = solutionUrls[scenario.scenarioId];
 
-    if (!solutionUrl || solutionPixels) {
+    if (!solutionUrl) {
+      lastLoadedSolutionUrlRef.current = null;
       return;
     }
+
+    // Reload solution pixels when the screenshot URL changes.
+    if (lastLoadedSolutionUrlRef.current === solutionUrl) {
+      return;
+    }
+    lastLoadedSolutionUrlRef.current = solutionUrl;
 
     const img = new Image();
     img.onerror = (e) => {
@@ -65,7 +73,7 @@ export const ScenarioUpdater = ({
       const imageData = getPixelData(img, dimWidth, dimHeight);
       handleSolutionPixelUpdate(scenario.scenarioId, imageData);
     };
-  }, [solutionUrls, dimWidth, dimHeight, solutionPixels, handleSolutionPixelUpdate, scenario.scenarioId]);
+  }, [solutionUrls, dimWidth, dimHeight, handleSolutionPixelUpdate, scenario.scenarioId]);
 
   const workerRunningRef = useRef(false);
 

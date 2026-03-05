@@ -1,23 +1,23 @@
 'use client';
 
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 import { Sparkles } from "lucide-react";
 import { useAppSelector } from "@/store/hooks/hooks";
-import MagicButtonEditor from "./MagicButtonEditor";
 import { chatGPTURl } from "@/constants";
 import { useAIProviderConfig } from "@/components/default/ai/providers/stores/aiProviderConfigStore";
+import {
+  fillPromptTemplate,
+  useAIPromptConfig,
+} from "@/components/default/ai/providers/stores/aiPromptConfigStore";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Textarea } from "@/components/ui/textarea";
 
 type EditorMagicButtonProps = {
   answerKey?: string;
   EditorCode: string;
-  editorCodeChanger: (newCode: string) => void;
+  onSuggestion?: (newCode: string) => void;
+  editorCodeChanger?: (newCode: string) => void;
   editorType: string;
   disabled?: boolean;
   newPrompt?: string;
@@ -40,6 +40,7 @@ const EditorMagicButton = ({
   answerKey = "code",
   buttonColor = "secondary",
   EditorCode,
+  onSuggestion,
   editorCodeChanger,
   editorType,
   disabled = false,
@@ -52,53 +53,44 @@ const EditorMagicButton = ({
   );
   const level = useAppSelector((state) => state.levels[currentlevel - 1]);
   const name = level.name;
-  const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const handleOpen = () => setOpen(true);
-  const handleClose = () => setOpen(false);
-  const [codeChanges, setCodeChanges] = useState<string>("");
+  const [open, setOpen] = useState(false);
+  const [requestPrompt, setRequestPrompt] = useState("");
   const { config } = useAIProviderConfig();
+  const { config: promptConfig } = useAIPromptConfig();
   const defaultSystemPromptAddOn = `Return a json with "${answerKey}"-key that contains the new and improved code for the component.`;
-  const [systemPrompt, setSystemPrompt] = useState(
-    newSystemPrompt ||
-      `You are an AI trained to assist in creating web development educational content. Please generate code for a given component in ${editorType}. 
-`
-  );
-  const [prompt, setPrompt] = useState(
-    newPrompt ||
-      `Improve the following ${editorType} for a component named ${name}:
-Improvements based on the following code: 
-- IF CSS: make it more responsive, move magic numbers to named variables in root. 
-- If HTML: add accessibility attributes, make it more semantic.
-- IF JS: make it more efficient, use more modern syntax.
-
-`
-  );
-
-  useEffect(() => {
-    setPrompt(
+  const prompt = useMemo(
+    () =>
       newPrompt ||
-        `Improve the following ${editorType} for a component named ${name}:
-Improvements based on the following code: 
-- IF CSS: make it more responsive, move magic numbers to named variables in root. 
-- If HTML: add accessibility attributes, make it more semantic.
-- IF JS: make it more efficient, use more modern syntax.
-
-`
-    );
-  }, [EditorCode, editorType, name, newPrompt]);
-
-  useEffect(() => {
-    setSystemPrompt(
+      fillPromptTemplate(promptConfig.editorPromptTemplate, {
+        levelName: name,
+        editorType,
+      }),
+    [editorType, name, newPrompt, promptConfig.editorPromptTemplate],
+  );
+  const systemPrompt = useMemo(
+    () =>
       newSystemPrompt ||
-        `You are an AI trained to assist in creating web development educational content. Please generate code for a given component in ${editorType}.`
-    );
-  }, [editorType, newSystemPrompt]);
+      fillPromptTemplate(promptConfig.editorSystemPromptTemplate, {
+        levelName: name,
+        editorType,
+      }),
+    [editorType, name, newSystemPrompt, promptConfig.editorSystemPromptTemplate],
+  );
+
+  const handleSuggestion = (nextCode: string) => {
+    if (onSuggestion) {
+      onSuggestion(nextCode);
+      return;
+    }
+    if (editorCodeChanger) {
+      editorCodeChanger(nextCode);
+    }
+  };
 
   const fetchResponse = async () => {
-    //Use our API to get a response from AI, use the name of the level in the prompt
+    const trimmedRequestPrompt = requestPrompt.trim();
     try {
-      handleClose();
       setLoading(true);
       const response = await fetch(chatGPTURl, {
         method: "POST",
@@ -118,7 +110,15 @@ Improvements based on the following code:
               "${answerKey}": "${exampleResponse}"
             }` +
             "'''",
-          prompt: prompt + "code to improve:" + "'''" + EditorCode + "'''",
+          prompt:
+            prompt +
+            (trimmedRequestPrompt
+              ? `\nRequested changes from user:\n'''${trimmedRequestPrompt}'''\n`
+              : "") +
+            "code to improve:" +
+            "'''" +
+            EditorCode +
+            "'''",
         }),
       });
       const data = await response.json();
@@ -126,107 +126,52 @@ Improvements based on the following code:
       if (typeof data === "string") {
         const dP = JSON.parse(data);
         if (typeof dP[answerKey] === "string") {
-          setCodeChanges(
-            dP[answerKey] || `No ${answerKey}-key in response: ${dP}`
-          );
+          handleSuggestion(dP[answerKey] || "");
         } else {
-          // stringifying the object
-          setCodeChanges(
-            JSON.stringify(dP[answerKey]) ||
-              `No ${answerKey}-key in response: ${dP}`
-          );
+          handleSuggestion(JSON.stringify(dP[answerKey] || ""));
         }
+      } else if (typeof data === "object" && typeof data?.[answerKey] === "string") {
+        handleSuggestion(data[answerKey]);
       }
 
+      setOpen(false);
       setLoading(false);
-      handleOpen();
     } catch (error) {
       setLoading(false);
       console.error("Error:", error);
     }
   };
-
-  const handleApprove = () => {
-    editorCodeChanger(codeChanges);
-  };
-
-  const handleSystemInputChange = (
-    event: React.ChangeEvent<HTMLTextAreaElement>
-  ) => {
-    setSystemPrompt(event.target.value);
-  };
-
-  const handleInputChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setPrompt(event.target.value);
-  };
-
-  const handleCodeChanges = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setCodeChanges(event.target.value);
-  };
   return (
-    <>
-      {loading && (
-        <div className="flex items-center justify-center p-2">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
-        </div>
-      )}
-      {!loading && (
-        <>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={fetchResponse}
-            disabled={disabled}
-            data-color={buttonColor}
-          >
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button type="button" variant="ghost" size="icon" disabled={disabled} data-color={buttonColor}>
+          {loading ? (
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+          ) : (
             <Sparkles className="h-5 w-5" />
+          )}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        className="w-80 space-y-3 border-border/80 bg-muted/90 p-3 text-foreground shadow-xl backdrop-blur"
+      >
+        <Textarea
+          placeholder={`Example: Refactor this ${editorType} to be cleaner and add comments where helpful.`}
+          rows={5}
+          value={requestPrompt}
+          onChange={(event) => setRequestPrompt(event.target.value)}
+        />
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={() => setOpen(false)} disabled={loading}>
+            Cancel
           </Button>
-          <MagicButtonEditor
-            disabled={disabled}
-            prompt={prompt}
-            systemPrompt={systemPrompt}
-            handleInputChange={handleInputChange}
-            handleSystemInputChange={handleSystemInputChange}
-            fetchResponse={fetchResponse}
-          />
-        </>
-      )}
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-fit max-w-[90vw] bg-secondary border-2 border-black shadow-[0_0_24px] p-4 text-primary">
-          <DialogHeader>
-            <DialogTitle id="modal-modal-title">
-              Response from ChatGPT (Can be edited):
-            </DialogTitle>
-          </DialogHeader>
-          <textarea
-            rows={10}
-            className="w-[90vw] max-w-full overflow-auto mt-2 p-2 border rounded bg-background text-foreground"
-            value={codeChanges}
-            onChange={handleCodeChanges}
-            aria-label="Code changes textarea"
-          />
-
-          <div className="flex gap-2 mt-4">
-            <Button
-              onClick={() => {
-                handleApprove();
-                handleClose();
-              }}
-            >
-              Approve
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => {
-                handleClose();
-              }}
-            >
-              Reject
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </>
+          <Button type="button" size="sm" onClick={fetchResponse} disabled={loading}>
+            {loading ? "Generating..." : "Submit"}
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 };
 

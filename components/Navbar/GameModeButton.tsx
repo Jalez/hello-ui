@@ -4,49 +4,60 @@ import { useCallback } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Gamepad2 } from "lucide-react";
-import { useAppSelector } from "@/store/hooks/hooks";
 import PoppingTitle from "@/components/General/PoppingTitle";
 import { useGameStore } from "@/components/default/games";
 import { useSession } from "next-auth/react";
 
-export const GameModeButton = () => {
+type NavbarActionDisplayMode = "icon-label" | "icon";
+
+interface GameModeButtonProps {
+  displayMode?: NavbarActionDisplayMode;
+}
+
+export const GameModeButton = ({ displayMode = "icon" }: GameModeButtonProps) => {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const options = useAppSelector((state) => state.options);
-  const currentMode = options.mode;
-  const isGameMode = currentMode === "game";
   const { data: session } = useSession();
   const getCurrentGame = useGameStore((state) => state.getCurrentGame);
   const game = getCurrentGame();
-  const isGameOwner = game?.userId && (session?.userId === game.userId || session?.user?.email === game.userId);
+  const sessionUserId = session?.userId || session?.user?.email || "";
+  const gameOwnerId = game?.userId || "";
+  const canEdit = Boolean(game?.canEdit ?? (gameOwnerId && sessionUserId === gameOwnerId));
+  const isCreatorRoute = pathname.startsWith("/creator/");
 
   const enterGameMode = useCallback(() => {
-    // Navigate to game mode
+    if (!game?.id) return;
     const params = new URLSearchParams(searchParams.toString());
     params.set("mode", "game");
-    router.push(`${pathname}?${params.toString()}`);
-  }, [pathname, searchParams, router]);
+    router.push(`/game/${game.id}?${params.toString()}`);
+  }, [game?.id, searchParams, router]);
 
-  // Don't show button if already in game mode or if user is not the game owner
-  if (isGameMode || !isGameOwner) {
+  if (!isCreatorRoute || !canEdit || !game?.id) {
     return null;
+  }
+
+  const button = (
+    <Button
+      size={displayMode === "icon-label" ? "sm" : "icon"}
+      variant="ghost"
+      className={displayMode === "icon-label" ? "w-full justify-start gap-2" : undefined}
+      title="Enter Game Mode"
+      onClick={enterGameMode}
+    >
+      <Gamepad2 className="h-5 w-5" />
+      {displayMode === "icon-label" && <span>Game Mode</span>}
+    </Button>
+  );
+
+  if (displayMode === "icon-label") {
+    return button;
   }
 
   return (
     <PoppingTitle topTitle="Enter Game Mode">
-      <Button
-        size="icon"
-        variant="ghost"
-        title="Enter Game Mode"
-        onClick={enterGameMode}
-      >
-        <Gamepad2 className="h-5 w-5" />
-      </Button>
+      {button}
     </PoppingTitle>
   );
 };
-
-
-
 

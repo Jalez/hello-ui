@@ -12,6 +12,8 @@
     "db:init-prod": "tsx scripts/db-init-prod.ts",
     "db:check": "tsx scripts/db-check.ts",
     "db:details": "tsx scripts/db-details.ts",
+    "db:migrate:isolate-games": "tsx scripts/migrate-isolate-shared-game-maps.ts --apply",
+    "db:migrate:isolate-games:dry": "tsx scripts/migrate-isolate-shared-game-maps.ts --dry-run",
     "db:reset": "pnpm db:purge && pnpm db:init -- -y",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",

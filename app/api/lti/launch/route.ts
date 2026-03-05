@@ -198,8 +198,8 @@ export async function POST(request: NextRequest) {
 
     const response = NextResponse.redirect(loginUrl);
 
-    // Keep lti_session cookie so /group/[groupId] still resolves the LTI context
-    // (group membership, outcome service, etc.) when the user navigates there.
+    // Keep lti_session cookie so gameplay routes can resolve the LTI context
+    // (group membership, outcome service, etc.) after redirect.
     response.cookies.set("lti_session", JSON.stringify(ltiSession), {
       httpOnly: true,
       secure: isSecure,

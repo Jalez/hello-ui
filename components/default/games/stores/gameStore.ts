@@ -9,7 +9,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
   isInitialized: false,
   loadingGameId: null,
 
-  createGame: async (userId: string, mapName: string, title?: string) => {
+  createGame: async (userId: string, mapName?: string, title?: string) => {
     const game = await createGame({ mapName, title });
     set((state) => ({
       games: [game, ...state.games],
@@ -92,9 +92,14 @@ export const useGameStore = create<GameState>()((set, get) => ({
   },
 
   addGameToStore: (game: Game) => {
-    set((state) => ({
-      games: [game, ...state.games],
-    }));
+    set((state) => {
+      const exists = state.games.some((g) => g.id === game.id);
+      return {
+        games: exists
+          ? state.games.map((g) => (g.id === game.id ? { ...g, ...game } : g))
+          : [game, ...state.games],
+      };
+    });
   },
 
   getGameById: (id: string) => {

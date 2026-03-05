@@ -1,6 +1,6 @@
 "use client";
 
-import { Edit3, Loader2, MoreVertical, Trash2 } from "lucide-react";
+import { Edit3, FolderKanban, Loader2, MoreVertical, Trash2 } from "lucide-react";
 import Link from "next/link";
 import type React from "react";
 import {
@@ -10,12 +10,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Game } from "./types";
 
 interface GameAccordionItemProps {
   game: Game;
   gameTitle: string;
+  href: string;
   active: boolean;
   isEditing: boolean;
   isLoading?: boolean;
@@ -32,9 +33,11 @@ interface GameAccordionItemProps {
 export const GameAccordionItem: React.FC<GameAccordionItemProps> = ({
   game,
   gameTitle,
+  href,
   active,
   isEditing,
   isLoading = false,
+  isCollapsed,
   onGameClick,
   editTitle,
   setEditTitle,
@@ -43,14 +46,14 @@ export const GameAccordionItem: React.FC<GameAccordionItemProps> = ({
   handleStartEdit,
   handleDeleteGame,
 }) => {
+  const rowStateClass = active
+    ? "bg-gray-200 text-gray-900 dark:bg-muted dark:text-white"
+    : "text-gray-700 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-muted";
+
   return (
-    <div
-      className={`w-full border-b border-border flex items-center ${
-        active ? "bg-gray-200 dark:bg-muted" : "hover:bg-gray-200 dark:hover:bg-muted"
-      }`}
-    >
-      <div className="relative flex group w-full items-center justify-between">
-        <div className="flex-1 min-w-0 overflow-hidden">
+    <div className={`group w-full min-w-0 overflow-hidden ${rowStateClass}`}>
+      <div className="flex h-12 w-full min-w-0 items-center">
+        <div className="flex-1 min-w-0">
           {isEditing ? (
             <input
               type="text"
@@ -58,47 +61,46 @@ export const GameAccordionItem: React.FC<GameAccordionItemProps> = ({
               onChange={(e) => setEditTitle(e.target.value)}
               onKeyDown={(e) => handleKeyPress(e, game.id)}
               onBlur={() => handleCancelEdit(game.id)}
-              className="w-full text-sm bg-white dark:bg-gray-700 border border-gray-500 p-3 focus:outline-none focus:ring-1 focus:ring-gray-500"
+              className="h-12 w-full text-sm bg-white dark:bg-gray-700 border border-gray-500 px-3 focus:outline-none focus:ring-1 focus:ring-gray-500"
               onClick={(e) => e.stopPropagation()}
               autoFocus
             />
           ) : (
-            <Link
-              href={`/game/${game.id}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                onGameClick?.();
-              }}
-              className="text-left text-sm font-medium block w-full min-w-0 p-3 flex items-center gap-2"
-              title={gameTitle}
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin flex-shrink-0" />
-                  <span className="truncate">{gameTitle}</span>
-                </>
-              ) : (
-                <>
-                  <span className="truncate flex-1">{gameTitle}</span>
-                  {game.isCollaborator && (
-                    <Badge variant="outline" className="text-xs flex-shrink-0">
-                      collaborator
-                    </Badge>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Link
+                  href={href}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onGameClick?.();
+                  }}
+                  className="flex h-12 w-full min-w-0 items-center px-4 text-left text-sm font-medium"
+                  title={gameTitle}
+                >
+                  <div className="flex items-center justify-center w-8 shrink-0">
+                    {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FolderKanban className="h-4 w-4" />}
+                  </div>
+                  {!isCollapsed && (
+                    <div className="flex-1 min-w-0 pl-3">
+                      <span className="block truncate whitespace-nowrap">{gameTitle}</span>
+                    </div>
                   )}
-                  <Badge variant="secondary" className="text-xs flex-shrink-0">
-                    {game.mapName}
-                  </Badge>
-                </>
+                </Link>
+              </TooltipTrigger>
+              {isCollapsed && (
+                <TooltipContent side="right" className="ml-2">
+                  <p>{gameTitle}</p>
+                </TooltipContent>
               )}
-            </Link>
+            </Tooltip>
           )}
         </div>
 
-        {!isEditing && !isLoading && (
-          <div className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity pr-2">
+        {!isCollapsed && !isEditing && !isLoading && (
+          <div className="flex h-12 w-10 flex-shrink-0 items-center justify-center pr-2">
             <DropdownMenu>
               <DropdownMenuTrigger
-                className="p-1 hover:bg-gray-300 dark:hover:bg-gray-600 rounded"
+                className="pointer-events-none rounded p-1 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 focus:pointer-events-auto focus:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100 hover:bg-gray-300 dark:hover:bg-gray-600"
                 onClick={(e) => e.stopPropagation()}
               >
                 <MoreVertical className="h-4 w-4" />

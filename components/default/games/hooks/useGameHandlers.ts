@@ -36,7 +36,7 @@ export const useGameHandlers = ({ isAuthenticated, onGameClick }: UseGameHandler
     }
   }, [creatingGameId, pathname]);
 
-  const handleCreateGame = useCallback(async (mapName: string = "all") => {
+  const handleCreateGame = useCallback(async (mapName?: string) => {
     if (isCreating) return;
     
     if (!isAuthenticated) {

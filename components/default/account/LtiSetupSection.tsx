@@ -87,7 +87,7 @@ export function LtiSetupSection() {
   };
 
   return (
-    <div className="rounded-lg border p-6 space-y-4">
+    <div className="rounded-lg border bg-card p-6 space-y-4 shadow-sm">
       <div>
         <h2 className="text-lg font-semibold">LTI Integration</h2>
         <p className="text-sm text-muted-foreground mt-1">

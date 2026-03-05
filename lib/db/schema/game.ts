@@ -104,3 +104,24 @@ export const projectCollaborators = pgTable(
     index("idx_project_collaborators_user_id").on(table.userId),
   ],
 );
+
+export const gameInstances = pgTable(
+  "game_instances",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    gameId: uuid("game_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+    scope: text("scope").notNull(),
+    userId: text("user_id"),
+    groupId: uuid("group_id"),
+    progressData: jsonb("progress_data").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("idx_game_instances_game_id").on(table.gameId),
+    index("idx_game_instances_group_id").on(table.groupId),
+    index("idx_game_instances_user_id").on(table.userId),
+    index("idx_game_instances_scope").on(table.scope),
+    index("idx_game_instances_updated_at").on(table.updatedAt),
+  ],
+);

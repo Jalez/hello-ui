@@ -22,6 +22,24 @@ export async function loadGames(): Promise<Game[]> {
   }
 }
 
+export async function loadPublicGames(): Promise<Game[]> {
+  try {
+    const response = await fetch(apiUrl("/api/games/public"), {
+      method: "GET",
+      headers: { "Content-Type": "application/json" },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to load public games: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("Failed to load public games:", error);
+    throw error;
+  }
+}
+
 export async function getGame(id: string): Promise<Game> {
   try {
     const response = await fetch(apiUrl(`/api/games/${id}`), {
