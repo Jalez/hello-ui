@@ -101,7 +101,7 @@ export const GameSettingsButton = ({ displayMode = "icon" }: GameSettingsButtonP
       return;
     }
 
-    fetch(`/api/games/${game.id}/collaborators`)
+    fetch(apiUrl(`/api/games/${game.id}/collaborators`))
       .then(async (res) => {
         if (!res.ok) {
           throw new Error("Failed to load collaborators");
@@ -220,7 +220,7 @@ export const GameSettingsButton = ({ displayMode = "icon" }: GameSettingsButtonP
 
     try {
       setCollaboratorError(null);
-      const response = await fetch(`/api/games/${game.id}/collaborators`, {
+      const response = await fetch(apiUrl(`/api/games/${game.id}/collaborators`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: collaboratorEmail }),
@@ -244,7 +244,7 @@ export const GameSettingsButton = ({ displayMode = "icon" }: GameSettingsButtonP
 
       try {
         setCollaboratorError(null);
-        const response = await fetch(`/api/games/${game.id}/collaborators/${encodeURIComponent(email)}`, {
+        const response = await fetch(apiUrl(`/api/games/${game.id}/collaborators/${encodeURIComponent(email)}`), {
           method: "DELETE",
         });
 
