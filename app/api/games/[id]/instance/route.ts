@@ -11,8 +11,16 @@ import {
   resolveAccessKeyForGame,
 } from "@/app/api/_lib/services/gameService/accessCookie";
 
-export function getRows(result: any): any[] {
-  return result?.rows ?? result ?? [];
+export function getRows(result: { rows?: unknown[] } | unknown[] | null | undefined): Record<string, unknown>[] {
+  if (!result) {
+    return [];
+  }
+
+  if (Array.isArray(result)) {
+    return result as Record<string, unknown>[];
+  }
+
+  return (result.rows ?? []) as Record<string, unknown>[];
 }
 
 export function getAccessKeyFromRequest(request: NextRequest): string | null {
@@ -40,64 +48,43 @@ export function shouldEnforceAccess(request: NextRequest): boolean {
   return request.nextUrl.searchParams.get("accessContext") === "game";
 }
 
-export async function resolveInstance(
-  request: NextRequest,
-  gameId: string,
-  actorUserId: string,
-  mode: "individual" | "group",
-) {
-  const sql = await getSql();
-
-  if (mode === "group") {
-    const groupId = request.nextUrl.searchParams.get("groupId");
-    if (!groupId) {
-      return { error: "groupId is required for group mode", status: 400 } as const;
-    }
-
-    const membershipResult = await sql.query(
-      "SELECT id FROM group_members WHERE group_id = $1 AND user_id = $2 LIMIT 1",
-      [groupId, actorUserId],
-    );
-    const membershipRows = getRows(membershipResult);
-    if (!membershipRows.length) {
-      return { error: "You are not a member of this group", status: 403 } as const;
-    }
-
-    const existingResult = await sql.query(
-      "SELECT id, progress_data FROM game_instances WHERE game_id = $1 AND scope = 'group' AND group_id = $2 LIMIT 1",
-      [gameId, groupId],
-    );
-    const existingRows = getRows(existingResult);
-    if (existingRows.length) {
-      return {
-        instance: {
-          id: existingRows[0].id,
-          scope: "group" as const,
-          groupId,
-          userId: null,
-          progressData: existingRows[0].progress_data ?? {},
-        },
-      } as const;
-    }
-
-    const createdResult = await sql.query(
-      `INSERT INTO game_instances (game_id, scope, group_id, progress_data)
-       VALUES ($1, 'group', $2, '{}')
-       RETURNING id, progress_data`,
-      [gameId, groupId],
-    );
-    const createdRows = getRows(createdResult);
+async function resolveGroupInstance(sql: Awaited<ReturnType<typeof getSql>>, gameId: string, groupId: string) {
+  const existingResult = await sql.query(
+    "SELECT id, progress_data FROM game_instances WHERE game_id = $1 AND scope = 'group' AND group_id = $2 LIMIT 1",
+    [gameId, groupId],
+  );
+  const existingRows = getRows(existingResult);
+  if (existingRows.length) {
     return {
       instance: {
-        id: createdRows[0].id,
+        id: existingRows[0].id,
         scope: "group" as const,
         groupId,
         userId: null,
-        progressData: createdRows[0].progress_data ?? {},
+        progressData: existingRows[0].progress_data ?? {},
       },
     } as const;
   }
 
+  const createdResult = await sql.query(
+    `INSERT INTO game_instances (game_id, scope, group_id, progress_data)
+     VALUES ($1, 'group', $2, '{}')
+     RETURNING id, progress_data`,
+    [gameId, groupId],
+  );
+  const createdRows = getRows(createdResult);
+  return {
+    instance: {
+      id: createdRows[0].id,
+      scope: "group" as const,
+      groupId,
+      userId: null,
+      progressData: createdRows[0].progress_data ?? {},
+    },
+  } as const;
+}
+
+async function resolveIndividualInstance(sql: Awaited<ReturnType<typeof getSql>>, gameId: string, actorUserId: string) {
   const existingResult = await sql.query(
     "SELECT id, progress_data FROM game_instances WHERE game_id = $1 AND scope = 'individual' AND user_id = $2 LIMIT 1",
     [gameId, actorUserId],
@@ -131,6 +118,47 @@ export async function resolveInstance(
       progressData: createdRows[0].progress_data ?? {},
     },
   } as const;
+}
+
+export async function resolveInstance(
+  request: NextRequest,
+  gameId: string,
+  actorUserId: string,
+  mode: "individual" | "group",
+  canEditGame: boolean = false,
+) {
+  const sql = await getSql();
+
+  if (mode === "group") {
+    const groupId = request.nextUrl.searchParams.get("groupId");
+    if (!groupId) {
+      if (canEditGame) {
+        return resolveIndividualInstance(sql, gameId, actorUserId);
+      }
+      return { error: "groupId is required for group mode", status: 400 } as const;
+    }
+
+    if (canEditGame) {
+      const groupResult = await sql.query("SELECT id FROM groups WHERE id = $1 LIMIT 1", [groupId]);
+      const groupRows = getRows(groupResult);
+      if (!groupRows.length) {
+        return { error: "Group not found", status: 404 } as const;
+      }
+    } else {
+      const membershipResult = await sql.query(
+        "SELECT id FROM group_members WHERE group_id = $1 AND user_id = $2 LIMIT 1",
+        [groupId, actorUserId],
+      );
+      const membershipRows = getRows(membershipResult);
+      if (!membershipRows.length) {
+        return { error: "You are not a member of this group", status: 403 } as const;
+      }
+    }
+
+    return resolveGroupInstance(sql, gameId, groupId);
+  }
+
+  return resolveIndividualInstance(sql, gameId, actorUserId);
 }
 
 async function resolveServiceTokenAuth(request: NextRequest, gameId: string) {
@@ -294,7 +322,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: "Authentication required for group games" }, { status: 401 });
     }
 
-    const resolved = await resolveInstance(request, id, actorUserId, mode);
+    const resolved = await resolveInstance(request, id, actorUserId, mode, Boolean(game.can_edit));
     if ("error" in resolved) {
       return NextResponse.json({ error: resolved.error }, { status: resolved.status });
     }
@@ -320,7 +348,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ error: "guestId is required for public individual games" }, { status: 400 });
   }
 
-  const resolved = await resolveInstance(request, id, actorUserId, mode);
+  const resolved = await resolveInstance(request, id, actorUserId, mode, Boolean(game.can_edit));
   if ("error" in resolved) {
     return NextResponse.json({ error: resolved.error }, { status: resolved.status });
   }
@@ -335,7 +363,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
-  let body: any = {};
+  let body: Record<string, unknown> = {};
   try {
     body = await request.json();
   } catch {
@@ -410,7 +438,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: "guestId is required for public individual games" }, { status: 400 });
     }
 
-    const resolved = await resolveInstance(request, id, actorUserId, mode);
+    const resolved = await resolveInstance(request, id, actorUserId, mode, Boolean(game.can_edit));
     if ("error" in resolved) {
       return NextResponse.json({ error: resolved.error }, { status: resolved.status });
     }
@@ -446,7 +474,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     return NextResponse.json({ error: "guestId is required for public individual games" }, { status: 400 });
   }
 
-  const resolved = await resolveInstance(request, id, actorUserId, mode);
+  const resolved = await resolveInstance(request, id, actorUserId, mode, Boolean(game.can_edit));
   if ("error" in resolved) {
     return NextResponse.json({ error: resolved.error }, { status: resolved.status });
   }

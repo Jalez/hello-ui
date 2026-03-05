@@ -75,6 +75,9 @@ export default function GameHelpPage() {
             <p>
               If collaboration is enabled, edits/presence can appear in real-time for your group.
             </p>
+            <p>
+              In group mode, you can only enter with a group you already belong to. If no group appears on entry, ask the creator or instructor to add you first.
+            </p>
           </AccordionContent>
         </AccordionItem>
 
@@ -86,7 +89,7 @@ export default function GameHelpPage() {
               private, or require an access key.
             </p>
             <p>
-              Contact your instructor/creator for a fresh link or key.
+              For group-mode games, contact your instructor/creator if you still need to be added to the correct group. They can also open Creator Preview and jump into active group instances from the game navbar.
             </p>
           </AccordionContent>
         </AccordionItem>
