@@ -111,7 +111,8 @@ export default function GamePage({ params }: GamePageProps) {
   const [error, setError] = useState<string | null>(null);
   const [requiresGroup, setRequiresGroup] = useState(false);
   const [requiresAccessKey, setRequiresAccessKey] = useState(false);
-  const [accessKey, setAccessKey] = useState("");
+  const [accessKeyInput, setAccessKeyInput] = useState("");
+  const [submittedAccessKey, setSubmittedAccessKey] = useState("");
   const [accessKeyError, setAccessKeyError] = useState<string | null>(null);
   const [hideSidebar, setHideSidebar] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
@@ -136,7 +137,8 @@ export default function GamePage({ params }: GamePageProps) {
   useEffect(() => {
     const storedAccessKey = readStoredAccessKey(gameId);
     queueMicrotask(() => {
-      setAccessKey(storedAccessKey);
+      setAccessKeyInput(storedAccessKey);
+      setSubmittedAccessKey(storedAccessKey);
       setAccessKeyReady(true);
     });
   }, [gameId]);
@@ -179,14 +181,15 @@ export default function GamePage({ params }: GamePageProps) {
 
         const gameParams = new URLSearchParams();
         gameParams.set("accessContext", "game");
-        if (accessKey) {
-          gameParams.set("key", accessKey);
+        if (submittedAccessKey) {
+          gameParams.set("key", submittedAccessKey);
         }
         const gameRes = await fetch(apiUrl(`/api/games/${gameId}${gameParams.toString() ? `?${gameParams.toString()}` : ""}`));
         if (!gameRes.ok) {
           const payload = await gameRes.json().catch(() => ({}));
           if (gameRes.status === 403 && (payload.requiresAccessKey || payload.reason === "access_key_required" || payload.reason === "access_key_invalid")) {
             clearStoredAccessKey(gameId);
+            setSubmittedAccessKey("");
             setRequiresAccessKey(true);
             setAccessKeyError(payload.error || "Access key required");
             setHideSidebar(payload.hideSidebar ?? false);
@@ -199,8 +202,8 @@ export default function GamePage({ params }: GamePageProps) {
         }
         const game = await gameRes.json();
         setHideSidebar(Boolean(game?.hideSidebar));
-        if (accessKey.trim()) {
-          persistAccessKey(gameId, accessKey.trim());
+        if (submittedAccessKey.trim()) {
+          persistAccessKey(gameId, submittedAccessKey.trim());
         }
 
         const now = Date.now();
@@ -219,7 +222,7 @@ export default function GamePage({ params }: GamePageProps) {
           }
         }
 
-        if (game?.accessKeyRequired && !accessKey) {
+        if (game?.accessKeyRequired && !submittedAccessKey) {
           setRequiresAccessKey(true);
           setAccessKeyError("Access key required");
           setIsLoading(false);
@@ -248,14 +251,15 @@ export default function GamePage({ params }: GamePageProps) {
           if (!session?.user && guestId) {
             instanceParams.set("guestId", guestId);
           }
-          if (accessKey) {
-            instanceParams.set("key", accessKey);
+          if (submittedAccessKey) {
+            instanceParams.set("key", submittedAccessKey);
           }
           const instanceRes = await fetch(apiUrl(`/api/games/${gameId}/instance?${instanceParams.toString()}`));
           if (!instanceRes.ok) {
             const payload = await instanceRes.json().catch(() => ({}));
             if (instanceRes.status === 403 && (payload.requiresAccessKey || payload.reason === "access_key_required" || payload.reason === "access_key_invalid")) {
               clearStoredAccessKey(gameId);
+              setSubmittedAccessKey("");
               setRequiresAccessKey(true);
               setAccessKeyError(payload.error || "Access key required");
               setIsLoading(false);
@@ -274,8 +278,8 @@ export default function GamePage({ params }: GamePageProps) {
           if (!session?.user && guestId) {
             instanceParams.set("guestId", guestId);
           }
-          if (accessKey) {
-            instanceParams.set("key", accessKey);
+          if (submittedAccessKey) {
+            instanceParams.set("key", submittedAccessKey);
           }
           const instanceRes = await fetch(apiUrl(`/api/games/${gameId}/instance${instanceParams.toString() ? `?${instanceParams.toString()}` : ""}`));
           if (instanceRes.ok) {
@@ -286,6 +290,7 @@ export default function GamePage({ params }: GamePageProps) {
             const payload = await instanceRes.json().catch(() => ({}));
             if (instanceRes.status === 403 && (payload.requiresAccessKey || payload.reason === "access_key_required" || payload.reason === "access_key_invalid")) {
               clearStoredAccessKey(gameId);
+              setSubmittedAccessKey("");
               setRequiresAccessKey(true);
               setAccessKeyError(payload.error || "Access key required");
               setIsLoading(false);
@@ -309,7 +314,7 @@ export default function GamePage({ params }: GamePageProps) {
     };
 
     initializeGame();
-  }, [gameId, session, guestId, setCurrentGameId, searchParams, router, pathname, addGameToStore, loadAttempt, accessKeyReady, accessKey]);
+  }, [gameId, session, guestId, setCurrentGameId, searchParams, router, pathname, addGameToStore, loadAttempt, accessKeyReady, submittedAccessKey]);
 
   const handleGroupSelect = (groupId: string) => {
     const normalizedParams = new URLSearchParams(searchParams.toString());
@@ -375,14 +380,15 @@ export default function GamePage({ params }: GamePageProps) {
           <input
             type="password"
             className="w-full rounded border px-3 py-2 text-sm"
-            value={accessKey}
-            onChange={(event) => setAccessKey(event.target.value)}
+            value={accessKeyInput}
+            onChange={(event) => setAccessKeyInput(event.target.value)}
             placeholder="Enter access key"
           />
           {accessKeyError && <p className="text-sm text-red-600">{accessKeyError}</p>}
           <button
             className="w-full rounded bg-primary text-primary-foreground px-3 py-2 text-sm"
             onClick={() => {
+              setSubmittedAccessKey(accessKeyInput);
               setIsLoading(true);
               setError(null);
               setLoadAttempt((value) => value + 1);
