@@ -56,6 +56,10 @@ const LevelControls = ({
   }, [levelName, currentlevel]);
 
   const increaseLevelConfirm = (event: React.MouseEvent<HTMLButtonElement>) => {
+    if (isCreator) {
+      increaseLevel();
+      return;
+    }
     // if the next level timer has not started, confirm
     const nextLevel = levels[currentlevel];
     if (nextLevel && !nextLevel.timeData.startTime) {

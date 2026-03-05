@@ -8,14 +8,18 @@ interface OptionsState {
   creator: boolean; // Kept for backward compatibility, derived from mode
   mode: Mode;
   lastSaved: number | null;
+  isSavingLevel: boolean;
+  autoSaveLevels: boolean;
   activeArtTab: number; // 0 = "Model solution", 1 = "Your design"
 }
 
 const initialState: OptionsState = {
   showWordCloud: false,
   creator: false,
-  mode: "test",
+  mode: "game",
   lastSaved: null,
+  isSavingLevel: false,
+  autoSaveLevels: true,
   activeArtTab: 0,
 };
 
@@ -23,7 +27,11 @@ const storage = obfuscate("options") as any;
 
 const storedOptions = storage.getItem(storage.key);
 if (storedOptions) {
-  initialState.showWordCloud = JSON.parse(storedOptions).showWordCloud;
+  const parsed = JSON.parse(storedOptions);
+  initialState.showWordCloud = parsed.showWordCloud;
+  if (typeof parsed.autoSaveLevels === "boolean") {
+    initialState.autoSaveLevels = parsed.autoSaveLevels;
+  }
 } else {
   initialState.showWordCloud = false;
 }
@@ -47,11 +55,20 @@ const optionsSlice = createSlice({
       // Keep for backward compatibility
       state.creator = action.payload;
       // Update mode based on creator state
-      state.mode = action.payload ? "creator" : "test";
+      state.mode = action.payload ? "creator" : "game";
     },
 
     setLastSaved(state, action: PayloadAction<number>) {
       state.lastSaved = action.payload;
+    },
+
+    setIsSavingLevel(state, action: PayloadAction<boolean>) {
+      state.isSavingLevel = action.payload;
+    },
+
+    setAutoSaveLevels(state, action: PayloadAction<boolean>) {
+      state.autoSaveLevels = action.payload;
+      storage.setItem(storage.key, JSON.stringify(state));
     },
 
     setActiveArtTab(state, action: PayloadAction<number>) {
@@ -60,7 +77,15 @@ const optionsSlice = createSlice({
   },
 });
 
-export const { setShowWordCloud, setMode, setCreator, setLastSaved, setActiveArtTab } =
+export const {
+  setShowWordCloud,
+  setMode,
+  setCreator,
+  setLastSaved,
+  setIsSavingLevel,
+  setAutoSaveLevels,
+  setActiveArtTab,
+} =
   optionsSlice.actions;
 
 export default optionsSlice.reducer;

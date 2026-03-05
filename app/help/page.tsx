@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 const quickStart = [
   "Sign in and open or create a game from the sidebar list.",
   "Use Creator Mode to edit levels, templates, and solutions.",
-  "Switch to Test Mode to validate the learner experience with the current template.",
+  "Switch to Game Mode to validate the learner experience with the current template.",
   "Save level changes from Creator Tools to persist your work.",
   "Open Game Settings to configure visibility, sharing, work mode, collaborators, and access controls.",
 ];
@@ -25,7 +25,7 @@ const troubleshooting = [
   },
   {
     issue: "Collaboration presence/cursors are not visible",
-    fix: "Multiplayer features appear only on group collaboration pages when group mode is active.",
+    fix: "Multiplayer features appear when group mode is active and a valid group is selected in the game route.",
   },
 ];
 
@@ -55,15 +55,17 @@ export default function HelpPage() {
 
       <Accordion type="single" collapsible className="w-full space-y-2">
         <AccordionItem value="modes" className="border rounded-md px-4">
-          <AccordionTrigger>Modes: Creator, Test, and Game</AccordionTrigger>
+          <AccordionTrigger>Modes: Creator and Game</AccordionTrigger>
           <AccordionContent className="text-sm space-y-2">
             <p>
-              Creator Mode is for authoring tasks and level content. Test Mode lets you run through the same task flow as a learner.
-              Game Mode is the constrained learner view used in share/play flows.
+              Creator Mode is for authoring tasks and level content. Game Mode is the constrained learner view used in share/play flows.
             </p>
             <p>
-              Mode switching is URL-driven (`?mode=creator`, `?mode=test`, `?mode=game`) so links and embeds can force the expected
-              experience.
+              Creator routes use <code>/creator/[gameId]</code>, while game/player routes use <code>/game/[gameId]</code>{" "}
+              and <code>/play/[token]</code>.
+            </p>
+            <p>
+              Each new game gets its own cloned map and level records, so edits in one game do not overwrite another game.
             </p>
           </AccordionContent>
         </AccordionItem>
@@ -79,11 +81,11 @@ export default function HelpPage() {
                 <strong>Individual</strong>: everyone works in their own instance.
               </li>
               <li>
-                <strong>Group</strong>: users with a group context are routed to the shared group workspace for multiplayer collaboration.
+                <strong>Group</strong>: users choose a group in <code>/game/[gameId]</code> and then enter a shared multiplayer instance.
               </li>
             </ul>
             <p>
-              This setting decides whether group pages are used for a game. It is independent of normal owner/collaborator edit rights.
+              This setting decides whether a group context is required to open gameplay. It is independent of normal owner/collaborator edit rights.
             </p>
           </AccordionContent>
         </AccordionItem>
@@ -96,6 +98,7 @@ export default function HelpPage() {
               <li>Visibility (public/private)</li>
               <li>Share link generation/regeneration</li>
               <li>Work Mode (individual/group)</li>
+              <li>Game level imports create independent copies (no shared cross-game level edits)</li>
               <li>Creator access (add/remove collaborators)</li>
               <li>Access window (optional start/end availability)</li>
               <li>Access key requirement and key regeneration (optional)</li>

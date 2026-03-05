@@ -20,8 +20,6 @@ export const ModelArtContainer = ({
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const level = useAppSelector((state) => state.levels[currentLevel - 1]);
   const solutions = useAppSelector((state: any) => state.solutions);
-  const solutionUrls = useAppSelector((state: any) => state.solutionUrls);
-  const solutionUrl = solutionUrls[scenario.scenarioId];
   const defaultLevelSolutions = solutions[level.name] || null;
   const levelSolution = level.solution || { css: "", html: "", js: "" };
   const [solutionCSS, setSolutionCSS] = useState<string>(
@@ -52,17 +50,15 @@ export const ModelArtContainer = ({
       width={scenario.dimensions.width}
       height={scenario.dimensions.height}
     >
-      {!solutionUrl && (
-        <Frame
-          id="DrawBoard"
-          newCss={solutionCSS}
-          newHtml={solutionHTML}
-          newJs={solutionJS + "\n" + scenario.js}
-          events={level.events || []}
-          scenario={scenario}
-          name="solutionUrl"
-        />
-      )}
+      <Frame
+        id="DrawBoard"
+        newCss={solutionCSS}
+        newHtml={solutionHTML}
+        newJs={solutionJS + "\n" + scenario.js}
+        events={level.events || []}
+        scenario={scenario}
+        name="solutionUrl"
+      />
       {children}
     </ArtContainer>
   );

@@ -62,6 +62,16 @@ function toIsoOrNull(value: string): string | null {
 }
 
 export const GameSettings = () => {
+  return <GameSettingsButton />;
+};
+
+type NavbarActionDisplayMode = "icon-label" | "icon";
+
+interface GameSettingsButtonProps {
+  displayMode?: NavbarActionDisplayMode;
+}
+
+export const GameSettingsButton = ({ displayMode = "icon" }: GameSettingsButtonProps) => {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [copiedLti, setCopiedLti] = useState(false);
@@ -266,13 +276,25 @@ export const GameSettings = () => {
 
   if (!game || !canEdit) return null;
 
+  const triggerButton = (
+    <Button
+      size={displayMode === "icon-label" ? "sm" : "icon"}
+      variant="ghost"
+      className={displayMode === "icon-label" ? "w-full justify-start gap-2" : undefined}
+      onClick={handleOpen}
+    >
+      <Settings className="h-5 w-5" />
+      {displayMode === "icon-label" && <span>Settings</span>}
+    </Button>
+  );
+
   return (
     <>
-      <PoppingTitle topTitle="Game Settings">
-        <Button size="icon" variant="ghost" onClick={handleOpen}>
-          <Settings className="h-5 w-5" />
-        </Button>
-      </PoppingTitle>
+      {displayMode === "icon" ? (
+        <PoppingTitle topTitle="Game Settings">{triggerButton}</PoppingTitle>
+      ) : (
+        triggerButton
+      )}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="z-[1200] max-w-2xl max-h-[85vh] overflow-y-auto space-y-4">

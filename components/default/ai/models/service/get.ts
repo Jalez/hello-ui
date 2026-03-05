@@ -1,18 +1,59 @@
 import { apiUrl } from "@/lib/apiUrl";
 import type { Model } from "../types";
 
+function coerceToModel(entry: any): Model {
+  const id = String(entry?.id || entry?.mode || "");
+  return {
+    id,
+    canonical_slug: id,
+    hugging_face_id: "",
+    name: String(entry?.name || id),
+    created: Date.now(),
+    description: String(entry?.description || ""),
+    context_length: 0,
+    architecture: {
+      tokenizer: "unknown",
+      instruct_type: null,
+      modality: "text",
+    },
+    pricing: {
+      prompt: "0",
+      completion: "0",
+      request: "0",
+      image: "0",
+      internal_reasoning: "0",
+    },
+    top_provider: {
+      context_length: 0,
+      max_completion_tokens: null,
+      is_moderated: false,
+    },
+    per_request_limits: null,
+    supported_parameters: [],
+    default_parameters: {},
+  };
+}
+
 /**
  * Fetch all models from the API
  */
 export async function getModels(): Promise<Model[]> {
   const response = await fetch(apiUrl("/api/ai/models/read"));
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch models: ${response.statusText}`);
+  if (response.ok) {
+    const data = await response.json();
+    return data.models;
   }
 
-  const data = await response.json();
-  return data.models;
+  // Backward-compatible fallback for deployments exposing only /api/ai.
+  const fallbackResponse = await fetch(apiUrl("/api/ai"));
+  if (!fallbackResponse.ok) {
+    throw new Error(`Failed to fetch models: ${fallbackResponse.statusText}`);
+  }
+  const fallbackData = await fallbackResponse.json();
+  if (!Array.isArray(fallbackData)) {
+    return [];
+  }
+  return fallbackData.map(coerceToModel).filter((model) => model.id.length > 0);
 }
 
 /**

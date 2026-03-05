@@ -8,16 +8,19 @@ import { Save } from "lucide-react";
 import { levelUrl } from "@/constants";
 import { updateLevelIdentifier } from "@/store/slices/levels.slice";
 import { setLastSaved } from "@/store/slices/options.slice";
+import { addLevelsToMap } from "@/lib/utils/network/maps";
+import { useGameStore } from "@/components/default/games";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const isValidUUID = (str: string): boolean => UUID_REGEX.test(str);
-const AUTO_SAVE_DELAY_MS = 3000;
+const AUTO_SAVE_DELAY_MS = 1500;
 
 const LevelSaver = () => {
   const dispatch = useAppDispatch();
   const currentLevel = useAppSelector((state) => state.currentLevel.currentLevel);
   const level = useAppSelector((state) => state.levels[currentLevel - 1]);
   const isCreator = useAppSelector((state) => state.options.creator);
+  const currentGame = useGameStore((state) => state.getCurrentGame());
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMounted = useRef(false);
 
@@ -53,6 +56,9 @@ const LevelSaver = () => {
     if (contentType?.includes("application/json")) {
       const data = await response.json();
       if (!isUpdate && data.identifier) {
+        if (currentGame?.mapName) {
+          await addLevelsToMap(currentGame.mapName, [data.identifier]);
+        }
         dispatch(updateLevelIdentifier({ levelId: currentLevel, identifier: data.identifier }));
       }
     }

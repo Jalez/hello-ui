@@ -2,18 +2,22 @@ import { apiUrl } from "@/lib/apiUrl";
 import type { Game } from "../../types";
 
 export interface CreateGameOptions {
-  mapName: string;
+  mapName?: string;
   title?: string;
 }
 
 export async function createGame(options: CreateGameOptions): Promise<Game> {
   try {
     const { mapName, title = "New Game" } = options;
+    const payload: Record<string, unknown> = { title };
+    if (mapName && mapName.trim()) {
+      payload.mapName = mapName.trim();
+    }
 
     const response = await fetch(apiUrl("/api/games"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mapName, title }),
+      body: JSON.stringify(payload),
     });
 
     if (!response.ok) {

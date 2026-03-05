@@ -33,7 +33,7 @@ export interface GameState {
   isInitialized: boolean;
   loadingGameId: string | null;
 
-  createGame: (userId: string, mapName: string, title?: string) => Promise<Game>;
+  createGame: (userId: string, mapName?: string, title?: string) => Promise<Game>;
   updateGame: (id: string, updates: Partial<Game>) => Promise<void>;
   removeGame: (id: string) => Promise<void>;
   clearGames: () => void;

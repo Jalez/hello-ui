@@ -25,7 +25,7 @@ export interface Game {
 
 export interface CreateGameOptions {
   userId: string;
-  mapName: string;
+  mapName?: string;
   title: string;
   progressData?: Record<string, unknown>;
 }

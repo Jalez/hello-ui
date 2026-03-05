@@ -24,7 +24,13 @@ interface LtiSessionInfo {
   role: string;
 }
 
-export const AplusSubmitButton = () => {
+type NavbarActionDisplayMode = "icon-label" | "icon";
+
+interface AplusSubmitButtonProps {
+  displayMode?: NavbarActionDisplayMode;
+}
+
+export const AplusSubmitButton = ({ displayMode = "icon" }: AplusSubmitButtonProps) => {
   const [ltiInfo, setLtiInfo] = useState<LtiSessionInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -98,16 +104,29 @@ export const AplusSubmitButton = () => {
 
   return (
     <>
-      <PoppingTitle topTitle="Submit to A+">
+      {displayMode === "icon" ? (
+        <PoppingTitle topTitle="Submit to A+">
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={() => setShowDialog(true)}
+            title="Submit grade to A+"
+          >
+            <Send className="h-5 w-5" />
+          </Button>
+        </PoppingTitle>
+      ) : (
         <Button
-          size="icon"
+          size="sm"
           variant="ghost"
+          className="w-full justify-start gap-2"
           onClick={() => setShowDialog(true)}
           title="Submit grade to A+"
         >
           <Send className="h-5 w-5" />
+          <span>Submit</span>
         </Button>
-      </PoppingTitle>
+      )}
 
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
         <DialogContent className="z-[1200]">

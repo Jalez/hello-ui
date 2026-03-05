@@ -120,10 +120,19 @@ export const pointsSlice = createSlice({
       const scenarioId = action.payload.scenarioId;
       const startTime = action.payload.level.timeData.startTime;
       const pointsThresholds = action.payload.level.pointsThresholds;
-      const level = state.levels[levelName];
+      let level = state.levels[levelName];
       if (!level) {
-        console.error("Level not found");
-        return;
+        level = {
+          points: action.payload.level.points,
+          maxPoints: action.payload.level.maxPoints,
+          accuracy: action.payload.level.accuracy || 0,
+          bestTime: "0:0",
+          scenarios: action.payload.level.scenarios.map((scenario) => ({
+            scenarioId: scenario.scenarioId,
+            accuracy: scenario.accuracy,
+          })),
+        };
+        state.levels[levelName] = level;
       }
       let scenario = level.scenarios.find(
         (scenario) => scenario.scenarioId === scenarioId

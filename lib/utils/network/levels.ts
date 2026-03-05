@@ -8,6 +8,7 @@ type updateLevel = (id: string, level: any) => Promise<Level>;
 type deleteLevel = (id: string) => Promise<Level>;
 type getAllLevels = () => Promise<Level[]>;
 type createLevel = (level: any) => Promise<Level>;
+type cloneLevel = (id: string, name?: string) => Promise<Level>;
 
 /**
  * @description Get the names of all levels from the server
@@ -84,5 +85,20 @@ export const createLevel: createLevel = async (level) => {
     body: JSON.stringify(level),
   };
   const data = makeRequest<Level>(levelUrl, options);
+  return data;
+};
+
+/**
+ * @description Create a copy of an existing level.
+ */
+export const cloneLevel: cloneLevel = async (id, name) => {
+  const options: RequestInit = {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(name ? { name } : {}),
+  };
+  const data = makeRequest<Level>(`${levelUrl}/${id}/clone`, options);
   return data;
 };

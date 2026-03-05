@@ -1,29 +1,30 @@
 'use client';
 
-import { Map } from "lucide-react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useState } from "react";
+import { Map as MapIcon, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Card } from "@/components/ui/card";
 import PoppingTitle from "../General/PoppingTitle";
-import { useEffect, useState } from "react";
-import { Level, MapDetails } from "@/types";
-import AIEnabler from "./MapEditor/AIEnabler";
-import LevelAdder from "./MapEditor/LevelAdder";
 import MapLevels from "./MapEditor/MapLevels";
-import MapSelector from "./MapEditor/MapSelector";
-import MapAdder from "./MapEditor/MapAdder";
-import {
-  getMapLevels,
-  getMapNames,
-  updateMap,
-} from "@/lib/utils/network/maps";
-import SetRandom from "./MapEditor/SetRandom";
-import { forwardRef, useImperativeHandle, useCallback } from "react";
+import { addLevelsToMap, getMapLevels } from "@/lib/utils/network/maps";
+import { cloneLevel } from "@/lib/utils/network/levels";
+import { loadGames } from "@/components/default/games/service";
+import { useGameStore } from "@/components/default/games";
+import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
+import { setCurrentLevel } from "@/store/slices/currentLevel.slice";
+import { updateWeek, setAllLevels } from "@/store/slices/levels.slice";
+import { setSolutions } from "@/store/slices/solutions.slice";
+import { resetSolutionUrls } from "@/store/slices/solutionUrls.slice";
+import { initializePointsFromLevelsStateThunk } from "@/store/actions/score.actions";
+import { addNotificationData } from "@/store/slices/notifications.slice";
+import { Level } from "@/types";
 
 export interface MapEditorRef {
   triggerOpen: () => void;
@@ -33,123 +34,260 @@ interface MapEditorProps {
   renderButton?: boolean;
 }
 
+interface ImportCandidate {
+  identifier: string;
+  name: string;
+  mapName: string;
+  sourceGameTitle: string;
+}
+
 const MapEditor = forwardRef<MapEditorRef, MapEditorProps>(({ renderButton = true }, ref) => {
   const [open, setOpen] = useState(false);
+  const [importCandidates, setImportCandidates] = useState<ImportCandidate[]>([]);
+  const [isLoadingCandidates, setIsLoadingCandidates] = useState(false);
+  const [isApplyingImport, setIsApplyingImport] = useState(false);
+  const [search, setSearch] = useState("");
+  const [selectedImportId, setSelectedImportId] = useState("");
+
+  const dispatch = useAppDispatch();
+  const options = useAppSelector((state) => state.options);
+  const levels = useAppSelector((state) => state.levels);
+  const solutionUrls = useAppSelector((state) => state.solutionUrls);
+  const currentLevel = useAppSelector((state) => state.currentLevel.currentLevel);
+
+  const getCurrentGame = useGameStore((state) => state.getCurrentGame);
+  const currentGame = getCurrentGame();
+  const isCreator = options.creator;
+
   const handleOpen = useCallback(() => setOpen(true), []);
-  const handleClose = () => setOpen(false);
-  const [selectedMapName, setSelectedMapName] = useState("");
-  const [MapNames, setMapNames] = useState<string[]>([]);
-  const [selectedMapDetails, setSelectedMapDetails] = useState<MapDetails>({
-    levels: [],
-    canUseAI: false,
-    random: 0,
-  });
-  const [mapLevels, setMapLevels] = useState<Level[]>([]);
-  useEffect(() => {
-    // fetch maps from the server
-    const fetchMapNames = async () => {
-      setMapNames(await getMapNames());
-    };
-    fetchMapNames();
-  }, []);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      triggerOpen: handleOpen,
+    }),
+    [handleOpen],
+  );
+
+  const refreshCurrentMapLevels = useCallback(async () => {
+    if (!currentGame?.id || !currentGame.mapName) return;
+
+    const freshLevels = await getMapLevels(currentGame.mapName);
+    const solutions = freshLevels.reduce<Record<string, { html: string; css: string; js: string }>>(
+      (acc, level) => {
+        acc[level.name] = {
+          html: level.solution.html,
+          css: level.solution.css,
+          js: level.solution.js,
+        };
+        return acc;
+      },
+      {},
+    );
+
+    dispatch(
+      updateWeek({
+        levels: freshLevels,
+        mapName: currentGame.mapName,
+        gameId: currentGame.id,
+        mode: options.mode,
+        forceFresh: true,
+      }),
+    );
+    dispatch(setSolutions(solutions));
+    dispatch(resetSolutionUrls());
+    setAllLevels(freshLevels);
+    dispatch(initializePointsFromLevelsStateThunk());
+
+    if (currentLevel > freshLevels.length) {
+      dispatch(setCurrentLevel(Math.max(1, freshLevels.length)));
+    }
+  }, [currentGame?.id, currentGame?.mapName, currentLevel, dispatch, options.mode]);
 
   useEffect(() => {
-    const fetchMapLevels = async () => {
-      if (selectedMapName) {
-        const levels = await getMapLevels(selectedMapName);
-        console.log("levels", levels);
-        // JATKETAAN TÄSTÄ, EN NYT JAKSA- T: PERJANTAI JAKKE
-        setMapLevels(levels);
-        // setSelectedMapDetails(await getMapLevels(selectedMap));
+    if (!open || !currentGame?.mapName || !isCreator) return;
+
+    let mounted = true;
+    const loadCandidates = async () => {
+      try {
+        setIsLoadingCandidates(true);
+        const games = await loadGames();
+        const editableGames = games.filter((game) => Boolean(game.canEdit || game.isOwner));
+        const mapToGameTitle = new globalThis.Map<string, string>();
+        for (const game of editableGames) {
+          if (!mapToGameTitle.has(game.mapName)) {
+            mapToGameTitle.set(game.mapName, game.title || game.mapName);
+          }
+        }
+        const mapNames = Array.from(mapToGameTitle.keys());
+        const existingIdentifiers = new Set(levels.map((level) => level.identifier).filter(Boolean));
+        const dedup = new globalThis.Map<string, ImportCandidate>();
+
+        await Promise.all(
+          mapNames.map(async (mapName) => {
+            const mapLevels = await getMapLevels(mapName);
+            for (const level of mapLevels) {
+              if (!level.identifier || existingIdentifiers.has(level.identifier)) continue;
+              if (!dedup.has(level.identifier)) {
+                dedup.set(level.identifier, {
+                  identifier: level.identifier,
+                  name: level.name,
+                  mapName,
+                  sourceGameTitle: mapToGameTitle.get(mapName) || mapName,
+                });
+              }
+            }
+          }),
+        );
+
+        if (!mounted) return;
+        const sorted = Array.from(dedup.values()).sort((a, b) => a.name.localeCompare(b.name));
+        setImportCandidates(sorted);
+      } catch (error) {
+        console.error("Failed to load import candidates", error);
+        if (mounted) {
+          dispatch(addNotificationData({ message: "Failed to load level import list", type: "error" }));
+        }
+      } finally {
+        if (mounted) {
+          setIsLoadingCandidates(false);
+        }
       }
     };
-    fetchMapLevels();
-  }, [selectedMapName]);
 
-  const updateSelectedMapDetails = async (newDetails: MapDetails) => {
+    loadCandidates();
+
+    return () => {
+      mounted = false;
+    };
+  }, [currentGame?.mapName, dispatch, isCreator, levels, open]);
+
+  const filteredCandidates = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return importCandidates;
+    return importCandidates.filter(
+      (candidate) =>
+        candidate.name.toLowerCase().includes(term) ||
+        candidate.sourceGameTitle.toLowerCase().includes(term) ||
+        candidate.mapName.toLowerCase().includes(term),
+    );
+  }, [importCandidates, search]);
+
+  const selectedCandidate =
+    filteredCandidates.find((candidate) => candidate.identifier === selectedImportId) || null;
+
+  const handleCreateCopy = useCallback(async () => {
+    if (!selectedCandidate || !currentGame?.mapName) return;
     try {
-      const updatedMap = await updateMap(selectedMapName, newDetails);
-      console.log("Updated map:", updatedMap);
-      setSelectedMapDetails(updatedMap);
+      setIsApplyingImport(true);
+      const copied = await cloneLevel(selectedCandidate.identifier, `${selectedCandidate.name} (Copy)`);
+      if (!copied.identifier) {
+        throw new Error("Clone response missing identifier");
+      }
+      await addLevelsToMap(currentGame.mapName, [copied.identifier]);
+      await refreshCurrentMapLevels();
+      setSelectedImportId("");
+      dispatch(addNotificationData({ message: "Copied level added to game", type: "success" }));
     } catch (error) {
-      console.error("Error:", error);
+      console.error(error);
+      dispatch(addNotificationData({ message: "Failed to copy level", type: "error" }));
+    } finally {
+      setIsApplyingImport(false);
     }
-  };
+  }, [selectedCandidate, currentGame?.mapName, refreshCurrentMapLevels, dispatch]);
 
-  const handleMapNameSelect = (newMapName: string) => {
-    setSelectedMapName(newMapName);
-  };
+  const getThumbnailForLevel = useCallback(
+    (level: Level) => {
+      const firstScenarioId = level.scenarios?.[0]?.scenarioId;
+      if (!firstScenarioId) return null;
+      return solutionUrls[firstScenarioId] || null;
+    },
+    [solutionUrls],
+  );
 
-  const handleMapDetailsSelect = (newMapDetails: MapDetails) => {
-    setSelectedMapDetails(newMapDetails);
-  };
+  const handleSelectLevel = useCallback(
+    (index: number) => {
+      dispatch(setCurrentLevel(index + 1));
+      setOpen(false);
+    },
+    [dispatch],
+  );
 
-  const updateMapNames = (newName: string) => {
-    setMapNames([...MapNames, newName]);
-  };
-
-  useImperativeHandle(ref, () => ({
-    triggerOpen: handleOpen,
-  }), [handleOpen]);
+  if (!isCreator) return null;
 
   return (
     <>
       {renderButton && (
-        <PoppingTitle topTitle="Maps">
-          <Button variant="ghost" size="icon" onClick={handleOpen}>
-            <Map className="h-5 w-5" />
+        <PoppingTitle topTitle="Game Levels">
+          <Button type="button" variant="ghost" size="icon" onClick={handleOpen}>
+            <MapIcon className="h-5 w-5" />
           </Button>
         </PoppingTitle>
       )}
+
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="w-[80%] max-w-6xl border-2 border-black shadow-[0_0_24px] p-4 max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-5xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle id="edit-prompt-title" className="text-3xl">
-              Game Maps
-            </DialogTitle>
+            <DialogTitle>Game Levels</DialogTitle>
+            <DialogDescription>
+              Levels imported from other games are always added as independent copies.
+            </DialogDescription>
           </DialogHeader>
-          
-          <MapAdder updateMapNames={updateMapNames} />
 
-          {MapNames.length !== 0 && (
-            <MapSelector
-              MapNames={MapNames}
-              handleNameSelect={handleMapNameSelect}
-              updateDetails={handleMapDetailsSelect}
-              selectedMap={selectedMapName}
+          <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
+            <MapLevels
+              levels={levels}
+              getThumbnailForLevel={getThumbnailForLevel}
+              onSelectLevel={handleSelectLevel}
             />
-          )}
-          {selectedMapName && (
-            <Card className="flex flex-col gap-4 m-4 p-4 border border-secondary rounded-2xl bg-primary/80">
-              <h2 id="edit-prompt-title" className="text-2xl font-semibold">
-                Selected Map: {selectedMapName}
-              </h2>
-              <div className="flex flex-row items-start justify-around gap-4">
-                <LevelAdder
-                  updateHandler={updateSelectedMapDetails}
-                  selectedMap={selectedMapDetails}
-                />
-                <MapLevels
-                  selectedMapDetails={selectedMapDetails}
-                  levels={mapLevels}
-                />
 
-                <div className="flex flex-col gap-4">
-                  <AIEnabler
-                    updateHandler={updateSelectedMapDetails}
-                    selectedMap={selectedMapDetails}
-                  />
-                  <SetRandom
-                    selectedMap={selectedMapDetails}
-                    updateHandler={updateSelectedMapDetails}
-                  />
-                </div>
+            <div className="space-y-3 rounded-md border p-3">
+              <h3 className="text-sm font-semibold">Import Level Copy</h3>
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Search by level, game, or map"
+                  className="pl-8"
+                />
               </div>
-            </Card>
-          )}
-          <Button variant="destructive" onClick={handleClose}>
-            Close
-          </Button>
+
+              <div className="max-h-64 overflow-y-auto space-y-1 rounded border p-1">
+                {isLoadingCandidates && (
+                  <p className="px-2 py-1 text-xs text-muted-foreground">Loading levels…</p>
+                )}
+                {!isLoadingCandidates && filteredCandidates.length === 0 && (
+                  <p className="px-2 py-1 text-xs text-muted-foreground">No levels found.</p>
+                )}
+                {filteredCandidates.map((candidate) => (
+                  <Button
+                    type="button"
+                    key={candidate.identifier}
+                    variant={selectedImportId === candidate.identifier ? "secondary" : "ghost"}
+                    className="h-auto w-full justify-start px-2 py-1.5 text-left"
+                    onClick={() => setSelectedImportId(candidate.identifier)}
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-medium">{candidate.name}</p>
+                      <p className="truncate text-[10px] text-muted-foreground">
+                        {candidate.sourceGameTitle} · {candidate.mapName}
+                      </p>
+                    </div>
+                  </Button>
+                ))}
+              </div>
+
+              <Button
+                type="button"
+                className="w-full"
+                disabled={!selectedCandidate || isApplyingImport}
+                onClick={handleCreateCopy}
+              >
+                Add as independent copy
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </>

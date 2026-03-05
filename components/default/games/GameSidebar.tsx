@@ -13,6 +13,7 @@ import { useGameStore } from "./stores/gameStore";
 import { GamesList } from "./GamesList";
 import { useGameHandlers } from "./hooks/useGameHandlers";
 import type { Game } from "./types";
+import { GamesSearchModal } from "./GamesSearchModal";
 
 interface SidebarGameListProps {
   onGameClick?: () => void;
@@ -58,12 +59,18 @@ export const GameSidebar: React.FC<SidebarGameListProps> = ({ onGameClick, isUse
   }, [isAuthenticated, hasLoadedGames, session?.user?.email, loadGames, isCollapsed, isSearchModalOpen]);
 
   const isActive = (gameId: string) => {
-    return pathname === `/game/${gameId}`;
+    return pathname === `/game/${gameId}` || pathname === `/creator/${gameId}`;
   };
 
   const getGameTitle = (game: Game) => {
     return game.title || "Untitled Game";
   };
+
+  const creatorGames = games.filter((game) => Boolean(game.isOwner || game.canEdit));
+  const playedGames = games.filter((game) => !(game.isOwner || game.canEdit));
+
+  const getCreatorHref = (game: Game) => `/creator/${game.id}`;
+  const getPlayedHref = (game: Game) => `/game/${game.id}`;
 
   const handleKeyPress = useCallback(
     async (e: React.KeyboardEvent, gameId: string) => {
@@ -121,21 +128,27 @@ export const GameSidebar: React.FC<SidebarGameListProps> = ({ onGameClick, isUse
         icon={isCreating ? <Loader2 className="h-5 w-5 animate-spin" /> : <Plus className="h-5 w-5" />}
         label="New Game"
         isCollapsed={isCollapsed}
-        onClick={() => handleCreateGame("all")}
+        onClick={() => handleCreateGame()}
         tooltip={isAuthenticated ? "New Game" : "Sign in to create games"}
         disabled={!isAuthenticated}
       />
 
-      {isCollapsed ? (
-        <SidebarButton
-          icon={<Search className="h-5 w-5" />}
-          isCollapsed={true}
-          onClick={() => setIsSearchModalOpen(true)}
-          tooltip="Search Games"
-        />
-      ) : (
+      <SidebarButton
+        icon={<Search className="h-5 w-5" />}
+        label="Search Games"
+        isCollapsed={isCollapsed}
+        onClick={() => setIsSearchModalOpen(true)}
+        tooltip="Search Games"
+      />
+
+      <div className="w-full min-w-0 overflow-hidden space-y-2">
+        {!isCollapsed && (
+          <div className="px-3 pt-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground whitespace-nowrap truncate">
+            Creator Games
+          </div>
+        )}
         <GamesList
-          games={games}
+          games={creatorGames}
           isLoading={isLoading}
           creatingGameId={creatingGameId}
           isCollapsed={isCollapsed}
@@ -144,13 +157,46 @@ export const GameSidebar: React.FC<SidebarGameListProps> = ({ onGameClick, isUse
           setEditTitle={setEditTitle}
           onGameClick={onGameClick}
           getGameTitle={getGameTitle}
+          getGameHref={getCreatorHref}
           isActive={isActive}
+          emptyLabel="No creator games yet"
           handleKeyPress={handleKeyPress}
           handleCancelEdit={handleCancelEditWrapper}
           handleStartEdit={handleStartEdit}
           handleDeleteGame={handleDeleteGameWrapper}
         />
-      )}
+
+        {!isCollapsed && (
+          <div className="px-3 pt-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground whitespace-nowrap truncate">
+            Played Games
+          </div>
+        )}
+        <GamesList
+          games={playedGames}
+          isLoading={isLoading}
+          creatingGameId={creatingGameId}
+          isCollapsed={isCollapsed}
+          editingId={editingId}
+          editTitle={editTitle}
+          setEditTitle={setEditTitle}
+          onGameClick={onGameClick}
+          getGameTitle={getGameTitle}
+          getGameHref={getPlayedHref}
+          isActive={isActive}
+          emptyLabel="No played games yet"
+          handleKeyPress={handleKeyPress}
+          handleCancelEdit={handleCancelEditWrapper}
+          handleStartEdit={handleStartEdit}
+          handleDeleteGame={handleDeleteGameWrapper}
+        />
+      </div>
+
+      <GamesSearchModal
+        open={isSearchModalOpen}
+        onOpenChange={setIsSearchModalOpen}
+        userGames={games}
+        onGameClick={onGameClick}
+      />
     </>
   );
 };
