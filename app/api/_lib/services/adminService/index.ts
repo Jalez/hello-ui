@@ -7,13 +7,15 @@ import * as del from "./delete";
 import * as read from "./read";
 
 // Re-export individual functions for backward compatibility
-export { isAdmin, getAllAdmins, getAdminDetails } from "./read";
+export { isAdmin, isAdminByEmail, ensureAdminForEmailMatch, getAllAdmins, getAdminDetails } from "./read";
 export { addAdmin } from "./create";
 export { removeAdmin } from "./delete";
 
 // Export a simple accessor function for consistency with other services
 export const getAdminService = () => ({
   isAdmin: read.isAdmin,
+  isAdminByEmail: read.isAdminByEmail,
+  ensureAdminForEmailMatch: read.ensureAdminForEmailMatch,
   getAllAdmins: read.getAllAdmins,
   getAdminDetails: read.getAdminDetails,
   addAdmin: create.addAdmin,
