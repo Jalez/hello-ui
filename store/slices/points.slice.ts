@@ -181,6 +181,41 @@ export const pointsSlice = createSlice({
         delete state.levels[oldName];
       }
     },
+    /** Merge saved per-level points from backend (e.g. game instance progressData.pointsByLevel). */
+    mergeSavedPoints: (
+      state,
+      action: PayloadAction<
+        Record<
+          string,
+          {
+            points?: number;
+            maxPoints?: number;
+            accuracy?: number;
+            bestTime?: string;
+            scenarios?: { scenarioId: string; accuracy: number }[];
+          }
+        >
+      >,
+    ) => {
+      const saved = action.payload;
+      if (!saved || typeof saved !== "object") return;
+      for (const levelName of Object.keys(state.levels)) {
+        const data = saved[levelName];
+        if (!data) continue;
+        const level = state.levels[levelName];
+        if (typeof data.points === "number" && data.points >= 0) level.points = data.points;
+        if (typeof data.maxPoints === "number") level.maxPoints = data.maxPoints;
+        if (typeof data.accuracy === "number") level.accuracy = data.accuracy;
+        if (typeof data.bestTime === "string") level.bestTime = data.bestTime;
+        if (Array.isArray(data.scenarios))
+          level.scenarios = data.scenarios.map((s) => ({ scenarioId: s.scenarioId, accuracy: s.accuracy }));
+      }
+      state.allPoints = Object.values(state.levels).reduce((acc, l) => acc + l.points, 0);
+      if (typeof window !== "undefined") {
+        const pointsStorage = backendStorage("points");
+        pointsStorage.setItem(pointsStorage.key, JSON.stringify(state));
+      }
+    },
   },
 });
 
@@ -194,6 +229,7 @@ export const {
   updateLevelBestTime,
   updateLevelAccuracy,
   renameLevelKey,
+  mergeSavedPoints,
 } = pointsSlice.actions;
 
 export default pointsSlice.reducer;

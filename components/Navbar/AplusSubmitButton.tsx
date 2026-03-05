@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect, useCallback } from "react";
+import { useParams, useSearchParams } from "next/navigation";
 import { apiUrl } from "@/lib/apiUrl";
-import { Send, Loader2 } from "lucide-react";
+import { Flag, Loader2, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -14,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { useAppSelector } from "@/store/hooks/hooks";
 import PoppingTitle from "@/components/General/PoppingTitle";
+import { useGameStore } from "@/components/default/games";
 
 interface LtiSessionInfo {
   isLtiMode: boolean;
@@ -31,88 +33,153 @@ interface AplusSubmitButtonProps {
 }
 
 export const AplusSubmitButton = ({ displayMode = "icon" }: AplusSubmitButtonProps) => {
+  const params = useParams();
+  const searchParams = useSearchParams();
+  const currentGame = useGameStore((s) => s.getCurrentGame());
+  const addGameToStore = useGameStore((s) => s.addGameToStore);
+
   const [ltiInfo, setLtiInfo] = useState<LtiSessionInfo | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [ltiLoading, setLtiLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showDialog, setShowDialog] = useState(false);
   const [result, setResult] = useState<{ success: boolean; message?: string; error?: string } | null>(null);
 
   const points = useAppSelector((state) => state.points);
 
+  const gameIdParam = params?.gameId;
+  const gameId = typeof gameIdParam === "string" ? gameIdParam : Array.isArray(gameIdParam) ? gameIdParam[0] : null;
+  const isGameRoute = Boolean(gameId);
+
   useEffect(() => {
     fetch(apiUrl("/api/games/lti-session"))
       .then((res) => res.json())
       .then((data) => {
         setLtiInfo(data);
-        setIsLoading(false);
+        setLtiLoading(false);
       })
-      .catch(() => {
-        setIsLoading(false);
-      });
+      .catch(() => setLtiLoading(false));
   }, []);
 
-  const handleSubmitGrade = useCallback(async () => {
-    if (!ltiInfo?.hasOutcomeService) return;
+  const buildFinishUrl = useCallback(() => {
+    if (!gameId) return apiUrl(`/api/games/${gameId}/finish`);
+    const params = new URLSearchParams();
+    params.set("accessContext", "game");
+    const groupId = searchParams.get("groupId");
+    const guestId = searchParams.get("guestId");
+    const key = searchParams.get("key");
+    if (groupId) params.set("groupId", groupId);
+    if (guestId) params.set("guestId", guestId);
+    if (key) params.set("key", key);
+    return `${apiUrl(`/api/games/${gameId}/finish`)}?${params.toString()}`;
+  }, [gameId, searchParams]);
+
+  const handleFinishGame = useCallback(async () => {
+    if (!gameId) return;
 
     setIsSubmitting(true);
     setResult(null);
 
     try {
-      const response = await fetch(apiUrl("/api/games/submit-grade"), {
+      const finishRes = await fetch(buildFinishUrl(), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           points: points.allPoints,
           maxPoints: points.allMaxPoints,
+          pointsByLevel: Object.fromEntries(
+            Object.entries(points.levels).map(([name, data]) => [
+              name,
+              { points: data.points, maxPoints: data.maxPoints, accuracy: data.accuracy, bestTime: data.bestTime, scenarios: data.scenarios },
+            ])
+          ),
         }),
       });
 
-      const data = await response.json();
+      const finishData = await finishRes.json();
 
-      if (data.success) {
-        setResult({ success: true, message: data.message });
-        setShowDialog(false);
+      if (!finishRes.ok || !finishData.success) {
+        setResult({
+          success: false,
+          error: finishData.error || "Failed to finish game",
+        });
+        setIsSubmitting(false);
+        return;
+      }
 
-        if (data.isInIframe && window.parent) {
-          setTimeout(() => {
-            window.parent.postMessage({ type: "a-plus-refresh-stats" }, "*");
-            if (window.top) {
-              window.top.location.reload();
-            }
-          }, 500);
+      if (currentGame && finishData.instance?.progressData) {
+        addGameToStore({
+          ...currentGame,
+          progressData: finishData.instance.progressData,
+        });
+      }
+
+      if (ltiInfo?.hasOutcomeService) {
+        const gradeRes = await fetch(apiUrl("/api/games/submit-grade"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            points: points.allPoints,
+            maxPoints: points.allMaxPoints,
+          }),
+        });
+        const gradeData = await gradeRes.json();
+
+        if (gradeData.success) {
+          setResult({ success: true, message: gradeData.message });
+          setShowDialog(false);
+          if (gradeData.isInIframe && typeof window !== "undefined" && window.parent) {
+            setTimeout(() => {
+              window.parent.postMessage({ type: "a-plus-refresh-stats" }, "*");
+              if (window.top) window.top.location.reload();
+            }, 500);
+          }
+        } else {
+          setResult({
+            success: true,
+            message: "Game marked as finished. Grade could not be sent to A+.",
+          });
+          setShowDialog(false);
         }
       } else {
-        setResult({ success: false, error: data.error || "Failed to submit grade" });
+        setResult({ success: true, message: "Game finished. Your result has been saved." });
+        setShowDialog(false);
       }
     } catch (error) {
       setResult({
         success: false,
-        error: error instanceof Error ? error.message : "Failed to submit grade",
+        error: error instanceof Error ? error.message : "Failed to finish game",
       });
     } finally {
       setIsSubmitting(false);
     }
-  }, [ltiInfo, points.allPoints, points.allMaxPoints]);
+  }, [
+    gameId,
+    buildFinishUrl,
+    points.allPoints,
+    points.allMaxPoints,
+    currentGame,
+    addGameToStore,
+    ltiInfo?.hasOutcomeService,
+  ]);
 
-  if (isLoading || !ltiInfo?.isLtiMode || !ltiInfo.hasOutcomeService) {
+  const percentage =
+    points.allMaxPoints > 0 ? Math.round((points.allPoints / points.allMaxPoints) * 100) : 0;
+
+  if (!isGameRoute || !gameId) {
     return null;
   }
-
-  const percentage = points.allMaxPoints > 0
-    ? Math.round((points.allPoints / points.allMaxPoints) * 100)
-    : 0;
 
   return (
     <>
       {displayMode === "icon" ? (
-        <PoppingTitle topTitle="Submit to A+">
+        <PoppingTitle topTitle="Finish game">
           <Button
             size="icon"
             variant="ghost"
             onClick={() => setShowDialog(true)}
-            title="Submit grade to A+"
+            title="Finish game and save result"
           >
-            <Send className="h-5 w-5" />
+            <Flag className="h-5 w-5" />
           </Button>
         </PoppingTitle>
       ) : (
@@ -121,19 +188,20 @@ export const AplusSubmitButton = ({ displayMode = "icon" }: AplusSubmitButtonPro
           variant="ghost"
           className="w-full justify-start gap-2"
           onClick={() => setShowDialog(true)}
-          title="Submit grade to A+"
+          title="Finish game and save result"
         >
-          <Send className="h-5 w-5" />
-          <span>Submit</span>
+          <Flag className="h-5 w-5" />
+          <span>Finish game</span>
         </Button>
       )}
 
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
         <DialogContent className="z-[1200]">
           <DialogHeader>
-            <DialogTitle>Submit Grade to A+</DialogTitle>
+            <DialogTitle>Finish game</DialogTitle>
             <DialogDescription>
-              Your score will be submitted to A+ (Plussa).
+              Save your result and mark this game as finished. You can view your summary when you return.
+              {ltiInfo?.hasOutcomeService && " Your score will also be submitted to A+ (Plussa)."}
             </DialogDescription>
           </DialogHeader>
 
@@ -142,47 +210,45 @@ export const AplusSubmitButton = ({ displayMode = "icon" }: AplusSubmitButtonPro
               <div className="text-3xl font-bold">
                 {points.allPoints} / {points.allMaxPoints}
               </div>
-              <div className="text-lg text-muted-foreground mt-1">
-                {percentage}%
-              </div>
+              <div className="text-lg text-muted-foreground mt-1">{percentage}%</div>
             </div>
 
-            {ltiInfo.courseName && (
+            {ltiInfo?.courseName && (
               <p className="text-sm text-muted-foreground mt-4">
                 Course: <strong>{ltiInfo.courseName}</strong>
               </p>
             )}
 
-            <p className="text-sm text-muted-foreground mt-2">
-              You can resubmit to update your score.
-            </p>
-
             {result && (
-              <div className={`mt-4 p-3 rounded-lg ${result.success ? "bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200" : "bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200"}`}>
+              <div
+                className={`mt-4 p-3 rounded-lg ${
+                  result.success
+                    ? "bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200"
+                    : "bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200"
+                }`}
+              >
                 {result.success ? result.message : result.error}
               </div>
             )}
           </div>
 
           <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setShowDialog(false)}
-              disabled={isSubmitting}
-            >
+            <Button variant="outline" onClick={() => setShowDialog(false)} disabled={isSubmitting}>
               Cancel
             </Button>
-            <Button
-              onClick={handleSubmitGrade}
-              disabled={isSubmitting}
-            >
+            <Button onClick={handleFinishGame} disabled={isSubmitting}>
               {isSubmitting ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Submitting...
+                  Saving...
+                </>
+              ) : ltiInfo?.hasOutcomeService ? (
+                <>
+                  <Send className="h-4 w-4 mr-2" />
+                  Finish and submit to A+
                 </>
               ) : (
-                "Submit Grade"
+                "Finish game"
               )}
             </Button>
           </DialogFooter>

@@ -51,8 +51,7 @@ export const Navbar = () => {
   const canEditCurrentGame = Boolean(currentGame?.canEdit ?? currentGame?.isOwner);
   const isCreator = options.creator;
   const isGameRoute = pathname.startsWith("/game/");
-  const isPlayRoute = pathname.startsWith("/play/");
-  const shouldShowMobileSidebarToggle = isVisible && (isGameRoute || isPlayRoute);
+  const shouldShowMobileSidebarToggle = isVisible && isGameRoute;
 
   const level = levels[currentLevel - 1];
   const mapEditorRef = useRef<MapEditorRef>(null);
@@ -128,33 +127,13 @@ export const Navbar = () => {
           </div>
         )}
 
-        {/* Compact nav: text-first menus (no icon-only mode) */}
+        {/* Compact nav: text-first menus (no icon-only mode). Hide Game and Level menus on game route. */}
         <div className="flex 2xl:hidden items-center gap-1">
-          {isCreator ? (
-            <CreatorControls displayMode="menu" />
-          ) : (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-8">
-                  View
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-56 border-0 shadow-lg">
-                <DropdownMenuLabel>View</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={handleArtTabSwitch}
-                  className="cursor-pointer"
-                >
-                  <Switch
-                    checked={activeArtTab === 1}
-                    onCheckedChange={handleArtTabSwitch}
-                    className="pointer-events-none scale-75"
-                  />
-                  <span>{activeArtTab === 0 ? "Model solution" : "Your design"}</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+          {isCreator && !isGameRoute && (
+            <>
+              <CreatorControls displayMode="menu" />
+              {renderGameMenu()}
+            </>
           )}
 
           <ModeToggleButton displayMode="icon-label" />
@@ -171,12 +150,13 @@ export const Navbar = () => {
             <span>Reset</span>
           </Button>
 
-          {renderGameMenu()}
+          <InfoGamePoints />
+          <AplusSubmitButton displayMode="icon-label" />
         </div>
 
-        {/* Left section - Creator controls or Art tab switch */}
+        {/* Left section - Creator controls or Art tab switch. Hide creator tools on game route. */}
         <div className="hidden 2xl:flex flex-row gap-2 justify-center items-center flex-[1_0_25%]">
-          {isCreator ? (
+          {isCreator && !isGameRoute ? (
             <CreatorControls displayMode="icon-label" />
           ) : (
             <PoppingTitle topTitle={activeArtTab === 0 ? "Model solution" : "Your design"}>
@@ -219,7 +199,6 @@ export const Navbar = () => {
         {/* Right section - Game points + A+ submit */}
         <div className="hidden 2xl:flex flex-[1_0_25%] justify-center items-center gap-2">
           <InfoGamePoints />
-          {renderGameMenu()}
           <AplusSubmitButton displayMode="icon-label" />
         </div>
 
