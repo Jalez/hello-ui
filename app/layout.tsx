@@ -13,6 +13,9 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+// Ensure layout runs per-request so session and admin check are never cached
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "UI Designer",
   description: "CSS Artist - UI Designer",

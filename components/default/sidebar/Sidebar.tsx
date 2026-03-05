@@ -1,6 +1,6 @@
 "use client";
 
-import { Settings, Users } from "lucide-react";
+import { Settings, Trash2, Users } from "lucide-react";
 import { usePathname } from "next/navigation";
 import type React from "react";
 import { useEffect, createContext, useContext } from "react";
@@ -10,7 +10,6 @@ import { ExpandButton } from "./SidebarExpandButton";
 import { SidebarLink } from "./SidebarLink";
 import { UserProfileMenu } from "./UserProfileMenu";
 import { useGameStore } from "../games";
-import { useAppSelector } from "@/store/hooks/hooks";
 
 // Context to override isCollapsed for mobile drawer
 const MobileSidebarContext = createContext<boolean>(false);
@@ -34,19 +33,18 @@ interface LeftSidebarProps {
 export const Sidebar: React.FC<LeftSidebarProps> = ({ isUserAdmin, sidebarHeader, children }) => {
   const { isCollapsed, isMobile, isOverlayOpen, closeOverlay, setIsOverlayOpen, isVisible, setIsVisible } = useSidebarCollapse();
   const pathname = usePathname();
-  const options = useAppSelector((state) => state.options);
   const getCurrentGame = useGameStore((state) => state.getCurrentGame);
   const game = getCurrentGame();
 
   const isCreatorRoute = pathname.startsWith("/creator/");
   const isGameRoute = pathname.startsWith("/game/");
-  const isPlayRoute = pathname.startsWith("/play/");
   const isAuthRoute = pathname.startsWith("/auth/");
-  const isPlayerRoute = isGameRoute || isPlayRoute;
+  const isPlayerRoute = isGameRoute;
   const showInlineSidebarOnMobile = !isPlayerRoute && !isAuthRoute;
-  const shouldHideForPlayerContext = isPlayerRoute && options.mode !== "creator" && Boolean(game?.hideSidebar);
+  const isResolvingGameOnGameRoute = isGameRoute && !game;
+  const shouldHideForPlayerContext = isPlayerRoute && Boolean(game?.hideSidebar);
   const shouldHideSidebar =
-    (!isCreatorRoute && shouldHideForPlayerContext) || isAuthRoute;
+    isResolvingGameOnGameRoute || (!isCreatorRoute && shouldHideForPlayerContext) || isAuthRoute;
 
   useEffect(() => {
     setIsVisible(!shouldHideSidebar);
@@ -83,6 +81,13 @@ export const Sidebar: React.FC<LeftSidebarProps> = ({ isUserAdmin, sidebarHeader
         icon: <Users className="h-5 w-5" />,
         href: "/admin/users",
         description: "Manage users and permissions",
+      });
+      items.push({
+        id: "admin-maintenance",
+        label: "Maintenance",
+        icon: <Trash2 className="h-5 w-5" />,
+        href: "/admin/maintenance",
+        description: "Purge orphan levels and maps",
       });
     }
 

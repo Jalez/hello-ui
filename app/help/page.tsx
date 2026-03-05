@@ -17,7 +17,7 @@ const troubleshooting = [
   },
   {
     issue: "Shared link says game not found or access denied",
-    fix: "Confirm the game is public, the share token is current, access window allows current time, and access key (if required) is correct.",
+    fix: "Confirm the game is public, access window allows current time, and access key (if required) is correct.",
   },
   {
     issue: "I expected multiplayer but got an individual instance",
@@ -58,11 +58,10 @@ export default function HelpPage() {
           <AccordionTrigger>Modes: Creator and Game</AccordionTrigger>
           <AccordionContent className="text-sm space-y-2">
             <p>
-              Creator Mode is for authoring tasks and level content. Game Mode is the constrained learner view used in share/play flows.
+              Creator Mode is for authoring tasks and level content. Game Mode is the constrained learner view used in gameplay and shared links.
             </p>
             <p>
-              Creator routes use <code>/creator/[gameId]</code>, while game/player routes use <code>/game/[gameId]</code>{" "}
-              and <code>/play/[token]</code>.
+              Creator routes use <code>/creator/[gameId]</code>, while game/player routes use <code>/game/[gameId]</code>.
             </p>
             <p>
               Each new game gets its own cloned map and level records, so edits in one game do not overwrite another game.

@@ -31,10 +31,6 @@ import PoppingTitle from "@/components/General/PoppingTitle";
 import { useGameStore } from "@/components/default/games";
 import { useAppSelector } from "@/store/hooks/hooks";
 
-function generateToken(): string {
-  return crypto.randomUUID();
-}
-
 type Collaborator = {
   user_id: string;
   added_by: string;
@@ -126,8 +122,8 @@ export const GameSettingsButton = ({ displayMode = "icon" }: GameSettingsButtonP
   };
 
   const origin = typeof window !== "undefined" ? window.location.origin : "";
-  const shareUrl = game?.shareToken ? `${origin}/play/${game.shareToken}` : null;
-  const ltiLaunchUrl = game?.shareToken ? `${origin}${apiUrl(`/api/lti/play/${game.shareToken}`)}` : null;
+  const shareUrl = game?.id ? `${origin}/game/${game.id}?mode=game` : null;
+  const ltiLaunchUrl = game?.id ? `${origin}${apiUrl(`/api/lti/game/${game.id}`)}` : null;
 
   const handleTogglePublic = useCallback(async () => {
     if (!game) return;
@@ -148,10 +144,11 @@ export const GameSettingsButton = ({ displayMode = "icon" }: GameSettingsButtonP
   }, [game, updateGame]);
 
   const handleGenerateShareLink = useCallback(async () => {
-    if (!game) return;
-    const token = generateToken();
-    await updateGame(game.id, { shareToken: token });
-  }, [game, updateGame]);
+    if (!shareUrl) return;
+    await navigator.clipboard.writeText(shareUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }, [shareUrl]);
 
   const handleCopyLink = useCallback(async () => {
     if (!shareUrl) return;
@@ -347,27 +344,21 @@ export const GameSettingsButton = ({ displayMode = "icon" }: GameSettingsButtonP
 
           <div className="space-y-1">
             <p className="text-sm font-semibold">Share Link</p>
-            {shareUrl ? (
-              <div className="flex gap-2">
-                <Input readOnly value={shareUrl} className="text-xs h-9" />
-                <Button size="icon" variant="outline" className="shrink-0 h-9 w-9" onClick={handleCopyLink}>
-                  {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
-                </Button>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="shrink-0 h-9 w-9"
-                  onClick={handleGenerateShareLink}
-                  title="Regenerate link"
-                >
-                  <RefreshCw className="h-4 w-4" />
-                </Button>
-              </div>
-            ) : (
-              <Button variant="outline" className="w-full" onClick={handleGenerateShareLink}>
-                Generate Share Link
+            <div className="flex gap-2">
+              <Input readOnly value={shareUrl || ""} className="text-xs h-9" />
+              <Button size="icon" variant="outline" className="shrink-0 h-9 w-9" onClick={handleCopyLink}>
+                {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
               </Button>
-            )}
+              <Button
+                size="icon"
+                variant="ghost"
+                className="shrink-0 h-9 w-9"
+                onClick={handleGenerateShareLink}
+                title="Copy link"
+              >
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
 
           {ltiLaunchUrl && (
