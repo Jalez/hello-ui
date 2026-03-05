@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, type ReactNode } from "react";
 import { useParams, usePathname, useSearchParams } from "next/navigation";
 import { apiUrl } from "@/lib/apiUrl";
 import { Flag, Loader2, Send } from "lucide-react";
@@ -30,9 +30,10 @@ type NavbarActionDisplayMode = "icon-label" | "icon";
 
 interface AplusSubmitButtonProps {
   displayMode?: NavbarActionDisplayMode;
+  renderTrigger?: (options: { openDialog: () => void }) => ReactNode;
 }
 
-export const AplusSubmitButton = ({ displayMode = "icon" }: AplusSubmitButtonProps) => {
+export const AplusSubmitButton = ({ displayMode = "icon", renderTrigger }: AplusSubmitButtonProps) => {
   const params = useParams();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -40,7 +41,6 @@ export const AplusSubmitButton = ({ displayMode = "icon" }: AplusSubmitButtonPro
   const addGameToStore = useGameStore((s) => s.addGameToStore);
 
   const [ltiInfo, setLtiInfo] = useState<LtiSessionInfo | null>(null);
-  const [ltiLoading, setLtiLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showDialog, setShowDialog] = useState(false);
   const [result, setResult] = useState<{ success: boolean; message?: string; error?: string } | null>(null);
@@ -56,9 +56,8 @@ export const AplusSubmitButton = ({ displayMode = "icon" }: AplusSubmitButtonPro
       .then((res) => res.json())
       .then((data) => {
         setLtiInfo(data);
-        setLtiLoading(false);
       })
-      .catch(() => setLtiLoading(false));
+      .catch(() => {});
   }, []);
 
   const buildFinishUrl = useCallback(() => {
@@ -158,6 +157,7 @@ export const AplusSubmitButton = ({ displayMode = "icon" }: AplusSubmitButtonPro
     buildFinishUrl,
     points.allPoints,
     points.allMaxPoints,
+    points.levels,
     currentGame,
     addGameToStore,
     ltiInfo?.hasOutcomeService,
@@ -170,31 +170,37 @@ export const AplusSubmitButton = ({ displayMode = "icon" }: AplusSubmitButtonPro
     return null;
   }
 
-  return (
-    <>
-      {displayMode === "icon" ? (
-        <PoppingTitle topTitle="Finish game">
-          <Button
-            size="icon"
-            variant="ghost"
-            onClick={() => setShowDialog(true)}
-            title="Finish game and save result"
-          >
-            <Flag className="h-5 w-5" />
-          </Button>
-        </PoppingTitle>
-      ) : (
+  const openDialog = () => setShowDialog(true);
+
+  const trigger = renderTrigger ? renderTrigger({ openDialog }) : (
+    displayMode === "icon" ? (
+      <PoppingTitle topTitle="Finish game">
         <Button
-          size="sm"
+          size="icon"
           variant="ghost"
-          className="w-full justify-start gap-2"
-          onClick={() => setShowDialog(true)}
+          onClick={openDialog}
           title="Finish game and save result"
         >
           <Flag className="h-5 w-5" />
-          <span>Finish game</span>
         </Button>
-      )}
+      </PoppingTitle>
+    ) : (
+      <Button
+        size="sm"
+        variant="ghost"
+        className="w-full justify-start gap-2"
+        onClick={openDialog}
+        title="Finish game and save result"
+      >
+        <Flag className="h-5 w-5" />
+        <span>Finish game</span>
+      </Button>
+    )
+  );
+
+  return (
+    <>
+      {trigger}
 
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
         <DialogContent className="z-[1200]">

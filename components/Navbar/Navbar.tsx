@@ -5,7 +5,7 @@ import {
 } from "@/store/slices/options.slice";
 import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
 import { Button } from "@/components/ui/button";
-import { RotateCcw, PanelLeft, Map } from "lucide-react";
+import { RotateCcw, PanelLeft, Map, Flag, Settings } from "lucide-react";
 import LevelControls from "@/components/General/LevelControls/LevelControls";
 import { setCurrentLevel } from "@/store/slices/currentLevel.slice";
 import { resetLevel } from "@/store/slices/levels.slice";
@@ -37,10 +37,11 @@ import { ModeToggleButton } from "./ModeToggleButton";
 import { AplusSubmitButton } from "./AplusSubmitButton";
 import Link from "next/link";
 import { useGameStore } from "@/components/default/games";
+import { CreatorMenu } from "./CreatorMenu";
 
 export const Navbar = () => {
   const dispatch = useAppDispatch();
-  const { openOverlay, isVisible } = useSidebarCollapse();
+  const { openOverlay, isMobile, isOverlayOpen, isVisible } = useSidebarCollapse();
   const pathname = usePathname();
   const levels = useAppSelector((state) => state.levels);
   const currentLevel = useAppSelector(
@@ -51,27 +52,30 @@ export const Navbar = () => {
   const canEditCurrentGame = Boolean(currentGame?.canEdit ?? currentGame?.isOwner);
   const isCreator = options.creator;
   const isGameRoute = pathname.startsWith("/game/");
-  const shouldShowMobileSidebarToggle = isVisible && isGameRoute;
+  const showCreatorGameMenus =
+    isGameRoute &&
+    Boolean(currentGame?.id) &&
+    canEditCurrentGame;
+  const shouldShowMobileSidebarToggle = isGameRoute && isVisible && isMobile && !isOverlayOpen;
 
   const level = levels[currentLevel - 1];
   const mapEditorRef = useRef<MapEditorRef>(null);
-  const arrowRef = useRef(null);
-  const [anchorEl, setAnchorEl] = useState(null);
+  const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
 
   const levelChanger = useCallback((pickedLevel: number) => {
     dispatch(setCurrentLevel(pickedLevel));
-  }, []);
+  }, [dispatch]);
 
   const handleLevelReset = useCallback(() => {
     dispatch(resetLevel(currentLevel));
-  }, [currentLevel]);
+  }, [currentLevel, dispatch]);
 
   const togglePopper = useCallback(() => {
-    setAnchorEl(arrowRef.current ?? {});
-  }, [arrowRef]);
+    setIsResetDialogOpen(true);
+  }, []);
 
   const handleAnchorElReset = useCallback(() => {
-    setAnchorEl(null);
+    setIsResetDialogOpen(false);
   }, []);
 
   const activeArtTab = options.activeArtTab;
@@ -89,6 +93,26 @@ export const Navbar = () => {
       <DropdownMenuContent align="start" className="w-72 border-0 shadow-lg">
         <DropdownMenuLabel>Game Tools</DropdownMenuLabel>
         <DropdownMenuSeparator />
+        {showCreatorGameMenus && (
+          <>
+            <DropdownMenuItem onSelect={togglePopper}>
+              <RotateCcw className="h-4 w-4 mr-2" />
+              Reset Game
+            </DropdownMenuItem>
+            <AplusSubmitButton
+              renderTrigger={({ openDialog }) => (
+                <DropdownMenuItem onSelect={(event) => {
+                  event.preventDefault();
+                  openDialog();
+                }}>
+                  <Flag className="h-4 w-4 mr-2" />
+                  Finish Game
+                </DropdownMenuItem>
+              )}
+            />
+            <DropdownMenuSeparator />
+          </>
+        )}
         <DropdownMenuItem onClick={() => mapEditorRef.current?.triggerOpen()}>
           <Map className="h-4 w-4 mr-2" />
           Game Levels
@@ -97,7 +121,10 @@ export const Navbar = () => {
           <>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
-              <Link href={`/creator/${currentGame.id}/settings`}>Game Settings</Link>
+              <Link href={`/creator/${currentGame.id}/settings`}>
+                <Settings className="h-4 w-4 mr-2" />
+                Game Settings
+              </Link>
             </DropdownMenuItem>
           </>
         )}
@@ -136,9 +163,19 @@ export const Navbar = () => {
           </>
         )}
 
-        <ModeToggleButton displayMode="icon-label" />
+        {showCreatorGameMenus && currentGame?.id ? (
+          <>
+            <CreatorMenu
+              gameId={currentGame.id}
+              collaborationMode={currentGame.collaborationMode}
+            />
+            {renderGameMenu()}
+          </>
+        ) : (
+          <ModeToggleButton displayMode="icon-label" />
+        )}
 
-        {isGameRoute && (
+        {isGameRoute && !showCreatorGameMenus && (
           <Button
             type="button"
             size="sm"
@@ -153,7 +190,7 @@ export const Navbar = () => {
         )}
 
         <InfoGamePoints />
-        <AplusSubmitButton displayMode="icon-label" />
+        {!showCreatorGameMenus && <AplusSubmitButton displayMode="icon-label" />}
       </div>
 
       {/* Left section - Creator controls or Art tab switch. Hide creator tools on game route. */}
@@ -171,18 +208,27 @@ export const Navbar = () => {
       <div className="flex flex-row gap-2 lg:gap-3 justify-center items-center flex-1 2xl:flex-[1_0_50%]">
         {/* Mode switch */}
         <div className="hidden 2xl:flex gap-1 items-center">
-          <ModeToggleButton displayMode="icon-label" />
+          {showCreatorGameMenus && currentGame?.id ? (
+            <>
+              <CreatorMenu
+                gameId={currentGame.id}
+                collaborationMode={currentGame.collaborationMode}
+              />
+              {renderGameMenu()}
+            </>
+          ) : (
+            <ModeToggleButton displayMode="icon-label" />
+          )}
         </div>
 
         {/* Reset button */}
-        {isGameRoute && (
+        {isGameRoute && !showCreatorGameMenus && (
           <div className="hidden 2xl:block">
             <Button
               size="sm"
               variant="ghost"
               className="gap-2"
               title="Reset Level"
-              ref={arrowRef}
               onClick={togglePopper}
             >
               <RotateCcw className="h-5 w-5" />
@@ -203,7 +249,7 @@ export const Navbar = () => {
       {/* Right section - Game points + A+ submit */}
       <div className="hidden 2xl:flex flex-[1_0_25%] justify-center items-center gap-2">
         <InfoGamePoints />
-        <AplusSubmitButton displayMode="icon-label" />
+        {!showCreatorGameMenus && <AplusSubmitButton displayMode="icon-label" />}
       </div>
 
       {/* Game Levels dialog controlled from navbar menu */}
@@ -211,7 +257,7 @@ export const Navbar = () => {
 
       {/* Dialog for reset confirmation */}
       <NavPopper
-        anchorEl={anchorEl}
+        open={isResetDialogOpen}
         paragraph="This is an irreversible action. All progress will be lost, but timer is not affected. Are you sure you want to reset the level?"
         title="Reset Level"
         handleConfirmation={handleLevelReset}
@@ -222,7 +268,7 @@ export const Navbar = () => {
 };
 
 type NavPopperProps = {
-  anchorEl: any;
+  open: boolean;
   paragraph: string;
   title: string;
   handleConfirmation: () => void;
@@ -230,41 +276,39 @@ type NavPopperProps = {
 };
 
 export const NavPopper = ({
-  anchorEl,
+  open,
   paragraph,
   title,
   handleConfirmation,
   resetAnchorEl,
 }: NavPopperProps) => {
-  const [openPopper, setOpenPopper] = useState(false);
-
   useEffect(() => {
-    // whenever anchorEl changes, set openPopper to true
-    if (anchorEl) {
-      setOpenPopper(true);
+    if (!open) {
+      return undefined;
     }
-  }, [anchorEl]);
 
-  useEffect(() => {
-    // if openPopper is true, start a timer to close it after 10 seconds
-    if (openPopper) {
-      const timer = setTimeout(() => {
-        setOpenPopper(false);
-      }, 10000);
-      return () => clearTimeout(timer);
-    } else {
-      resetAnchorEl && resetAnchorEl();
-    }
-  }, [openPopper, resetAnchorEl]);
+    const timer = setTimeout(() => {
+      resetAnchorEl?.();
+    }, 10000);
+
+    return () => clearTimeout(timer);
+  }, [open, resetAnchorEl]);
 
   const confirmationAndClose = () => {
     handleConfirmation();
-    setOpenPopper(false);
+    resetAnchorEl?.();
   };
-  const handleClose = useCallback(() => setOpenPopper(false), []);
+  const handleClose = useCallback(() => resetAnchorEl?.(), [resetAnchorEl]);
 
   return (
-    <Dialog open={openPopper} onOpenChange={setOpenPopper}>
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) {
+          resetAnchorEl?.();
+        }
+      }}
+    >
       <DialogContent className="z-[1200]">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>

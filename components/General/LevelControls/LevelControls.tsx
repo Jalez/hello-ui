@@ -34,9 +34,8 @@ const LevelControls = ({
   currentlevel,
   levelName,
 }: LevelControlsProps) => {
-  const [anchorEl, setAnchorEl] = React.useState(null);
+  const [isNextLevelDialogOpen, setIsNextLevelDialogOpen] = React.useState(false);
   const levels = useAppSelector((state) => state.levels);
-  const forwardArrowRef = React.useRef(null);
   const options = useAppSelector((state) => state.options);
   const currentLevel = useAppSelector(
     (state) => state.currentLevel.currentLevel
@@ -64,7 +63,7 @@ const LevelControls = ({
     // if the next level timer has not started, confirm
     const nextLevel = levels[currentlevel];
     if (nextLevel && !nextLevel.timeData.startTime) {
-      setAnchorEl(forwardArrowRef.current);
+      setIsNextLevelDialogOpen(true);
       return;
     }
     increaseLevel();
@@ -74,7 +73,7 @@ const LevelControls = ({
   };
 
   const resetAnchorEl = () => {
-    setAnchorEl(null);
+    setIsNextLevelDialogOpen(false);
   };
 
   const updateLevelNameHandler = (name: string) => {
@@ -88,16 +87,13 @@ const LevelControls = ({
   return (
     <>
       <NavPopper
-        anchorEl={anchorEl}
+        open={isNextLevelDialogOpen}
         paragraph="Are you sure you want to go to the next level? Timer for the next level will start immediately if you proceed."
         title="Next Level"
         handleConfirmation={increaseLevel}
         resetAnchorEl={resetAnchorEl}
       />
-      <div
-        className="flex justify-center items-center"
-        ref={forwardArrowRef}
-      >
+      <div className="flex justify-center items-center">
         <strong>
           {currentlevel}/{maxLevels}
         </strong>

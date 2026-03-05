@@ -81,6 +81,25 @@ function clearStoredAccessKey(gameId: string): void {
   }
 }
 
+function getRoomIdForInstance(
+  gameId: string,
+  instance: { scope?: string; groupId?: string | null; userId?: string | null } | null | undefined,
+): string | null {
+  if (!instance) {
+    return null;
+  }
+
+  if (instance.scope === "group" && instance.groupId) {
+    return `group:${instance.groupId}:game:${gameId}`;
+  }
+
+  if (instance.scope === "individual" && instance.userId) {
+    return `individual:${instance.userId}:game:${gameId}`;
+  }
+
+  return null;
+}
+
 export default function GamePage({ params }: GamePageProps) {
   const { gameId } = use(params);
   const { data: session } = useSession();
@@ -115,19 +134,29 @@ export default function GamePage({ params }: GamePageProps) {
     "finishedAt" in currentGame.progressData;
 
   useEffect(() => {
-    setAccessKey(readStoredAccessKey(gameId));
-    setAccessKeyReady(true);
+    const storedAccessKey = readStoredAccessKey(gameId);
+    queueMicrotask(() => {
+      setAccessKey(storedAccessKey);
+      setAccessKeyReady(true);
+    });
   }, [gameId]);
 
   useEffect(() => {
-    if (session?.user) return;
+    if (session?.user) {
+      queueMicrotask(() => {
+        setGuestId("");
+      });
+      return;
+    }
     const storageKey = "ui-designer-guest-id";
     let nextGuestId = localStorage.getItem(storageKey) || "";
     if (!nextGuestId) {
       nextGuestId = crypto.randomUUID();
       localStorage.setItem(storageKey, nextGuestId);
     }
-    setGuestId(nextGuestId);
+    queueMicrotask(() => {
+      setGuestId(nextGuestId);
+    });
   }, [session?.user]);
 
   useEffect(() => {
@@ -204,7 +233,8 @@ export default function GamePage({ params }: GamePageProps) {
             return;
           }
           const groupId = searchParams.get("groupId");
-          if (!groupId) {
+          const canOpenCreatorPreview = Boolean(game.canEdit);
+          if (!groupId && !canOpenCreatorPreview) {
             setRequiresGroup(true);
             setIsLoading(false);
             return;
@@ -212,7 +242,9 @@ export default function GamePage({ params }: GamePageProps) {
 
           const instanceParams = new URLSearchParams();
           instanceParams.set("accessContext", "game");
-          instanceParams.set("groupId", groupId);
+          if (groupId) {
+            instanceParams.set("groupId", groupId);
+          }
           if (!session?.user && guestId) {
             instanceParams.set("guestId", guestId);
           }
@@ -235,7 +267,7 @@ export default function GamePage({ params }: GamePageProps) {
           }
           const instancePayload = await instanceRes.json();
           addGameToStore({ ...game, progressData: instancePayload.instance?.progressData ?? {} });
-          setRoomId(`group:${groupId}:game:${gameId}`);
+          setRoomId(getRoomIdForInstance(gameId, instancePayload.instance));
         } else {
           const instanceParams = new URLSearchParams();
           instanceParams.set("accessContext", "game");
@@ -249,6 +281,7 @@ export default function GamePage({ params }: GamePageProps) {
           if (instanceRes.ok) {
             const instancePayload = await instanceRes.json();
             addGameToStore({ ...game, progressData: instancePayload.instance?.progressData ?? {} });
+            setRoomId(getRoomIdForInstance(gameId, instancePayload.instance));
           } else {
             const payload = await instanceRes.json().catch(() => ({}));
             if (instanceRes.status === 403 && (payload.requiresAccessKey || payload.reason === "access_key_required" || payload.reason === "access_key_invalid")) {
@@ -259,12 +292,11 @@ export default function GamePage({ params }: GamePageProps) {
               return;
             }
             addGameToStore(game);
+            const userId = session?.user
+              ? (session.userId || session.user.email || "")
+              : guestId;
+            setRoomId(`individual:${userId}:game:${gameId}`);
           }
-          // Individual mode also uses WS for persistence
-          const userId = session?.user
-            ? (session.userId || session.user.email || "")
-            : guestId;
-          setRoomId(`individual:${userId}:game:${gameId}`);
         }
 
         setCurrentGameId(gameId);
@@ -277,7 +309,7 @@ export default function GamePage({ params }: GamePageProps) {
     };
 
     initializeGame();
-  }, [gameId, session, guestId, setCurrentGameId, searchParams, router, pathname, addGameToStore, loadAttempt, accessKeyReady]);
+  }, [gameId, session, guestId, setCurrentGameId, searchParams, router, pathname, addGameToStore, loadAttempt, accessKeyReady, accessKey]);
 
   const handleGroupSelect = (groupId: string) => {
     const normalizedParams = new URLSearchParams(searchParams.toString());
@@ -318,7 +350,10 @@ export default function GamePage({ params }: GamePageProps) {
         <div className="w-full max-w-xl rounded-lg border bg-card p-6 space-y-4">
           <h2 className="text-xl font-semibold">Select Group</h2>
           <p className="text-sm text-muted-foreground">
-            This game is in Group Work Mode. Choose your group to open the shared instance.
+            This game is in Group Work Mode. Choose one of your existing groups to open the shared instance.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            If you do not see a group here, ask the game creator or your instructor to add you before entering.
           </p>
           <GroupSelector
             selectedGroupId={searchParams.get("groupId")}

@@ -8,6 +8,7 @@ const quickStart = [
   "Switch to Game Mode to validate the learner experience with the current template.",
   "Save level changes from Creator Tools to persist your work.",
   "Open Game Settings to configure visibility, sharing, work mode, collaborators, and access controls.",
+  "In group-mode games, creators can open Creator Preview first and use the game navbar to jump into active group instances.",
 ];
 
 const troubleshooting = [
@@ -25,7 +26,7 @@ const troubleshooting = [
   },
   {
     issue: "Collaboration presence/cursors are not visible",
-    fix: "Multiplayer features appear when group mode is active and a valid group is selected in the game route.",
+    fix: "Multiplayer features appear when group mode is active and a valid group instance is open. Players must belong to a group first; creators can jump between active group instances from the game navbar.",
   },
 ];
 
@@ -80,11 +81,15 @@ export default function HelpPage() {
                 <strong>Individual</strong>: everyone works in their own instance.
               </li>
               <li>
-                <strong>Group</strong>: users choose a group in <code>/game/[gameId]</code> and then enter a shared multiplayer instance.
+                <strong>Group</strong>: players choose one of their existing groups in <code>/game/[gameId]</code> and then enter a shared multiplayer instance.
               </li>
             </ul>
             <p>
               This setting decides whether a group context is required to open gameplay. It is independent of normal owner/collaborator edit rights.
+            </p>
+            <p>
+              If a player has not been added to a group yet, they cannot create one from the game entry screen. Game editors can still open the route in
+              Creator Preview and use the navbar to switch into active group instances.
             </p>
           </AccordionContent>
         </AccordionItem>

@@ -82,7 +82,7 @@ export async function POST(
     return NextResponse.json({ error: "guestId is required for public individual games" }, { status: 400 });
   }
 
-  const resolved = await resolveInstance(request, gameId, actorUserId, mode);
+  const resolved = await resolveInstance(request, gameId, actorUserId, mode, Boolean(game.can_edit));
   if ("error" in resolved) {
     return NextResponse.json({ error: resolved.error }, { status: resolved.status });
   }

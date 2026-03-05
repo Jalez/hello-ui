@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { apiUrl } from "@/lib/apiUrl";
 import {
   Select,
@@ -10,7 +10,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { CreateGroupDialog } from "./CreateGroupDialog";
 
 interface Group {
   id: string;
@@ -56,11 +55,6 @@ export function GroupSelector({
     fetchGroups();
   }, []);
 
-  const handleGroupCreated = (group: Group) => {
-    setGroups((prev) => [...prev, group]);
-    onGroupSelect(group.id);
-  };
-
   if (isLoading) {
     return (
       <div className={className}>
@@ -85,9 +79,9 @@ export function GroupSelector({
   }
 
   return (
-    <div className={`flex items-center gap-2 ${className || ""}`}>
+    <div className={`space-y-2 ${className || ""}`}>
       <Select value={selectedGroupId || ""} onValueChange={onGroupSelect}>
-        <SelectTrigger className="w-[200px]">
+        <SelectTrigger className="w-[240px]">
           <SelectValue placeholder="Select a group" />
         </SelectTrigger>
         <SelectContent>
@@ -104,10 +98,11 @@ export function GroupSelector({
           )}
         </SelectContent>
       </Select>
-      <CreateGroupDialog
-        onGroupCreated={handleGroupCreated}
-        trigger={<Button variant="outline" size="sm">New</Button>}
-      />
+      {groups.length === 0 && (
+        <p className="text-sm text-muted-foreground">
+          You are not a member of any group yet.
+        </p>
+      )}
     </div>
   );
 }
