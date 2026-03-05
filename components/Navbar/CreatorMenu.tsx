@@ -46,20 +46,38 @@ function formatActivityLabel(value: string | null): string {
   });
 }
 
+function getUniqueMemberNames(memberNames: string[]): string[] {
+  return Array.from(new Set(memberNames.map((value) => value.trim()).filter(Boolean)));
+}
+
 function formatGroupLabel(group: Pick<ActiveGroupInstance, "name" | "memberNames">): string {
-  if (group.memberNames.length === 0) {
+  const memberNames = getUniqueMemberNames(group.memberNames);
+
+  if (memberNames.length === 0) {
     return group.name;
   }
 
-  if (group.memberNames.length === 1) {
-    return group.memberNames[0];
+  if (memberNames.length === 1) {
+    return memberNames[0];
   }
 
-  if (group.memberNames.length === 2) {
-    return `${group.memberNames[0]}, ${group.memberNames[1]}`;
+  if (memberNames.length === 2) {
+    return `${memberNames[0]}, ${memberNames[1]}`;
   }
 
-  return `${group.memberNames[0]}, ${group.memberNames[1]} +${group.memberNames.length - 2}`;
+  return `${memberNames[0]}, ${memberNames[1]} +${memberNames.length - 2}`;
+}
+
+function formatGroupSecondaryLine(group: Pick<ActiveGroupInstance, "name" | "memberNames" | "updatedAt">): string {
+  const primaryLabel = formatGroupLabel(group).trim();
+  const groupName = group.name.trim();
+  const activityLabel = `Last activity ${formatActivityLabel(group.updatedAt)}`;
+
+  if (!groupName || groupName === primaryLabel) {
+    return activityLabel;
+  }
+
+  return `${groupName} • ${activityLabel}`;
 }
 
 export function CreatorMenu({ gameId, collaborationMode }: CreatorMenuProps) {
@@ -182,7 +200,7 @@ export function CreatorMenu({ gameId, collaborationMode }: CreatorMenuProps) {
                   <div className="flex flex-col">
                     <span>{formatGroupLabel(group)}{group.groupId === currentGroupId ? " (Current)" : ""}</span>
                     <span className="text-xs text-muted-foreground">
-                      {group.name} • Last activity {formatActivityLabel(group.updatedAt)}
+                      {formatGroupSecondaryLine(group)}
                     </span>
                   </div>
                 </DropdownMenuItem>
