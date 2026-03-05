@@ -2,7 +2,7 @@ import { extractRows, getSqlInstance } from "../../db/shared";
 import type { AdminUser } from "./types";
 
 /**
- * Check if a user is an admin
+ * Check if a user is an admin by user ID
  */
 export async function isAdmin(userId: string): Promise<boolean> {
   try {
@@ -18,6 +18,69 @@ export async function isAdmin(userId: string): Promise<boolean> {
     return rows.length > 0;
   } catch (error) {
     console.error("DB: CONNECTION-FAIL: Error checking admin status. This often indicates the PostgreSQL Docker container is not running. Please check that your database container is started:", error);
+    return false;
+  }
+}
+
+/**
+ * Check if a user is an admin by email (case-insensitive).
+ * Use this when resolving admin status from session.user.email so the seeded
+ * admin (e.g. raitsu11@gmail.com) matches regardless of Google's email casing.
+ */
+export async function isAdminByEmail(email: string | null | undefined): Promise<boolean> {
+  if (!email || typeof email !== "string" || !email.trim()) {
+    return false;
+  }
+  try {
+    const sql = await getSqlInstance();
+    const normalized = email.trim().toLowerCase();
+    const result = await sql`
+      SELECT ar.id
+      FROM admin_roles ar
+      JOIN users u ON ar.user_id = u.id
+      WHERE ar.is_active = true
+      AND LOWER(TRIM(u.email)) = ${normalized}
+      LIMIT 1
+    `;
+    const rows = extractRows(result);
+    return rows.length > 0;
+  } catch (error) {
+    console.error("DB: CONNECTION-FAIL: Error checking admin by email:", error);
+    return false;
+  }
+}
+
+/**
+ * If the given email (case-insensitive) matches an existing admin's email, ensure
+ * the given userId also has an admin role. Use when the signed-in user might be a
+ * different user row (e.g. Google sign-in created a duplicate) but same email.
+ */
+export async function ensureAdminForEmailMatch(
+  email: string | null | undefined,
+  userId: string,
+): Promise<boolean> {
+  if (!email || typeof email !== "string" || !email.trim() || !userId) {
+    return false;
+  }
+  try {
+    const sql = await getSqlInstance();
+    const normalized = email.trim().toLowerCase();
+    const existing = await sql`
+      SELECT ar.user_id
+      FROM admin_roles ar
+      JOIN users u ON ar.user_id = u.id
+      WHERE ar.is_active = true
+      AND LOWER(TRIM(u.email)) = ${normalized}
+      LIMIT 1
+    `;
+    const rows = extractRows(existing);
+    if (rows.length === 0) return false;
+    const adminUserId = (rows[0] as { user_id: string }).user_id;
+    if (adminUserId === userId) return true;
+    const { addAdmin } = await import("./create");
+    return addAdmin(userId, "admin", adminUserId);
+  } catch (error) {
+    console.error("DB: ensureAdminForEmailMatch error:", error);
     return false;
   }
 }

@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import type { Session } from "next-auth";
-import { isAdmin } from "@/app/api/_lib/services/adminService";
+import { isAdmin, isAdminByEmail } from "@/app/api/_lib/services/adminService";
 import { withAuth } from "./auth";
 
 /**
@@ -21,8 +21,14 @@ export function withAdminAuth(
 ) {
   return withAuth(async (request: NextRequest, context: any, session?: Session) => {
     try {
-      // Check admin status using the session passed from withAuth
-      const isUserAdmin = await isAdmin(session.userId);
+      // Check admin by email first (case-insensitive, matches seeded admin), then by userId
+      let isUserAdmin = false;
+      if (session.user?.email) {
+        isUserAdmin = await isAdminByEmail(session.user.email);
+      }
+      if (!isUserAdmin && session.userId) {
+        isUserAdmin = await isAdmin(session.userId);
+      }
       if (!isUserAdmin) {
         return NextResponse.json({ error: "Admin access required" }, { status: 403 });
       }
@@ -59,8 +65,14 @@ export function withAdminOrUserAuth(
       const userId = session.userId;
       const targetUserId = session.userId;
 
-      // Check if user is admin OR accessing their own data
-      const isUserAdmin = await isAdmin(userId);
+      // Check admin by email first, then by userId
+      let isUserAdmin = false;
+      if (session.user?.email) {
+        isUserAdmin = await isAdminByEmail(session.user.email);
+      }
+      if (!isUserAdmin && userId) {
+        isUserAdmin = await isAdmin(userId);
+      }
       const isSelf = userId === targetUserId;
 
       if (!isUserAdmin && !isSelf) {
