@@ -72,12 +72,36 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
   const updateUserTabRef = React.useRef<((clientId: string, editorType: EditorType) => void) | null>(null);
   const updateUserTypingRef = React.useRef<((clientId: string, editorType: EditorType, isTyping: boolean) => void) | null>(null);
 
+  // Queue presence events that arrive before refs are set (e.g. fast current-users after join)
+  const pendingPresenceRef = React.useRef<Array<{ type: "user-joined"; user: ActiveUser } | { type: "current-users"; users: ActiveUser[] }>>([]);
+
+  const flushPendingPresence = useCallback(() => {
+    const addUser = addUserRef.current;
+    const setUsers = setUsersRef.current;
+    if (!addUser && !setUsers) return;
+    const pending = pendingPresenceRef.current;
+    if (pending.length === 0) return;
+    pendingPresenceRef.current = [];
+    for (const event of pending) {
+      if (event.type === "current-users" && setUsers) setUsers(event.users);
+      if (event.type === "user-joined" && addUser) addUser(event.user);
+    }
+  }, []);
+
   const handleUserJoined = useCallback((joinedUser: ActiveUser) => {
-    addUserRef.current?.(joinedUser);
+    if (addUserRef.current) {
+      addUserRef.current(joinedUser);
+    } else {
+      pendingPresenceRef.current.push({ type: "user-joined", user: joinedUser });
+    }
   }, []);
 
   const handleCurrentUsers = useCallback((users: ActiveUser[]) => {
-    setUsersRef.current?.(users);
+    if (setUsersRef.current) {
+      setUsersRef.current(users);
+    } else {
+      pendingPresenceRef.current.push({ type: "current-users", users });
+    }
   }, []);
 
   const handleUserLeftId = useCallback((userId: string) => {
@@ -183,14 +207,18 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
 
   const { activeUsers, usersByTab, addUser, setUsers, removeUser, clearUsers, updateUserTab, updateUserTyping } = useCollaborationPresence({});
 
-  // Wire refs so handleUserJoined / handleCurrentUsers / handleUserLeftId can call them
+  // Wire refs so handleUserJoined / handleCurrentUsers / handleUserLeftId can call them; flush any events that arrived early
   React.useLayoutEffect(() => {
     addUserRef.current = addUser;
     setUsersRef.current = setUsers;
     removeUserRef.current = removeUser;
     updateUserTabRef.current = updateUserTab;
     updateUserTypingRef.current = updateUserTyping;
-  }, [addUser, setUsers, removeUser, updateUserTab, updateUserTyping]);
+    flushPendingPresence();
+    // Delayed flush in case presence events were queued after this layout effect (e.g. fast current-users)
+    const t = setTimeout(flushPendingPresence, 80);
+    return () => clearTimeout(t);
+  }, [addUser, setUsers, removeUser, updateUserTab, updateUserTyping, flushPendingPresence]);
 
   const { updateLocalCursor } = useCollaborationCursor({
     sendCursor: sendCanvasCursor,

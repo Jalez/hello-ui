@@ -62,6 +62,9 @@ export function useCollaborationConnection(
   } = options;
   const parsedGroupId = extractGroupIdFromRoomId(roomId);
 
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
+
   const socketRef = useRef<Socket | null>(null);
   const clientIdRef = useRef<string | null>(null);
   const userColorRef = useRef<string | null>(null);
@@ -75,16 +78,23 @@ export function useCollaborationConnection(
   const [clientId, setClientId] = useState<string | null>(null);
   const [socketState, setSocketState] = useState<Socket | null>(null);
 
+  const userIdentity = user ? `${user.id}|${user.email}` : null;
+
   useEffect(() => {
-    if (!roomId || !user) {
+    if (!roomId || !userIdentity) {
+      return;
+    }
+    const opts = optionsRef.current;
+    const currentUser = opts.user;
+    if (!currentUser) {
       return;
     }
 
     logDebugClient("ws_connection_start", {
       roomId,
-      userId: user.id,
-      userEmail: user.email,
-      userName: user.name,
+      userId: currentUser.id,
+      userEmail: currentUser.email,
+      userName: currentUser.name,
     });
 
     if (socketRef.current?.connected) {
@@ -94,17 +104,17 @@ export function useCollaborationConnection(
     const newClientId = generateClientId();
     clientIdRef.current = newClientId;
     if (!userColorRef.current) {
-      userColorRef.current = generateUserColor(user.email);
+      userColorRef.current = generateUserColor(currentUser.email);
     }
 
     const wsUrl = getWebSocketUrl();
 
     const socket = io(wsUrl, {
       auth: {
-        userId: user.id,
-        userEmail: user.email,
-        userName: user.name,
-        userImage: user.image,
+        userId: currentUser.id,
+        userEmail: currentUser.email,
+        userName: currentUser.name,
+        userImage: currentUser.image,
         roomId,
       },
       transports: ["websocket", "polling"],
@@ -138,39 +148,41 @@ export function useCollaborationConnection(
       setClientId(newClientId);
       setSocketState(socket);
       reconnectAttemptsRef.current = 0;
+      const u = optionsRef.current.user;
+      if (!u) return;
 
       logDebugClient("ws_socket_connect", {
         socketId: socket.id,
         clientId: newClientId,
         roomId,
-        userId: user.id,
-        userEmail: user.email,
+        userId: u.id,
+        userEmail: u.email,
       });
 
       socket.emit("join-game", {
         roomId,
         groupId: parsedGroupId ?? undefined,
         clientId: newClientId,
-        userId: user.id,
-        userEmail: user.email,
-        userName: user.name,
-        userImage: user.image,
+        userId: u.id,
+        userEmail: u.email,
+        userName: u.name,
+        userImage: u.image,
       });
 
       logDebugClient("ws_join_game_emitted", {
         roomId,
-        userId: user.id,
-        userEmail: user.email,
+        userId: u.id,
+        userEmail: u.email,
       });
 
-      onConnected?.();
+      optionsRef.current.onConnected?.();
     });
 
     socket.on("disconnect", (reason) => {
       isConnectedRef.current = false;
       setIsConnected(false);
       setIsConnecting(false);
-      onDisconnected?.();
+      optionsRef.current.onDisconnected?.();
 
       if (reason === "io server disconnect") {
         return;
@@ -185,7 +197,7 @@ export function useCollaborationConnection(
         }, RECONNECT_DELAY_MS);
       } else {
         setError("Failed to reconnect after multiple attempts");
-        onError?.("Failed to reconnect after multiple attempts");
+        optionsRef.current.onError?.("Failed to reconnect after multiple attempts");
       }
     });
 
@@ -193,58 +205,65 @@ export function useCollaborationConnection(
       setIsConnected(false);
       setIsConnecting(false);
       setError(err.message);
-      onError?.(err.message);
+      optionsRef.current.onError?.(err.message);
     });
 
     socket.on("error", (data: { error?: string }) => {
       setError(data.error || "Unknown error");
-      onError?.(data.error || "Unknown error");
+      optionsRef.current.onError?.(data.error || "Unknown error");
     });
 
     socket.on("user-joined", (data: { clientId?: string; userId: string; userEmail: string; userName?: string; userImage?: string }) => {
-      if (data.userEmail !== user.email) {
-        onUserJoined?.({
-          clientId: data.clientId || socket.id || "",
+      const u = optionsRef.current.user;
+      if (!u || data.userEmail === u.email) return;
+      const joinedClientId = data.clientId ?? "";
+      if (joinedClientId) {
+        const payload = {
+          clientId: joinedClientId,
           userId: data.userId,
           userEmail: data.userEmail,
           userName: data.userName,
           userImage: data.userImage,
-        });
+        };
+        queueMicrotask(() => optionsRef.current.onUserJoined?.(payload));
       }
     });
 
     socket.on("user-left", (data: { userId: string; userEmail: string; userName?: string }) => {
-      onUserLeft?.({
+      optionsRef.current.onUserLeft?.({
         userId: data.userId,
         userEmail: data.userEmail,
         userName: data.userName,
       });
     });
 
-    socket.on("current-users", (data: { users?: Array<{ clientId: string; userId?: string; userEmail: string; userName?: string; userImage?: string; color?: string }> }) => {
+    socket.on("current-users", (data: { users?: Array<{ clientId?: string; userId?: string; userEmail: string; userName?: string; userImage?: string; color?: string }> }) => {
       if (data.users && Array.isArray(data.users)) {
-        onCurrentUsers?.(
-          data.users.map((u) => ({
-            clientId: u.clientId,
+        const mapped = data.users
+          .filter((u) => u && (u.clientId ?? "").length > 0)
+          .map((u) => ({
+            clientId: u.clientId ?? "",
             userId: u.userId || "",
             userEmail: u.userEmail,
             userName: u.userName,
             userImage: u.userImage,
             color: u.color || generateUserColor(u.userEmail),
-          }))
-        );
+          }));
+        if (mapped.length > 0) {
+          queueMicrotask(() => optionsRef.current.onCurrentUsers?.(mapped));
+        }
       }
     });
 
     socket.on("canvas-cursor", (data: CanvasCursor & { clientId: string }) => {
       if (data.clientId !== clientIdRef.current) {
-        onCanvasCursor?.(data);
+        optionsRef.current.onCanvasCursor?.(data);
       }
     });
 
     socket.on("editor-cursor", (data: EditorCursor & { clientId: string }) => {
       if (data.clientId !== clientIdRef.current) {
-        onEditorCursor?.(data);
+        optionsRef.current.onEditorCursor?.(data);
       }
     });
 
@@ -257,46 +276,30 @@ export function useCollaborationConnection(
         });
         return;
       }
-      onEditorChange?.(data);
+      optionsRef.current.onEditorChange?.(data);
     });
 
     socket.on("tab-focus", (data: TabFocusMessage & { clientId: string }) => {
       if (data.clientId !== clientIdRef.current) {
-        onTabFocus?.(data);
+        optionsRef.current.onTabFocus?.(data);
       }
     });
 
     socket.on("typing-status", (data: TypingStatusMessage & { clientId: string }) => {
       if (data.clientId !== clientIdRef.current) {
-        onTypingStatus?.(data);
+        optionsRef.current.onTypingStatus?.(data);
       }
     });
 
     socket.on("code-sync", (data: { levels: Array<{ name: string; code: { html: string; css: string; js: string } }> }) => {
-      onCodeSync?.(data);
+      optionsRef.current.onCodeSync?.(data);
     });
 
     return () => {
       clearReconnectTimeout();
       disconnectSocket();
     };
-  }, [
-    roomId,
-    parsedGroupId,
-    user,
-    onConnected,
-    onDisconnected,
-    onError,
-    onUserJoined,
-    onUserLeft,
-    onCanvasCursor,
-    onEditorCursor,
-    onEditorChange,
-    onCurrentUsers,
-    onTabFocus,
-    onTypingStatus,
-    onCodeSync,
-  ]);
+  }, [roomId, parsedGroupId, userIdentity]);
 
   const sendCanvasCursor = useCallback((x: number, y: number) => {
     if (socketRef.current && roomId && user && clientIdRef.current) {
