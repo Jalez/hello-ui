@@ -9,6 +9,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { GroupSelector } from "@/components/groups";
 import { useSidebarCollapse } from "@/components/default/sidebar/context/SidebarCollapseContext";
 import { GameSummaryView } from "@/components/GameSummary/GameSummaryView";
+import { apiUrl } from "@/lib/apiUrl";
 
 interface GamePageProps {
   params: Promise<{
@@ -152,7 +153,7 @@ export default function GamePage({ params }: GamePageProps) {
         if (accessKey) {
           gameParams.set("key", accessKey);
         }
-        const gameRes = await fetch(`/api/games/${gameId}${gameParams.toString() ? `?${gameParams.toString()}` : ""}`);
+        const gameRes = await fetch(apiUrl(`/api/games/${gameId}${gameParams.toString() ? `?${gameParams.toString()}` : ""}`));
         if (!gameRes.ok) {
           const payload = await gameRes.json().catch(() => ({}));
           if (gameRes.status === 403 && (payload.requiresAccessKey || payload.reason === "access_key_required" || payload.reason === "access_key_invalid")) {
@@ -218,7 +219,7 @@ export default function GamePage({ params }: GamePageProps) {
           if (accessKey) {
             instanceParams.set("key", accessKey);
           }
-          const instanceRes = await fetch(`/api/games/${gameId}/instance?${instanceParams.toString()}`);
+          const instanceRes = await fetch(apiUrl(`/api/games/${gameId}/instance?${instanceParams.toString()}`));
           if (!instanceRes.ok) {
             const payload = await instanceRes.json().catch(() => ({}));
             if (instanceRes.status === 403 && (payload.requiresAccessKey || payload.reason === "access_key_required" || payload.reason === "access_key_invalid")) {
@@ -244,7 +245,7 @@ export default function GamePage({ params }: GamePageProps) {
           if (accessKey) {
             instanceParams.set("key", accessKey);
           }
-          const instanceRes = await fetch(`/api/games/${gameId}/instance${instanceParams.toString() ? `?${instanceParams.toString()}` : ""}`);
+          const instanceRes = await fetch(apiUrl(`/api/games/${gameId}/instance${instanceParams.toString() ? `?${instanceParams.toString()}` : ""}`));
           if (instanceRes.ok) {
             const instancePayload = await instanceRes.json();
             addGameToStore({ ...game, progressData: instancePayload.instance?.progressData ?? {} });
@@ -371,18 +372,18 @@ export default function GamePage({ params }: GamePageProps) {
 
   const user = session?.user
     ? {
-        id: session.userId || session.user.email || "",
-        email: session.user.email || "",
-        name: session.user.name ?? undefined,
-        image: session.user.image ?? undefined,
-      }
+      id: session.userId || session.user.email || "",
+      email: session.user.email || "",
+      name: session.user.name ?? undefined,
+      image: session.user.image ?? undefined,
+    }
     : guestId
       ? {
-          id: guestId,
-          email: `guest-${guestId}@local`,
-          name: "Guest",
-          image: undefined,
-        }
+        id: guestId,
+        email: `guest-${guestId}@local`,
+        name: "Guest",
+        image: undefined,
+      }
       : null;
 
   return (

@@ -164,7 +164,7 @@ export default function CreatorSettingsPage({ params }: CreatorSettingsPageProps
         setInitialDraft(nextDraft);
 
         if (loaded.canManageCollaborators) {
-          const response = await fetch(`/api/games/${loaded.id}/collaborators`);
+          const response = await fetch(apiUrl(`/api/games/${loaded.id}/collaborators`));
           if (response.ok) {
             const data = await response.json();
             setCollaborators(Array.isArray(data.collaborators) ? data.collaborators : []);
@@ -267,7 +267,7 @@ export default function CreatorSettingsPage({ params }: CreatorSettingsPageProps
 
     try {
       setCollaboratorError(null);
-      const response = await fetch(`/api/games/${game.id}/collaborators`, {
+      const response = await fetch(apiUrl(`/api/games/${game.id}/collaborators`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: collaboratorEmail.trim() }),
@@ -290,7 +290,7 @@ export default function CreatorSettingsPage({ params }: CreatorSettingsPageProps
 
     try {
       setCollaboratorError(null);
-      const response = await fetch(`/api/games/${game.id}/collaborators/${encodeURIComponent(email)}`, {
+      const response = await fetch(apiUrl(`/api/games/${game.id}/collaborators/${encodeURIComponent(email)}`), {
         method: "DELETE",
       });
 
@@ -323,7 +323,7 @@ export default function CreatorSettingsPage({ params }: CreatorSettingsPageProps
       try {
         setLoadingSuggestions(true);
         const response = await fetch(
-          `/api/games/${game.id}/collaborators/suggestions?q=${encodeURIComponent(query)}`,
+          apiUrl(`/api/games/${game.id}/collaborators/suggestions?q=${encodeURIComponent(query)}`),
         );
         if (!response.ok) {
           throw new Error("Failed to load suggestions");
@@ -391,314 +391,314 @@ export default function CreatorSettingsPage({ params }: CreatorSettingsPageProps
 
       <div className="flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-4xl p-6 space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Visibility</CardTitle>
-            <CardDescription>Choose whether this game is public or private.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button
-              variant="outline"
-              className="w-full justify-start gap-2"
-              onClick={() => {
-                setDraft((current) => (current ? { ...current, isPublic: !current.isPublic } : current));
-                setSaveSuccess(null);
-              }}
-            >
-              {draft.isPublic ? <Globe className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
-              <span>{draft.isPublic ? "Public" : "Private"}</span>
-              <span className="ml-auto text-xs text-muted-foreground">
-                {draft.isPublic ? "Visible in public games" : "Only invited creators can edit"}
-              </span>
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <UsersRound className="h-4 w-4" /> Work Mode
-            </CardTitle>
-            <CardDescription>Group mode routes users to shared workspace. Individual mode isolates players.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid grid-cols-2 gap-2">
-            <Button
-              variant={draft.collaborationMode === "individual" ? "default" : "outline"}
-              onClick={() => {
-                setDraft((current) => (current ? { ...current, collaborationMode: "individual" } : current));
-                setSaveSuccess(null);
-              }}
-            >
-              Individual
-            </Button>
-            <Button
-              variant={draft.collaborationMode === "group" ? "default" : "outline"}
-              onClick={() => {
-                setDraft((current) => (current ? { ...current, collaborationMode: "group" } : current));
-                setSaveSuccess(null);
-              }}
-            >
-              Group
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Share Link</CardTitle>
-            <CardDescription>Copy a player link for this game.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex gap-2">
-              <Input readOnly value={shareUrl || ""} className="text-xs h-9" />
-              <Button size="icon" variant="outline" className="shrink-0 h-9 w-9" onClick={handleCopyLink}>
-                {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
-              </Button>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Visibility</CardTitle>
+              <CardDescription>Choose whether this game is public or private.</CardDescription>
+            </CardHeader>
+            <CardContent>
               <Button
-                size="icon"
-                variant="ghost"
-                className="shrink-0 h-9 w-9"
-                title="Copy link"
-                onClick={handleGenerateShareLink}
-              >
-                <RefreshCw className="h-4 w-4" />
-              </Button>
-            </div>
-
-            {ltiLaunchUrl && (
-              <div className="space-y-1">
-                <div className="flex items-center gap-1">
-                  <p className="text-sm font-semibold">A+ LTI Launch URL</p>
-                  <ExternalLink className="h-3 w-3 text-muted-foreground" />
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Use this as the Launch URL in A+ / Moodle to identify users and post grades.
-                </p>
-                <div className="flex gap-2">
-                  <Input readOnly value={ltiLaunchUrl} className="text-xs h-9" />
-                  <Button size="icon" variant="outline" className="shrink-0 h-9 w-9" onClick={handleCopyLtiUrl}>
-                    {copiedLti ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
-                  </Button>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Sidebar for Players</CardTitle>
-            <CardDescription>Applied on gameplay routes.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between rounded-md border p-3">
-              <div className="flex items-center gap-2 text-sm">
-                {draft.hideSidebar ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                <span>{draft.hideSidebar ? "Hide sidebar for players" : "Show sidebar for players"}</span>
-              </div>
-              <Switch
-                checked={draft.hideSidebar}
-                onCheckedChange={(checked) => {
-                  setDraft((current) => (current ? { ...current, hideSidebar: checked } : current));
-                  setSaveSuccess(null);
-                }}
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <CalendarClock className="h-4 w-4" /> Access Window
-            </CardTitle>
-            <CardDescription>Optionally limit when share-link players can open this game.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex items-center justify-between rounded-md border p-3">
-              <span className="text-sm font-medium">Enable access window</span>
-              <Switch
-                checked={draft.accessWindowEnabled}
-                onCheckedChange={(checked) => {
-                  setDraft((current) => (current ? { ...current, accessWindowEnabled: checked } : current));
-                  setSaveSuccess(null);
-                }}
-              />
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-              <Input
-                type="datetime-local"
-                value={draft.accessStartsAtInput}
-                onChange={(event) => {
-                  setDraft((current) => (current ? { ...current, accessStartsAtInput: event.target.value } : current));
-                  setSaveSuccess(null);
-                }}
-              />
-              <Input
-                type="datetime-local"
-                value={draft.accessEndsAtInput}
-                onChange={(event) => {
-                  setDraft((current) => (current ? { ...current, accessEndsAtInput: event.target.value } : current));
-                  setSaveSuccess(null);
-                }}
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <KeyRound className="h-4 w-4" /> Access Key
-            </CardTitle>
-            <CardDescription>Require and manage access key for share-link players.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex items-center justify-between rounded-md border p-3">
-              <span className="text-sm font-medium">Require access key</span>
-              <Switch
-                checked={draft.accessKeyRequired}
-                onCheckedChange={(checked) => {
-                  setDraft((current) => (current ? { ...current, accessKeyRequired: checked } : current));
-                  setSaveSuccess(null);
-                }}
-              />
-            </div>
-            <div className="flex gap-2">
-              <Input
-                value={draft.accessKey}
-                onChange={(event) => {
-                  setDraft((current) => (current ? { ...current, accessKey: event.target.value } : current));
-                  setSaveSuccess(null);
-                }}
-                className="font-mono text-xs"
-                placeholder="No key generated"
-              />
-              <Button size="icon" variant="outline" onClick={handleCopyAccessKey} disabled={!draft.accessKey}>
-                {copiedAccessKey ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
-              </Button>
-              <Button
-                size="sm"
                 variant="outline"
+                className="w-full justify-start gap-2"
                 onClick={() => {
-                  setDraft((current) =>
-                    current ? { ...current, accessKeyRequired: true, accessKey: createAccessKey() } : current,
-                  );
+                  setDraft((current) => (current ? { ...current, isPublic: !current.isPublic } : current));
                   setSaveSuccess(null);
                 }}
               >
-                <RefreshCw className="h-4 w-4 mr-1" /> Regenerate
+                {draft.isPublic ? <Globe className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
+                <span>{draft.isPublic ? "Public" : "Private"}</span>
+                <span className="ml-auto text-xs text-muted-foreground">
+                  {draft.isPublic ? "Visible in public games" : "Only invited creators can edit"}
+                </span>
               </Button>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <Users className="h-4 w-4" /> Creator Access
-            </CardTitle>
-            <CardDescription>Add or remove collaborators who can edit this game.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {canManageCollaborators ? (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <UsersRound className="h-4 w-4" /> Work Mode
+              </CardTitle>
+              <CardDescription>Group mode routes users to shared workspace. Individual mode isolates players.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid grid-cols-2 gap-2">
+              <Button
+                variant={draft.collaborationMode === "individual" ? "default" : "outline"}
+                onClick={() => {
+                  setDraft((current) => (current ? { ...current, collaborationMode: "individual" } : current));
+                  setSaveSuccess(null);
+                }}
+              >
+                Individual
+              </Button>
+              <Button
+                variant={draft.collaborationMode === "group" ? "default" : "outline"}
+                onClick={() => {
+                  setDraft((current) => (current ? { ...current, collaborationMode: "group" } : current));
+                  setSaveSuccess(null);
+                }}
+              >
+                Group
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Share Link</CardTitle>
+              <CardDescription>Copy a player link for this game.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
               <div className="flex gap-2">
-                <Input
-                  value={collaboratorEmail}
-                  onChange={(event) => setCollaboratorEmail(event.target.value)}
-                  list="collaborator-email-suggestions"
-                  autoComplete="off"
-                  placeholder="creator@example.com"
-                />
-                <datalist id="collaborator-email-suggestions">
-                  {collaboratorSuggestions.map((email) => (
-                    <option key={email} value={email} />
-                  ))}
-                </datalist>
-                <Button variant="outline" onClick={handleAddCollaborator}>
-                  <UserPlus className="h-4 w-4 mr-1" /> Add
+                <Input readOnly value={shareUrl || ""} className="text-xs h-9" />
+                <Button size="icon" variant="outline" className="shrink-0 h-9 w-9" onClick={handleCopyLink}>
+                  {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="shrink-0 h-9 w-9"
+                  title="Copy link"
+                  onClick={handleGenerateShareLink}
+                >
+                  <RefreshCw className="h-4 w-4" />
                 </Button>
               </div>
-            ) : (
-              <p className="text-xs text-muted-foreground">You can edit this game but cannot manage collaborators.</p>
-            )}
 
-            {canManageCollaborators && collaboratorEmail.trim().length >= 2 && (
-              <p className="text-xs text-muted-foreground">
-                {loadingSuggestions
-                  ? "Searching users..."
-                  : collaboratorSuggestions.length > 0
-                    ? "Suggestions available in the email input dropdown."
-                    : "No matching users found."}
-              </p>
-            )}
-
-            {collaboratorError && <p className="text-xs text-red-600">{collaboratorError}</p>}
-
-            <div className="space-y-1">
-              {collaborators.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No additional creators yet.</p>
-              ) : (
-                collaborators.map((collaborator) => (
-                  <div key={collaborator.user_id} className="flex items-center justify-between border rounded px-2 py-1 text-sm">
-                    <span className="font-mono text-xs">{collaborator.user_id}</span>
-                    {canRemoveCollaborators && (
-                      <Button size="icon" variant="ghost" onClick={() => handleRemoveCollaborator(collaborator.user_id)}>
-                        <Trash2 className="h-4 w-4 text-red-500" />
-                      </Button>
-                    )}
+              {ltiLaunchUrl && (
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1">
+                    <p className="text-sm font-semibold">A+ LTI Launch URL</p>
+                    <ExternalLink className="h-3 w-3 text-muted-foreground" />
                   </div>
-                ))
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Thumbnail</CardTitle>
-            <CardDescription>Set custom thumbnail URL or use one of the generated solution screenshots.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {draft.thumbnailUrl && (
-              <div className="relative rounded-md overflow-hidden border h-24 bg-muted">
-                <img src={draft.thumbnailUrl} alt="Thumbnail preview" className="w-full h-full object-cover" />
-              </div>
-            )}
-            <div className="space-y-2">
-              <Label htmlFor="thumbnail-url">Thumbnail URL</Label>
-              <Input
-                id="thumbnail-url"
-                value={draft.thumbnailUrl}
-                onChange={(event) => {
-                  setDraft((current) => (current ? { ...current, thumbnailUrl: event.target.value } : current));
-                  setSaveSuccess(null);
-                }}
-                placeholder="https://..."
-              />
-            </div>
-            {solutionScreenshots.length > 0 && (
-              <div className="space-y-1">
-                <p className="text-xs text-muted-foreground">Or use a solution screenshot:</p>
-                <div className="flex flex-wrap gap-2">
-                  {solutionScreenshots.map(([scenarioId, url]) => (
-                    <button
-                      key={scenarioId}
-                      title={scenarioLabel(scenarioId)}
-                      onClick={() => {
-                        setDraft((current) => (current ? { ...current, thumbnailUrl: url as string } : current));
-                        setSaveSuccess(null);
-                      }}
-                      className="relative rounded border overflow-hidden w-20 h-14 hover:ring-2 ring-primary transition"
-                    >
-                      <img src={url as string} alt={scenarioLabel(scenarioId)} className="w-full h-full object-cover" />
-                    </button>
-                  ))}
+                  <p className="text-xs text-muted-foreground">
+                    Use this as the Launch URL in A+ / Moodle to identify users and post grades.
+                  </p>
+                  <div className="flex gap-2">
+                    <Input readOnly value={ltiLaunchUrl} className="text-xs h-9" />
+                    <Button size="icon" variant="outline" className="shrink-0 h-9 w-9" onClick={handleCopyLtiUrl}>
+                      {copiedLti ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                    </Button>
+                  </div>
                 </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Sidebar for Players</CardTitle>
+              <CardDescription>Applied on gameplay routes.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between rounded-md border p-3">
+                <div className="flex items-center gap-2 text-sm">
+                  {draft.hideSidebar ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  <span>{draft.hideSidebar ? "Hide sidebar for players" : "Show sidebar for players"}</span>
+                </div>
+                <Switch
+                  checked={draft.hideSidebar}
+                  onCheckedChange={(checked) => {
+                    setDraft((current) => (current ? { ...current, hideSidebar: checked } : current));
+                    setSaveSuccess(null);
+                  }}
+                />
               </div>
-            )}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <CalendarClock className="h-4 w-4" /> Access Window
+              </CardTitle>
+              <CardDescription>Optionally limit when share-link players can open this game.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-center justify-between rounded-md border p-3">
+                <span className="text-sm font-medium">Enable access window</span>
+                <Switch
+                  checked={draft.accessWindowEnabled}
+                  onCheckedChange={(checked) => {
+                    setDraft((current) => (current ? { ...current, accessWindowEnabled: checked } : current));
+                    setSaveSuccess(null);
+                  }}
+                />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <Input
+                  type="datetime-local"
+                  value={draft.accessStartsAtInput}
+                  onChange={(event) => {
+                    setDraft((current) => (current ? { ...current, accessStartsAtInput: event.target.value } : current));
+                    setSaveSuccess(null);
+                  }}
+                />
+                <Input
+                  type="datetime-local"
+                  value={draft.accessEndsAtInput}
+                  onChange={(event) => {
+                    setDraft((current) => (current ? { ...current, accessEndsAtInput: event.target.value } : current));
+                    setSaveSuccess(null);
+                  }}
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <KeyRound className="h-4 w-4" /> Access Key
+              </CardTitle>
+              <CardDescription>Require and manage access key for share-link players.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-center justify-between rounded-md border p-3">
+                <span className="text-sm font-medium">Require access key</span>
+                <Switch
+                  checked={draft.accessKeyRequired}
+                  onCheckedChange={(checked) => {
+                    setDraft((current) => (current ? { ...current, accessKeyRequired: checked } : current));
+                    setSaveSuccess(null);
+                  }}
+                />
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  value={draft.accessKey}
+                  onChange={(event) => {
+                    setDraft((current) => (current ? { ...current, accessKey: event.target.value } : current));
+                    setSaveSuccess(null);
+                  }}
+                  className="font-mono text-xs"
+                  placeholder="No key generated"
+                />
+                <Button size="icon" variant="outline" onClick={handleCopyAccessKey} disabled={!draft.accessKey}>
+                  {copiedAccessKey ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setDraft((current) =>
+                      current ? { ...current, accessKeyRequired: true, accessKey: createAccessKey() } : current,
+                    );
+                    setSaveSuccess(null);
+                  }}
+                >
+                  <RefreshCw className="h-4 w-4 mr-1" /> Regenerate
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Users className="h-4 w-4" /> Creator Access
+              </CardTitle>
+              <CardDescription>Add or remove collaborators who can edit this game.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {canManageCollaborators ? (
+                <div className="flex gap-2">
+                  <Input
+                    value={collaboratorEmail}
+                    onChange={(event) => setCollaboratorEmail(event.target.value)}
+                    list="collaborator-email-suggestions"
+                    autoComplete="off"
+                    placeholder="creator@example.com"
+                  />
+                  <datalist id="collaborator-email-suggestions">
+                    {collaboratorSuggestions.map((email) => (
+                      <option key={email} value={email} />
+                    ))}
+                  </datalist>
+                  <Button variant="outline" onClick={handleAddCollaborator}>
+                    <UserPlus className="h-4 w-4 mr-1" /> Add
+                  </Button>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">You can edit this game but cannot manage collaborators.</p>
+              )}
+
+              {canManageCollaborators && collaboratorEmail.trim().length >= 2 && (
+                <p className="text-xs text-muted-foreground">
+                  {loadingSuggestions
+                    ? "Searching users..."
+                    : collaboratorSuggestions.length > 0
+                      ? "Suggestions available in the email input dropdown."
+                      : "No matching users found."}
+                </p>
+              )}
+
+              {collaboratorError && <p className="text-xs text-red-600">{collaboratorError}</p>}
+
+              <div className="space-y-1">
+                {collaborators.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">No additional creators yet.</p>
+                ) : (
+                  collaborators.map((collaborator) => (
+                    <div key={collaborator.user_id} className="flex items-center justify-between border rounded px-2 py-1 text-sm">
+                      <span className="font-mono text-xs">{collaborator.user_id}</span>
+                      {canRemoveCollaborators && (
+                        <Button size="icon" variant="ghost" onClick={() => handleRemoveCollaborator(collaborator.user_id)}>
+                          <Trash2 className="h-4 w-4 text-red-500" />
+                        </Button>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Thumbnail</CardTitle>
+              <CardDescription>Set custom thumbnail URL or use one of the generated solution screenshots.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {draft.thumbnailUrl && (
+                <div className="relative rounded-md overflow-hidden border h-24 bg-muted">
+                  <img src={draft.thumbnailUrl} alt="Thumbnail preview" className="w-full h-full object-cover" />
+                </div>
+              )}
+              <div className="space-y-2">
+                <Label htmlFor="thumbnail-url">Thumbnail URL</Label>
+                <Input
+                  id="thumbnail-url"
+                  value={draft.thumbnailUrl}
+                  onChange={(event) => {
+                    setDraft((current) => (current ? { ...current, thumbnailUrl: event.target.value } : current));
+                    setSaveSuccess(null);
+                  }}
+                  placeholder="https://..."
+                />
+              </div>
+              {solutionScreenshots.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">Or use a solution screenshot:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {solutionScreenshots.map(([scenarioId, url]) => (
+                      <button
+                        key={scenarioId}
+                        title={scenarioLabel(scenarioId)}
+                        onClick={() => {
+                          setDraft((current) => (current ? { ...current, thumbnailUrl: url as string } : current));
+                          setSaveSuccess(null);
+                        }}
+                        className="relative rounded border overflow-hidden w-20 h-14 hover:ring-2 ring-primary transition"
+                      >
+                        <img src={url as string} alt={scenarioLabel(scenarioId)} className="w-full h-full object-cover" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
 

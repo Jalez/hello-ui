@@ -20,6 +20,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { apiUrl } from "@/lib/apiUrl";
 import { useOptionalCollaboration } from "@/lib/collaboration/CollaborationProvider";
 import { TabPresence } from "@/components/collaboration/TabPresence";
 import { EditorType } from "@/lib/collaboration/types";
@@ -53,7 +54,7 @@ function EditorTabs({
   const options = useAppSelector((state) => state.options);
   const isCreator = options.creator;
   const dispatch = useAppDispatch();
-  
+
   const [activeLanguage, setActiveLanguage] = React.useState<'html' | 'css' | 'js'>('html');
   const [isTemplateMode, setIsTemplateMode] = React.useState<boolean>(true);
 
@@ -155,7 +156,7 @@ function EditorTabs({
     };
 
     try {
-      const response = await fetch(`/api/levels/${identifier}`, {
+      const response = await fetch(apiUrl(`/api/levels/${identifier}`), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(nextLocks),
@@ -234,13 +235,13 @@ function EditorTabs({
                 <DropdownMenuContent align="start" className="w-56">
                   <DropdownMenuLabel>Editor</DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  
+
                   {languageTabs.map((tab) => {
                     const tabLanguage = tab.value as 'html' | 'css' | 'js';
                     const tabLocked = languages[tabLanguage].locked;
                     const isActive = activeLanguage === tabLanguage;
                     const tabUsers = otherUsersByTab[tabLanguage] || [];
-                    
+
                     return (
                       <DropdownMenuItem
                         key={tab.value}
@@ -274,7 +275,7 @@ function EditorTabs({
                       </DropdownMenuItem>
                     );
                   })}
-                  
+
                   {isCreator && (
                     <>
                       <DropdownMenuSeparator />
@@ -300,7 +301,7 @@ function EditorTabs({
                 const tabLocked = languages[tabLanguage].locked;
                 const isActive = activeLanguage === tabLanguage;
                 const tabUsers = otherUsersByTab[tabLanguage] || [];
-                
+
                 return (
                   <div
                     key={tab.value}
@@ -373,11 +374,11 @@ function EditorTabs({
             const langData = languages[tab.value as 'html' | 'css' | 'js'];
             const code = isTemplateMode ? langData.code : langData.solution;
             const locked = langData.locked;
-            
+
             return (
-              <TabsContent 
+              <TabsContent
                 key={tab.value}
-                value={tab.value} 
+                value={tab.value}
                 className="flex-1 flex flex-col min-h-0 mt-0"
               >
                 <CodeEditor
