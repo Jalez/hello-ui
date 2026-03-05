@@ -10,6 +10,7 @@ import {
 } from "@/store/slices/levels.slice";
 import { Level } from "@/types";
 import { javascript } from "@codemirror/lang-javascript";
+import { useCallback } from "react";
 import EditorTabs from "./EditorTabs";
 
 const Editors = (): React.ReactNode => {
@@ -27,14 +28,15 @@ const Editors = (): React.ReactNode => {
   
   const identifier = level.identifier;
 
-  const codeUpdater = (
+  const codeUpdater = useCallback((
     language: 'html' | 'css' | 'js',
     code: string,
     isSolution: boolean
   ) => {
     if (!levels[currentLevel - 1]) return;
-    
+
     if (isSolution) {
+      if (levels[currentLevel - 1].solution?.[language] === code) return;
       dispatch(
         updateSolutionCode({
           id: currentLevel,
@@ -42,6 +44,7 @@ const Editors = (): React.ReactNode => {
         })
       );
     } else {
+      if (levels[currentLevel - 1].code?.[language] === code) return;
       dispatch(
         updateCode({
           id: currentLevel,
@@ -49,7 +52,7 @@ const Editors = (): React.ReactNode => {
         })
       );
     }
-  };
+  }, [levels, currentLevel, dispatch]);
 
   const languages = {
     html: {

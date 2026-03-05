@@ -19,6 +19,9 @@ export const scenarioSolutionUrls: scenarioSolutionUrls = {};
 const maxCodeLength = 100000;
 
 let storage: ReturnType<typeof backendStorage> | null = null;
+let activeGameId: string | null = null;
+let activeMapName = "all";
+let activeMode = "game";
 
 const templateWithoutCode = {
   question_and_answer: {
@@ -85,12 +88,25 @@ const levelsSlice = createSlice({
   reducers: {
     evaluateLevel(state, action) {},
     updateWeek(state, action) {
-      const { levels, gameId } = action.payload;
+      const { levels, gameId, mode, forceFresh } = action.payload;
       let { mapName } = action.payload;
       if (!mapName) mapName = "all";
+      activeGameId = gameId || null;
+      activeMapName = mapName;
+      activeMode = mode || "game";
+
+      if (activeMode === "game" && activeGameId) {
+        // In game mode, return levels as-is. WS code-sync will overlay saved progress.
+        return levels;
+      }
+
       // Scope cache by game ID so different games don't share stale level state
       const cacheKey = gameId ? `ui-designer-${mapName}-${gameId}` : `ui-designer-${mapName}`;
       storage = backendStorage(cacheKey);
+      if (forceFresh) {
+        storage.setItem(storage.key, JSON.stringify(levels));
+        return levels;
+      }
       // Try to get from sessionStorage cache first
       const cached = storage.getItem(storage.key);
       if (cached) {
@@ -142,7 +158,6 @@ const levelsSlice = createSlice({
     resetLevel(state, action) {
       const level = state[action.payload - 1];
       if (!level) return;
-      level.identifier = undefined;
 
       level.confettiSprinkled = false;
       level.timeData.pointAndTime = {};
@@ -210,6 +225,13 @@ const levelsSlice = createSlice({
       const { id, code } = action.payload;
       const level = state[id - 1];
       if (!level) return;
+      if (
+        level.solution?.html === code?.html &&
+        level.solution?.css === code?.css &&
+        level.solution?.js === code?.js
+      ) {
+        return;
+      }
       level.solution = code;
       storage?.setItem(storage.key, JSON.stringify(state));
     },
@@ -219,6 +241,13 @@ const levelsSlice = createSlice({
       const level = state[id - 1];
 
       if (!level) return;
+      if (
+        level.code?.html === code?.html &&
+        level.code?.css === code?.css &&
+        level.code?.js === code?.js
+      ) {
+        return;
+      }
       //console.log("updateCode");
       if (
         (code.html && code.html.length > maxCodeLength) ||
@@ -470,6 +499,13 @@ const levelsSlice = createSlice({
       const { levelId, colors } = action.payload;
       const level = state[levelId - 1];
       if (!level) return;
+      const previousColors = level.buildingBlocks?.colors || [];
+      if (
+        previousColors.length === colors.length &&
+        previousColors.every((color, index) => color === colors[index])
+      ) {
+        return;
+      }
       if (level.buildingBlocks) {
         level.buildingBlocks.colors = colors;
       } else {
