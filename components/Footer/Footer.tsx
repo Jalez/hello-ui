@@ -4,7 +4,6 @@
 import HelpModal from "@/components/Help/Help";
 import { useAppSelector } from "@/store/hooks/hooks";
 import PoppingTitle from "@/components/General/PoppingTitle";
-import InfoInstructions from "../InfoBoard/InfoInstructions";
 import Info from "../InfoBoard/Info";
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
@@ -13,7 +12,9 @@ function useRelativeTime(timestamp: number | null): string | null {
   const [label, setLabel] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!timestamp) { setLabel(null); return; }
+    if (!timestamp) {
+      return undefined;
+    }
 
     const update = () => {
       const seconds = Math.floor((Date.now() - timestamp) / 1000);
@@ -27,7 +28,7 @@ function useRelativeTime(timestamp: number | null): string | null {
     return () => clearInterval(id);
   }, [timestamp]);
 
-  return label;
+  return timestamp ? label : null;
 }
 
 export const Footer = () => {
@@ -36,12 +37,15 @@ export const Footer = () => {
 
   return (
     <footer
-      className="flex flex-row justify-between items-center p-2 w-full h-fit shrink-0 text-sm border-t"
+      className="flex flex-wrap md:flex-nowrap justify-between items-center gap-2 p-2 w-full h-fit shrink-0 text-sm border-t"
     >
       <div className="flex flex-row gap-2 pointer-events-auto">
         <PoppingTitle topTitle="Help">
           <HelpModal />
         </PoppingTitle>
+      </div>
+      <div className="flex justify-center flex-1 min-w-0">
+        <Info />
       </div>
       <div className="flex items-center gap-4">
         {options.creator && (
