@@ -60,16 +60,27 @@ function EditorTabs({
   const collaboration = useOptionalCollaboration();
   const isConnected = collaboration?.isConnected ?? false;
   const usersByTab = collaboration?.usersByTab ?? { html: [], css: [], js: [] };
+  const myClientId = collaboration?.clientId ?? null;
+  const otherUsersByTab = React.useMemo(() => {
+    if (!myClientId) return { html: [] as typeof usersByTab.html, css: [] as typeof usersByTab.css, js: [] as typeof usersByTab.js };
+    return {
+      html: (usersByTab.html || []).filter((u) => u.clientId !== myClientId),
+      css: (usersByTab.css || []).filter((u) => u.clientId !== myClientId),
+      js: (usersByTab.js || []).filter((u) => u.clientId !== myClientId),
+    };
+  }, [usersByTab, myClientId]);
   const setActiveTab = collaboration?.setActiveTab;
   const lastRemoteCodeChange = collaboration?.lastRemoteCodeChange ?? null;
   const initialCodeSync = collaboration?.initialCodeSync ?? null;
   const lastAppliedInitialSyncRef = React.useRef<string | null>(null);
   const lastAppliedRemoteTsRef = React.useRef<number | null>(null);
+  const lastSentTabRef = React.useRef<EditorType | null>(null);
 
   React.useEffect(() => {
-    if (isConnected && setActiveTab) {
-      setActiveTab(activeLanguage);
-    }
+    if (!isConnected || !setActiveTab) return;
+    if (lastSentTabRef.current === activeLanguage) return;
+    lastSentTabRef.current = activeLanguage;
+    setActiveTab(activeLanguage);
   }, [isConnected, setActiveTab, activeLanguage]);
 
   React.useEffect(() => {
@@ -112,6 +123,7 @@ function EditorTabs({
     const editorType = newLanguage as EditorType;
     setActiveLanguage(editorType);
     if (isConnected && setActiveTab) {
+      lastSentTabRef.current = editorType;
       setActiveTab(editorType);
     }
   };
@@ -181,15 +193,6 @@ function EditorTabs({
     }
   };
 
-  const currentLanguageData = languages[activeLanguage];
-  const currentCode = isTemplateMode ? currentLanguageData.code : currentLanguageData.solution;
-  const currentLocked = currentLanguageData.locked;
-
-  // If template is empty, it is locked and we are not in the creator, don't show it
-  if (!currentCode && currentLocked && !isCreator) {
-    return <div></div>;
-  }
-
   const handleCodeUpdate = (data: { html?: string; css?: string; js?: string }, type: string) => {
     const isSolution = type === 'Solution' || type === 'solution';
 
@@ -236,7 +239,7 @@ function EditorTabs({
                     const tabLanguage = tab.value as 'html' | 'css' | 'js';
                     const tabLocked = languages[tabLanguage].locked;
                     const isActive = activeLanguage === tabLanguage;
-                    const tabUsers = usersByTab[tabLanguage] || [];
+                    const tabUsers = otherUsersByTab[tabLanguage] || [];
                     
                     return (
                       <DropdownMenuItem
@@ -296,7 +299,7 @@ function EditorTabs({
                 const tabLanguage = tab.value as 'html' | 'css' | 'js';
                 const tabLocked = languages[tabLanguage].locked;
                 const isActive = activeLanguage === tabLanguage;
-                const tabUsers = usersByTab[tabLanguage] || [];
+                const tabUsers = otherUsersByTab[tabLanguage] || [];
                 
                 return (
                   <div
@@ -348,8 +351,8 @@ function EditorTabs({
               <span className="text-sm font-medium text-primary">
                 {languageTabs.find(tab => tab.value === activeLanguage)?.label}
               </span>
-              {isConnected && (usersByTab[activeLanguage] || []).length > 0 && (
-                <TabPresence users={usersByTab[activeLanguage]} size="sm" />
+              {isConnected && (otherUsersByTab[activeLanguage] || []).length > 0 && (
+                <TabPresence users={otherUsersByTab[activeLanguage]} size="sm" />
               )}
             </div>
 
