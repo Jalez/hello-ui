@@ -61,7 +61,7 @@ export default function GamesPage() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
         {games.map((game) => {
-          const href = game.shareToken ? `/play/${game.shareToken}` : `/project/${game.id}`;
+          const href = `/game/${game.id}?mode=game`;
           return (
             <Link
               key={game.id}

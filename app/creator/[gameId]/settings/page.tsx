@@ -55,10 +55,6 @@ type SettingsDraft = {
   accessKey: string;
 };
 
-function generateToken(): string {
-  return crypto.randomUUID();
-}
-
 function createAccessKey(): string {
   return Math.random().toString(36).slice(2, 10).toUpperCase();
 }
@@ -192,8 +188,8 @@ export default function CreatorSettingsPage({ params }: CreatorSettingsPageProps
   }, [draft, initialDraft]);
 
   const origin = typeof window !== "undefined" ? window.location.origin : "";
-  const shareUrl = game?.shareToken ? `${origin}/play/${game.shareToken}` : null;
-  const ltiLaunchUrl = game?.shareToken ? `${origin}${apiUrl(`/api/lti/play/${game.shareToken}`)}` : null;
+  const shareUrl = game?.id ? `${origin}/game/${game.id}?mode=game` : null;
+  const ltiLaunchUrl = game?.id ? `${origin}${apiUrl(`/api/lti/game/${game.id}`)}` : null;
 
   const solutionScreenshots = Object.entries(solutionUrls).filter(([, url]) => !!url);
   const scenarioLabel = (scenarioId: string) => {
@@ -239,8 +235,10 @@ export default function CreatorSettingsPage({ params }: CreatorSettingsPageProps
   };
 
   const handleGenerateShareLink = async () => {
-    if (!game) return;
-    await updateGame(game.id, { shareToken: generateToken() });
+    if (!shareUrl) return;
+    await navigator.clipboard.writeText(shareUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   const handleCopyLink = async () => {
@@ -448,34 +446,24 @@ export default function CreatorSettingsPage({ params }: CreatorSettingsPageProps
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Share Link</CardTitle>
-            <CardDescription>Generate and copy a player link for this game.</CardDescription>
+            <CardDescription>Copy a player link for this game.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {shareUrl ? (
-              <div className="flex gap-2">
-                <Input readOnly value={shareUrl} className="text-xs h-9" />
-                <Button size="icon" variant="outline" className="shrink-0 h-9 w-9" onClick={handleCopyLink}>
-                  {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
-                </Button>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="shrink-0 h-9 w-9"
-                  title="Regenerate link"
-                  onClick={handleGenerateShareLink}
-                >
-                  <RefreshCw className="h-4 w-4" />
-                </Button>
-              </div>
-            ) : (
+            <div className="flex gap-2">
+              <Input readOnly value={shareUrl || ""} className="text-xs h-9" />
+              <Button size="icon" variant="outline" className="shrink-0 h-9 w-9" onClick={handleCopyLink}>
+                {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+              </Button>
               <Button
-                variant="outline"
-                className="w-full"
+                size="icon"
+                variant="ghost"
+                className="shrink-0 h-9 w-9"
+                title="Copy link"
                 onClick={handleGenerateShareLink}
               >
-                Generate Share Link
+                <RefreshCw className="h-4 w-4" />
               </Button>
-            )}
+            </div>
 
             {ltiLaunchUrl && (
               <div className="space-y-1">

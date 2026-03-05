@@ -41,8 +41,31 @@ export async function LayoutClient({ children }: LayoutClientProps) {
   // Get session on server to pass to SessionProvider (eliminates initial /api/auth/session call)
   const session = (await getServerSession(authOptions)) as Session | null;
 
-  // Check admin status on the server (with defensive handling)
-  const isUserAdmin = false; // Default to false for now, can be enhanced later
+  // Check admin status on the server so sidebar shows admin nav (e.g. Maintenance).
+  // 1) Env fallback: ADMIN_EMAIL (e.g. in Docker when DB seed not run) — match session email case-insensitively.
+  // 2) DB: prefer email (case-insensitive), then userId; sync duplicate user rows if needed.
+  let isUserAdmin = false;
+  const adminEmailEnv = process.env.ADMIN_EMAIL?.trim();
+  if (session?.user?.email && adminEmailEnv) {
+    isUserAdmin = session.user.email.trim().toLowerCase() === adminEmailEnv.toLowerCase();
+  }
+  if (!isUserAdmin) {
+    const { isAdminByEmail, isAdmin, ensureAdminForEmailMatch } = await import("@/app/api/_lib/services/adminService");
+    try {
+      if (session?.user?.email) {
+        isUserAdmin = await isAdminByEmail(session.user.email);
+        if (isUserAdmin && session?.userId && !(await isAdmin(session.userId))) {
+          await ensureAdminForEmailMatch(session.user.email, session.userId);
+          isUserAdmin = true;
+        }
+      }
+      if (!isUserAdmin && session?.userId) {
+        isUserAdmin = await isAdmin(session.userId);
+      }
+    } catch {
+      isUserAdmin = false;
+    }
+  }
 
   return (
     <LayoutClientInner 

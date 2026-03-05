@@ -13,7 +13,7 @@ export const useGameHandlers = ({ isAuthenticated, onGameClick }: UseGameHandler
   const router = useRouter();
   const pathname = usePathname();
   const { data: session } = useSession();
-  const { updateGame, removeGame, createGame: createGameInStore } = useGameStore();
+  const { updateGame, removeGame, createGame: createGameInStore, setCurrentGameId } = useGameStore();
   const { showError, showSuccess, showLoading, hideNotification } = useNotificationStore();
   const [isCreating, setIsCreating] = useState(false);
   const [creatingGameId, setCreatingGameId] = useState<string | null>(null);
@@ -54,7 +54,8 @@ export const useGameHandlers = ({ isAuthenticated, onGameClick }: UseGameHandler
 
       hideNotification();
       showSuccess("Game created successfully!");
-      
+
+      setCurrentGameId(newGame.id);
       setCreatingGameId(newGame.id);
       router.push(`/game/${newGame.id}`);
       
@@ -68,7 +69,7 @@ export const useGameHandlers = ({ isAuthenticated, onGameClick }: UseGameHandler
       setIsCreating(false);
       setCreatingGameId(null);
     }
-  }, [isAuthenticated, session, router, onGameClick, isCreating, createGameInStore, showError, showSuccess, showLoading, hideNotification]);
+  }, [isAuthenticated, session, router, onGameClick, isCreating, createGameInStore, setCurrentGameId, showError, showSuccess, showLoading, hideNotification]);
 
   const handleSaveEdit = useCallback(
     async (e: React.MouseEvent, gameId: string, editTitle: string) => {
