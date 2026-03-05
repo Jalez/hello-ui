@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { getGamesByUserId, getPublicGames, createGame } from '@/app/api/_lib/services/gameService';
-import { getMapByName } from '@/app/api/_lib/services/mapService';
 import debug from 'debug';
 
 const logger = debug('ui_designer:api:games');
@@ -96,19 +95,8 @@ export async function POST(request: NextRequest) {
     if (!body.title) {
       return respondWithError(new Error('title is required'));
     }
-    const requestedMapName = typeof body.mapName === "string" ? body.mapName.trim() : "";
-    const sourceMapName = requestedMapName && requestedMapName !== "all" ? requestedMapName : "all";
-    const map = await getMapByName(sourceMapName);
-    if (!map) {
-      return NextResponse.json(
-        { error: `Map '${sourceMapName}' not found` },
-        { status: 404 }
-      );
-    }
-
     const game = await createGame({
       userId,
-      mapName: sourceMapName,
       title: body.title,
       progressData: body.progressData || {},
     });

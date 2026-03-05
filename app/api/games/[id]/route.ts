@@ -1,13 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
-import { deleteGame, getGameById, regenerateAccessKey, regenerateShareToken, updateGame } from '@/app/api/_lib/services/gameService';
+import { deleteGame, evaluateGameRouteAccess, getGameById, getGameByIdForGameplay, regenerateAccessKey, regenerateShareToken, updateGame } from '@/app/api/_lib/services/gameService';
 import type { Game } from '@/app/api/_lib/services/gameService';
+import {
+  attachGameAccessCookie,
+  clearGameAccessCookie,
+  getRawAccessKeyFromRequest,
+  resolveAccessKeyForGame,
+} from '@/app/api/_lib/services/gameService/accessCookie';
 import debug from 'debug';
 
 const logger = debug('ui_designer:api:games:id');
 
 const respondWithError = (error: Error, status: number = 400) => NextResponse.json({ error: error.message }, { status });
+
+function accessDenied(reason: "not_started" | "expired" | "access_key_required" | "access_key_invalid", game?: Game | null) {
+  if (reason === "not_started") {
+    return NextResponse.json({ error: "Game is not open yet", reason }, { status: 403 });
+  }
+  if (reason === "expired") {
+    return NextResponse.json({ error: "Game access window has ended", reason }, { status: 403 });
+  }
+  return NextResponse.json(
+    {
+      error: reason === "access_key_invalid" ? "Invalid access key" : "Access key required",
+      reason,
+      requiresAccessKey: true,
+      hideSidebar: game?.hide_sidebar ?? false,
+    },
+    { status: 403 },
+  );
+}
+
+function shouldEnforceAccess(request: NextRequest): boolean {
+  return request.nextUrl.searchParams.get("accessContext") === "game";
+}
 
 function buildGamePayload(game: Game | null) {
   if (!game) {
@@ -48,22 +76,41 @@ function buildGamePayload(game: Game | null) {
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await getServerSession(authOptions);
-
-    if (!session?.user?.email) {
+    const enforceGameplayAccess = shouldEnforceAccess(request);
+    if (!session?.user?.email && !enforceGameplayAccess) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
-
-    const actorIdentifiers = [session.userId, session.user.email].filter(Boolean) as string[];
+    const actorIdentifiers = session?.user?.email
+      ? [session.userId, session.user.email].filter(Boolean) as string[]
+      : [];
     const { id } = await params;
 
     if (!id || typeof id !== 'string') {
       return respondWithError(new Error('Invalid game ID'));
     }
 
-    const game = await getGameById(id, actorIdentifiers);
+    const game = enforceGameplayAccess
+      ? await getGameByIdForGameplay(id, actorIdentifiers.length ? actorIdentifiers : undefined)
+      : await getGameById(id, actorIdentifiers);
 
     if (!game) {
       return NextResponse.json({ error: 'Game not found' }, { status: 404 });
+    }
+
+    if (enforceGameplayAccess) {
+      const rawAccessKey = getRawAccessKeyFromRequest(request);
+      const accessError = evaluateGameRouteAccess(game, resolveAccessKeyForGame(request, game));
+      if (accessError) {
+        const deniedResponse = accessDenied(accessError, game);
+        if (accessError === "access_key_required" || accessError === "access_key_invalid") {
+          clearGameAccessCookie(request, deniedResponse, game.id);
+        }
+        return deniedResponse;
+      }
+
+      const response = NextResponse.json(buildGamePayload(game));
+      attachGameAccessCookie(request, response, game, rawAccessKey);
+      return response;
     }
 
     return NextResponse.json(buildGamePayload(game));
@@ -72,6 +119,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ message: 'Failed to fetch game' }, { status: 500 });
   }
 }
+
 
 /**
  * PATCH /api/games/[id]
