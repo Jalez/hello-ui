@@ -2,14 +2,45 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { getSql } from "@/app/api/_lib/db";
-import { getGameById } from "@/app/api/_lib/services/gameService";
+import { evaluateGameRouteAccess, getGameById, getGameByIdForGameplay } from "@/app/api/_lib/services/gameService";
 import { getOrCreateUserByEmail } from "@/app/api/_lib/services/userService";
+import {
+  attachGameAccessCookie,
+  clearGameAccessCookie,
+  getRawAccessKeyFromRequest,
+  resolveAccessKeyForGame,
+} from "@/app/api/_lib/services/gameService/accessCookie";
 
-function getRows(result: any): any[] {
+export function getRows(result: any): any[] {
   return result?.rows ?? result ?? [];
 }
 
-async function resolveInstance(
+export function getAccessKeyFromRequest(request: NextRequest): string | null {
+  return getRawAccessKeyFromRequest(request);
+}
+
+export function accessDenied(reason: "not_started" | "expired" | "access_key_required" | "access_key_invalid") {
+  if (reason === "not_started") {
+    return NextResponse.json({ error: "Game is not open yet", reason }, { status: 403 });
+  }
+  if (reason === "expired") {
+    return NextResponse.json({ error: "Game access window has ended", reason }, { status: 403 });
+  }
+  return NextResponse.json(
+    {
+      error: reason === "access_key_invalid" ? "Invalid access key" : "Access key required",
+      reason,
+      requiresAccessKey: true,
+    },
+    { status: 403 },
+  );
+}
+
+export function shouldEnforceAccess(request: NextRequest): boolean {
+  return request.nextUrl.searchParams.get("accessContext") === "game";
+}
+
+export async function resolveInstance(
   request: NextRequest,
   gameId: string,
   actorUserId: string,
@@ -222,25 +253,74 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   }
 
   const session = await getServerSession(authOptions);
-
-  if (!session?.user?.email) {
+  const enforceGameplayAccess = shouldEnforceAccess(request);
+  const actorIdentifiers = session?.user?.email
+    ? [session.userId, session.user.email].filter(Boolean) as string[]
+    : [];
+  if (!session?.user?.email && !enforceGameplayAccess) {
     return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   }
 
-  const actorIdentifiers = [session.userId, session.user.email].filter(Boolean) as string[];
-  const actorUser = await getOrCreateUserByEmail(session.user.email);
-
-  const game = await getGameById(id, actorIdentifiers);
+  const game = enforceGameplayAccess
+    ? await getGameByIdForGameplay(id, actorIdentifiers.length ? actorIdentifiers : undefined)
+    : await getGameById(id, actorIdentifiers);
   if (!game) {
     return NextResponse.json({ error: "Game not found" }, { status: 404 });
   }
 
-  if (!game.can_edit && !game.is_public) {
+  if (session?.user?.email && !game.can_edit && !game.is_public) {
     return NextResponse.json({ error: "No access to this game" }, { status: 403 });
   }
 
+  if (enforceGameplayAccess) {
+    const rawAccessKey = getRawAccessKeyFromRequest(request);
+    const accessError = evaluateGameRouteAccess(game, resolveAccessKeyForGame(request, game));
+    if (accessError) {
+      const deniedResponse = accessDenied(accessError);
+      if (accessError === "access_key_required" || accessError === "access_key_invalid") {
+        clearGameAccessCookie(request, deniedResponse, game.id);
+      }
+      return deniedResponse;
+    }
+
+    const mode = game.collaboration_mode === "group" ? "group" : "individual";
+    const actorUserId = session?.user?.email
+      ? (await getOrCreateUserByEmail(session.user.email)).id
+      : request.nextUrl.searchParams.get("guestId");
+    if (!actorUserId) {
+      return NextResponse.json({ error: "guestId is required for public individual games" }, { status: 400 });
+    }
+    if (!session?.user?.email && game.collaboration_mode === "group") {
+      return NextResponse.json({ error: "Authentication required for group games" }, { status: 401 });
+    }
+
+    const resolved = await resolveInstance(request, id, actorUserId, mode);
+    if ("error" in resolved) {
+      return NextResponse.json({ error: resolved.error }, { status: resolved.status });
+    }
+
+    const response = NextResponse.json({
+      gameId: id,
+      collaborationMode: mode,
+      instance: resolved.instance,
+    });
+    attachGameAccessCookie(request, response, game, rawAccessKey);
+    return response;
+  }
+
+  if (!session?.user?.email && game.collaboration_mode === "group") {
+    return NextResponse.json({ error: "Authentication required for group games" }, { status: 401 });
+  }
+
   const mode = game.collaboration_mode === "group" ? "group" : "individual";
-  const resolved = await resolveInstance(request, id, actorUser.id, mode);
+  const actorUserId = session?.user?.email
+    ? (await getOrCreateUserByEmail(session.user.email)).id
+    : request.nextUrl.searchParams.get("guestId");
+  if (!actorUserId) {
+    return NextResponse.json({ error: "guestId is required for public individual games" }, { status: 400 });
+  }
+
+  const resolved = await resolveInstance(request, id, actorUserId, mode);
   if ("error" in resolved) {
     return NextResponse.json({ error: resolved.error }, { status: resolved.status });
   }
@@ -292,21 +372,81 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   }
 
   const session = await getServerSession(authOptions);
-
-  if (!session?.user?.email) {
+  const enforceGameplayAccess = shouldEnforceAccess(request);
+  const actorIdentifiers = session?.user?.email
+    ? [session.userId, session.user.email].filter(Boolean) as string[]
+    : [];
+  if (!session?.user?.email && !enforceGameplayAccess) {
     return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   }
 
-  const actorIdentifiers = [session.userId, session.user.email].filter(Boolean) as string[];
-  const actorUser = await getOrCreateUserByEmail(session.user.email);
-
-  const game = await getGameById(id, actorIdentifiers);
+  const game = enforceGameplayAccess
+    ? await getGameByIdForGameplay(id, actorIdentifiers.length ? actorIdentifiers : undefined)
+    : await getGameById(id, actorIdentifiers);
   if (!game) {
     return NextResponse.json({ error: "Game not found" }, { status: 404 });
   }
 
+  if (enforceGameplayAccess) {
+    const rawAccessKey = getRawAccessKeyFromRequest(request);
+    const accessError = evaluateGameRouteAccess(game, resolveAccessKeyForGame(request, game));
+    if (accessError) {
+      const deniedResponse = accessDenied(accessError);
+      if (accessError === "access_key_required" || accessError === "access_key_invalid") {
+        clearGameAccessCookie(request, deniedResponse, game.id);
+      }
+      return deniedResponse;
+    }
+
+    if (!session?.user?.email && game.collaboration_mode === "group") {
+      return NextResponse.json({ error: "Authentication required for group games" }, { status: 401 });
+    }
+
+    const mode = game.collaboration_mode === "group" ? "group" : "individual";
+    const actorUserId = session?.user?.email
+      ? (await getOrCreateUserByEmail(session.user.email)).id
+      : request.nextUrl.searchParams.get("guestId");
+    if (!actorUserId) {
+      return NextResponse.json({ error: "guestId is required for public individual games" }, { status: 400 });
+    }
+
+    const resolved = await resolveInstance(request, id, actorUserId, mode);
+    if ("error" in resolved) {
+      return NextResponse.json({ error: resolved.error }, { status: resolved.status });
+    }
+
+    const sql = await getSql();
+    const updatedResult = await sql.query(
+      "UPDATE game_instances SET progress_data = $2, updated_at = NOW() WHERE id = $1 RETURNING id, progress_data",
+      [resolved.instance.id, progressData],
+    );
+    const updatedRows = getRows(updatedResult);
+
+    const response = NextResponse.json({
+      gameId: id,
+      collaborationMode: mode,
+      instance: {
+        ...resolved.instance,
+        progressData: updatedRows[0]?.progress_data ?? progressData,
+      },
+    });
+    attachGameAccessCookie(request, response, game, rawAccessKey);
+    return response;
+  }
+
+  if (!session?.user?.email && game.collaboration_mode === "group") {
+    return NextResponse.json({ error: "Authentication required for group games" }, { status: 401 });
+  }
+
   const mode = game.collaboration_mode === "group" ? "group" : "individual";
-  const resolved = await resolveInstance(request, id, actorUser.id, mode);
+  const actorUserId = session?.user?.email
+    ? (await getOrCreateUserByEmail(session.user.email)).id
+    : request.nextUrl.searchParams.get("guestId");
+  if (!actorUserId) {
+    return NextResponse.json({ error: "guestId is required for public individual games" }, { status: 400 });
+  }
+
+  const resolved = await resolveInstance(request, id, actorUserId, mode);
   if ("error" in resolved) {
     return NextResponse.json({ error: resolved.error }, { status: resolved.status });
   }
