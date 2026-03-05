@@ -19,6 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { apiUrl } from "@/lib/apiUrl";
 
 interface LevelControlsProps {
   maxLevels: number;
@@ -132,7 +133,7 @@ const LevelControls = ({
         >
           <ChevronRight className="h-5 w-5" />
         </Button>
-          <Difficulty />
+        <Difficulty />
       </div>
     </>
   );
@@ -146,7 +147,7 @@ const getSyntaxIcons = (level: any) => {
     icons.push(
       <img
         key="html"
-        src="/html.svg"
+        src={apiUrl("/html.svg")}
         alt="HTML"
         title="HTML"
         className="h-4 w-4 inline"
@@ -157,7 +158,7 @@ const getSyntaxIcons = (level: any) => {
     icons.push(
       <img
         key="css"
-        src="/css3.svg"
+        src={apiUrl("/css3.svg")}
         alt="CSS"
         title="CSS"
         className="h-4 w-4 inline"
@@ -168,7 +169,7 @@ const getSyntaxIcons = (level: any) => {
     icons.push(
       <img
         key="js"
-        src="/Javascript-shield.svg"
+        src={apiUrl("/Javascript-shield.svg")}
         alt="JavaScript"
         title="JavaScript"
         className="h-4 w-4 inline"

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from "react";
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams, usePathname, useSearchParams } from "next/navigation";
 import { apiUrl } from "@/lib/apiUrl";
 import { Flag, Loader2, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -34,6 +34,7 @@ interface AplusSubmitButtonProps {
 
 export const AplusSubmitButton = ({ displayMode = "icon" }: AplusSubmitButtonProps) => {
   const params = useParams();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const currentGame = useGameStore((s) => s.getCurrentGame());
   const addGameToStore = useGameStore((s) => s.addGameToStore);
@@ -48,7 +49,7 @@ export const AplusSubmitButton = ({ displayMode = "icon" }: AplusSubmitButtonPro
 
   const gameIdParam = params?.gameId;
   const gameId = typeof gameIdParam === "string" ? gameIdParam : Array.isArray(gameIdParam) ? gameIdParam[0] : null;
-  const isGameRoute = Boolean(gameId);
+  const isGameRoute = pathname.startsWith("/game/") && Boolean(gameId);
 
   useEffect(() => {
     fetch(apiUrl("/api/games/lti-session"))
@@ -221,11 +222,10 @@ export const AplusSubmitButton = ({ displayMode = "icon" }: AplusSubmitButtonPro
 
             {result && (
               <div
-                className={`mt-4 p-3 rounded-lg ${
-                  result.success
-                    ? "bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200"
-                    : "bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200"
-                }`}
+                className={`mt-4 p-3 rounded-lg ${result.success
+                  ? "bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200"
+                  : "bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200"
+                  }`}
               >
                 {result.success ? result.message : result.error}
               </div>
