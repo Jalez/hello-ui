@@ -21,18 +21,18 @@ import { logDebug } from "@/lib/debug-logger";
 import { authOptions } from "@/lib/auth";
 import { createOneTimeCode } from "@/lib/lti/one-time-code";
 
-// POST /api/lti/play/[token]
-// LTI 1.0 launch endpoint for a specific game (identified by its share token).
+// POST /api/lti/game/[gameId]
+// LTI 1.0 launch endpoint for a specific game ID.
 // A+ (or any LMS) configures this URL as the launch URL for an embedded exercise.
-// After validating credentials and authenticating the user, it redirects to /play/[token].
+// After validating credentials and authenticating the user, it redirects to /game/[gameId].
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ token: string }> }
+  { params }: { params: Promise<{ gameId: string }> }
 ) {
   try {
-    const { token: shareToken } = await params;
+    const { gameId } = await params;
 
-    logDebug("lti_play_start", { shareToken });
+    logDebug("lti_game_start", { gameId });
 
     const contentType = request.headers.get("content-type") || "";
     let body: Record<string, string> = {};
@@ -55,7 +55,7 @@ export async function POST(
       Object.entries(ltiData).filter(([key, value]) => key.startsWith("custom_") && !!value)
     );
 
-    logDebug("lti_play_lti_data", {
+    logDebug("lti_game_lti_data", {
       user_id: ltiData.user_id,
       lis_person_contact_email_primary: ltiData.lis_person_contact_email_primary,
       lis_person_sourcedid: ltiData.lis_person_sourcedid,
@@ -94,7 +94,7 @@ export async function POST(
       identity.confidence === "weak" &&
       requireStrongIdentity
     ) {
-      logDebug("lti_play_identity_rejected", {
+      logDebug("lti_game_identity_rejected", {
         reason: "weak_identity",
         identitySource: identity.source,
       });
@@ -120,7 +120,7 @@ export async function POST(
       ? `lti-${createHash("sha256").update(`${identity.key}:browser:${browserId}`).digest("hex").slice(0, 24)}@lti.local`
       : identity.email;
 
-    logDebug("lti_play_resolved_email", {
+    logDebug("lti_game_resolved_email", {
       identitySource: identity.source,
       identityConfidence: identity.confidence,
       browserScopedIdentity,
@@ -141,7 +141,7 @@ export async function POST(
         const sessionUser = await getUserByEmail(sessionEmail);
         if (sessionUser && sessionUser.id !== ltiUser.id) {
           user = sessionUser;
-          logDebug("lti_play_identity_override", {
+          logDebug("lti_game_identity_override", {
             strategy: "session_preferred",
             sessionUserId: sessionUser.id,
             sessionUserEmail: sessionUser.email,
@@ -153,7 +153,7 @@ export async function POST(
       }
     }
 
-    logDebug("lti_play_db_user", {
+    logDebug("lti_game_db_user", {
       dbUserId: user.id,
       dbUserEmail: user.email,
       dbUserName: user.name,
@@ -174,7 +174,7 @@ export async function POST(
     const role = getLtiRole(userInfo.roles);
     await addGroupMember({ groupId: group.id, userId: user.id, role });
 
-    logDebug("lti_play_group", {
+    logDebug("lti_game_group", {
       groupId: group.id,
       groupName: group.name,
       groupContextKey: ltiGroupContext.key,
@@ -207,28 +207,30 @@ export async function POST(
       },
     };
 
-    // Look up the game by shareToken and decide routing mode:
+    // Look up the game by ID and decide routing mode:
     // - group: redirect to /game/[gameId] with required groupId context
     // - individual: redirect to /game/[gameId]
     let collaborationMode: "individual" | "group" = "individual";
     let resolvedGameId: string | null = null;
     const gameResult = await sql.query(
-      "SELECT id, group_id, collaboration_mode FROM projects WHERE share_token = $1 LIMIT 1",
-      [shareToken]
+      "SELECT id, group_id, collaboration_mode FROM projects WHERE id = $1 LIMIT 1",
+      [gameId]
     );
     const gameRows = (gameResult as any).rows ?? gameResult;
-    if (gameRows?.length) {
-      resolvedGameId = gameRows[0].id;
-      collaborationMode = gameRows[0].collaboration_mode === "group" ? "group" : "individual";
+    if (!gameRows?.length) {
+      return NextResponse.json({ error: "Game not found" }, { status: 404 });
+    }
 
-      if (collaborationMode === "group") {
-        const gameGroupId = gameRows[0].group_id;
-        if (!gameGroupId) {
-          await sql.query(
-            "UPDATE projects SET group_id = $1 WHERE id = $2 AND group_id IS NULL",
-            [group.id, gameRows[0].id]
-          );
-        }
+    resolvedGameId = gameRows[0].id;
+    collaborationMode = gameRows[0].collaboration_mode === "group" ? "group" : "individual";
+
+    if (collaborationMode === "group") {
+      const gameGroupId = gameRows[0].group_id;
+      if (!gameGroupId) {
+        await sql.query(
+          "UPDATE projects SET group_id = $1 WHERE id = $2 AND group_id IS NULL",
+          [group.id, gameRows[0].id]
+        );
       }
     }
 
@@ -246,7 +248,7 @@ export async function POST(
       { expiresIn: "5m", issuer: "lti-launch" }
     );
 
-    logDebug("lti_play_jwt_created", {
+    logDebug("lti_game_jwt_created", {
       jwtUserId: user.id,
       jwtEmail: user.email,
       jwtName: user.name || userInfo.name || user.email,
@@ -254,13 +256,9 @@ export async function POST(
       collaborationMode,
     });
 
-    const dest = resolvedGameId
-      ? (
-        collaborationMode === "group"
-          ? `/game/${resolvedGameId}?mode=game&groupId=${group.id}`
-          : `/game/${resolvedGameId}?mode=game`
-      )
-      : `/play/${shareToken}?mode=game`;
+    const dest = collaborationMode === "group"
+      ? `/game/${resolvedGameId}?mode=game&groupId=${group.id}`
+      : `/game/${resolvedGameId}?mode=game`;
 
     // Redirect with a one-time code instead of the JWT in the URL (code is exchanged server-side for the token).
     const code = createOneTimeCode(ltiSignInToken, dest);
@@ -293,14 +291,14 @@ export async function POST(
       });
     }
 
-    logDebug("lti_play_redirect", {
+    logDebug("lti_game_redirect", {
       redirectUrl: loginUrl.origin + loginUrl.pathname + "?code=...&dest=" + encodeURIComponent(dest),
       cookieSet: true,
     });
 
     return response;
   } catch (error) {
-    logDebug("lti_play_error", { error: String(error) });
+    logDebug("lti_game_error", { error: String(error) });
     return NextResponse.json({ error: "Failed to process LTI launch" }, { status: 500 });
   }
 }
