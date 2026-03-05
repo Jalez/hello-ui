@@ -1,5 +1,6 @@
 export interface CanvasCursor {
-  groupId: string;
+  roomId: string;
+  groupId?: string;
   clientId: string;
   userId: string;
   userName?: string;
@@ -11,7 +12,8 @@ export interface CanvasCursor {
 }
 
 export interface EditorCursor {
-  groupId: string;
+  roomId: string;
+  groupId?: string;
   editorType: "html" | "css" | "js";
   clientId: string;
   userId: string;
@@ -22,12 +24,14 @@ export interface EditorCursor {
 }
 
 export interface EditorChange {
-  groupId: string;
+  roomId: string;
+  groupId?: string;
   editorType: "html" | "css" | "js";
   clientId: string;
   userId: string;
   version: number;
   changes: unknown[];
+  levelIndex?: number;
   isAck?: boolean;
   serverTs?: string;
 }
@@ -50,13 +54,14 @@ export interface CollaborationState {
   activeUsers: ActiveUser[];
   remoteCursors: Map<string, CanvasCursor>;
   editorCursors: Map<string, EditorCursor>;
-  groupId: string | null;
+  roomId: string | null;
   error: string | null;
   clientId: string | null;
 }
 
 export interface JoinGamePayload {
-  groupId: string;
+  roomId: string;
+  groupId?: string;
   userId: string;
   userEmail: string;
   userName?: string;
@@ -64,7 +69,8 @@ export interface JoinGamePayload {
 }
 
 export interface LeaveGamePayload {
-  groupId: string;
+  roomId: string;
+  groupId?: string;
 }
 
 export type EditorType = "html" | "css" | "js";
@@ -77,7 +83,8 @@ export interface UserIdentity {
 }
 
 export interface TabFocusMessage {
-  groupId: string;
+  roomId: string;
+  groupId?: string;
   clientId: string;
   userId: string;
   userName?: string;
@@ -87,7 +94,8 @@ export interface TabFocusMessage {
 }
 
 export interface TypingStatusMessage {
-  groupId: string;
+  roomId: string;
+  groupId?: string;
   clientId: string;
   userId: string;
   userName?: string;

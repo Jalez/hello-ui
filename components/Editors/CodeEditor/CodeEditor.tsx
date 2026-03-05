@@ -3,8 +3,8 @@
 
 import { html } from "@codemirror/lang-html";
 import CodeMirror from "@uiw/react-codemirror";
-import { EditorView, tooltips } from "@codemirror/view";
-import { EditorState, type Extension } from "@codemirror/state";
+import { Decoration, EditorView, tooltips } from "@codemirror/view";
+import { EditorState, type Extension, type Range } from "@codemirror/state";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { vscodeDark } from "@uiw/codemirror-theme-vscode";
 import { Compartment } from "@codemirror/state";
@@ -14,9 +14,11 @@ import { ReactCodeMirrorProps } from "@uiw/react-codemirror";
 import { useAppSelector } from "@/store/hooks/hooks";
 import { getCommentKeymap } from "./getCommentKeyMap";
 import EditorMagicButton from "@/components/CreatorControls/EditorMagicButton";
+import { Button } from "@/components/ui/button";
 import { useTheme } from "next-themes";
 import { useOptionalCollaboration } from "@/lib/collaboration/CollaborationProvider";
 import { EditorType, EditorCursor } from "@/lib/collaboration/types";
+import { applyAcceptedHunks, buildLineDiffHunks, type DiffHunk } from "./lineDiff";
 
 const TYPING_DEBOUNCE_MS = 300;
 const LOCAL_CODE_UPDATE_DEBOUNCE_MS = 80;
@@ -42,6 +44,7 @@ interface CodeEditorProps {
 }
 
 const commentKeymapCompartment = new Compartment();
+const reviewDecorationsCompartment = new Compartment();
 
 interface CodeMirrorProps extends ReactCodeMirrorProps {
   options: {
@@ -85,6 +88,7 @@ export default function CodeEditor({
 }: CodeEditorProps) {
   const lineNumberCompartment = new Compartment();
   const [code, setCode] = useState<string>(template);
+  const currentLevel = useAppSelector((state) => state.currentLevel.currentLevel);
   const options = useAppSelector((state) => state.options);
   const { theme: nextTheme } = useTheme();
   const isDark = nextTheme === 'dark' || (nextTheme === 'system' && typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches);
@@ -104,6 +108,8 @@ export default function CodeEditor({
   const editorViewRef = useRef<EditorView | null>(null);
   const editorViewportRef = useRef<HTMLDivElement | null>(null);
   const [remoteCarets, setRemoteCarets] = useState<RemoteEditorCaret[]>([]);
+  const [aiReview, setAiReview] = useState<{ baseCode: string; hunks: DiffHunk[] } | null>(null);
+  const [reviewError, setReviewError] = useState<string | null>(null);
 
   const handleTypingStart = useCallback(() => {
     if (isConnected && !locked && setTyping) {
@@ -138,14 +144,14 @@ export default function CodeEditor({
     syncTimeoutRef.current = setTimeout(() => {
       const nextCode = pendingCodeRef.current;
       if (typeof nextCode === "string") {
-        applyEditorChange(editorType, [nextCode]);
+        applyEditorChange(editorType, [nextCode], currentLevel - 1);
         pendingCodeRef.current = null;
       }
 
       const selection = pendingSelectionRef.current;
       updateEditorSelection(editorType, selection);
     }, TYPING_DEBOUNCE_MS);
-  }, [isConnected, locked, applyEditorChange, updateEditorSelection, editorType]);
+  }, [isConnected, locked, applyEditorChange, updateEditorSelection, editorType, currentLevel]);
 
   useEffect(() => {
     if (!isConnected || !editorViewRef.current || !editorViewportRef.current) {
@@ -214,6 +220,38 @@ export default function CodeEditor({
     };
   }, [editorCursors, editorType, code, isConnected, remoteCarets.length]);
 
+  const buildReviewDecorations = useCallback((doc: EditorState["doc"], hunks: DiffHunk[]) => {
+    const ranges: Range<Decoration>[] = [];
+    const pendingHunks = hunks.filter((hunk) => hunk.status === "pending");
+
+    for (const hunk of pendingHunks) {
+      const startLineNumber = Math.min(Math.max(hunk.startOld + 1, 1), doc.lines);
+      const endLineNumber = Math.min(
+        Math.max((hunk.endOld > hunk.startOld ? hunk.endOld : hunk.startOld + 1), 1),
+        doc.lines,
+      );
+
+      for (let line = startLineNumber; line <= endLineNumber; line += 1) {
+        ranges.push(Decoration.line({ class: "cm-ai-pending-line" }).range(doc.line(line).from));
+      }
+    }
+
+    return EditorView.decorations.of(Decoration.set(ranges));
+  }, []);
+
+  useEffect(() => {
+    const view = editorViewRef.current;
+    if (!view) return;
+
+    const extension = aiReview
+      ? buildReviewDecorations(view.state.doc, aiReview.hunks)
+      : [];
+
+    view.dispatch({
+      effects: reviewDecorationsCompartment.reconfigure(extension),
+    });
+  }, [aiReview, buildReviewDecorations]);
+
   // Custom theme extension to ensure consistent line backgrounds and font size
   // Override all possible background styles from base themes
   const consistentLineTheme = EditorView.theme({
@@ -234,6 +272,9 @@ export default function CodeEditor({
       fontSize: "14px",
       fontFamily: "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace",
     },
+    ".cm-ai-pending-line": {
+      backgroundColor: isDark ? "rgba(250, 204, 21, 0.14)" : "rgba(250, 204, 21, 0.2)",
+    },
 
     ".cm-gutters": {
       backgroundColor: "transparent !important",
@@ -246,6 +287,9 @@ export default function CodeEditor({
   }, { dark: isDark });
   const handleCodeUpdate = (value: string) => {
     if (!locked) {
+      if (aiReview) {
+        setAiReview(null);
+      }
       setCode(value);
 
       // Typing detection + broadcast code change
@@ -265,12 +309,52 @@ export default function CodeEditor({
   };
 
   const isCreator = options.creator;
+  const pendingHunks = aiReview?.hunks.filter((hunk) => hunk.status === "pending") ?? [];
+  const acceptedHunks = aiReview?.hunks.filter((hunk) => hunk.status === "accepted") ?? [];
+
+  const handleAiSuggestion = useCallback(
+    (suggestedCode: string) => {
+      try {
+        const hunks = buildLineDiffHunks(code, suggestedCode);
+        if (hunks.length === 0) {
+          setReviewError("AI suggestion did not include any code changes.");
+          return;
+        }
+        setReviewError(null);
+        setAiReview({ baseCode: code, hunks });
+      } catch (error) {
+        console.error("Failed to build AI diff hunks", error);
+        setReviewError("Failed to build AI diff review.");
+      }
+    },
+    [code],
+  );
+
+  const updateHunkStatus = useCallback((hunkId: string, status: DiffHunk["status"]) => {
+    setAiReview((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        hunks: current.hunks.map((hunk) => (hunk.id === hunkId ? { ...hunk, status } : hunk)),
+      };
+    });
+  }, []);
+
+  const applyAcceptedChanges = useCallback(() => {
+    setAiReview((current) => {
+      if (!current) return current;
+      const nextCode = applyAcceptedHunks(current.baseCode, current.hunks);
+      setCode(nextCode);
+      return null;
+    });
+  }, []);
   // const [savedChanges, setSavedChanges] = useState<boolean>(true);
 
   useEffect(() => {
     let timer: NodeJS.Timeout | null = null;
-    // if (code !== "" && savedChanges) {
-    if (code !== "") {
+    // Only sync to Redux when local editor content differs from source template.
+    // This prevents idle re-renders from re-dispatching unchanged code.
+    if (code !== template) {
       // console.log("updating code: ", title.toLowerCase());
       timer = setTimeout(() => {
         codeUpdater({ [title.toLowerCase()]: code }, type);
@@ -281,7 +365,7 @@ export default function CodeEditor({
     return () => {
       if (timer) clearTimeout(timer);
     };
-  }, [code, codeUpdater, title, type]);
+  }, [code, template, codeUpdater, title, type]);
   // }, [code, savedChanges]);
 
   // useEffect(() => {
@@ -299,10 +383,10 @@ export default function CodeEditor({
   // }, [savedChanges]);
 
   useEffect(() => {
-    if (code !== template) {
-      queueMicrotask(() => setCode(template));
-    }
-  }, [template, levelIdentifier, code]);
+    setCode((prev) => (prev === template ? prev : template));
+    setAiReview(null);
+    setReviewError(null);
+  }, [template, levelIdentifier]);
 
   const cmProps: CodeMirrorProps = {
     options: {
@@ -324,6 +408,7 @@ export default function CodeEditor({
       tooltips({ parent: typeof document !== 'undefined' ? document.body : undefined }),
       // keymap.of(commentKeymap),
       commentKeymapCompartment.of(keymap.of(getCommentKeymap(title))), // default language
+      reviewDecorationsCompartment.of([]),
     ],
     theme: theme,
     placeholder: `Write your ${title} here...`,
@@ -403,9 +488,68 @@ export default function CodeEditor({
             buttonColor="primary"
             EditorCode={code}
             editorType={title}
-            editorCodeChanger={handleCodeUpdate}
+            onSuggestion={handleAiSuggestion}
             disabled={locked}
           />
+        </div>
+      )}
+
+      {isCreator && aiReview && (
+        <div className="absolute top-1 right-1 z-[120] max-h-60 w-[380px] overflow-auto rounded-md border bg-card p-2 shadow-lg">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-xs font-semibold">
+              AI suggestion review: {pendingHunks.length} pending / {acceptedHunks.length} accepted
+            </p>
+            <div className="flex gap-1">
+              <Button size="sm" variant="outline" onClick={() => setAiReview(null)}>
+                Cancel
+              </Button>
+              <Button size="sm" onClick={applyAcceptedChanges} disabled={acceptedHunks.length === 0}>
+                Apply Accepted
+              </Button>
+            </div>
+          </div>
+          <div className="space-y-2">
+            {aiReview.hunks.map((hunk, index) => (
+              <div key={hunk.id} className="rounded border bg-muted/40 p-2">
+                <div className="mb-1 text-[11px] text-muted-foreground">
+                  Change {index + 1} · lines {hunk.startOld + 1}-{Math.max(hunk.endOld, hunk.startOld + 1)}
+                </div>
+                <pre className="max-h-24 overflow-auto text-[11px] whitespace-pre-wrap rounded bg-background p-1">
+                  {hunk.newLines.join("\n") || "(deletion)"}
+                </pre>
+                <div className="mt-2 flex gap-1">
+                  <Button
+                    size="sm"
+                    variant={hunk.status === "accepted" ? "default" : "outline"}
+                    onClick={() => updateHunkStatus(hunk.id, "accepted")}
+                  >
+                    Accept
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={hunk.status === "declined" ? "default" : "outline"}
+                    onClick={() => updateHunkStatus(hunk.id, "declined")}
+                  >
+                    Decline
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={hunk.status === "pending" ? "default" : "outline"}
+                    onClick={() => updateHunkStatus(hunk.id, "pending")}
+                  >
+                    Pending
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {isCreator && reviewError && (
+        <div className="absolute top-1 left-1 z-[120] rounded border border-destructive bg-card px-2 py-1 text-xs text-destructive">
+          {reviewError}
         </div>
       )}
 

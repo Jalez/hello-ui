@@ -60,6 +60,7 @@ services:
       DB_CLIENT: postgres
       NEXT_PUBLIC_WEBSOCKET_URL: ${NEXT_PUBLIC_WEBSOCKET_URL:-ws://localhost:3100}
       NEXT_PUBLIC_DRAWBOARD_URL: ${NEXT_PUBLIC_DRAWBOARD_URL:-http://localhost:3500}
+      WS_SERVICE_TOKEN: ${WS_SERVICE_TOKEN:-ws-service-secret}
     depends_on:
       db-init:
         condition: service_completed_successfully
@@ -77,6 +78,11 @@ services:
     environment:
       PORT: 3100
       CORS_ORIGIN: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      API_BASE_URL: http://app:3000
+      WS_SERVICE_TOKEN: ${WS_SERVICE_TOKEN:-ws-service-secret}
+    depends_on:
+      app:
+        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3100/health || exit 1"]
       interval: 10s

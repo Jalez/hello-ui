@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import CodeEditor from "./CodeEditor/CodeEditor";
 import { Lock, LockOpen, Menu } from "lucide-react";
-import { handleLocking } from "@/store/slices/levels.slice";
+import { handleLocking, updateCode } from "@/store/slices/levels.slice";
 import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
 import { html } from "@codemirror/lang-html";
 import { css } from "@codemirror/lang-css";
@@ -45,9 +45,11 @@ function EditorTabs({
   codeUpdater,
   identifier,
 }: EditorTabsProps) {
+  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const currentLevel = useAppSelector(
     (state) => state.currentLevel.currentLevel
   );
+  const levels = useAppSelector((state) => state.levels);
   const options = useAppSelector((state) => state.options);
   const isCreator = options.creator;
   const dispatch = useAppDispatch();
@@ -74,9 +76,13 @@ function EditorTabs({
     if (!isTemplateMode || !lastRemoteCodeChange) return;
     if (lastAppliedRemoteTsRef.current === lastRemoteCodeChange.ts) return;
 
+    // Only apply if the remote change is for the current level
+    const myLevelIndex = currentLevel - 1;
+    if (typeof lastRemoteCodeChange.levelIndex === "number" && lastRemoteCodeChange.levelIndex !== myLevelIndex) return;
+
     lastAppliedRemoteTsRef.current = lastRemoteCodeChange.ts;
     codeUpdater(lastRemoteCodeChange.editorType, lastRemoteCodeChange.content, false);
-  }, [lastRemoteCodeChange, isTemplateMode, codeUpdater]);
+  }, [lastRemoteCodeChange, isTemplateMode, codeUpdater, currentLevel]);
 
   React.useEffect(() => {
     if (!isTemplateMode || !initialCodeSync) return;
@@ -85,10 +91,22 @@ function EditorTabs({
     if (lastAppliedInitialSyncRef.current === syncKey) return;
 
     lastAppliedInitialSyncRef.current = syncKey;
-    codeUpdater('html', initialCodeSync.html || '', false);
-    codeUpdater('css', initialCodeSync.css || '', false);
-    codeUpdater('js', initialCodeSync.js || '', false);
-  }, [initialCodeSync, isTemplateMode, codeUpdater]);
+
+    // Apply code for current level from the multi-level sync.
+    // Dispatch a single updateCode with all fields to avoid stale-closure issues
+    // where sequential codeUpdater calls overwrite each other.
+    const levelData = initialCodeSync.levels?.[currentLevel - 1];
+    if (levelData?.code) {
+      dispatch(updateCode({
+        id: currentLevel,
+        code: {
+          html: levelData.code.html || '',
+          css: levelData.code.css || '',
+          js: levelData.code.js || '',
+        },
+      }));
+    }
+  }, [initialCodeSync, isTemplateMode, dispatch, currentLevel]);
 
   const handleLanguageChange = (newLanguage: string) => {
     const editorType = newLanguage as EditorType;
@@ -98,7 +116,7 @@ function EditorTabs({
     }
   };
 
-  const handleLockUnlock = (language: 'html' | 'css' | 'js') => {
+  const handleLockUnlock = async (language: 'html' | 'css' | 'js') => {
     console.log('handleLockUnlock called with language:', language);
     console.log('Current level:', currentLevel);
     // The reducer expects 'js', not 'javascript'
@@ -110,6 +128,33 @@ function EditorTabs({
         type: lockType,
       })
     );
+
+    if (!identifier || !UUID_REGEX.test(identifier)) {
+      return;
+    }
+
+    const level = levels[currentLevel - 1];
+    if (!level) return;
+
+    const nextLocks = {
+      lockHTML: language === "html" ? !level.lockHTML : level.lockHTML,
+      lockCSS: language === "css" ? !level.lockCSS : level.lockCSS,
+      lockJS: language === "js" ? !level.lockJS : level.lockJS,
+    };
+
+    try {
+      const response = await fetch(`/api/levels/${identifier}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(nextLocks),
+      });
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Failed to persist editor locks:", errorText);
+      }
+    } catch (error) {
+      console.error("Failed to persist editor locks:", error);
+    }
   };
 
   const getLanguageLang = (lang: 'html' | 'css' | 'js') => {

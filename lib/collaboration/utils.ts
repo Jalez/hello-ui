@@ -56,3 +56,16 @@ export function getWebSocketUrl(): string {
   const wsUrl = process.env.NEXT_PUBLIC_WEBSOCKET_URL || "ws://localhost:3100";
   return wsUrl.replace("ws://", "http://").replace("wss://", "https://");
 }
+
+export function extractGroupIdFromRoomId(roomId: string | null | undefined): string | null {
+  if (!roomId || !roomId.startsWith("group:")) {
+    return null;
+  }
+  const afterPrefix = roomId.slice("group:".length);
+  const gameSeparatorIndex = afterPrefix.indexOf(":game:");
+  if (gameSeparatorIndex === -1) {
+    return afterPrefix || null;
+  }
+  const groupId = afterPrefix.slice(0, gameSeparatorIndex);
+  return groupId || null;
+}

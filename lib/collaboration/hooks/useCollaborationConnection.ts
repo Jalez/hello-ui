@@ -3,12 +3,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { io, Socket } from "socket.io-client";
 import { ActiveUser, CanvasCursor, EditorCursor, EditorChange, UserIdentity, TabFocusMessage, TypingStatusMessage, EditorType } from "../types";
-import { generateClientId, generateUserColor, getWebSocketUrl } from "../utils";
+import { extractGroupIdFromRoomId, generateClientId, generateUserColor, getWebSocketUrl } from "../utils";
 import { RECONNECT_DELAY_MS, MAX_RECONNECT_ATTEMPTS } from "../constants";
 import { logDebugClient } from "@/lib/debug-logger";
 
 interface UseCollaborationConnectionOptions {
-  groupId: string | null;
+  roomId: string | null;
   user: UserIdentity | null;
   onConnected?: () => void;
   onDisconnected?: () => void;
@@ -21,7 +21,7 @@ interface UseCollaborationConnectionOptions {
   onCurrentUsers?: (users: ActiveUser[]) => void;
   onTabFocus?: (message: TabFocusMessage) => void;
   onTypingStatus?: (message: TypingStatusMessage) => void;
-  onCodeSync?: (codeState: { html: string; css: string; js: string }) => void;
+  onCodeSync?: (codeState: { levels: Array<{ name: string; code: { html: string; css: string; js: string } }> }) => void;
 }
 
 interface UseCollaborationConnectionReturn {
@@ -32,11 +32,11 @@ interface UseCollaborationConnectionReturn {
   clientId: string | null;
   connect: () => void;
   disconnect: () => void;
-  joinGame: (groupId: string) => void;
+  joinGame: (roomId: string) => void;
   leaveGame: () => void;
   sendCanvasCursor: (x: number, y: number) => void;
   sendEditorCursor: (editorType: EditorType, selection: { from: number; to: number }) => void;
-  sendEditorChange: (editorType: EditorType, version: number, changes: unknown[]) => void;
+  sendEditorChange: (editorType: EditorType, version: number, changes: unknown[], levelIndex?: number) => void;
   sendTabFocus: (editorType: EditorType) => void;
   sendTypingStatus: (editorType: EditorType, isTyping: boolean) => void;
 }
@@ -45,7 +45,7 @@ export function useCollaborationConnection(
   options: UseCollaborationConnectionOptions
 ): UseCollaborationConnectionReturn {
   const {
-    groupId,
+    roomId,
     user,
     onConnected,
     onDisconnected,
@@ -60,6 +60,7 @@ export function useCollaborationConnection(
     onTypingStatus,
     onCodeSync,
   } = options;
+  const parsedGroupId = extractGroupIdFromRoomId(roomId);
 
   const socketRef = useRef<Socket | null>(null);
   const clientIdRef = useRef<string | null>(null);
@@ -75,12 +76,12 @@ export function useCollaborationConnection(
   const [socketState, setSocketState] = useState<Socket | null>(null);
 
   useEffect(() => {
-    if (!groupId || !user) {
+    if (!roomId || !user) {
       return;
     }
 
     logDebugClient("ws_connection_start", {
-      groupId,
+      roomId,
       userId: user.id,
       userEmail: user.email,
       userName: user.name,
@@ -104,7 +105,7 @@ export function useCollaborationConnection(
         userEmail: user.email,
         userName: user.name,
         userImage: user.image,
-        groupId,
+        roomId,
       },
       transports: ["websocket", "polling"],
       reconnection: false,
@@ -141,13 +142,14 @@ export function useCollaborationConnection(
       logDebugClient("ws_socket_connect", {
         socketId: socket.id,
         clientId: newClientId,
-        groupId,
+        roomId,
         userId: user.id,
         userEmail: user.email,
       });
 
       socket.emit("join-game", {
-        groupId,
+        roomId,
+        groupId: parsedGroupId ?? undefined,
         clientId: newClientId,
         userId: user.id,
         userEmail: user.email,
@@ -156,7 +158,7 @@ export function useCollaborationConnection(
       });
 
       logDebugClient("ws_join_game_emitted", {
-        groupId,
+        roomId,
         userId: user.id,
         userEmail: user.email,
       });
@@ -270,7 +272,7 @@ export function useCollaborationConnection(
       }
     });
 
-    socket.on("code-sync", (data: { html: string; css: string; js: string }) => {
+    socket.on("code-sync", (data: { levels: Array<{ name: string; code: { html: string; css: string; js: string } }> }) => {
       onCodeSync?.(data);
     });
 
@@ -279,7 +281,8 @@ export function useCollaborationConnection(
       disconnectSocket();
     };
   }, [
-    groupId,
+    roomId,
+    parsedGroupId,
     user,
     onConnected,
     onDisconnected,
@@ -296,9 +299,10 @@ export function useCollaborationConnection(
   ]);
 
   const sendCanvasCursor = useCallback((x: number, y: number) => {
-    if (socketRef.current && groupId && user && clientIdRef.current) {
+    if (socketRef.current && roomId && user && clientIdRef.current) {
       socketRef.current.emit("canvas-cursor", {
-        groupId,
+        roomId,
+        groupId: parsedGroupId ?? undefined,
         clientId: clientIdRef.current,
         userId: user.id,
         userName: user.name,
@@ -308,12 +312,13 @@ export function useCollaborationConnection(
         ts: Date.now(),
       });
     }
-  }, [groupId, user]);
+  }, [roomId, parsedGroupId, user]);
 
   const sendEditorCursor = useCallback((editorType: "html" | "css" | "js", selection: { from: number; to: number }) => {
-    if (socketRef.current && groupId && user && clientIdRef.current) {
+    if (socketRef.current && roomId && user && clientIdRef.current) {
       socketRef.current.emit("editor-cursor", {
-        groupId,
+        roomId,
+        groupId: parsedGroupId ?? undefined,
         editorType,
         clientId: clientIdRef.current,
         userId: user.id,
@@ -323,25 +328,28 @@ export function useCollaborationConnection(
         ts: Date.now(),
       });
     }
-  }, [groupId, user]);
+  }, [roomId, parsedGroupId, user]);
 
-  const sendEditorChange = useCallback((editorType: EditorType, version: number, changes: unknown[]) => {
-    if (socketRef.current && groupId && user && clientIdRef.current) {
+  const sendEditorChange = useCallback((editorType: EditorType, version: number, changes: unknown[], levelIndex?: number) => {
+    if (socketRef.current && roomId && user && clientIdRef.current) {
       socketRef.current.emit("editor-change", {
-        groupId,
+        roomId,
+        groupId: parsedGroupId ?? undefined,
         editorType,
         clientId: clientIdRef.current,
         userId: user.id,
         version,
         changes,
+        levelIndex,
       });
     }
-  }, [groupId, user]);
+  }, [roomId, parsedGroupId, user]);
 
   const sendTabFocus = useCallback((editorType: EditorType) => {
-    if (socketRef.current && groupId && user && clientIdRef.current) {
+    if (socketRef.current && roomId && user && clientIdRef.current) {
       socketRef.current.emit("tab-focus", {
-        groupId,
+        roomId,
+        groupId: parsedGroupId ?? undefined,
         editorType,
         clientId: clientIdRef.current,
         userId: user.id,
@@ -349,12 +357,13 @@ export function useCollaborationConnection(
         ts: Date.now(),
       });
     }
-  }, [groupId, user]);
+  }, [roomId, parsedGroupId, user]);
 
   const sendTypingStatus = useCallback((editorType: EditorType, isTyping: boolean) => {
-    if (socketRef.current && groupId && user && clientIdRef.current) {
+    if (socketRef.current && roomId && user && clientIdRef.current) {
       socketRef.current.emit("typing-status", {
-        groupId,
+        roomId,
+        groupId: parsedGroupId ?? undefined,
         editorType,
         clientId: clientIdRef.current,
         userId: user.id,
@@ -363,7 +372,7 @@ export function useCollaborationConnection(
         ts: Date.now(),
       });
     }
-  }, [groupId, user]);
+  }, [roomId, parsedGroupId, user]);
 
   const disconnect = () => {
     if (reconnectTimeoutRef.current) {
@@ -383,8 +392,11 @@ export function useCollaborationConnection(
   };
 
   const leaveGame = () => {
-    if (socketRef.current && groupId) {
-      socketRef.current.emit("leave-game", { groupId });
+    if (socketRef.current && roomId) {
+      socketRef.current.emit("leave-game", {
+        roomId,
+        groupId: parsedGroupId ?? undefined,
+      });
     }
     disconnect();
   };

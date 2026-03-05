@@ -15,19 +15,22 @@ import { useCollaborationConnection } from "./hooks/useCollaborationConnection";
 import { useCollaborationCursor } from "./hooks/useCollaborationCursor";
 import { useCollaborationPresence } from "./hooks/useCollaborationPresence";
 import { useCollaborationEditor } from "./hooks/useCollaborationEditor";
+import { extractGroupIdFromRoomId } from "./utils";
 
 export interface RemoteCodeChange {
   editorType: EditorType;
   content: string;
+  levelIndex?: number;
   ts: number;
 }
 
-export type CodeSyncState = { html: string; css: string; js: string } | null;
+export type CodeSyncState = { levels: Array<{ name: string; code: { html: string; css: string; js: string } }> } | null;
 
 interface CollaborationContextValue {
   isConnected: boolean;
   isConnecting: boolean;
   error: string | null;
+  roomId: string | null;
   groupId: string | null;
   clientId: string | null;
   activeUsers: ActiveUser[];
@@ -38,7 +41,7 @@ interface CollaborationContextValue {
   initialCodeSync: CodeSyncState;
   updateCanvasCursor: (x: number, y: number) => void;
   updateEditorSelection: (editorType: EditorType, selection: { from: number; to: number }) => void;
-  applyEditorChange: (editorType: EditorType, changes: unknown[]) => void;
+  applyEditorChange: (editorType: EditorType, changes: unknown[], levelIndex?: number) => void;
   setActiveTab: (editorType: EditorType) => void;
   setTyping: (editorType: EditorType, isTyping: boolean) => void;
   connect: () => void;
@@ -49,11 +52,14 @@ export const CollaborationContext = createContext<CollaborationContextValue | nu
 
 interface CollaborationProviderProps {
   children: React.ReactNode;
-  groupId: string | null;
+  roomId?: string | null;
+  groupId?: string | null;
   user: UserIdentity | null;
 }
 
-export function CollaborationProvider({ children, groupId, user }: CollaborationProviderProps) {
+export function CollaborationProvider({ children, roomId, groupId, user }: CollaborationProviderProps) {
+  const resolvedRoomId = roomId ?? groupId ?? null;
+  const resolvedGroupId = extractGroupIdFromRoomId(resolvedRoomId);
   const [canvasCursors, setCanvasCursors] = useState<Map<string, CanvasCursor>>(new Map());
   const [editorCursors, setEditorCursors] = useState<Map<string, EditorCursor>>(new Map());
   const [lastRemoteCodeChange, setLastRemoteCodeChange] = useState<RemoteCodeChange | null>(null);
@@ -122,12 +128,13 @@ export function CollaborationProvider({ children, groupId, user }: Collaboration
       setLastRemoteCodeChange({
         editorType: change.editorType,
         content,
+        levelIndex: change.levelIndex,
         ts: Date.now(),
       });
     }
   }, []);
 
-  const handleCodeSync = useCallback((codeState: { html: string; css: string; js: string }) => {
+  const handleCodeSync = useCallback((codeState: { levels: Array<{ name: string; code: { html: string; css: string; js: string } }> }) => {
     setInitialCodeSync(codeState);
   }, []);
 
@@ -161,7 +168,7 @@ export function CollaborationProvider({ children, groupId, user }: Collaboration
     sendTabFocus,
     sendTypingStatus,
   } = useCollaborationConnection({
-    groupId,
+    roomId: resolvedRoomId,
     user,
     onUserJoined: handleUserJoined,
     onUserLeft: handleUserLeft,
@@ -232,8 +239,8 @@ export function CollaborationProvider({ children, groupId, user }: Collaboration
   );
 
   const applyEditorChangeWrapper = useCallback(
-    (editorType: EditorType, changes: unknown[]) => {
-      applyLocalChange(editorType, changes);
+    (editorType: EditorType, changes: unknown[], levelIndex?: number) => {
+      applyLocalChange(editorType, changes, levelIndex);
     },
     [applyLocalChange]
   );
@@ -243,7 +250,8 @@ export function CollaborationProvider({ children, groupId, user }: Collaboration
       isConnected,
       isConnecting,
       error,
-      groupId,
+      roomId: resolvedRoomId,
+      groupId: resolvedGroupId,
       clientId,
       activeUsers,
       usersByTab,
@@ -263,7 +271,8 @@ export function CollaborationProvider({ children, groupId, user }: Collaboration
       isConnected,
       isConnecting,
       error,
-      groupId,
+      resolvedRoomId,
+      resolvedGroupId,
       clientId,
       activeUsers,
       usersByTab,

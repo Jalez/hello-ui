@@ -5,12 +5,12 @@ import { EditorType } from "../types";
 
 interface UseCollaborationEditorOptions {
   sendCursor: (editorType: EditorType, selection: { from: number; to: number }) => void;
-  sendChange: (editorType: EditorType, version: number, changes: unknown[]) => void;
+  sendChange: (editorType: EditorType, version: number, changes: unknown[], levelIndex?: number) => void;
 }
 
 interface UseCollaborationEditorReturn {
   updateLocalSelection: (editorType: EditorType, selection: { from: number; to: number }) => void;
-  applyLocalChange: (editorType: EditorType, changes: unknown[]) => void;
+  applyLocalChange: (editorType: EditorType, changes: unknown[], levelIndex?: number) => void;
 }
 
 export function useCollaborationEditor(
@@ -45,10 +45,10 @@ export function useCollaborationEditor(
   );
 
   const applyLocalChange = useCallback(
-    (editorType: EditorType, changes: unknown[]) => {
+    (editorType: EditorType, changes: unknown[], levelIndex?: number) => {
       const version = (versionRef.current[editorType] || 0) + 1;
       versionRef.current[editorType] = version;
-      sendChange(editorType, version, changes);
+      sendChange(editorType, version, changes, levelIndex);
     },
     [sendChange]
   );
