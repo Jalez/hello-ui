@@ -16,7 +16,7 @@ import {
   TypingStatusMessage,
   EditorType,
 } from "../types";
-import { extractGroupIdFromRoomId, generateClientId, generateUserColor, getWebSocketUrl } from "../utils";
+import { extractGroupIdFromRoomId, generateClientId, generateUserColor, getWebSocketConfig } from "../utils";
 import { RECONNECT_DELAY_MS, MAX_RECONNECT_ATTEMPTS } from "../constants";
 import { logDebugClient } from "@/lib/debug-logger";
 
@@ -119,9 +119,10 @@ export function useCollaborationConnection(
       userColorRef.current = generateUserColor(currentUser.email);
     }
 
-    const wsUrl = getWebSocketUrl();
+    const { url: wsUrl, path: wsPath } = getWebSocketConfig();
 
     const socket = io(wsUrl, {
+      path: wsPath,
       auth: {
         userId: currentUser.id,
         userEmail: currentUser.email,
