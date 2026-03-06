@@ -48,6 +48,54 @@ export function shouldEnforceAccess(request: NextRequest): boolean {
   return request.nextUrl.searchParams.get("accessContext") === "game";
 }
 
+function normalizeProgressData(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return value as Record<string, unknown>;
+}
+
+function mergeProgressData(
+  existingProgressData: unknown,
+  nextProgressData: unknown,
+): Record<string, unknown> {
+  const existing = normalizeProgressData(existingProgressData);
+  const next = normalizeProgressData(nextProgressData);
+
+  if ("levels" in next) {
+    return {
+      ...existing,
+      ...next,
+    };
+  }
+
+  return {
+    ...existing,
+    ...next,
+    ...(existing.levels === undefined ? {} : { levels: existing.levels }),
+  };
+}
+
+async function updateInstanceProgressData(
+  instanceId: string,
+  existingProgressData: unknown,
+  nextProgressData: unknown,
+) {
+  const sql = await getSql();
+  const mergedProgressData = mergeProgressData(existingProgressData, nextProgressData);
+  const updatedResult = await sql.query(
+    "UPDATE game_instances SET progress_data = $2, updated_at = NOW() WHERE id = $1 RETURNING id, progress_data",
+    [instanceId, mergedProgressData],
+  );
+  const updatedRows = getRows(updatedResult);
+
+  return {
+    mergedProgressData,
+    persistedProgressData: updatedRows[0]?.progress_data ?? mergedProgressData,
+  };
+}
+
 async function resolveGroupInstance(sql: Awaited<ReturnType<typeof getSql>>, gameId: string, groupId: string) {
   const existingResult = await sql.query(
     "SELECT id, progress_data FROM game_instances WHERE game_id = $1 AND scope = 'group' AND group_id = $2 LIMIT 1",
@@ -174,7 +222,7 @@ async function resolveServiceTokenAuth(request: NextRequest, gameId: string) {
 
   // Look up the game directly (no actor-based access check for service calls)
   const gameResult = await sql.query(
-    "SELECT id, collaboration_mode FROM projects WHERE id = $1 LIMIT 1",
+    "SELECT id, collaboration_mode, map_name FROM projects WHERE id = $1 LIMIT 1",
     [gameId],
   );
   const gameRows = getRows(gameResult);
@@ -186,6 +234,14 @@ async function resolveServiceTokenAuth(request: NextRequest, gameId: string) {
 
   if (mode === "group") {
     if (!groupId) {
+      if (userId) {
+        const individualInstance = await resolveIndividualInstance(sql, gameId, userId);
+        return {
+          ...individualInstance,
+          collaborationMode: mode,
+          mapName: (gameRows[0].map_name as string) || "",
+        } as const;
+      }
       return { error: "groupId is required for group mode", status: 400 } as const;
     }
     const existingResult = await sql.query(
@@ -203,6 +259,7 @@ async function resolveServiceTokenAuth(request: NextRequest, gameId: string) {
           progressData: existingRows[0].progress_data ?? {},
         },
         collaborationMode: mode,
+        mapName: (gameRows[0].map_name as string) || "",
       } as const;
     }
     const createdResult = await sql.query(
@@ -221,6 +278,7 @@ async function resolveServiceTokenAuth(request: NextRequest, gameId: string) {
         progressData: createdRows[0].progress_data ?? {},
       },
       collaborationMode: mode,
+      mapName: (gameRows[0].map_name as string) || "",
     } as const;
   }
 
@@ -243,6 +301,7 @@ async function resolveServiceTokenAuth(request: NextRequest, gameId: string) {
         progressData: existingRows[0].progress_data ?? {},
       },
       collaborationMode: mode,
+      mapName: (gameRows[0].map_name as string) || "",
     } as const;
   }
   const createdResult = await sql.query(
@@ -261,6 +320,7 @@ async function resolveServiceTokenAuth(request: NextRequest, gameId: string) {
       progressData: createdRows[0].progress_data ?? {},
     },
     collaborationMode: mode,
+    mapName: (gameRows[0].map_name as string) || "",
   } as const;
 }
 
@@ -276,6 +336,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({
       gameId: id,
       collaborationMode: serviceResult.collaborationMode,
+      mapName: serviceResult.mapName,
       instance: serviceResult.instance,
     });
   }
@@ -330,6 +391,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const response = NextResponse.json({
       gameId: id,
       collaborationMode: mode,
+      mapName: game.map_name,
       instance: resolved.instance,
     });
     attachGameAccessCookie(request, response, game, rawAccessKey);
@@ -356,6 +418,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   return NextResponse.json({
     gameId: id,
     collaborationMode: mode,
+    mapName: game.map_name,
     instance: resolved.instance,
   });
 }
@@ -382,19 +445,18 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: serviceResult.error }, { status: serviceResult.status });
     }
 
-    const sql = await getSql();
-    const updatedResult = await sql.query(
-      "UPDATE game_instances SET progress_data = $2, updated_at = NOW() WHERE id = $1 RETURNING id, progress_data",
-      [serviceResult.instance.id, progressData],
+    const { persistedProgressData } = await updateInstanceProgressData(
+      String(serviceResult.instance.id),
+      serviceResult.instance.progressData,
+      progressData,
     );
-    const updatedRows = getRows(updatedResult);
 
     return NextResponse.json({
       gameId: id,
       collaborationMode: serviceResult.collaborationMode,
       instance: {
         ...serviceResult.instance,
-        progressData: updatedRows[0]?.progress_data ?? progressData,
+        progressData: persistedProgressData,
       },
     });
   }
@@ -443,19 +505,18 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: resolved.error }, { status: resolved.status });
     }
 
-    const sql = await getSql();
-    const updatedResult = await sql.query(
-      "UPDATE game_instances SET progress_data = $2, updated_at = NOW() WHERE id = $1 RETURNING id, progress_data",
-      [resolved.instance.id, progressData],
+    const { persistedProgressData } = await updateInstanceProgressData(
+      String(resolved.instance.id),
+      resolved.instance.progressData,
+      progressData,
     );
-    const updatedRows = getRows(updatedResult);
 
     const response = NextResponse.json({
       gameId: id,
       collaborationMode: mode,
       instance: {
         ...resolved.instance,
-        progressData: updatedRows[0]?.progress_data ?? progressData,
+        progressData: persistedProgressData,
       },
     });
     attachGameAccessCookie(request, response, game, rawAccessKey);
@@ -479,19 +540,18 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     return NextResponse.json({ error: resolved.error }, { status: resolved.status });
   }
 
-  const sql = await getSql();
-  const updatedResult = await sql.query(
-    "UPDATE game_instances SET progress_data = $2, updated_at = NOW() WHERE id = $1 RETURNING id, progress_data",
-    [resolved.instance.id, progressData],
+  const { persistedProgressData } = await updateInstanceProgressData(
+    String(resolved.instance.id),
+    resolved.instance.progressData,
+    progressData,
   );
-  const updatedRows = getRows(updatedResult);
 
   return NextResponse.json({
     gameId: id,
     collaborationMode: mode,
     instance: {
       ...resolved.instance,
-      progressData: updatedRows[0]?.progress_data ?? progressData,
+      progressData: persistedProgressData,
     },
   });
 }

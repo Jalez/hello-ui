@@ -1,16 +1,31 @@
 "use client";
 
 import { useCallback, useRef } from "react";
-import { EditorType } from "../types";
+import { EditorType, RoomStateSyncMessage } from "../types";
 
 interface UseCollaborationEditorOptions {
   sendCursor: (editorType: EditorType, selection: { from: number; to: number }) => void;
-  sendChange: (editorType: EditorType, version: number, changes: unknown[], levelIndex?: number) => void;
+  sendChange: (
+    editorType: EditorType,
+    levelIndex: number,
+    baseVersion: number,
+    changeSetJson: unknown,
+    selection?: { from: number; to: number }
+  ) => void;
 }
 
 interface UseCollaborationEditorReturn {
   updateLocalSelection: (editorType: EditorType, selection: { from: number; to: number }) => void;
-  applyLocalChange: (editorType: EditorType, changes: unknown[], levelIndex?: number) => void;
+  applyLocalChange: (
+    editorType: EditorType,
+    changeSetJson: unknown,
+    levelIndex: number,
+    selection?: { from: number; to: number }
+  ) => void;
+  setEditorVersion: (editorType: EditorType, levelIndex: number, version: number) => void;
+  getEditorVersion: (editorType: EditorType, levelIndex: number) => number;
+  syncEditorVersions: (payload: RoomStateSyncMessage | null) => void;
+  resetEditorVersions: () => void;
 }
 
 export function useCollaborationEditor(
@@ -18,17 +33,17 @@ export function useCollaborationEditor(
 ): UseCollaborationEditorReturn {
   const { sendCursor, sendChange } = options;
 
-  const versionRef = useRef<Record<EditorType, number>>({
-    html: 0,
-    css: 0,
-    js: 0,
-  });
+  const versionRef = useRef<Record<string, number>>({});
 
   const lastSelectionRef = useRef<Record<EditorType, { from: number; to: number }>>({
     html: { from: 0, to: 0 },
     css: { from: 0, to: 0 },
     js: { from: 0, to: 0 },
   });
+
+  const getVersionKey = useCallback((editorType: EditorType, levelIndex: number) => {
+    return `${levelIndex}:${editorType}`;
+  }, []);
 
   const updateLocalSelection = useCallback(
     (editorType: EditorType, selection: { from: number; to: number }) => {
@@ -45,16 +60,42 @@ export function useCollaborationEditor(
   );
 
   const applyLocalChange = useCallback(
-    (editorType: EditorType, changes: unknown[], levelIndex?: number) => {
-      const version = (versionRef.current[editorType] || 0) + 1;
-      versionRef.current[editorType] = version;
-      sendChange(editorType, version, changes, levelIndex);
+    (editorType: EditorType, changeSetJson: unknown, levelIndex: number, selection?: { from: number; to: number }) => {
+      const versionKey = getVersionKey(editorType, levelIndex);
+      const baseVersion = versionRef.current[versionKey] || 0;
+      sendChange(editorType, levelIndex, baseVersion, changeSetJson, selection);
     },
-    [sendChange]
+    [getVersionKey, sendChange]
   );
+
+  const setEditorVersion = useCallback((editorType: EditorType, levelIndex: number, version: number) => {
+    versionRef.current[getVersionKey(editorType, levelIndex)] = version;
+  }, [getVersionKey]);
+
+  const getEditorVersion = useCallback((editorType: EditorType, levelIndex: number) => {
+    return versionRef.current[getVersionKey(editorType, levelIndex)] || 0;
+  }, [getVersionKey]);
+
+  const syncEditorVersions = useCallback((payload: RoomStateSyncMessage | null) => {
+    const nextVersions: Record<string, number> = {};
+    payload?.levels.forEach((level, levelIndex) => {
+      nextVersions[getVersionKey("html", levelIndex)] = level.versions?.html ?? 0;
+      nextVersions[getVersionKey("css", levelIndex)] = level.versions?.css ?? 0;
+      nextVersions[getVersionKey("js", levelIndex)] = level.versions?.js ?? 0;
+    });
+    versionRef.current = nextVersions;
+  }, [getVersionKey]);
+
+  const resetEditorVersions = useCallback(() => {
+    versionRef.current = {};
+  }, []);
 
   return {
     updateLocalSelection,
     applyLocalChange,
+    setEditorVersion,
+    getEditorVersion,
+    syncEditorVersions,
+    resetEditorVersions,
   };
 }

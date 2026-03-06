@@ -1,6 +1,7 @@
 'use client';
 
 import React from "react";
+import { ChangeSet, Text } from "@codemirror/state";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -8,6 +9,7 @@ import CodeEditor from "./CodeEditor/CodeEditor";
 import { Lock, LockOpen, Menu } from "lucide-react";
 import { handleLocking, updateCode } from "@/store/slices/levels.slice";
 import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
+import { store } from "@/store/store";
 import { html } from "@codemirror/lang-html";
 import { css } from "@codemirror/lang-css";
 import { javascript } from "@codemirror/lang-javascript";
@@ -72,10 +74,35 @@ function EditorTabs({
   }, [usersByTab, myClientId]);
   const setActiveTab = collaboration?.setActiveTab;
   const lastRemoteCodeChange = collaboration?.lastRemoteCodeChange ?? null;
-  const initialCodeSync = collaboration?.initialCodeSync ?? null;
-  const lastAppliedInitialSyncRef = React.useRef<string | null>(null);
-  const lastAppliedRemoteTsRef = React.useRef<number | null>(null);
+  const lastRemoteCodeResync = collaboration?.lastRemoteCodeResync ?? null;
+  const lastAppliedRemotePatchTsRef = React.useRef<number | null>(null);
+  const lastAppliedRemoteResyncTsRef = React.useRef<number | null>(null);
   const lastSentTabRef = React.useRef<EditorType | null>(null);
+
+  const applyTemplateCodeUpdate = React.useCallback((
+    levelIndex: number,
+    editorType: 'html' | 'css' | 'js',
+    nextContent: string
+  ) => {
+    const stateLevels = store.getState().levels;
+    const targetLevel = stateLevels[levelIndex];
+    if (!targetLevel) {
+      return;
+    }
+
+    const currentCode = targetLevel.code || { html: "", css: "", js: "" };
+    if ((currentCode[editorType] || "") === nextContent) {
+      return;
+    }
+
+    dispatch(updateCode({
+      id: levelIndex + 1,
+      code: {
+        ...currentCode,
+        [editorType]: nextContent,
+      },
+    }));
+  }, [dispatch]);
 
   React.useEffect(() => {
     if (!isConnected || !setActiveTab) return;
@@ -85,40 +112,44 @@ function EditorTabs({
   }, [isConnected, setActiveTab, activeLanguage]);
 
   React.useEffect(() => {
-    if (!isTemplateMode || !lastRemoteCodeChange) return;
-    if (lastAppliedRemoteTsRef.current === lastRemoteCodeChange.ts) return;
+    if (!lastRemoteCodeChange) return;
+    if (lastAppliedRemotePatchTsRef.current === lastRemoteCodeChange.ts) return;
 
-    // Only apply if the remote change is for the current level
-    const myLevelIndex = currentLevel - 1;
-    if (typeof lastRemoteCodeChange.levelIndex === "number" && lastRemoteCodeChange.levelIndex !== myLevelIndex) return;
+    lastAppliedRemotePatchTsRef.current = lastRemoteCodeChange.ts;
 
-    lastAppliedRemoteTsRef.current = lastRemoteCodeChange.ts;
-    codeUpdater(lastRemoteCodeChange.editorType, lastRemoteCodeChange.content, false);
-  }, [lastRemoteCodeChange, isTemplateMode, codeUpdater, currentLevel]);
+    const isActiveEditorTarget =
+      lastRemoteCodeChange.levelIndex === currentLevel - 1 &&
+      lastRemoteCodeChange.editorType === activeLanguage;
+    if (isActiveEditorTarget) {
+      return;
+    }
+
+    try {
+      const currentLevels = store.getState().levels;
+      const targetLevel = currentLevels[lastRemoteCodeChange.levelIndex];
+      const currentContent = targetLevel?.code?.[lastRemoteCodeChange.editorType] || "";
+      const nextContent = ChangeSet.fromJSON(lastRemoteCodeChange.changeSetJson)
+        .apply(Text.of(currentContent.split("\n")))
+        .toString();
+      applyTemplateCodeUpdate(lastRemoteCodeChange.levelIndex, lastRemoteCodeChange.editorType, nextContent);
+    } catch (error) {
+      console.error("Failed to apply remote editor patch", error);
+    }
+  }, [activeLanguage, applyTemplateCodeUpdate, currentLevel, lastRemoteCodeChange]);
 
   React.useEffect(() => {
-    if (!isTemplateMode || !initialCodeSync) return;
+    if (!lastRemoteCodeResync) return;
+    if (lastAppliedRemoteResyncTsRef.current === lastRemoteCodeResync.ts) return;
 
-    const syncKey = JSON.stringify(initialCodeSync);
-    if (lastAppliedInitialSyncRef.current === syncKey) return;
-
-    lastAppliedInitialSyncRef.current = syncKey;
-
-    // Apply code for current level from the multi-level sync.
-    // Dispatch a single updateCode with all fields to avoid stale-closure issues
-    // where sequential codeUpdater calls overwrite each other.
-    const levelData = initialCodeSync.levels?.[currentLevel - 1];
-    if (levelData?.code) {
-      dispatch(updateCode({
-        id: currentLevel,
-        code: {
-          html: levelData.code.html || '',
-          css: levelData.code.css || '',
-          js: levelData.code.js || '',
-        },
-      }));
+    lastAppliedRemoteResyncTsRef.current = lastRemoteCodeResync.ts;
+    const isActiveEditorTarget =
+      lastRemoteCodeResync.levelIndex === currentLevel - 1 &&
+      lastRemoteCodeResync.editorType === activeLanguage;
+    if (isActiveEditorTarget) {
+      return;
     }
-  }, [initialCodeSync, isTemplateMode, dispatch, currentLevel]);
+    applyTemplateCodeUpdate(lastRemoteCodeResync.levelIndex, lastRemoteCodeResync.editorType, lastRemoteCodeResync.content);
+  }, [activeLanguage, applyTemplateCodeUpdate, currentLevel, lastRemoteCodeResync]);
 
   const handleLanguageChange = (newLanguage: string) => {
     const editorType = newLanguage as EditorType;
@@ -196,7 +227,7 @@ function EditorTabs({
 
   const handleCodeUpdate = (data: { html?: string; css?: string; js?: string }, type: string) => {
     const isSolution = type === 'Solution' || type === 'solution';
-
+    console.log('handleCodeUpdate called with data:', data, 'type:', type, 'isSolution:', isSolution);
     const updatedLanguage = (Object.keys(data).find(
       (key) => key === 'html' || key === 'css' || key === 'js'
     ) || activeLanguage) as 'html' | 'css' | 'js';

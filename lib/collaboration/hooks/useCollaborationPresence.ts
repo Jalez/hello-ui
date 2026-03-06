@@ -81,24 +81,38 @@ export function useCollaborationPresence(
   );
 
   const updateUserTab = useCallback((clientId: string, editorType: EditorType) => {
-    setActiveUsers((prev) =>
-      prev.map((u) =>
-        u.clientId === clientId
-          ? { ...u, activeTab: editorType, isTyping: false }
-          : u
-      )
-    );
+    setActiveUsers((prev) => {
+      let changed = false;
+      const next = prev.map((u) => {
+        if (u.clientId !== clientId) {
+          return u;
+        }
+        if (u.activeTab === editorType && !u.isTyping) {
+          return u;
+        }
+        changed = true;
+        return { ...u, activeTab: editorType, isTyping: false };
+      });
+      return changed ? next : prev;
+    });
   }, []);
 
   const updateUserTyping = useCallback(
     (clientId: string, editorType: EditorType, isTyping: boolean) => {
-      setActiveUsers((prev) =>
-        prev.map((u) =>
-          u.clientId === clientId
-            ? { ...u, activeTab: editorType, isTyping }
-            : u
-        )
-      );
+      setActiveUsers((prev) => {
+        let changed = false;
+        const next = prev.map((u) => {
+          if (u.clientId !== clientId) {
+            return u;
+          }
+          if (u.activeTab === editorType && Boolean(u.isTyping) === Boolean(isTyping)) {
+            return u;
+          }
+          changed = true;
+          return { ...u, activeTab: editorType, isTyping };
+        });
+        return changed ? next : prev;
+      });
     },
     []
   );

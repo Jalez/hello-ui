@@ -96,7 +96,9 @@ const levelsSlice = createSlice({
       activeMode = mode || "game";
 
       if (activeMode === "game" && activeGameId) {
-        // In game mode, return levels as-is. WS code-sync will overlay saved progress.
+        // Gameplay code is owned by the websocket room state.
+        // Clearing storage here prevents any creator-mode cache from leaking into gameplay.
+        storage = null;
         return levels;
       }
 

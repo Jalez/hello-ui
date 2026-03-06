@@ -2,7 +2,19 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { io, Socket } from "socket.io-client";
-import { ActiveUser, CanvasCursor, EditorCursor, EditorChange, UserIdentity, TabFocusMessage, TypingStatusMessage, EditorType } from "../types";
+import {
+  ActiveUser,
+  CanvasCursor,
+  EditorChange,
+  EditorChangeApplied,
+  EditorCursor,
+  EditorResync,
+  RoomStateSyncMessage,
+  UserIdentity,
+  TabFocusMessage,
+  TypingStatusMessage,
+  EditorType,
+} from "../types";
 import { extractGroupIdFromRoomId, generateClientId, generateUserColor, getWebSocketUrl } from "../utils";
 import { RECONNECT_DELAY_MS, MAX_RECONNECT_ATTEMPTS } from "../constants";
 import { logDebugClient } from "@/lib/debug-logger";
@@ -18,10 +30,12 @@ interface UseCollaborationConnectionOptions {
   onCanvasCursor?: (cursor: CanvasCursor) => void;
   onEditorCursor?: (cursor: EditorCursor) => void;
   onEditorChange?: (change: EditorChange) => void;
+  onEditorChangeApplied?: (message: EditorChangeApplied) => void;
+  onEditorResync?: (message: EditorResync) => void;
   onCurrentUsers?: (users: ActiveUser[]) => void;
   onTabFocus?: (message: TabFocusMessage) => void;
   onTypingStatus?: (message: TypingStatusMessage) => void;
-  onCodeSync?: (codeState: { levels: Array<{ name: string; code: { html: string; css: string; js: string } }> }) => void;
+  onRoomStateSync?: (roomState: RoomStateSyncMessage) => void;
 }
 
 interface UseCollaborationConnectionReturn {
@@ -36,38 +50,37 @@ interface UseCollaborationConnectionReturn {
   leaveGame: () => void;
   sendCanvasCursor: (x: number, y: number) => void;
   sendEditorCursor: (editorType: EditorType, selection: { from: number; to: number }) => void;
-  sendEditorChange: (editorType: EditorType, version: number, changes: unknown[], levelIndex?: number) => void;
+  sendEditorChange: (
+    editorType: EditorType,
+    levelIndex: number,
+    baseVersion: number,
+    changeSetJson: unknown,
+    selection?: { from: number; to: number }
+  ) => void;
   sendTabFocus: (editorType: EditorType) => void;
   sendTypingStatus: (editorType: EditorType, isTyping: boolean) => void;
+  sendRoomReset: (scope: "level" | "game", levelIndex?: number) => void;
 }
 
 export function useCollaborationConnection(
   options: UseCollaborationConnectionOptions
 ): UseCollaborationConnectionReturn {
-  const {
-    roomId,
-    user,
-    onConnected,
-    onDisconnected,
-    onError,
-    onUserJoined,
-    onUserLeft,
-    onCanvasCursor,
-    onEditorCursor,
-    onEditorChange,
-    onCurrentUsers,
-    onTabFocus,
-    onTypingStatus,
-    onCodeSync,
-  } = options;
+  const { roomId, user } = options;
   const parsedGroupId = extractGroupIdFromRoomId(roomId);
 
   const optionsRef = useRef(options);
-  optionsRef.current = options;
+  useEffect(() => {
+    optionsRef.current = options;
+  }, [options]);
 
   const socketRef = useRef<Socket | null>(null);
   const clientIdRef = useRef<string | null>(null);
   const userColorRef = useRef<string | null>(null);
+  const typingStatusRef = useRef<Record<EditorType, boolean>>({
+    html: false,
+    css: false,
+    js: false,
+  });
   const reconnectAttemptsRef = useRef(0);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isConnectedRef = useRef(false);
@@ -137,11 +150,13 @@ export function useCollaborationConnection(
         socketRef.current.disconnect();
         socketRef.current = null;
       }
+      typingStatusRef.current = { html: false, css: false, js: false };
       isConnectedRef.current = false;
     };
 
     socket.on("connect", () => {
       isConnectedRef.current = true;
+      typingStatusRef.current = { html: false, css: false, js: false };
       setIsConnected(true);
       setIsConnecting(false);
       setError(null);
@@ -180,6 +195,7 @@ export function useCollaborationConnection(
 
     socket.on("disconnect", (reason) => {
       isConnectedRef.current = false;
+      typingStatusRef.current = { html: false, css: false, js: false };
       setIsConnected(false);
       setIsConnecting(false);
       optionsRef.current.onDisconnected?.();
@@ -272,11 +288,19 @@ export function useCollaborationConnection(
         logDebugClient("ws_editor_change_ignored_self", {
           clientId: data.clientId,
           editorType: data.editorType,
-          version: data.version,
+          nextVersion: data.nextVersion,
         });
         return;
       }
       optionsRef.current.onEditorChange?.(data);
+    });
+
+    socket.on("editor-change-applied", (data: EditorChangeApplied) => {
+      optionsRef.current.onEditorChangeApplied?.(data);
+    });
+
+    socket.on("editor-resync", (data: EditorResync) => {
+      optionsRef.current.onEditorResync?.(data);
     });
 
     socket.on("tab-focus", (data: TabFocusMessage & { clientId: string }) => {
@@ -291,8 +315,8 @@ export function useCollaborationConnection(
       }
     });
 
-    socket.on("code-sync", (data: { levels: Array<{ name: string; code: { html: string; css: string; js: string } }> }) => {
-      optionsRef.current.onCodeSync?.(data);
+    socket.on("room-state-sync", (data: RoomStateSyncMessage) => {
+      optionsRef.current.onRoomStateSync?.(data);
     });
 
     return () => {
@@ -333,7 +357,13 @@ export function useCollaborationConnection(
     }
   }, [roomId, parsedGroupId, user]);
 
-  const sendEditorChange = useCallback((editorType: EditorType, version: number, changes: unknown[], levelIndex?: number) => {
+  const sendEditorChange = useCallback((
+    editorType: EditorType,
+    levelIndex: number,
+    baseVersion: number,
+    changeSetJson: unknown,
+    selection?: { from: number; to: number }
+  ) => {
     if (socketRef.current && roomId && user && clientIdRef.current) {
       socketRef.current.emit("editor-change", {
         roomId,
@@ -341,9 +371,11 @@ export function useCollaborationConnection(
         editorType,
         clientId: clientIdRef.current,
         userId: user.id,
-        version,
-        changes,
+        baseVersion,
+        changeSetJson,
         levelIndex,
+        selection,
+        ts: Date.now(),
       });
     }
   }, [roomId, parsedGroupId, user]);
@@ -364,6 +396,12 @@ export function useCollaborationConnection(
 
   const sendTypingStatus = useCallback((editorType: EditorType, isTyping: boolean) => {
     if (socketRef.current && roomId && user && clientIdRef.current) {
+      const nextIsTyping = Boolean(isTyping);
+      if (typingStatusRef.current[editorType] === nextIsTyping) {
+        return;
+      }
+      typingStatusRef.current[editorType] = nextIsTyping;
+
       socketRef.current.emit("typing-status", {
         roomId,
         groupId: parsedGroupId ?? undefined,
@@ -371,7 +409,21 @@ export function useCollaborationConnection(
         clientId: clientIdRef.current,
         userId: user.id,
         userName: user.name,
-        isTyping,
+        isTyping: nextIsTyping,
+        ts: Date.now(),
+      });
+    }
+  }, [roomId, parsedGroupId, user]);
+
+  const sendRoomReset = useCallback((scope: "level" | "game", levelIndex?: number) => {
+    if (socketRef.current && roomId && user && clientIdRef.current) {
+      socketRef.current.emit("reset-room-state", {
+        roomId,
+        groupId: parsedGroupId ?? undefined,
+        clientId: clientIdRef.current,
+        userId: user.id,
+        scope,
+        levelIndex,
         ts: Date.now(),
       });
     }
@@ -387,6 +439,7 @@ export function useCollaborationConnection(
       socketRef.current = null;
     }
     isConnectedRef.current = false;
+    typingStatusRef.current = { html: false, css: false, js: false };
     setIsConnected(false);
     setIsConnecting(false);
     setClientId(null);
@@ -419,5 +472,6 @@ export function useCollaborationConnection(
     sendEditorChange,
     sendTabFocus,
     sendTypingStatus,
+    sendRoomReset,
   };
 }

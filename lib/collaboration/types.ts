@@ -23,17 +23,55 @@ export interface EditorCursor {
   ts: number;
 }
 
+export interface EditorVersionMap {
+  html: number;
+  css: number;
+  js: number;
+}
+
+export interface RoomStateSyncLevel {
+  [key: string]: unknown;
+  name: string;
+  code: { html: string; css: string; js: string };
+  versions: EditorVersionMap;
+}
+
+export interface RoomStateSyncMessage {
+  levels: RoomStateSyncLevel[];
+  ts: number;
+}
+
 export interface EditorChange {
   roomId: string;
   groupId?: string;
   editorType: "html" | "css" | "js";
   clientId: string;
   userId: string;
+  baseVersion: number;
+  nextVersion: number;
+  changeSetJson: unknown;
+  levelIndex: number;
+  selection?: { from: number; to: number };
+  ts: number;
+}
+
+export interface EditorChangeApplied {
+  roomId: string;
+  groupId?: string;
+  editorType: "html" | "css" | "js";
+  levelIndex: number;
+  nextVersion: number;
+  ts: number;
+}
+
+export interface EditorResync {
+  roomId: string;
+  groupId?: string;
+  editorType: "html" | "css" | "js";
+  levelIndex: number;
+  content: string;
   version: number;
-  changes: unknown[];
-  levelIndex?: number;
-  isAck?: boolean;
-  serverTs?: string;
+  ts: number;
 }
 
 export interface ActiveUser {
