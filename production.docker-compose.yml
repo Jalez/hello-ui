@@ -41,7 +41,7 @@ services:
       args:
         NEXT_PUBLIC_APP_URL: https://tie-lukioplus.rd.tuni.fi/css-artist
         NEXT_PUBLIC_DRAWBOARD_URL: https://tie-lukioplus.rd.tuni.fi/drawboard
-        NEXT_PUBLIC_WEBSOCKET_URL: wss://tie-lukioplus.rd.tuni.fi/css-artist/ws
+        NEXT_PUBLIC_WEBSOCKET_URL: wss://tie-lukioplus.rd.tuni.fi/css-artist-ws
         NEXT_PUBLIC_BASE_PATH: /css-artist
     container_name: ui-designer.app
     image: ui-designer-app:latest
@@ -59,7 +59,7 @@ services:
       NEXT_PUBLIC_APP_URL: "https://tie-lukioplus.rd.tuni.fi/css-artist"
       NEXT_PUBLIC_BASE_PATH: "/css-artist"
       NEXT_PUBLIC_DRAWBOARD_URL: "https://tie-lukioplus.rd.tuni.fi/drawboard"
-      NEXT_PUBLIC_WEBSOCKET_URL: "wss://tie-lukioplus.rd.tuni.fi/css-artist/ws"
+      NEXT_PUBLIC_WEBSOCKET_URL: "wss://tie-lukioplus.rd.tuni.fi/css-artist-ws"
       # Server-only: LTI redirect base (not inlined at build time, so prod always uses this)
       APP_ROOT_URL: "https://tie-lukioplus.rd.tuni.fi/css-artist"
       # Admin: grant sidebar admin link to this email (e.g. when DB admin_roles not seeded). Match is case-insensitive.
