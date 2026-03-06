@@ -6,6 +6,7 @@ import React, { useEffect, useState } from "react";
 import { ChevronRight, ChevronLeft, Edit } from "lucide-react";
 import { NavPopper } from "@/components/Navbar/Navbar";
 import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import LevelOpinion from "./LevelOpinion";
 import { updateLevelName } from "@/store/slices/levels.slice";
 import { renameLevelKey } from "@/store/slices/points.slice";
@@ -16,10 +17,13 @@ import {
   Select,
   SelectContent,
   SelectItem,
+  SelectItemText,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
 import { apiUrl } from "@/lib/apiUrl";
+import { useOptionalCollaboration } from "@/lib/collaboration/CollaborationProvider";
+import { ActiveUser } from "@/lib/collaboration/types";
 
 interface LevelControlsProps {
   maxLevels: number;
@@ -27,6 +31,8 @@ interface LevelControlsProps {
   currentlevel: number;
   levelName?: string;
 }
+
+const EMPTY_ACTIVE_USERS: ActiveUser[] = [];
 
 const LevelControls = ({
   maxLevels,
@@ -135,10 +141,13 @@ const LevelControls = ({
   );
 };
 
-const getSyntaxIcons = (level: any) => {
-  if (!level) return null;
-
+const getSyntaxIcons = (level: {
+  lockHTML?: boolean;
+  lockCSS?: boolean;
+  lockJS?: boolean;
+}) => {
   const icons = [];
+
   if (!level.lockHTML) {
     icons.push(
       <img
@@ -150,6 +159,7 @@ const getSyntaxIcons = (level: any) => {
       />
     );
   }
+
   if (!level.lockCSS) {
     icons.push(
       <img
@@ -161,6 +171,7 @@ const getSyntaxIcons = (level: any) => {
       />
     );
   }
+
   if (!level.lockJS) {
     icons.push(
       <img
@@ -172,11 +183,62 @@ const getSyntaxIcons = (level: any) => {
       />
     );
   }
+
   return icons;
+};
+
+const getUserInitials = (user: ActiveUser) => {
+  const source = user.userName || user.userEmail || "?";
+  return source
+    .split(" ")
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+};
+
+const LevelPresence = ({ users }: { users: ActiveUser[] }) => {
+  if (users.length === 0) {
+    return null;
+  }
+
+  const visibleUsers = users.slice(0, 3);
+  const remainingCount = users.length - visibleUsers.length;
+
+  return (
+    <div className="flex items-center -space-x-1">
+      {visibleUsers.map((user) => (
+        <Avatar
+          key={user.clientId}
+          className="h-5 w-5 border border-background"
+          title={user.userName || user.userEmail}
+          style={{ borderColor: user.color || undefined }}
+        >
+          {user.userImage && (
+            <AvatarImage src={user.userImage} alt={user.userName || user.userEmail} />
+          )}
+          <AvatarFallback
+            className="text-[10px] font-medium text-white"
+            style={{ backgroundColor: user.color || undefined }}
+          >
+            {getUserInitials(user)}
+          </AvatarFallback>
+        </Avatar>
+      ))}
+      {remainingCount > 0 && (
+        <Avatar className="h-5 w-5 border border-background">
+          <AvatarFallback className="bg-muted text-[10px] font-medium">
+            +{remainingCount}
+          </AvatarFallback>
+        </Avatar>
+      )}
+    </div>
+  );
 };
 
 const LevelSelect = ({ levelHandler }: { levelHandler: (level: number) => void }) => {
   const levels = useAppSelector((state) => state.levels);
+  const points = useAppSelector((state) => state.points);
   const currentLevel = useAppSelector(
     (state) => state.currentLevel.currentLevel
   );
@@ -192,6 +254,29 @@ const LevelSelect = ({ levelHandler }: { levelHandler: (level: number) => void }
   const stateOptions = useAppSelector((state) => state.options);
   const isCreator = stateOptions.creator;
   const dispatch = useAppDispatch();
+  const collaboration = useOptionalCollaboration();
+  const activeUsers = collaboration?.activeUsers ?? EMPTY_ACTIVE_USERS;
+  const myClientId = collaboration?.clientId ?? null;
+  const getLevelAccuracy = (levelName: string) => {
+    const accuracy = points.levels[levelName]?.accuracy;
+    return typeof accuracy === "number" ? `${accuracy}%` : "0%";
+  };
+  const usersByLevel = React.useMemo(() => {
+    const grouped = new Map<number, ActiveUser[]>();
+
+    for (const user of activeUsers) {
+      if (user.clientId === myClientId || !Number.isInteger(user.activeLevelIndex)) {
+        continue;
+      }
+
+      const levelIndex = user.activeLevelIndex as number;
+      const existing = grouped.get(levelIndex) ?? [];
+      existing.push(user);
+      grouped.set(levelIndex, existing);
+    }
+
+    return grouped;
+  }, [activeUsers, myClientId]);
 
   const updateLevelNameHandler = (newName: string) => {
     const oldName = currentLevelData?.name || "";
@@ -244,20 +329,26 @@ const LevelSelect = ({ levelHandler }: { levelHandler: (level: number) => void }
           <Select value={currentLevelData?.name || ""} onValueChange={levelSelectHandler}>
             <SelectTrigger className="text-primary border-b-2 border-secondary hover:border-secondary focus:border-primary focus:outline-none px-2 py-1 h-auto font-normal min-w-[200px]">
               <SelectValue placeholder="Select level">
-                <div className="flex items-center justify-between w-full gap-2">
-                  <span>The {currentLevelData?.name || "Unnamed"}</span>
-                  <div className="flex gap-1">
-                    {getSyntaxIcons(currentLevelData)}
-                  </div>
-                </div>
+                {currentLevelData
+                  ? `The ${currentLevelData.name}${isCreator ? "" : ` - ${getLevelAccuracy(currentLevelData.name)}`}`
+                  : "Select level"}
               </SelectValue>
             </SelectTrigger>
             <SelectContent className="bg-popover border border-border shadow-lg min-w-[300px]">
               {levels.map((level, index) => (
-                <SelectItem key={index} value={level.name}>
-                  <div className="flex items-center justify-between w-full gap-2 flex-1">
-                    <span className="flex-1">The {level.name}</span>
-                    <div className="flex gap-1">
+                <SelectItem
+                  key={index}
+                  value={level.name}
+                  textValue={`The ${level.name}${isCreator ? "" : ` - ${getLevelAccuracy(level.name)}`}`}
+                >
+                  <div className="flex w-full items-center justify-between gap-2">
+                    <div className="flex min-w-0 flex-1 items-center gap-2">
+                      <SelectItemText>
+                        {`The ${level.name}${isCreator ? "" : ` - ${getLevelAccuracy(level.name)}`}`}
+                      </SelectItemText>
+                      <LevelPresence users={usersByLevel.get(index) ?? []} />
+                    </div>
+                    <div className="flex shrink-0 gap-1">
                       {getSyntaxIcons(level)}
                     </div>
                   </div>

@@ -23,9 +23,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { apiUrl } from "@/lib/apiUrl";
-import { useOptionalCollaboration } from "@/lib/collaboration/CollaborationProvider";
+import { RemoteCodeChange, RemoteCodeResync, useOptionalCollaboration } from "@/lib/collaboration/CollaborationProvider";
 import { TabPresence } from "@/components/collaboration/TabPresence";
-import { EditorType } from "@/lib/collaboration/types";
+import { ActiveUser, EditorType } from "@/lib/collaboration/types";
 
 interface LanguageData {
   code: string;
@@ -42,6 +42,10 @@ interface EditorTabsProps {
   codeUpdater: (language: 'html' | 'css' | 'js', code: string, isSolution: boolean) => void;
   identifier: string;
 }
+
+const EMPTY_ACTIVE_USERS: ActiveUser[] = [];
+const EMPTY_REMOTE_CODE_CHANGES: RemoteCodeChange[] = [];
+const EMPTY_REMOTE_CODE_RESYNCS: RemoteCodeResync[] = [];
 
 function EditorTabs({
   languages,
@@ -62,22 +66,29 @@ function EditorTabs({
 
   const collaboration = useOptionalCollaboration();
   const isConnected = collaboration?.isConnected ?? false;
-  const usersByTab = collaboration?.usersByTab ?? { html: [], css: [], js: [] };
+  const activeUsers = collaboration?.activeUsers ?? EMPTY_ACTIVE_USERS;
   const myClientId = collaboration?.clientId ?? null;
   const otherUsersByTab = React.useMemo(() => {
-    if (!myClientId) return { html: [] as typeof usersByTab.html, css: [] as typeof usersByTab.css, js: [] as typeof usersByTab.js };
+    const currentLevelIndex = currentLevel - 1;
+    const emptyUsers = { html: [] as typeof activeUsers, css: [] as typeof activeUsers, js: [] as typeof activeUsers };
+    if (!myClientId) return emptyUsers;
+
+    const usersOnCurrentLevel = activeUsers.filter(
+      (u) => u.clientId !== myClientId && u.activeLevelIndex === currentLevelIndex
+    );
+
     return {
-      html: (usersByTab.html || []).filter((u) => u.clientId !== myClientId),
-      css: (usersByTab.css || []).filter((u) => u.clientId !== myClientId),
-      js: (usersByTab.js || []).filter((u) => u.clientId !== myClientId),
+      html: usersOnCurrentLevel.filter((u) => u.activeTab === "html"),
+      css: usersOnCurrentLevel.filter((u) => u.activeTab === "css"),
+      js: usersOnCurrentLevel.filter((u) => u.activeTab === "js"),
     };
-  }, [usersByTab, myClientId]);
+  }, [activeUsers, currentLevel, myClientId]);
   const setActiveTab = collaboration?.setActiveTab;
-  const lastRemoteCodeChange = collaboration?.lastRemoteCodeChange ?? null;
-  const lastRemoteCodeResync = collaboration?.lastRemoteCodeResync ?? null;
-  const lastAppliedRemotePatchTsRef = React.useRef<number | null>(null);
-  const lastAppliedRemoteResyncTsRef = React.useRef<number | null>(null);
-  const lastSentTabRef = React.useRef<EditorType | null>(null);
+  const remoteCodeChanges = collaboration?.remoteCodeChanges ?? EMPTY_REMOTE_CODE_CHANGES;
+  const remoteCodeResyncs = collaboration?.remoteCodeResyncs ?? EMPTY_REMOTE_CODE_RESYNCS;
+  const lastAppliedRemotePatchSeqRef = React.useRef<number>(0);
+  const lastAppliedRemoteResyncSeqRef = React.useRef<number>(0);
+  const lastSentTabRef = React.useRef<string | null>(null);
 
   const applyTemplateCodeUpdate = React.useCallback((
     levelIndex: number,
@@ -106,57 +117,66 @@ function EditorTabs({
 
   React.useEffect(() => {
     if (!isConnected || !setActiveTab) return;
-    if (lastSentTabRef.current === activeLanguage) return;
-    lastSentTabRef.current = activeLanguage;
-    setActiveTab(activeLanguage);
-  }, [isConnected, setActiveTab, activeLanguage]);
+    const nextPresenceKey = `${currentLevel - 1}:${activeLanguage}`;
+    if (lastSentTabRef.current === nextPresenceKey) return;
+    lastSentTabRef.current = nextPresenceKey;
+    setActiveTab(activeLanguage, currentLevel - 1);
+  }, [currentLevel, isConnected, setActiveTab, activeLanguage]);
 
   React.useEffect(() => {
-    if (!lastRemoteCodeChange) return;
-    if (lastAppliedRemotePatchTsRef.current === lastRemoteCodeChange.ts) return;
-
-    lastAppliedRemotePatchTsRef.current = lastRemoteCodeChange.ts;
-
-    const isActiveEditorTarget =
-      lastRemoteCodeChange.levelIndex === currentLevel - 1 &&
-      lastRemoteCodeChange.editorType === activeLanguage;
-    if (isActiveEditorTarget) {
-      return;
-    }
+    const unseenChanges = remoteCodeChanges.filter(
+      (change) => change.seq > lastAppliedRemotePatchSeqRef.current
+    );
+    if (unseenChanges.length === 0) return;
 
     try {
-      const currentLevels = store.getState().levels;
-      const targetLevel = currentLevels[lastRemoteCodeChange.levelIndex];
-      const currentContent = targetLevel?.code?.[lastRemoteCodeChange.editorType] || "";
-      const nextContent = ChangeSet.fromJSON(lastRemoteCodeChange.changeSetJson)
-        .apply(Text.of(currentContent.split("\n")))
-        .toString();
-      applyTemplateCodeUpdate(lastRemoteCodeChange.levelIndex, lastRemoteCodeChange.editorType, nextContent);
+      for (const change of unseenChanges) {
+        lastAppliedRemotePatchSeqRef.current = change.seq;
+
+        const isActiveEditorTarget =
+          change.levelIndex === currentLevel - 1 &&
+          change.editorType === activeLanguage;
+        if (isActiveEditorTarget) {
+          continue;
+        }
+
+        const currentLevels = store.getState().levels;
+        const targetLevel = currentLevels[change.levelIndex];
+        const currentContent = targetLevel?.code?.[change.editorType] || "";
+        const nextContent = ChangeSet.fromJSON(change.changeSetJson)
+          .apply(Text.of(currentContent.split("\n")))
+          .toString();
+        applyTemplateCodeUpdate(change.levelIndex, change.editorType, nextContent);
+      }
     } catch (error) {
       console.error("Failed to apply remote editor patch", error);
     }
-  }, [activeLanguage, applyTemplateCodeUpdate, currentLevel, lastRemoteCodeChange]);
+  }, [activeLanguage, applyTemplateCodeUpdate, currentLevel, remoteCodeChanges]);
 
   React.useEffect(() => {
-    if (!lastRemoteCodeResync) return;
-    if (lastAppliedRemoteResyncTsRef.current === lastRemoteCodeResync.ts) return;
+    const unseenResyncs = remoteCodeResyncs.filter(
+      (resync) => resync.seq > lastAppliedRemoteResyncSeqRef.current
+    );
+    if (unseenResyncs.length === 0) return;
 
-    lastAppliedRemoteResyncTsRef.current = lastRemoteCodeResync.ts;
-    const isActiveEditorTarget =
-      lastRemoteCodeResync.levelIndex === currentLevel - 1 &&
-      lastRemoteCodeResync.editorType === activeLanguage;
-    if (isActiveEditorTarget) {
-      return;
+    for (const resync of unseenResyncs) {
+      lastAppliedRemoteResyncSeqRef.current = resync.seq;
+      const isActiveEditorTarget =
+        resync.levelIndex === currentLevel - 1 &&
+        resync.editorType === activeLanguage;
+      if (isActiveEditorTarget) {
+        continue;
+      }
+      applyTemplateCodeUpdate(resync.levelIndex, resync.editorType, resync.content);
     }
-    applyTemplateCodeUpdate(lastRemoteCodeResync.levelIndex, lastRemoteCodeResync.editorType, lastRemoteCodeResync.content);
-  }, [activeLanguage, applyTemplateCodeUpdate, currentLevel, lastRemoteCodeResync]);
+  }, [activeLanguage, applyTemplateCodeUpdate, currentLevel, remoteCodeResyncs]);
 
   const handleLanguageChange = (newLanguage: string) => {
     const editorType = newLanguage as EditorType;
     setActiveLanguage(editorType);
     if (isConnected && setActiveTab) {
-      lastSentTabRef.current = editorType;
-      setActiveTab(editorType);
+      lastSentTabRef.current = `${currentLevel - 1}:${editorType}`;
+      setActiveTab(editorType, currentLevel - 1);
     }
   };
 

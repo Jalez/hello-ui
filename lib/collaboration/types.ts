@@ -15,6 +15,7 @@ export interface EditorCursor {
   roomId: string;
   groupId?: string;
   editorType: "html" | "css" | "js";
+  levelIndex: number;
   clientId: string;
   userId: string;
   userName?: string;
@@ -38,6 +39,11 @@ export interface RoomStateSyncLevel {
 
 export interface RoomStateSyncMessage {
   levels: RoomStateSyncLevel[];
+  ts: number;
+}
+
+export interface ProgressSyncMessage {
+  progressData: Record<string, unknown>;
   ts: number;
 }
 
@@ -83,6 +89,7 @@ export interface ActiveUser {
   color?: string;
   cursor?: { x: number; y: number };
   activeTab?: EditorType;
+  activeLevelIndex?: number;
   isTyping?: boolean;
 }
 
@@ -128,6 +135,7 @@ export interface TabFocusMessage {
   userName?: string;
   userImage?: string;
   editorType: EditorType;
+  levelIndex: number;
   ts: number;
 }
 
@@ -138,6 +146,7 @@ export interface TypingStatusMessage {
   userId: string;
   userName?: string;
   editorType: EditorType;
+  levelIndex: number;
   isTyping: boolean;
   ts: number;
 }

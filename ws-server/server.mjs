@@ -489,6 +489,7 @@ io.on("connection", (socket) => {
       userName: data.userName || userName,
       userImage: data.userImage || userImage,
       activeTab: null,
+      activeLevelIndex: null,
       isTyping: false,
     };
     addUserToRoom(roomId, socket.id, userData);
@@ -537,7 +538,7 @@ io.on("connection", (socket) => {
     const roomId = data.roomId || data.groupId || fallbackRoomId;
     if (!roomId) return;
     console.log(
-      `[editor-cursor:recv] room=${roomId} from=${socket.id} editorType=${data.editorType} selection=${JSON.stringify(data.selection)}`
+      `[editor-cursor:recv] room=${roomId} from=${socket.id} editorType=${data.editorType} levelIndex=${data.levelIndex} selection=${JSON.stringify(data.selection)}`
     );
     socket.to(roomId).emit("editor-cursor", data);
   });
@@ -634,6 +635,7 @@ io.on("connection", (socket) => {
     if (room && room.has(socket.id)) {
       const userData = room.get(socket.id);
       userData.activeTab = data.editorType;
+      userData.activeLevelIndex = Number.isInteger(data.levelIndex) ? data.levelIndex : 0;
       userData.isTyping = false;
       room.set(socket.id, userData);
 
@@ -645,9 +647,10 @@ io.on("connection", (socket) => {
         userName: userData.userName,
         userImage: userData.userImage,
         editorType: data.editorType,
+        levelIndex: userData.activeLevelIndex,
         ts: Date.now(),
       });
-      console.log(`[tab-focus] room=${roomId} from=${socket.id} editorType=${data.editorType}`);
+      console.log(`[tab-focus] room=${roomId} from=${socket.id} editorType=${data.editorType} levelIndex=${userData.activeLevelIndex}`);
     }
   });
 
@@ -660,8 +663,13 @@ io.on("connection", (socket) => {
       const userData = room.get(socket.id);
       const nextIsTyping = Boolean(data.isTyping);
       const nextEditorType = data.editorType ?? userData.activeTab ?? null;
+      const nextLevelIndex = Number.isInteger(data.levelIndex)
+        ? data.levelIndex
+        : (Number.isInteger(userData.activeLevelIndex) ? userData.activeLevelIndex : 0);
       const shouldBroadcast =
-        userData.isTyping !== nextIsTyping || userData.activeTab !== nextEditorType;
+        userData.isTyping !== nextIsTyping ||
+        userData.activeTab !== nextEditorType ||
+        userData.activeLevelIndex !== nextLevelIndex;
 
       if (!shouldBroadcast) {
         return;
@@ -669,6 +677,7 @@ io.on("connection", (socket) => {
 
       userData.isTyping = nextIsTyping;
       userData.activeTab = nextEditorType;
+      userData.activeLevelIndex = nextLevelIndex;
       room.set(socket.id, userData);
 
       socket.to(roomId).emit("typing-status", {
@@ -678,11 +687,43 @@ io.on("connection", (socket) => {
         userId: userData.userId,
         userName: userData.userName,
         editorType: nextEditorType,
+        levelIndex: nextLevelIndex,
         isTyping: nextIsTyping,
         ts: Date.now(),
       });
-      console.log(`[typing-status] room=${roomId} from=${socket.id} editorType=${nextEditorType} isTyping=${nextIsTyping}`);
+      console.log(`[typing-status] room=${roomId} from=${socket.id} editorType=${nextEditorType} levelIndex=${nextLevelIndex} isTyping=${nextIsTyping}`);
     }
+  });
+
+  socket.on("progress-sync", async (data) => {
+    const roomId = data?.roomId || data?.groupId || fallbackRoomId;
+    if (!roomId) return;
+
+    const ctx = parseRoomContext(roomId);
+    if (!ctx || ctx.kind !== "instance") {
+      return;
+    }
+
+    const state = await ensureRoomState(roomId, ctx);
+    const incomingProgress =
+      data?.progressData && typeof data.progressData === "object" && !Array.isArray(data.progressData)
+        ? data.progressData
+        : null;
+    if (!incomingProgress) {
+      return;
+    }
+
+    state.progressData = {
+      ...state.progressData,
+      ...incomingProgress,
+      levels: state.progressData.levels,
+    };
+
+    socket.to(roomId).emit("progress-sync", {
+      progressData: incomingProgress,
+      ts: Date.now(),
+    });
+    console.log(`[progress-sync] room=${roomId} from=${socket.id} keys=${Object.keys(incomingProgress).join(",")}`);
   });
 
   socket.on("reset-room-state", async (data) => {

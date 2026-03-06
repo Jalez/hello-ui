@@ -2,6 +2,7 @@ import { Compartment } from "@codemirror/state";
 
 export const REMOTE_SYNC_DEBOUNCE_MS = 500;
 export const TYPING_IDLE_MS = 800;
+export const LOCAL_REDUX_UPDATE_DEBOUNCE_MS = 350;
 
 export const commentKeymapCompartment = new Compartment();
 export const reviewDecorationsCompartment = new Compartment();

@@ -2,10 +2,11 @@
 
 import { useEffect, useRef } from "react";
 import { useParams, useSearchParams } from "next/navigation";
-import { useAppSelector } from "@/store/hooks/hooks";
+import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
 import { useGameStore } from "@/components/default/games";
 import { apiUrl } from "@/lib/apiUrl";
 import { useOptionalCollaboration } from "@/lib/collaboration/CollaborationProvider";
+import { mergeSavedPoints } from "@/store/slices/points.slice";
 
 const SAVE_DEBOUNCE_MS = 2000;
 
@@ -30,23 +31,67 @@ function stableSerialize(value: unknown): string {
  * Code is owned by websocket room state and must not be written through HTTP here.
  */
 export function ProgressPersistence() {
+  const dispatch = useAppDispatch();
   const params = useParams();
   const searchParams = useSearchParams();
   const levels = useAppSelector((state) => state.levels);
   const points = useAppSelector((state) => state.points);
   const mode = useAppSelector((state) => state.options.mode);
   const currentGame = useGameStore((s) => s.getCurrentGame());
+  const addGameToStore = useGameStore((s) => s.addGameToStore);
   const collaboration = useOptionalCollaboration();
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSavedSnapshotRef = useRef<string | null>(null);
   const inFlightSnapshotRef = useRef<string | null>(null);
+  const lastAppliedProgressSyncTsRef = useRef<number | null>(null);
 
   const gameId = typeof params?.gameId === "string" ? params.gameId : Array.isArray(params?.gameId) ? params.gameId[0] : null;
 
   useEffect(() => {
     lastSavedSnapshotRef.current = null;
     inFlightSnapshotRef.current = null;
+    lastAppliedProgressSyncTsRef.current = null;
   }, [gameId, currentGame?.id]);
+
+  useEffect(() => {
+    const syncMessage = collaboration?.lastProgressSync;
+    const syncedProgressData = syncMessage?.progressData;
+    if (!syncMessage || !syncedProgressData || mode !== "game" || !currentGame) {
+      return;
+    }
+
+    if (lastAppliedProgressSyncTsRef.current === syncMessage.ts) {
+      return;
+    }
+
+    const mergedProgressData = {
+      ...(typeof currentGame.progressData === "object" && currentGame.progressData !== null ? currentGame.progressData : {}),
+      ...syncedProgressData,
+    };
+
+    const currentProgressSnapshot = stableSerialize(currentGame.progressData ?? {});
+    const mergedProgressSnapshot = stableSerialize(mergedProgressData);
+
+    lastAppliedProgressSyncTsRef.current = syncMessage.ts;
+
+    if (currentProgressSnapshot !== mergedProgressSnapshot) {
+      addGameToStore({
+        ...currentGame,
+        progressData: mergedProgressData,
+      });
+    }
+
+    const pointsByLevel = syncedProgressData.pointsByLevel;
+    if (pointsByLevel && typeof pointsByLevel === "object" && !Array.isArray(pointsByLevel)) {
+      dispatch(mergeSavedPoints(pointsByLevel as Record<string, {
+        points?: number;
+        maxPoints?: number;
+        accuracy?: number;
+        bestTime?: string;
+        scenarios?: { scenarioId: string; accuracy: number }[];
+      }>));
+    }
+  }, [addGameToStore, collaboration?.lastProgressSync, currentGame, dispatch, mode]);
 
   useEffect(() => {
     if (mode !== "game") return;
@@ -118,6 +163,15 @@ export function ProgressPersistence() {
         .then((data) => {
           lastSavedSnapshotRef.current = nextSnapshot;
           inFlightSnapshotRef.current = null;
+          if (currentGame && data?.instance?.progressData) {
+            addGameToStore({
+              ...currentGame,
+              progressData: data.instance.progressData,
+            });
+          }
+          if (collaboration?.roomId && collaboration.isConnected && collaboration.codeSyncReady) {
+            collaboration.syncProgressData(progressData);
+          }
           return data;
         })
         .catch(() => {
@@ -131,7 +185,7 @@ export function ProgressPersistence() {
         timeoutRef.current = null;
       }
     };
-  }, [collaboration?.codeSyncReady, collaboration?.isConnected, collaboration?.roomId, currentGame, gameId, levels.length, mode, points.levels, searchParams]);
+  }, [addGameToStore, collaboration, currentGame, gameId, levels.length, mode, points.levels, searchParams]);
 
   return null;
 }
