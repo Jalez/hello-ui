@@ -83,6 +83,7 @@ services:
     environment:
       PORT: 8080
       SOCKET_IO_PATH: /
+      API_BASE_URL: http://app:3000
       CORS_ORIGIN: https://tie-lukioplus.rd.tuni.fi
       TZ: Europe/Helsinki
     healthcheck:
