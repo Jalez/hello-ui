@@ -8,7 +8,6 @@ import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
 import { useEffect, useState, useRef } from "react";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { updateWeek, setAllLevels } from "@/store/slices/levels.slice";
-import { sendScoreToParentFrame } from "@/store/actions/score.actions";
 import { Footer } from "./Footer/Footer";
 import { Navbar } from "./Navbar/Navbar";
 import { setMode } from "@/store/slices/options.slice";
@@ -275,7 +274,6 @@ function App() {
 
     // Set mode (which also updates creator for backward compatibility)
     dispatch(setMode(currentMode));
-    dispatch(sendScoreToParentFrame());
   }, [
     dispatch,
     currentGame,
