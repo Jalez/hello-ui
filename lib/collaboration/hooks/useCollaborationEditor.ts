@@ -4,7 +4,7 @@ import { useCallback, useRef } from "react";
 import { EditorType, RoomStateSyncMessage } from "../types";
 
 interface UseCollaborationEditorOptions {
-  sendCursor: (editorType: EditorType, selection: { from: number; to: number }) => void;
+  sendCursor: (editorType: EditorType, levelIndex: number, selection: { from: number; to: number }) => void;
   sendChange: (
     editorType: EditorType,
     levelIndex: number,
@@ -16,6 +16,7 @@ interface UseCollaborationEditorOptions {
 
 interface UseCollaborationEditorReturn {
   updateLocalSelection: (editorType: EditorType, selection: { from: number; to: number }) => void;
+  updateLocalSelectionForLevel: (editorType: EditorType, levelIndex: number, selection: { from: number; to: number }) => void;
   applyLocalChange: (
     editorType: EditorType,
     changeSetJson: unknown,
@@ -45,18 +46,25 @@ export function useCollaborationEditor(
     return `${levelIndex}:${editorType}`;
   }, []);
 
-  const updateLocalSelection = useCallback(
-    (editorType: EditorType, selection: { from: number; to: number }) => {
+  const updateLocalSelectionForLevel = useCallback(
+    (editorType: EditorType, levelIndex: number, selection: { from: number; to: number }) => {
       const lastSelection = lastSelectionRef.current[editorType];
       if (
         lastSelection.from !== selection.from ||
         lastSelection.to !== selection.to
       ) {
         lastSelectionRef.current[editorType] = selection;
-        sendCursor(editorType, selection);
+        sendCursor(editorType, levelIndex, selection);
       }
     },
     [sendCursor]
+  );
+
+  const updateLocalSelection = useCallback(
+    (editorType: EditorType, selection: { from: number; to: number }) => {
+      updateLocalSelectionForLevel(editorType, 0, selection);
+    },
+    [updateLocalSelectionForLevel]
   );
 
   const applyLocalChange = useCallback(
@@ -92,6 +100,7 @@ export function useCollaborationEditor(
 
   return {
     updateLocalSelection,
+    updateLocalSelectionForLevel,
     applyLocalChange,
     setEditorVersion,
     getEditorVersion,

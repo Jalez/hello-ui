@@ -9,6 +9,7 @@ import {
   EditorChangeApplied,
   EditorCursor,
   EditorResync,
+  ProgressSyncMessage,
   RoomStateSyncMessage,
   UserIdentity,
   TabFocusMessage,
@@ -36,6 +37,7 @@ interface UseCollaborationConnectionOptions {
   onTabFocus?: (message: TabFocusMessage) => void;
   onTypingStatus?: (message: TypingStatusMessage) => void;
   onRoomStateSync?: (roomState: RoomStateSyncMessage) => void;
+  onProgressSync?: (message: ProgressSyncMessage) => void;
 }
 
 interface UseCollaborationConnectionReturn {
@@ -49,7 +51,7 @@ interface UseCollaborationConnectionReturn {
   joinGame: (roomId: string) => void;
   leaveGame: () => void;
   sendCanvasCursor: (x: number, y: number) => void;
-  sendEditorCursor: (editorType: EditorType, selection: { from: number; to: number }) => void;
+  sendEditorCursor: (editorType: EditorType, levelIndex: number, selection: { from: number; to: number }) => void;
   sendEditorChange: (
     editorType: EditorType,
     levelIndex: number,
@@ -57,9 +59,10 @@ interface UseCollaborationConnectionReturn {
     changeSetJson: unknown,
     selection?: { from: number; to: number }
   ) => void;
-  sendTabFocus: (editorType: EditorType) => void;
-  sendTypingStatus: (editorType: EditorType, isTyping: boolean) => void;
+  sendTabFocus: (editorType: EditorType, levelIndex: number) => void;
+  sendTypingStatus: (editorType: EditorType, levelIndex: number, isTyping: boolean) => void;
   sendRoomReset: (scope: "level" | "game", levelIndex?: number) => void;
+  sendProgressSync: (progressData: Record<string, unknown>) => void;
 }
 
 export function useCollaborationConnection(
@@ -76,11 +79,7 @@ export function useCollaborationConnection(
   const socketRef = useRef<Socket | null>(null);
   const clientIdRef = useRef<string | null>(null);
   const userColorRef = useRef<string | null>(null);
-  const typingStatusRef = useRef<Record<EditorType, boolean>>({
-    html: false,
-    css: false,
-    js: false,
-  });
+  const typingStatusRef = useRef<Record<string, boolean>>({});
   const reconnectAttemptsRef = useRef(0);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isConnectedRef = useRef(false);
@@ -150,13 +149,13 @@ export function useCollaborationConnection(
         socketRef.current.disconnect();
         socketRef.current = null;
       }
-      typingStatusRef.current = { html: false, css: false, js: false };
+      typingStatusRef.current = {};
       isConnectedRef.current = false;
     };
 
     socket.on("connect", () => {
       isConnectedRef.current = true;
-      typingStatusRef.current = { html: false, css: false, js: false };
+      typingStatusRef.current = {};
       setIsConnected(true);
       setIsConnecting(false);
       setError(null);
@@ -229,7 +228,7 @@ export function useCollaborationConnection(
       optionsRef.current.onError?.(data.error || "Unknown error");
     });
 
-    socket.on("user-joined", (data: { clientId?: string; userId: string; userEmail: string; userName?: string; userImage?: string }) => {
+    socket.on("user-joined", (data: { clientId?: string; userId: string; userEmail: string; userName?: string; userImage?: string; activeTab?: EditorType; activeLevelIndex?: number; isTyping?: boolean }) => {
       const u = optionsRef.current.user;
       if (!u || data.userEmail === u.email) return;
       const joinedClientId = data.clientId ?? "";
@@ -240,6 +239,9 @@ export function useCollaborationConnection(
           userEmail: data.userEmail,
           userName: data.userName,
           userImage: data.userImage,
+          activeTab: data.activeTab,
+          activeLevelIndex: data.activeLevelIndex,
+          isTyping: data.isTyping,
         };
         queueMicrotask(() => optionsRef.current.onUserJoined?.(payload));
       }
@@ -253,7 +255,7 @@ export function useCollaborationConnection(
       });
     });
 
-    socket.on("current-users", (data: { users?: Array<{ clientId?: string; userId?: string; userEmail: string; userName?: string; userImage?: string; color?: string }> }) => {
+    socket.on("current-users", (data: { users?: Array<{ clientId?: string; userId?: string; userEmail: string; userName?: string; userImage?: string; color?: string; activeTab?: EditorType; activeLevelIndex?: number; isTyping?: boolean }> }) => {
       if (data.users && Array.isArray(data.users)) {
         const mapped = data.users
           .filter((u) => u && (u.clientId ?? "").length > 0)
@@ -264,6 +266,9 @@ export function useCollaborationConnection(
             userName: u.userName,
             userImage: u.userImage,
             color: u.color || generateUserColor(u.userEmail),
+            activeTab: u.activeTab,
+            activeLevelIndex: Number.isInteger(u.activeLevelIndex) ? u.activeLevelIndex : undefined,
+            isTyping: Boolean(u.isTyping),
           }));
         if (mapped.length > 0) {
           queueMicrotask(() => optionsRef.current.onCurrentUsers?.(mapped));
@@ -319,6 +324,10 @@ export function useCollaborationConnection(
       optionsRef.current.onRoomStateSync?.(data);
     });
 
+    socket.on("progress-sync", (data: ProgressSyncMessage) => {
+      optionsRef.current.onProgressSync?.(data);
+    });
+
     return () => {
       clearReconnectTimeout();
       disconnectSocket();
@@ -341,12 +350,13 @@ export function useCollaborationConnection(
     }
   }, [roomId, parsedGroupId, user]);
 
-  const sendEditorCursor = useCallback((editorType: "html" | "css" | "js", selection: { from: number; to: number }) => {
+  const sendEditorCursor = useCallback((editorType: "html" | "css" | "js", levelIndex: number, selection: { from: number; to: number }) => {
     if (socketRef.current && roomId && user && clientIdRef.current) {
       socketRef.current.emit("editor-cursor", {
         roomId,
         groupId: parsedGroupId ?? undefined,
         editorType,
+        levelIndex,
         clientId: clientIdRef.current,
         userId: user.id,
         userName: user.name,
@@ -380,12 +390,13 @@ export function useCollaborationConnection(
     }
   }, [roomId, parsedGroupId, user]);
 
-  const sendTabFocus = useCallback((editorType: EditorType) => {
+  const sendTabFocus = useCallback((editorType: EditorType, levelIndex: number) => {
     if (socketRef.current && roomId && user && clientIdRef.current) {
       socketRef.current.emit("tab-focus", {
         roomId,
         groupId: parsedGroupId ?? undefined,
         editorType,
+        levelIndex,
         clientId: clientIdRef.current,
         userId: user.id,
         userName: user.name,
@@ -394,18 +405,20 @@ export function useCollaborationConnection(
     }
   }, [roomId, parsedGroupId, user]);
 
-  const sendTypingStatus = useCallback((editorType: EditorType, isTyping: boolean) => {
+  const sendTypingStatus = useCallback((editorType: EditorType, levelIndex: number, isTyping: boolean) => {
     if (socketRef.current && roomId && user && clientIdRef.current) {
       const nextIsTyping = Boolean(isTyping);
-      if (typingStatusRef.current[editorType] === nextIsTyping) {
+      const typingKey = `${levelIndex}:${editorType}` as const;
+      if ((typingStatusRef.current as Record<string, boolean>)[typingKey] === nextIsTyping) {
         return;
       }
-      typingStatusRef.current[editorType] = nextIsTyping;
+      (typingStatusRef.current as Record<string, boolean>)[typingKey] = nextIsTyping;
 
       socketRef.current.emit("typing-status", {
         roomId,
         groupId: parsedGroupId ?? undefined,
         editorType,
+        levelIndex,
         clientId: clientIdRef.current,
         userId: user.id,
         userName: user.name,
@@ -429,6 +442,19 @@ export function useCollaborationConnection(
     }
   }, [roomId, parsedGroupId, user]);
 
+  const sendProgressSync = useCallback((progressData: Record<string, unknown>) => {
+    if (socketRef.current && roomId && user && clientIdRef.current) {
+      socketRef.current.emit("progress-sync", {
+        roomId,
+        groupId: parsedGroupId ?? undefined,
+        clientId: clientIdRef.current,
+        userId: user.id,
+        progressData,
+        ts: Date.now(),
+      });
+    }
+  }, [roomId, parsedGroupId, user]);
+
   const disconnect = () => {
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
@@ -439,7 +465,7 @@ export function useCollaborationConnection(
       socketRef.current = null;
     }
     isConnectedRef.current = false;
-    typingStatusRef.current = { html: false, css: false, js: false };
+    typingStatusRef.current = {};
     setIsConnected(false);
     setIsConnecting(false);
     setClientId(null);
@@ -473,5 +499,6 @@ export function useCollaborationConnection(
     sendTabFocus,
     sendTypingStatus,
     sendRoomReset,
+    sendProgressSync,
   };
 }

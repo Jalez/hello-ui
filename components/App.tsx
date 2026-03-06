@@ -304,7 +304,7 @@ function App() {
     console.log("isLoading", isLoading);
     if (isLoading) return;
 
-    const targetHeight = 1100;
+    const targetHeight = 900;
     try {
       window.parent.postMessage({ subject: "lti.frameResize", height: targetHeight }, "*");
       window.parent.postMessage({ type: "a-plus-resize-iframe", height: targetHeight }, "*");

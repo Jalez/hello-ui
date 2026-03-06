@@ -9,6 +9,9 @@ import { REMOTE_SYNC_DEBOUNCE_MS, TYPING_IDLE_MS } from "./constants";
 import type { RemoteEditorCaret } from "./types";
 import { EMPTY_EDITOR_CURSORS, areRemoteCaretsEqual, titleToEditorType } from "./utils";
 
+const EMPTY_REMOTE_CODE_CHANGES: NonNullable<ReturnType<typeof useOptionalCollaboration>>["remoteCodeChanges"] = [];
+const EMPTY_REMOTE_CODE_RESYNCS: NonNullable<ReturnType<typeof useOptionalCollaboration>>["remoteCodeResyncs"] = [];
+
 interface UseCodeEditorCollaborationOptions {
   title: "HTML" | "CSS" | "JS";
   code: string;
@@ -29,13 +32,14 @@ function buildRemoteCarets(
   viewport: HTMLDivElement,
   editorCursors: Map<string, EditorCursor>,
   editorType: ReturnType<typeof titleToEditorType>,
+  levelIndex: number,
 ) {
   const viewportRect = viewport.getBoundingClientRect();
   const docLen = view.state.doc.length;
   const nextCarets: RemoteEditorCaret[] = [];
 
   for (const [id, cursor] of editorCursors.entries()) {
-    if (cursor.editorType !== editorType) {
+    if (cursor.editorType !== editorType || cursor.levelIndex !== levelIndex) {
       continue;
     }
 
@@ -73,8 +77,8 @@ export function useCodeEditorCollaboration({
   const applyEditorChange = collaboration?.applyEditorChange;
   const updateEditorSelection = collaboration?.updateEditorSelection;
   const editorCursors = collaboration?.editorCursors ?? EMPTY_EDITOR_CURSORS;
-  const lastRemoteCodeChange = collaboration?.lastRemoteCodeChange ?? null;
-  const lastRemoteCodeResync = collaboration?.lastRemoteCodeResync ?? null;
+  const remoteCodeChanges = collaboration?.remoteCodeChanges ?? EMPTY_REMOTE_CODE_CHANGES;
+  const remoteCodeResyncs = collaboration?.remoteCodeResyncs ?? EMPTY_REMOTE_CODE_RESYNCS;
   const editorType = titleToEditorType(title);
 
   const editorViewRef = useRef<EditorView | null>(null);
@@ -88,8 +92,8 @@ export function useCodeEditorCollaboration({
   const applyingExternalUpdateRef = useRef(false);
   const codeRef = useRef(template);
   const lastSyncedCodeRef = useRef(template);
-  const lastAppliedRemotePatchTsRef = useRef<number | null>(null);
-  const lastAppliedRemoteResyncTsRef = useRef<number | null>(null);
+  const lastAppliedRemotePatchSeqRef = useRef<number>(0);
+  const lastAppliedRemoteResyncSeqRef = useRef<number>(0);
   const lastLevelIdentifierRef = useRef(levelIdentifier);
   const [remoteCarets, setRemoteCarets] = useState<RemoteEditorCaret[]>([]);
 
@@ -104,9 +108,9 @@ export function useCodeEditorCollaboration({
 
     if (isConnected && !locked && setTyping) {
       isTypingRef.current = true;
-      setTyping(editorType, true);
+      setTyping(editorType, currentLevel - 1, true);
     }
-  }, [editorType, isConnected, locked, setTyping]);
+  }, [currentLevel, editorType, isConnected, locked, setTyping]);
 
   const handleTypingEnd = useCallback(() => {
     if (!isTypingRef.current) {
@@ -115,9 +119,9 @@ export function useCodeEditorCollaboration({
 
     isTypingRef.current = false;
     if (isConnected && setTyping) {
-      setTyping(editorType, false);
+      setTyping(editorType, currentLevel - 1, false);
     }
-  }, [editorType, isConnected, setTyping]);
+  }, [currentLevel, editorType, isConnected, setTyping]);
 
   useEffect(() => {
     return () => {
@@ -148,72 +152,72 @@ export function useCodeEditorCollaboration({
         pendingChangeSetRef.current = null;
       }
 
-      updateEditorSelection(editorType, pendingSelectionRef.current);
+      updateEditorSelection(editorType, currentLevel - 1, pendingSelectionRef.current);
     }, REMOTE_SYNC_DEBOUNCE_MS);
   }, [applyEditorChange, currentLevel, editorType, isConnected, locked, updateEditorSelection]);
 
   useEffect(() => {
     const activeLevelIndex = currentLevel - 1;
-    if (!lastRemoteCodeChange) {
-      return;
-    }
-    if (lastRemoteCodeChange.editorType !== editorType) {
-      return;
-    }
-    if (lastRemoteCodeChange.levelIndex !== activeLevelIndex) {
-      return;
-    }
-    if (lastAppliedRemotePatchTsRef.current === lastRemoteCodeChange.ts) {
+    const unseenChanges = remoteCodeChanges.filter(
+      (change) =>
+        change.seq > lastAppliedRemotePatchSeqRef.current &&
+        change.editorType === editorType &&
+        change.levelIndex === activeLevelIndex
+    );
+    if (unseenChanges.length === 0) {
       return;
     }
 
-    lastAppliedRemotePatchTsRef.current = lastRemoteCodeChange.ts;
+    let nextVisibleCode: string | null = null;
 
     try {
-      const remoteChangeSet = ChangeSet.fromJSON(lastRemoteCodeChange.changeSetJson);
-      const nextSyncedCode = applyChangeSetToContent(lastSyncedCodeRef.current, remoteChangeSet);
-      lastSyncedCodeRef.current = nextSyncedCode;
+      for (const change of unseenChanges) {
+        const remoteChangeSet = ChangeSet.fromJSON(change.changeSetJson);
+        const nextSyncedCode = applyChangeSetToContent(lastSyncedCodeRef.current, remoteChangeSet);
+        lastSyncedCodeRef.current = nextSyncedCode;
 
-      if (pendingChangeSetRef.current) {
-        pendingChangeSetRef.current = pendingChangeSetRef.current.map(remoteChangeSet);
+        if (pendingChangeSetRef.current) {
+          pendingChangeSetRef.current = pendingChangeSetRef.current.map(remoteChangeSet);
+        }
+
+        nextVisibleCode = pendingChangeSetRef.current
+          ? applyChangeSetToContent(nextSyncedCode, pendingChangeSetRef.current)
+          : nextSyncedCode;
+        lastAppliedRemotePatchSeqRef.current = change.seq;
       }
 
-      const nextVisibleCode = pendingChangeSetRef.current
-        ? applyChangeSetToContent(nextSyncedCode, pendingChangeSetRef.current)
-        : nextSyncedCode;
-
-      suppressCollaborationUpdateRef.current = true;
-      setCode((prev) => (prev === nextVisibleCode ? prev : nextVisibleCode));
+      if (nextVisibleCode !== null) {
+        suppressCollaborationUpdateRef.current = true;
+        setCode((prev) => (prev === nextVisibleCode ? prev : nextVisibleCode));
+      }
     } catch (error) {
       console.error("Failed to apply remote editor patch to active editor", error);
     }
-  }, [currentLevel, editorType, lastRemoteCodeChange, setCode]);
+  }, [currentLevel, editorType, remoteCodeChanges, setCode]);
 
   useEffect(() => {
     const activeLevelIndex = currentLevel - 1;
-    if (!lastRemoteCodeResync) {
-      return;
-    }
-    if (lastRemoteCodeResync.editorType !== editorType) {
-      return;
-    }
-    if (lastRemoteCodeResync.levelIndex !== activeLevelIndex) {
-      return;
-    }
-    if (lastAppliedRemoteResyncTsRef.current === lastRemoteCodeResync.ts) {
+    const unseenResyncs = remoteCodeResyncs.filter(
+      (resync) =>
+        resync.seq > lastAppliedRemoteResyncSeqRef.current &&
+        resync.editorType === editorType &&
+        resync.levelIndex === activeLevelIndex
+    );
+    if (unseenResyncs.length === 0) {
       return;
     }
 
-    lastAppliedRemoteResyncTsRef.current = lastRemoteCodeResync.ts;
-    lastSyncedCodeRef.current = lastRemoteCodeResync.content;
+    const latestResync = unseenResyncs[unseenResyncs.length - 1];
+    lastAppliedRemoteResyncSeqRef.current = latestResync.seq;
+    lastSyncedCodeRef.current = latestResync.content;
     pendingChangeSetRef.current = null;
     if (syncTimeoutRef.current) {
       clearTimeout(syncTimeoutRef.current);
       syncTimeoutRef.current = null;
     }
     suppressCollaborationUpdateRef.current = true;
-    setCode((prev) => (prev === lastRemoteCodeResync.content ? prev : lastRemoteCodeResync.content));
-  }, [currentLevel, editorType, lastRemoteCodeResync, setCode]);
+    setCode((prev) => (prev === latestResync.content ? prev : latestResync.content));
+  }, [currentLevel, editorType, remoteCodeResyncs, setCode]);
 
   useEffect(() => {
     if (!isConnected || !editorViewRef.current || !editorViewportRef.current) {
@@ -233,7 +237,7 @@ export function useCodeEditorCollaboration({
         return;
       }
 
-      const nextCarets = buildRemoteCarets(view, viewport, editorCursors, editorType);
+      const nextCarets = buildRemoteCarets(view, viewport, editorCursors, editorType, currentLevel - 1);
       setRemoteCarets((prev) => (areRemoteCaretsEqual(prev, nextCarets) ? prev : nextCarets));
     };
 
@@ -260,7 +264,7 @@ export function useCodeEditorCollaboration({
       scrollDom?.removeEventListener("scroll", scheduleRecompute);
       win?.removeEventListener("resize", scheduleRecompute);
     };
-  }, [code, editorCursors, editorType, isConnected, remoteCarets.length]);
+  }, [code, currentLevel, editorCursors, editorType, isConnected, remoteCarets.length]);
 
   const handleCodeUpdate = useCallback((value: string) => {
     if (locked) {
@@ -311,10 +315,10 @@ export function useCodeEditorCollaboration({
         return;
       }
 
-      const nextCarets = buildRemoteCarets(view, viewport, editorCursors, editorType);
+      const nextCarets = buildRemoteCarets(view, viewport, editorCursors, editorType, currentLevel - 1);
       setRemoteCarets((prev) => (areRemoteCaretsEqual(prev, nextCarets) ? prev : nextCarets));
     }
-  }, [editorCursors, editorType, isConnected, scheduleDebouncedSync]);
+  }, [currentLevel, editorCursors, editorType, isConnected, scheduleDebouncedSync]);
 
   useEffect(() => {
     const levelChanged = lastLevelIdentifierRef.current !== levelIdentifier;

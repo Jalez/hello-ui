@@ -8,14 +8,18 @@ import { githubLight } from "@uiw/codemirror-theme-github";
 import { vscodeDark } from "@uiw/codemirror-theme-vscode";
 import CodeMirror from "@uiw/react-codemirror";
 import type { ReactCodeMirrorProps } from "@uiw/react-codemirror";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTheme } from "next-themes";
 
 import EditorMagicButton from "@/components/CreatorControls/EditorMagicButton";
 import { useAppSelector } from "@/store/hooks/hooks";
 
 import { AiReviewPanel } from "./AiReviewPanel";
-import { commentKeymapCompartment, reviewDecorationsCompartment } from "./constants";
+import {
+  commentKeymapCompartment,
+  reviewDecorationsCompartment,
+  LOCAL_REDUX_UPDATE_DEBOUNCE_MS,
+} from "./constants";
 import { getCommentKeymap } from "./getCommentKeyMap";
 import { HtmlFrameLine } from "./HtmlFrameLine";
 import { RemoteCaretsOverlay } from "./RemoteCaretsOverlay";
@@ -36,6 +40,8 @@ export default function CodeEditor({
   levelIdentifier,
 }: CodeEditorProps) {
   const [code, setCode] = useState(template);
+  const localUpdateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingCodeForReduxRef = useRef<string | null>(null);
   const currentLevel = useAppSelector((state) => state.currentLevel.currentLevel);
   const options = useAppSelector((state) => state.options);
   const { theme: nextTheme } = useTheme();
@@ -94,15 +100,51 @@ export default function CodeEditor({
     });
   }, [editorViewRef, review]);
 
+  const flushPendingLocalCodeUpdate = useCallback(() => {
+    const pendingCode = pendingCodeForReduxRef.current;
+    if (pendingCode === null || applyingExternalUpdateRef.current || pendingCode === template) {
+      pendingCodeForReduxRef.current = null;
+      return;
+    }
+
+    codeUpdater({ [title.toLowerCase()]: pendingCode }, type);
+    pendingCodeForReduxRef.current = null;
+  }, [applyingExternalUpdateRef, codeUpdater, template, title, type]);
+
   useEffect(() => {
     if (applyingExternalUpdateRef.current) {
       return;
     }
 
-    if (code !== template) {
-      codeUpdater({ [title.toLowerCase()]: code }, type);
+    if (code === template) {
+      if (localUpdateTimeoutRef.current) {
+        clearTimeout(localUpdateTimeoutRef.current);
+        localUpdateTimeoutRef.current = null;
+      }
+      pendingCodeForReduxRef.current = null;
+      return;
     }
-  }, [applyingExternalUpdateRef, code, codeUpdater, template, title, type]);
+
+    pendingCodeForReduxRef.current = code;
+    if (localUpdateTimeoutRef.current) {
+      clearTimeout(localUpdateTimeoutRef.current);
+    }
+
+    localUpdateTimeoutRef.current = setTimeout(() => {
+      localUpdateTimeoutRef.current = null;
+      flushPendingLocalCodeUpdate();
+    }, LOCAL_REDUX_UPDATE_DEBOUNCE_MS);
+  }, [applyingExternalUpdateRef, code, flushPendingLocalCodeUpdate, template]);
+
+  useEffect(() => {
+    return () => {
+      if (localUpdateTimeoutRef.current) {
+        clearTimeout(localUpdateTimeoutRef.current);
+        localUpdateTimeoutRef.current = null;
+      }
+      flushPendingLocalCodeUpdate();
+    };
+  }, [flushPendingLocalCodeUpdate]);
 
   useEffect(() => {
     clearReview();

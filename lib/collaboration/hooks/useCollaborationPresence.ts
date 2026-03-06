@@ -17,8 +17,8 @@ interface UseCollaborationPresenceReturn {
   setUsers: (users: ActiveUser[]) => void;
   clearUsers: () => void;
   getUserByClientId: (clientId: string) => ActiveUser | undefined;
-  updateUserTab: (clientId: string, editorType: EditorType) => void;
-  updateUserTyping: (clientId: string, editorType: EditorType, isTyping: boolean) => void;
+  updateUserTab: (clientId: string, editorType: EditorType, levelIndex: number) => void;
+  updateUserTyping: (clientId: string, editorType: EditorType, levelIndex: number, isTyping: boolean) => void;
   clearUserTyping: (clientId: string) => void;
 }
 
@@ -80,36 +80,40 @@ export function useCollaborationPresence(
     [activeUsers]
   );
 
-  const updateUserTab = useCallback((clientId: string, editorType: EditorType) => {
+  const updateUserTab = useCallback((clientId: string, editorType: EditorType, levelIndex: number) => {
     setActiveUsers((prev) => {
       let changed = false;
       const next = prev.map((u) => {
         if (u.clientId !== clientId) {
           return u;
         }
-        if (u.activeTab === editorType && !u.isTyping) {
+        if (u.activeTab === editorType && u.activeLevelIndex === levelIndex && !u.isTyping) {
           return u;
         }
         changed = true;
-        return { ...u, activeTab: editorType, isTyping: false };
+        return { ...u, activeTab: editorType, activeLevelIndex: levelIndex, isTyping: false };
       });
       return changed ? next : prev;
     });
   }, []);
 
   const updateUserTyping = useCallback(
-    (clientId: string, editorType: EditorType, isTyping: boolean) => {
+    (clientId: string, editorType: EditorType, levelIndex: number, isTyping: boolean) => {
       setActiveUsers((prev) => {
         let changed = false;
         const next = prev.map((u) => {
           if (u.clientId !== clientId) {
             return u;
           }
-          if (u.activeTab === editorType && Boolean(u.isTyping) === Boolean(isTyping)) {
+          if (
+            u.activeTab === editorType &&
+            u.activeLevelIndex === levelIndex &&
+            Boolean(u.isTyping) === Boolean(isTyping)
+          ) {
             return u;
           }
           changed = true;
-          return { ...u, activeTab: editorType, isTyping };
+          return { ...u, activeTab: editorType, activeLevelIndex: levelIndex, isTyping };
         });
         return changed ? next : prev;
       });
