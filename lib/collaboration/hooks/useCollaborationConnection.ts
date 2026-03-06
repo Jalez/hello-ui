@@ -65,6 +65,20 @@ interface UseCollaborationConnectionReturn {
   sendProgressSync: (progressData: Record<string, unknown>) => void;
 }
 
+function getSocketTransports(): ("websocket" | "polling")[] {
+  const configuredTransports = process.env.NEXT_PUBLIC_WEBSOCKET_TRANSPORTS;
+  if (!configuredTransports) {
+    return ["websocket", "polling"];
+  }
+
+  const transports = configuredTransports
+    .split(",")
+    .map((value) => value.trim())
+    .filter((value): value is "websocket" | "polling" => value === "websocket" || value === "polling");
+
+  return transports.length > 0 ? transports : ["websocket", "polling"];
+}
+
 export function useCollaborationConnection(
   options: UseCollaborationConnectionOptions
 ): UseCollaborationConnectionReturn {
@@ -120,6 +134,7 @@ export function useCollaborationConnection(
     }
 
     const { url: wsUrl, path: wsPath } = getWebSocketConfig();
+    const wsTransports = getSocketTransports();
 
     const socket = io(wsUrl, {
       path: wsPath,
@@ -131,7 +146,9 @@ export function useCollaborationConnection(
         userImage: currentUser.image,
         roomId,
       },
-      transports: ["websocket", "polling"],
+      transports: wsTransports,
+      upgrade: wsTransports.includes("websocket"),
+      tryAllTransports: true,
       reconnection: false,
     });
 
