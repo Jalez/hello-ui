@@ -38,6 +38,7 @@ import { AplusSubmitButton } from "./AplusSubmitButton";
 import Link from "next/link";
 import { useGameStore } from "@/components/default/games";
 import { CreatorMenu } from "./CreatorMenu";
+import { useOptionalCollaboration } from "@/lib/collaboration/CollaborationProvider";
 
 export const Navbar = () => {
   const dispatch = useAppDispatch();
@@ -49,6 +50,7 @@ export const Navbar = () => {
   );
   const options = useAppSelector((state) => state.options);
   const currentGame = useGameStore((state) => state.getCurrentGame());
+  const collaboration = useOptionalCollaboration();
   const canEditCurrentGame = Boolean(currentGame?.canEdit ?? currentGame?.isOwner);
   const isCreator = options.creator;
   const isGameRoute = pathname.startsWith("/game/");
@@ -61,6 +63,7 @@ export const Navbar = () => {
   const level = levels[currentLevel - 1];
   const mapEditorRef = useRef<MapEditorRef>(null);
   const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
+  const [resetScope, setResetScope] = useState<"level" | "game">("level");
 
   const levelChanger = useCallback((pickedLevel: number) => {
     dispatch(setCurrentLevel(pickedLevel));
@@ -70,7 +73,18 @@ export const Navbar = () => {
     dispatch(resetLevel(currentLevel));
   }, [currentLevel, dispatch]);
 
-  const togglePopper = useCallback(() => {
+  const handleSharedReset = useCallback((scope: "level" | "game") => {
+    if (!currentGame?.id) {
+      return;
+    }
+
+    if (collaboration?.isConnected && collaboration.resetRoomState) {
+      collaboration.resetRoomState(scope, currentLevel - 1);
+    }
+  }, [collaboration, currentGame?.id, currentLevel]);
+
+  const togglePopper = useCallback((scope: "level" | "game" = "level") => {
+    setResetScope(scope);
     setIsResetDialogOpen(true);
   }, []);
 
@@ -95,7 +109,11 @@ export const Navbar = () => {
         <DropdownMenuSeparator />
         {showCreatorGameMenus && (
           <>
-            <DropdownMenuItem onSelect={togglePopper}>
+            <DropdownMenuItem onSelect={() => togglePopper("level")}>
+              <RotateCcw className="h-4 w-4 mr-2" />
+              Reset Level
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => togglePopper("game")}>
               <RotateCcw className="h-4 w-4 mr-2" />
               Reset Game
             </DropdownMenuItem>
@@ -182,7 +200,7 @@ export const Navbar = () => {
             variant="ghost"
             className="gap-2"
             title="Reset Level"
-            onClick={togglePopper}
+            onClick={() => togglePopper("level")}
           >
             <RotateCcw className="h-4 w-4" />
             <span>Reset</span>
@@ -229,7 +247,7 @@ export const Navbar = () => {
               variant="ghost"
               className="gap-2"
               title="Reset Level"
-              onClick={togglePopper}
+              onClick={() => togglePopper("level")}
             >
               <RotateCcw className="h-5 w-5" />
               <span>Reset</span>
@@ -258,9 +276,15 @@ export const Navbar = () => {
       {/* Dialog for reset confirmation */}
       <NavPopper
         open={isResetDialogOpen}
-        paragraph="This is an irreversible action. All progress will be lost, but timer is not affected. Are you sure you want to reset the level?"
-        title="Reset Level"
-        handleConfirmation={handleLevelReset}
+        paragraph={
+          showCreatorGameMenus && resetScope === "game"
+            ? "This resets the shared game instance for the current room back to the original template code. All saved progress for that room will be lost."
+            : showCreatorGameMenus
+              ? "This resets only the current level in the shared game instance back to that level's original template code."
+            : "This is an irreversible action. All progress will be lost, but timer is not affected. Are you sure you want to reset the level?"
+        }
+        title={showCreatorGameMenus ? (resetScope === "game" ? "Reset Game" : "Reset Level") : "Reset Level"}
+        handleConfirmation={showCreatorGameMenus ? () => handleSharedReset(resetScope) : handleLevelReset}
         resetAnchorEl={handleAnchorElReset}
       />
     </div>

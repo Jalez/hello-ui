@@ -5,7 +5,6 @@ import { ArtBoards } from "./ArtBoards/ArtBoards";
 import { LevelUpdater } from "./General/LevelUpdater";
 import { GameContainer } from "./General/GameContainer";
 import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
-import InfoInstructions from "./InfoBoard/InfoInstructions";
 import { useEffect, useState, useRef } from "react";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { updateWeek, setAllLevels } from "@/store/slices/levels.slice";
@@ -15,7 +14,6 @@ import { Navbar } from "./Navbar/Navbar";
 import { setMode } from "@/store/slices/options.slice";
 import { setCurrentLevel } from "@/store/slices/currentLevel.slice";
 import { Level } from "@/types";
-import Info from "./InfoBoard/Info";
 import Notifications from "./General/Notifications";
 import { SnackbarProvider } from "notistack";
 import { setSolutions } from "@/store/slices/solutions.slice";
@@ -29,19 +27,29 @@ import { ProgressPersistence } from "./General/ProgressPersistence";
 import { useGameStore } from "./default/games";
 import { useSession } from "next-auth/react";
 import type { Mode } from "@/store/slices/options.slice";
+import { useOptionalCollaboration } from "@/lib/collaboration/CollaborationProvider";
 
-
-export let allLevels: Level[] = [];
+export const allLevels: Level[] = [];
 type SolutionsByLevelName = Record<string, { html: string; css: string; js: string }>;
+
+function normalizeRoomStateLevels(levels: Array<Record<string, unknown>>): Level[] {
+  return levels.map((rawLevel) => {
+    const levelWithoutVersions = {
+      ...rawLevel,
+    } as Record<string, unknown> & { versions?: unknown };
+    delete levelWithoutVersions.versions;
+    return levelWithoutVersions as unknown as Level;
+  });
+}
 
 function App() {
   const levels = useAppSelector((state) => state.levels);
-  const currentLevel = useAppSelector((state) => state.currentLevel.currentLevel);
   const dispatch = useAppDispatch();
   const options = useAppSelector((state) => state.options);
   const [isLoading, setIsLoading] = useState(true);
   const currentGame = useGameStore((state) => state.getCurrentGame());
   const { data: session } = useSession();
+  const collaboration = useOptionalCollaboration();
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
@@ -52,11 +60,18 @@ function App() {
   const hasFetchedRef = useRef(false);
   const lastGameIdRef = useRef<string | null>(null);
   const lastModeRef = useRef<string | null>(null);
+  const lastRoomIdRef = useRef<string | null>(null);
+  const lastRoomStateTsRef = useRef<number | null>(null);
+  const setIsLoadingAsync = (value: boolean) => {
+    queueMicrotask(() => setIsLoading(value));
+  };
 
   useEffect(() => {
     hasFetchedRef.current = false;
     lastGameIdRef.current = null;
     lastModeRef.current = null;
+    lastRoomIdRef.current = null;
+    lastRoomStateTsRef.current = null;
     if (currentGame?.id) {
       console.log("[App] Game context changed, forcing reload", {
         gameId: currentGame.id,
@@ -92,12 +107,12 @@ function App() {
     }
 
     if ((isGameRoute || isCreatorRoute) && (!routeGameId || !currentGame?.id || currentGame.id !== routeGameId)) {
-      setIsLoading(true);
+      setIsLoadingAsync(true);
       return;
     }
 
     if (isGameContextRoute && !currentGame?.mapName) {
-      setIsLoading(true);
+      setIsLoadingAsync(true);
       return;
     }
 
@@ -108,35 +123,42 @@ function App() {
     }
 
     const currentGameId = currentGame?.id || null;
+    const roomStateTs = collaboration?.initialRoomState?.ts ?? null;
+    const shouldUseWsCodeSource =
+      currentMode === "game" &&
+      Boolean(collaboration?.roomId);
+
+    if (shouldUseWsCodeSource && (!collaboration?.codeSyncReady || !collaboration?.initialRoomState)) {
+      setIsLoadingAsync(true);
+      return;
+    }
 
     // Check if game or mode changed
     const gameChanged = lastGameIdRef.current !== currentGameId;
     const modeChanged = lastModeRef.current !== currentMode;
+    const roomChanged = lastRoomIdRef.current !== (collaboration?.roomId || null);
+    const roomStateChanged = lastRoomStateTsRef.current !== roomStateTs;
 
-    // If neither changed and we already fetched, skip
-    if (hasFetchedRef.current && !gameChanged && !modeChanged) {
+    // If nothing affecting the data source changed and we already fetched, skip
+    if (hasFetchedRef.current && !gameChanged && !modeChanged && !roomChanged && !roomStateChanged) {
       return;
     }
 
     hasFetchedRef.current = true;
     lastGameIdRef.current = currentGameId;
     lastModeRef.current = currentMode;
+    lastRoomIdRef.current = collaboration?.roomId || null;
+    lastRoomStateTsRef.current = roomStateTs;
 
     const isCreator = currentMode === "creator";
 
-    // Game-context routes must always use the loaded game's map; never "all" to avoid loading every level.
-    const mapToFetch = isGameContextRoute
-      ? currentGame!.mapName
-      : urlParams.get("map") || "all";
-    const fetchLevels = async (mapName: string) => {
+    const applyLevels = async (levelsSnapshot: Level[], mapName: string) => {
       let solutions: SolutionsByLevelName = {};
       try {
-        if (!currentGame?.id && mapName === "all") {
-          allLevels = await getAllLevels();
-        } else {
-          allLevels = await getMapLevels(mapName);
-        }
-        solutions = allLevels.reduce((acc, level) => {
+        let fetchedLevels: Level[] = levelsSnapshot;
+        let nextLevels: Level[] = levelsSnapshot;
+
+        solutions = nextLevels.reduce((acc, level) => {
           acc[level.name] = {
             html: level.solution.html,
             css: level.solution.css,
@@ -146,7 +168,7 @@ function App() {
         }, {} as SolutionsByLevelName);
 
         if (isCreator) {
-          allLevels = allLevels.map((level) => {
+          nextLevels = nextLevels.map((level) => {
             level.solution = {
               html: solutions[level.name]?.html || "",
               css: solutions[level.name]?.css || "",
@@ -156,8 +178,8 @@ function App() {
           });
         }
 
-        // If no levels exist, create an empty default level
-        if (allLevels.length === 0) {
+        // Only non-collaborative paths fall back to a local starter level.
+        if (nextLevels.length === 0 && !shouldUseWsCodeSource) {
           console.log("No levels found, creating empty starter level");
           const emptyLevel: Level = {
             name: "template",
@@ -187,17 +209,18 @@ function App() {
             maxPoints: 100,
             confettiSprinkled: false,
           };
-          allLevels = [emptyLevel];
+          fetchedLevels = [emptyLevel];
+          nextLevels = [emptyLevel];
           solutions[emptyLevel.name] = { html: "", css: "", js: "" };
           console.log("Empty level created:", emptyLevel);
         }
 
         // Dispatch all updates synchronously
-        console.log("Dispatching levels to Redux, count:", allLevels.length);
-        dispatch(updateWeek({ levels: allLevels, mapName, gameId: currentGame?.id, mode: currentMode, forceFresh: modeChanged }));
+        console.log("Dispatching levels to Redux, count:", nextLevels.length);
+        dispatch(updateWeek({ levels: nextLevels, mapName, gameId: currentGame?.id, mode: currentMode, forceFresh: modeChanged }));
         dispatch(setSolutions(solutions));
         dispatch(resetSolutionUrls());
-        setAllLevels(allLevels);
+        setAllLevels(fetchedLevels);
         await dispatch(initializePointsFromLevelsStateThunk());
 
         // Restore saved best points per level from game instance (after points slice is initialized)
@@ -214,19 +237,48 @@ function App() {
 
         console.log("All dispatches complete, setting isLoading to false");
         // Set loading false immediately after dispatches (they're synchronous)
-        setIsLoading(false);
+        setIsLoadingAsync(false);
       } catch (error) {
-        console.error("Error fetching levels:", error);
-        setIsLoading(false);
+        console.error("Error applying levels:", error);
+        setIsLoadingAsync(false);
       }
     };
-    fetchLevels(mapToFetch);
+
+    setIsLoadingAsync(true);
+    if (shouldUseWsCodeSource) {
+      const roomStateLevels = normalizeRoomStateLevels(
+        (collaboration?.initialRoomState?.levels || []) as Array<Record<string, unknown>>
+      );
+      applyLevels(roomStateLevels, currentGame!.mapName);
+    } else {
+      // Game-context routes must always use the loaded game's map; never "all" to avoid loading every level.
+      const mapToFetch = isGameContextRoute
+        ? currentGame!.mapName
+        : urlParams.get("map") || "all";
+
+      const fetchLevels = async (mapName: string) => {
+        try {
+          let fetchedLevels: Level[] = [];
+          if (!currentGame?.id && mapName === "all") {
+            fetchedLevels = await getAllLevels();
+          } else {
+            fetchedLevels = await getMapLevels(mapName);
+          }
+          await applyLevels(fetchedLevels, mapName);
+        } catch (error) {
+          console.error("Error fetching levels:", error);
+          setIsLoadingAsync(false);
+        }
+      };
+      fetchLevels(mapToFetch);
+    }
 
     // Set mode (which also updates creator for backward compatibility)
     dispatch(setMode(currentMode));
     dispatch(sendScoreToParentFrame());
   }, [
     dispatch,
+    currentGame,
     currentGame?.id,
     currentGame?.mapName,
     currentGame?.userId,
@@ -236,7 +288,18 @@ function App() {
     router,
     session?.userId,
     session?.user?.email,
+    collaboration?.roomId,
+    collaboration?.codeSyncReady,
+    collaboration?.initialRoomState,
   ]);
+
+  const isWaitingForSharedCode =
+    options.mode === "game" &&
+    Boolean(collaboration?.roomId) &&
+    (
+      !collaboration.codeSyncReady ||
+      !collaboration.initialRoomState
+    );
 
   // Request enough height from parent LTI iframe to prevent scrollbars
   useEffect(() => {
@@ -262,11 +325,13 @@ function App() {
           <Notifications />
 
           <GameContainer>
-            {isLoading ? (
+            {isLoading || isWaitingForSharedCode ? (
               <div className="flex items-center justify-center h-full">
                 <div className="text-center space-y-4">
                   <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-                  <p className="text-muted-foreground">Loading levels...</p>
+                  <p className="text-muted-foreground">
+                    {isWaitingForSharedCode ? "Syncing shared code..." : "Loading levels..."}
+                  </p>
                 </div>
               </div>
             ) : levels.length > 0 ? (

@@ -5,26 +5,88 @@ import { useParams, useSearchParams } from "next/navigation";
 import { useAppSelector } from "@/store/hooks/hooks";
 import { useGameStore } from "@/components/default/games";
 import { apiUrl } from "@/lib/apiUrl";
+import { useOptionalCollaboration } from "@/lib/collaboration/CollaborationProvider";
 
 const SAVE_DEBOUNCE_MS = 2000;
 
+function stableSerialize(value: unknown): string {
+  if (value === null || typeof value !== "object") {
+    return JSON.stringify(value);
+  }
+
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableSerialize(item)).join(",")}]`;
+  }
+
+  const entries = Object.entries(value as Record<string, unknown>)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, nestedValue]) => `${JSON.stringify(key)}:${stableSerialize(nestedValue)}`);
+
+  return `{${entries.join(",")}}`;
+}
+
 /**
- * When on a game route, persists progress (levels code + pointsByLevel) to the game instance
- * so that after refresh the user sees their best points per level and correct total.
+ * When on a gameplay route, persists non-code progress to the game instance.
+ * Code is owned by websocket room state and must not be written through HTTP here.
  */
 export function ProgressPersistence() {
   const params = useParams();
   const searchParams = useSearchParams();
   const levels = useAppSelector((state) => state.levels);
   const points = useAppSelector((state) => state.points);
+  const mode = useAppSelector((state) => state.options.mode);
   const currentGame = useGameStore((s) => s.getCurrentGame());
-  const addGameToStore = useGameStore((s) => s.addGameToStore);
+  const collaboration = useOptionalCollaboration();
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSavedSnapshotRef = useRef<string | null>(null);
+  const inFlightSnapshotRef = useRef<string | null>(null);
 
   const gameId = typeof params?.gameId === "string" ? params.gameId : Array.isArray(params?.gameId) ? params.gameId[0] : null;
 
   useEffect(() => {
+    lastSavedSnapshotRef.current = null;
+    inFlightSnapshotRef.current = null;
+  }, [gameId, currentGame?.id]);
+
+  useEffect(() => {
+    if (mode !== "game") return;
     if (!gameId || !currentGame?.id || currentGame.id !== gameId || levels.length === 0) return;
+    if (collaboration?.roomId && collaboration.isConnected && !collaboration.codeSyncReady) return;
+
+    const baseProgressData =
+      typeof currentGame.progressData === "object" && currentGame.progressData !== null
+        ? currentGame.progressData
+        : {};
+
+    const baseProgressWithoutLevels = Object.fromEntries(
+      Object.entries(baseProgressData as Record<string, unknown>).filter(([key]) => key !== "levels")
+    );
+
+    const progressData: Record<string, unknown> = {
+      ...baseProgressWithoutLevels,
+      pointsByLevel: Object.fromEntries(
+        Object.entries(points.levels).map(([name, data]) => [
+          name,
+          {
+            points: data.points,
+            maxPoints: data.maxPoints,
+            accuracy: data.accuracy,
+            bestTime: data.bestTime,
+            scenarios: data.scenarios,
+          },
+        ])
+      ),
+    };
+    const nextSnapshot = stableSerialize(progressData);
+    const currentSnapshot = stableSerialize(baseProgressWithoutLevels);
+
+    if (
+      nextSnapshot === currentSnapshot ||
+      nextSnapshot === lastSavedSnapshotRef.current ||
+      nextSnapshot === inFlightSnapshotRef.current
+    ) {
+      return;
+    }
 
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
@@ -33,22 +95,7 @@ export function ProgressPersistence() {
 
     timeoutRef.current = setTimeout(() => {
       timeoutRef.current = null;
-      const progressData: Record<string, unknown> = {
-        ...(typeof currentGame.progressData === "object" && currentGame.progressData !== null ? currentGame.progressData : {}),
-        levels: levels.map((l) => ({ name: l.name, code: l.code })),
-        pointsByLevel: Object.fromEntries(
-          Object.entries(points.levels).map(([name, data]) => [
-            name,
-            {
-              points: data.points,
-              maxPoints: data.maxPoints,
-              accuracy: data.accuracy,
-              bestTime: data.bestTime,
-              scenarios: data.scenarios,
-            },
-          ])
-        ),
-      };
+      inFlightSnapshotRef.current = nextSnapshot;
 
       const qs = new URLSearchParams();
       qs.set("accessContext", "game");
@@ -69,11 +116,13 @@ export function ProgressPersistence() {
           return null;
         })
         .then((data) => {
-          if (data?.instance?.progressData) {
-            addGameToStore({ ...currentGame, progressData: data.instance.progressData });
-          }
+          lastSavedSnapshotRef.current = nextSnapshot;
+          inFlightSnapshotRef.current = null;
+          return data;
         })
-        .catch(() => {});
+        .catch(() => {
+          inFlightSnapshotRef.current = null;
+        });
     }, SAVE_DEBOUNCE_MS);
 
     return () => {
@@ -82,7 +131,7 @@ export function ProgressPersistence() {
         timeoutRef.current = null;
       }
     };
-  }, [gameId, currentGame?.id, currentGame?.progressData, levels, points.levels, searchParams, addGameToStore]);
+  }, [collaboration?.codeSyncReady, collaboration?.isConnected, collaboration?.roomId, currentGame, gameId, levels.length, mode, points.levels, searchParams]);
 
   return null;
 }

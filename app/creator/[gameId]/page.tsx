@@ -18,6 +18,7 @@ export default function CreatorPage({ params }: CreatorPageProps) {
   const { loadGameById, setCurrentGameId } = useGameStore();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [roomId, setRoomId] = useState<string | null>(null);
 
   useEffect(() => {
     const initializeGame = async () => {
@@ -37,6 +38,7 @@ export default function CreatorPage({ params }: CreatorPageProps) {
         }
 
         setCurrentGameId(gameId);
+        setRoomId(`creator:${gameId}:map:${encodeURIComponent(game.mapName)}`);
         setIsLoading(false);
       } catch (err) {
         console.error("Error loading creator game:", err);
@@ -82,7 +84,7 @@ export default function CreatorPage({ params }: CreatorPageProps) {
     : null;
 
   return (
-    <CollaborationProvider roomId={`game:${gameId}`} user={user}>
+    <CollaborationProvider roomId={roomId} user={user}>
       <App />
     </CollaborationProvider>
   );

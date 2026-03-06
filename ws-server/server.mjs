@@ -1,16 +1,21 @@
 import { createServer } from "http";
 import { Server } from "socket.io";
+import { ChangeSet, Text } from "@codemirror/state";
 
 const PORT = parseInt(process.env.PORT || "3100", 10);
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "http://localhost:3000";
 const API_BASE_URL = process.env.API_BASE_URL || "http://localhost:3000";
 const WS_SERVICE_TOKEN = process.env.WS_SERVICE_TOKEN || "";
 const WRITE_BUFFER_FLUSH_MS = 5000;
+const EDITOR_TYPES = ["html", "css", "js"];
 
-// In-memory room tracking: roomId -> Map<socketId, userData>
+// roomId -> Map<socketId, userData>
 const rooms = new Map();
 
-// Write buffer for debounced DB saves: roomId -> { gameId, queryParams, levels: {[levelIndex]: {html?, css?, js?}}, timer }
+// roomId -> { ctx, progressData, levels, templateLevels, mapName }
+const roomEditorState = new Map();
+
+// roomId -> { ctx, timer }
 const roomWriteBuffer = new Map();
 
 function getRoomUsers(roomId) {
@@ -27,13 +32,19 @@ function addUserToRoom(roomId, socketId, userData) {
 function removeUserFromRoom(roomId, socketId) {
   const room = rooms.get(roomId);
   if (!room) return null;
+
   const userData = room.get(socketId);
   room.delete(socketId);
+
   if (room.size === 0) {
     rooms.delete(roomId);
-    // Flush write buffer when room empties
-    flushWriteBuffer(roomId);
+    flushWriteBuffer(roomId).finally(() => {
+      if (!rooms.has(roomId) && !roomWriteBuffer.has(roomId)) {
+        roomEditorState.delete(roomId);
+      }
+    });
   }
+
   return userData;
 }
 
@@ -41,53 +52,58 @@ function extractGroupIdFromRoomId(roomId) {
   if (typeof roomId !== "string" || !roomId.startsWith("group:")) {
     return undefined;
   }
+
   const afterPrefix = roomId.slice("group:".length);
   const gameSeparatorIndex = afterPrefix.indexOf(":game:");
   if (gameSeparatorIndex === -1) {
     return afterPrefix || undefined;
   }
+
   const parsedGroupId = afterPrefix.slice(0, gameSeparatorIndex);
   return parsedGroupId || undefined;
 }
 
-/**
- * Parse game context from room ID.
- * Formats:
- *   group:{groupId}:game:{gameId}
- *   individual:{userId}:game:{gameId}
- */
 function parseRoomContext(roomId) {
   if (typeof roomId !== "string") return null;
 
   const groupMatch = roomId.match(/^group:(.+?):game:(.+)$/);
   if (groupMatch) {
-    return { gameId: groupMatch[2], groupId: groupMatch[1], userId: null };
+    return { kind: "instance", gameId: groupMatch[2], groupId: groupMatch[1], userId: null };
   }
 
   const individualMatch = roomId.match(/^individual:(.+?):game:(.+)$/);
   if (individualMatch) {
-    return { gameId: individualMatch[2], groupId: null, userId: individualMatch[1] };
+    return { kind: "instance", gameId: individualMatch[2], groupId: null, userId: individualMatch[1] };
+  }
+
+  const creatorMatch = roomId.match(/^creator:(.+?):map:(.+)$/);
+  if (creatorMatch) {
+    return {
+      kind: "creator",
+      gameId: creatorMatch[1],
+      mapName: decodeURIComponent(creatorMatch[2]),
+      groupId: null,
+      userId: null,
+    };
   }
 
   return null;
 }
 
-/**
- * Build query params string for the instance API based on room context.
- */
 function buildInstanceQueryParams(ctx) {
+  if (ctx.kind !== "instance") {
+    return "";
+  }
   const params = new URLSearchParams();
   if (ctx.groupId) params.set("groupId", ctx.groupId);
   if (ctx.userId) params.set("userId", ctx.userId);
   return params.toString();
 }
 
-/**
- * Fetch saved progress from the DB via the instance API.
- */
-async function fetchProgressFromDB(ctx) {
+async function fetchInstanceSnapshotFromDB(ctx) {
   const qs = buildInstanceQueryParams(ctx);
   const url = `${API_BASE_URL}/api/games/${ctx.gameId}/instance${qs ? `?${qs}` : ""}`;
+
   try {
     const response = await fetch(url, {
       headers: {
@@ -99,19 +115,24 @@ async function fetchProgressFromDB(ctx) {
       return null;
     }
     const data = await response.json();
-    return data?.instance?.progressData ?? null;
+    return {
+      progressData: data?.instance?.progressData ?? null,
+      mapName: typeof data?.mapName === "string" ? data.mapName : "",
+    };
   } catch (err) {
     console.error(`[db-fetch:error] url=${url}`, err.message);
     return null;
   }
 }
 
-/**
- * Save progress data to the DB via the instance API.
- */
 async function saveProgressToDB(ctx, progressData) {
+  if (ctx.kind !== "instance") {
+    return true;
+  }
+
   const qs = buildInstanceQueryParams(ctx);
   const url = `${API_BASE_URL}/api/games/${ctx.gameId}/instance${qs ? `?${qs}` : ""}`;
+
   try {
     const response = await fetch(url, {
       method: "PATCH",
@@ -122,7 +143,8 @@ async function saveProgressToDB(ctx, progressData) {
       body: JSON.stringify({ progressData }),
     });
     if (!response.ok) {
-      console.error(`[db-save:error] status=${response.status} url=${url}`);
+      const errorText = await response.text().catch(() => "");
+      console.error(`[db-save:error] status=${response.status} url=${url}${errorText ? ` body=${errorText}` : ""}`);
       return false;
     }
     console.log(`[db-save:ok] gameId=${ctx.gameId}`);
@@ -133,13 +155,278 @@ async function saveProgressToDB(ctx, progressData) {
   }
 }
 
-/**
- * Flush the write buffer for a room: merge buffered level edits into existing
- * progress data and PATCH to DB.
- */
+async function fetchCreatorLevels(ctx) {
+  const url = `${API_BASE_URL}/api/maps/levels/${encodeURIComponent(ctx.mapName)}`;
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.error(`[creator-fetch:error] status=${response.status} url=${url}`);
+      return [];
+    }
+
+    const levels = await response.json();
+    return Array.isArray(levels) ? levels : [];
+  } catch (err) {
+    console.error(`[creator-fetch:error] url=${url}`, err.message);
+    return [];
+  }
+}
+
+async function fetchLevelsForMapName(mapName) {
+  const url = `${API_BASE_URL}/api/maps/levels/${encodeURIComponent(mapName)}`;
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.error(`[map-fetch:error] status=${response.status} url=${url}`);
+      return [];
+    }
+
+    const levels = await response.json();
+    return Array.isArray(levels) ? levels : [];
+  } catch (err) {
+    console.error(`[map-fetch:error] url=${url}`, err.message);
+    return [];
+  }
+}
+
+function mergeTemplateAndProgressLevels(templateLevels = [], progressLevels = []) {
+  const mergedLevels = [];
+  const maxLevelCount = Math.max(templateLevels.length, progressLevels.length);
+
+  for (let levelIndex = 0; levelIndex < maxLevelCount; levelIndex += 1) {
+    const templateLevel = templateLevels[levelIndex];
+    const progressLevel = progressLevels[levelIndex];
+
+    if (templateLevel && progressLevel && typeof progressLevel === "object") {
+      const templateCode =
+        templateLevel.code && typeof templateLevel.code === "object" ? templateLevel.code : {};
+      const progressCode =
+        progressLevel.code && typeof progressLevel.code === "object" ? progressLevel.code : {};
+
+      mergedLevels.push({
+        ...templateLevel,
+        ...progressLevel,
+        name:
+          typeof progressLevel.name === "string" && progressLevel.name.length > 0
+            ? progressLevel.name
+            : templateLevel.name,
+        code: {
+          html:
+            typeof progressCode.html === "string"
+              ? progressCode.html
+              : (typeof templateCode.html === "string" ? templateCode.html : ""),
+          css:
+            typeof progressCode.css === "string"
+              ? progressCode.css
+              : (typeof templateCode.css === "string" ? templateCode.css : ""),
+          js:
+            typeof progressCode.js === "string"
+              ? progressCode.js
+              : (typeof templateCode.js === "string" ? templateCode.js : ""),
+        },
+      });
+      continue;
+    }
+
+    if (templateLevel) {
+      mergedLevels.push(templateLevel);
+      continue;
+    }
+
+    if (progressLevel && typeof progressLevel === "object") {
+      mergedLevels.push(progressLevel);
+    }
+  }
+
+  return mergedLevels;
+}
+
+function createVersionMap(source = {}) {
+  return {
+    html: Number.isFinite(source?.html) ? source.html : 0,
+    css: Number.isFinite(source?.css) ? source.css : 0,
+    js: Number.isFinite(source?.js) ? source.js : 0,
+  };
+}
+
+function createLevelState(level = {}) {
+  const { name = "", code = {}, versions = {}, ...meta } = level || {};
+  return {
+    name: typeof name === "string" ? name : "",
+    code: {
+      html: typeof code?.html === "string" ? code.html : "",
+      css: typeof code?.css === "string" ? code.css : "",
+      js: typeof code?.js === "string" ? code.js : "",
+    },
+    versions: createVersionMap(versions),
+    meta,
+  };
+}
+
+function serializeLevelState(level) {
+  return {
+    ...level.meta,
+    name: level.name,
+    code: {
+      html: level.code.html,
+      css: level.code.css,
+      js: level.code.js,
+    },
+  };
+}
+
+function createRoomState(ctx, progressData, options = {}) {
+  const { templateLevels = [], mapName = "" } = options;
+  const normalizedProgressData =
+    progressData && typeof progressData === "object" && !Array.isArray(progressData)
+      ? { ...progressData }
+      : {};
+  const levels = Array.isArray(normalizedProgressData.levels)
+    ? normalizedProgressData.levels.map((level) => createLevelState(level))
+    : [];
+  const normalizedTemplateLevels = Array.isArray(templateLevels)
+    ? templateLevels.map((level) => serializeLevelState(createLevelState(level)))
+    : [];
+
+  return {
+    ctx,
+    progressData: normalizedProgressData,
+    levels,
+    templateLevels: normalizedTemplateLevels,
+    mapName: typeof mapName === "string" ? mapName : "",
+  };
+}
+
+function ensureLevelState(state, levelIndex) {
+  if (!state.levels[levelIndex]) {
+    state.levels[levelIndex] = createLevelState();
+  }
+  return state.levels[levelIndex];
+}
+
+function serializeRoomStateSync(state) {
+  return {
+    levels: state.levels.map((level) => ({
+      ...serializeLevelState(level),
+      versions: { ...level.versions },
+    })),
+    ts: Date.now(),
+  };
+}
+
+function serializeProgressData(state) {
+  return {
+    ...state.progressData,
+    levels: state.levels.map((level) => serializeLevelState(level)),
+  };
+}
+
+function serializeCodeLevels(state) {
+  return {
+    levels: state.levels.map((level) => serializeLevelState(level)),
+  };
+}
+
+async function ensureRoomState(roomId, ctx) {
+  const existing = roomEditorState.get(roomId);
+  if (existing) {
+    existing.ctx = ctx;
+    return existing;
+  }
+
+  if (ctx.kind === "creator") {
+    const creatorLevels = await fetchCreatorLevels(ctx);
+    const nextState = createRoomState(ctx, { levels: creatorLevels }, {
+      templateLevels: creatorLevels,
+      mapName: ctx.mapName,
+    });
+    roomEditorState.set(roomId, nextState);
+    return nextState;
+  }
+
+  const instanceSnapshot = await fetchInstanceSnapshotFromDB(ctx);
+  const progressData =
+    instanceSnapshot?.progressData && typeof instanceSnapshot.progressData === "object" && !Array.isArray(instanceSnapshot.progressData)
+      ? instanceSnapshot.progressData
+      : {};
+  const mapName = typeof instanceSnapshot?.mapName === "string" ? instanceSnapshot.mapName : "";
+  const templateLevels = mapName ? await fetchLevelsForMapName(mapName) : [];
+  const progressLevels = Array.isArray(progressData.levels) ? progressData.levels : [];
+
+  const normalizedLevels =
+    templateLevels.length > 0
+      ? mergeTemplateAndProgressLevels(templateLevels, progressLevels)
+      : progressLevels;
+
+  const nextState = createRoomState(
+    ctx,
+    {
+      ...progressData,
+      levels: normalizedLevels,
+    },
+    {
+      templateLevels,
+      mapName,
+    }
+  );
+
+  roomEditorState.set(roomId, nextState);
+
+  const shouldPersistNormalizedLevels =
+    JSON.stringify(progressLevels) !== JSON.stringify(normalizedLevels);
+  if (shouldPersistNormalizedLevels && normalizedLevels.length > 0) {
+    const ok = await saveProgressToDB(ctx, serializeCodeLevels(nextState));
+    if (!ok) {
+      markRoomDirty(roomId, ctx);
+    }
+  }
+
+  return nextState;
+}
+
+function getDocumentText(content) {
+  return Text.of((content || "").split("\n"));
+}
+
+function summarizeEditorPayload(data) {
+  const jsonString = typeof data?.changeSetJson === "undefined" ? "" : JSON.stringify(data.changeSetJson);
+  return {
+    editorType: data?.editorType,
+    levelIndex: data?.levelIndex,
+    baseVersion: data?.baseVersion,
+    nextVersion: data?.nextVersion,
+    changeSetLen: jsonString.length,
+  };
+}
+
+function scheduleFlush(roomId) {
+  const buffer = roomWriteBuffer.get(roomId);
+  if (!buffer || buffer.timer) {
+    return;
+  }
+
+  buffer.timer = setTimeout(() => {
+    buffer.timer = null;
+    flushWriteBuffer(roomId);
+  }, WRITE_BUFFER_FLUSH_MS);
+}
+
+function markRoomDirty(roomId, ctx) {
+  if (!roomWriteBuffer.has(roomId)) {
+    roomWriteBuffer.set(roomId, { ctx, timer: null });
+  }
+  const buffer = roomWriteBuffer.get(roomId);
+  buffer.ctx = ctx;
+  scheduleFlush(roomId);
+}
+
 async function flushWriteBuffer(roomId) {
   const buffer = roomWriteBuffer.get(roomId);
-  if (!buffer || Object.keys(buffer.levels).length === 0) {
+  const state = roomEditorState.get(roomId);
+
+  if (!buffer || !state) {
     if (buffer?.timer) {
       clearTimeout(buffer.timer);
     }
@@ -152,76 +439,18 @@ async function flushWriteBuffer(roomId) {
     buffer.timer = null;
   }
 
-  const ctx = buffer.ctx;
-  // Build the levels array for progressData from the buffer
-  // We need to fetch current progress first to merge
-  let existingProgress = null;
-  try {
-    existingProgress = await fetchProgressFromDB(ctx);
-  } catch {
-    // ignore
-  }
-
-  const existingLevels = existingProgress?.levels || [];
-  const mergedLevels = [...existingLevels];
-
-  for (const [levelIndex, edits] of Object.entries(buffer.levels)) {
-    const idx = parseInt(levelIndex, 10);
-    if (!mergedLevels[idx]) {
-      mergedLevels[idx] = { name: "", code: { html: "", css: "", js: "" } };
-    }
-    const existing = mergedLevels[idx];
-    mergedLevels[idx] = {
-      ...existing,
-      code: {
-        html: edits.html ?? existing.code?.html ?? "",
-        css: edits.css ?? existing.code?.css ?? "",
-        js: edits.js ?? existing.code?.js ?? "",
-      },
-    };
-  }
-
-  const progressData = { levels: mergedLevels };
-  const ok = await saveProgressToDB(ctx, progressData);
+  const ok = await saveProgressToDB(state.ctx, serializeCodeLevels(state));
 
   if (ok) {
     roomWriteBuffer.delete(roomId);
+    if (!rooms.has(roomId)) {
+      roomEditorState.delete(roomId);
+    }
   } else {
-    // Retry on next interval
     scheduleFlush(roomId);
   }
 }
 
-/**
- * Schedule a debounced flush for a room.
- */
-function scheduleFlush(roomId) {
-  const buffer = roomWriteBuffer.get(roomId);
-  if (!buffer) return;
-  if (buffer.timer) return; // Already scheduled
-
-  buffer.timer = setTimeout(() => {
-    buffer.timer = null;
-    flushWriteBuffer(roomId);
-  }, WRITE_BUFFER_FLUSH_MS);
-}
-
-/**
- * Buffer an editor change for debounced DB save.
- */
-function bufferEditorChange(roomId, ctx, levelIndex, editorType, content) {
-  if (!roomWriteBuffer.has(roomId)) {
-    roomWriteBuffer.set(roomId, { ctx, levels: {}, timer: null });
-  }
-  const buffer = roomWriteBuffer.get(roomId);
-  if (!buffer.levels[levelIndex]) {
-    buffer.levels[levelIndex] = {};
-  }
-  buffer.levels[levelIndex][editorType] = content;
-  scheduleFlush(roomId);
-}
-
-// HTTP server with /health endpoint
 const httpServer = createServer((req, res) => {
   if (req.method === "GET" && req.url === "/health") {
     res.writeHead(200, { "Content-Type": "application/json" });
@@ -241,24 +470,12 @@ const io = new Server(httpServer, {
   transports: ["websocket", "polling"],
 });
 
-function summarizeEditorPayload(data) {
-  const content = data?.changes?.[0];
-  return {
-    editorType: data?.editorType,
-    levelIndex: data?.levelIndex,
-    version: data?.version,
-    hasContent: typeof content === "string",
-    contentLen: typeof content === "string" ? content.length : 0,
-  };
-}
-
 io.on("connection", (socket) => {
   const { userId, userEmail, userName, userImage, roomId: authRoomId, groupId } = socket.handshake.auth;
   const fallbackRoomId = authRoomId || groupId;
 
   console.log(`[connect] socket=${socket.id} userId=${userId} user=${userEmail} room=${fallbackRoomId}`);
 
-  // Handle join-game
   socket.on("join-game", async (data) => {
     const roomId = data.roomId || data.groupId || fallbackRoomId;
     if (!roomId) return;
@@ -276,34 +493,23 @@ io.on("connection", (socket) => {
     };
     addUserToRoom(roomId, socket.id, userData);
 
-    // Notify others in the room
     socket.to(roomId).emit("user-joined", userData);
 
-    // Send current users to the joining socket
     const currentUsers = Array.from(getRoomUsers(roomId).values());
     socket.emit("current-users", { users: currentUsers });
 
-    // Fetch saved progress from DB and send code-sync
     const ctx = parseRoomContext(roomId);
     if (ctx) {
-      // Flush any pending writes first to ensure DB is up-to-date
-      await flushWriteBuffer(roomId);
-
-      const progressData = await fetchProgressFromDB(ctx);
-      if (progressData?.levels && Array.isArray(progressData.levels)) {
-        socket.emit("code-sync", { levels: progressData.levels });
-        console.log(
-          `[code-sync:emit] room=${roomId} target=${socket.id} levelsCount=${progressData.levels.length}`
-        );
-      } else {
-        console.log(`[code-sync:skip] room=${roomId} target=${socket.id} reason=no-saved-progress`);
-      }
+      const state = await ensureRoomState(roomId, ctx);
+      socket.emit("room-state-sync", serializeRoomStateSync(state));
+      console.log(`[room-state-sync:emit] room=${roomId} target=${socket.id} levelsCount=${state.levels.length}`);
+    } else {
+      console.log(`[room-state-sync:skip] room=${roomId} target=${socket.id} reason=invalid-room-context`);
     }
 
     console.log(`[join-game] user=${userData.userEmail} room=${roomId} total=${currentUsers.length}`);
   });
 
-  // Handle leave-game
   socket.on("leave-game", (data) => {
     const roomId = data?.roomId || data?.groupId || fallbackRoomId;
     if (!roomId) return;
@@ -321,7 +527,6 @@ io.on("connection", (socket) => {
     }
   });
 
-  // Handle cursor events — forward to room
   socket.on("canvas-cursor", (data) => {
     const roomId = data.roomId || data.groupId || fallbackRoomId;
     if (!roomId) return;
@@ -337,37 +542,90 @@ io.on("connection", (socket) => {
     socket.to(roomId).emit("editor-cursor", data);
   });
 
-  // Handle editor changes — broadcast to room + buffer for DB save
-  socket.on("editor-change", (data) => {
+  socket.on("editor-change", async (data) => {
     const roomId = data.roomId || data.groupId || fallbackRoomId;
     if (!roomId) return;
 
-    const content = data.changes?.[0];
-    const levelIndex = typeof data.levelIndex === "number" ? data.levelIndex : 0;
-
-    if (typeof content === "string") {
-      // Buffer for debounced DB save
-      const ctx = parseRoomContext(roomId);
-      if (ctx) {
-        bufferEditorChange(roomId, ctx, levelIndex, data.editorType, content);
-      }
-      console.log(
-        `[editor-change:store] room=${roomId} from=${socket.id} ${JSON.stringify(summarizeEditorPayload(data))}`
-      );
-    } else {
-      console.log(
-        `[editor-change:skip] room=${roomId} from=${socket.id} reason=changes[0]-not-string payload=${JSON.stringify(summarizeEditorPayload(data))}`
-      );
+    const ctx = parseRoomContext(roomId);
+    if (!ctx) {
+      return;
     }
 
-    const recipients = Math.max((getRoomUsers(roomId).size || 1) - 1, 0);
-    console.log(
-      `[editor-change:emit] room=${roomId} from=${socket.id} recipients=${recipients} ${JSON.stringify(summarizeEditorPayload(data))}`
-    );
-    socket.to(roomId).emit("editor-change", data);
+    const levelIndex = Number.isInteger(data.levelIndex) ? data.levelIndex : 0;
+    const state = await ensureRoomState(roomId, ctx);
+    const levelState = ensureLevelState(state, levelIndex);
+    const editorType = EDITOR_TYPES.includes(data.editorType) ? data.editorType : "html";
+    const currentVersion = levelState.versions[editorType] || 0;
+
+    if (data.baseVersion !== currentVersion) {
+      socket.emit("editor-resync", {
+        roomId,
+        groupId: extractGroupIdFromRoomId(roomId),
+        editorType,
+        levelIndex,
+        content: levelState.code[editorType],
+        version: currentVersion,
+        ts: Date.now(),
+      });
+      console.log(
+        `[editor-change:resync] room=${roomId} from=${socket.id} editorType=${editorType} levelIndex=${levelIndex} clientBase=${data.baseVersion} serverVersion=${currentVersion}`
+      );
+      return;
+    }
+
+    try {
+      const changeSet = ChangeSet.fromJSON(data.changeSetJson);
+      const nextContent = changeSet.apply(getDocumentText(levelState.code[editorType])).toString();
+      const nextVersion = currentVersion + 1;
+
+      levelState.code[editorType] = nextContent;
+      levelState.versions[editorType] = nextVersion;
+
+      markRoomDirty(roomId, ctx);
+
+      const payload = {
+        roomId,
+        groupId: extractGroupIdFromRoomId(roomId),
+        editorType,
+        clientId: data.clientId,
+        userId: data.userId,
+        baseVersion: currentVersion,
+        nextVersion,
+        changeSetJson: data.changeSetJson,
+        levelIndex,
+        selection: data.selection,
+        ts: Date.now(),
+      };
+
+      console.log(`[editor-change:store] room=${roomId} from=${socket.id} ${JSON.stringify(summarizeEditorPayload(payload))}`);
+      socket.emit("editor-change-applied", {
+        roomId,
+        groupId: extractGroupIdFromRoomId(roomId),
+        editorType,
+        levelIndex,
+        nextVersion,
+        ts: Date.now(),
+      });
+
+      const recipients = Math.max((getRoomUsers(roomId).size || 1) - 1, 0);
+      console.log(`[editor-change:emit] room=${roomId} from=${socket.id} recipients=${recipients} ${JSON.stringify(summarizeEditorPayload(payload))}`);
+      socket.to(roomId).emit("editor-change", payload);
+    } catch (error) {
+      socket.emit("editor-resync", {
+        roomId,
+        groupId: extractGroupIdFromRoomId(roomId),
+        editorType,
+        levelIndex,
+        content: levelState.code[editorType],
+        version: currentVersion,
+        ts: Date.now(),
+      });
+      console.error(
+        `[editor-change:error] room=${roomId} from=${socket.id} editorType=${editorType} levelIndex=${levelIndex} ${error.message}`
+      );
+    }
   });
 
-  // Handle tab focus — store and broadcast
   socket.on("tab-focus", (data) => {
     const roomId = data.roomId || data.groupId || fallbackRoomId;
     if (!roomId) return;
@@ -393,7 +651,6 @@ io.on("connection", (socket) => {
     }
   });
 
-  // Handle typing status — broadcast to room
   socket.on("typing-status", (data) => {
     const roomId = data.roomId || data.groupId || fallbackRoomId;
     if (!roomId) return;
@@ -401,7 +658,17 @@ io.on("connection", (socket) => {
     const room = rooms.get(roomId);
     if (room && room.has(socket.id)) {
       const userData = room.get(socket.id);
-      userData.isTyping = data.isTyping;
+      const nextIsTyping = Boolean(data.isTyping);
+      const nextEditorType = data.editorType ?? userData.activeTab ?? null;
+      const shouldBroadcast =
+        userData.isTyping !== nextIsTyping || userData.activeTab !== nextEditorType;
+
+      if (!shouldBroadcast) {
+        return;
+      }
+
+      userData.isTyping = nextIsTyping;
+      userData.activeTab = nextEditorType;
       room.set(socket.id, userData);
 
       socket.to(roomId).emit("typing-status", {
@@ -410,19 +677,70 @@ io.on("connection", (socket) => {
         clientId: userData.clientId,
         userId: userData.userId,
         userName: userData.userName,
-        editorType: data.editorType,
-        isTyping: data.isTyping,
+        editorType: nextEditorType,
+        isTyping: nextIsTyping,
         ts: Date.now(),
       });
-      console.log(`[typing-status] room=${roomId} from=${socket.id} editorType=${data.editorType} isTyping=${Boolean(data.isTyping)}`);
+      console.log(`[typing-status] room=${roomId} from=${socket.id} editorType=${nextEditorType} isTyping=${nextIsTyping}`);
     }
   });
 
-  // Clean up on disconnect
+  socket.on("reset-room-state", async (data) => {
+    const roomId = data?.roomId || data?.groupId || fallbackRoomId;
+    if (!roomId) return;
+
+    const ctx = parseRoomContext(roomId);
+    if (!ctx || ctx.kind !== "instance") {
+      return;
+    }
+
+    const scope = data?.scope === "game" ? "game" : "level";
+    const levelIndex = Number.isInteger(data?.levelIndex) ? data.levelIndex : 0;
+    const currentState = await ensureRoomState(roomId, ctx);
+    let templateLevels = Array.isArray(currentState.templateLevels)
+      ? currentState.templateLevels
+      : [];
+
+    if (templateLevels.length === 0 && currentState.mapName) {
+      templateLevels = await fetchLevelsForMapName(currentState.mapName);
+    }
+    if (templateLevels.length === 0) {
+      return;
+    }
+
+    const nextState = createRoomState(ctx, serializeProgressData(currentState), {
+      templateLevels,
+      mapName: currentState.mapName,
+    });
+    if (scope === "game") {
+      nextState.levels = templateLevels.map((templateLevel) => createLevelState(templateLevel));
+    } else {
+      const templateLevel = templateLevels[levelIndex];
+      if (!templateLevel) {
+        return;
+      }
+      nextState.levels[levelIndex] = createLevelState(templateLevel);
+    }
+    roomEditorState.set(roomId, nextState);
+
+    const existingBuffer = roomWriteBuffer.get(roomId);
+    if (existingBuffer?.timer) {
+      clearTimeout(existingBuffer.timer);
+    }
+    roomWriteBuffer.delete(roomId);
+
+    const ok = await saveProgressToDB(ctx, serializeCodeLevels(nextState));
+    if (!ok) {
+      markRoomDirty(roomId, ctx);
+    }
+
+    io.to(roomId).emit("room-state-sync", serializeRoomStateSync(nextState));
+    console.log(`[room-state-sync:emit] room=${roomId} by=${socket.id} reason=reset scope=${scope} levelIndex=${levelIndex}`);
+  });
+
   socket.on("disconnect", (reason) => {
     console.log(`[disconnect] socket=${socket.id} reason=${reason}`);
 
-    // Remove from all rooms this socket was in
     for (const [roomId, userMap] of rooms.entries()) {
       if (userMap.has(socket.id)) {
         const userData = removeUserFromRoom(roomId, socket.id);
@@ -438,7 +756,6 @@ io.on("connection", (socket) => {
   });
 });
 
-// Flush all pending write buffers on shutdown
 async function flushAllBuffers() {
   const promises = [];
   for (const roomId of roomWriteBuffer.keys()) {
