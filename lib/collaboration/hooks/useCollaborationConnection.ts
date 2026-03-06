@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { io, Socket } from "socket.io-client";
 import {
   ActiveUser,
   CanvasCursor,
@@ -16,7 +15,7 @@ import {
   TypingStatusMessage,
   EditorType,
 } from "../types";
-import { extractGroupIdFromRoomId, generateClientId, generateUserColor, getWebSocketConfig } from "../utils";
+import { extractGroupIdFromRoomId, generateClientId, generateUserColor, getWebSocketUrl } from "../utils";
 import { RECONNECT_DELAY_MS, MAX_RECONNECT_ATTEMPTS } from "../constants";
 import { logDebugClient } from "@/lib/debug-logger";
 
@@ -41,7 +40,7 @@ interface UseCollaborationConnectionOptions {
 }
 
 interface UseCollaborationConnectionReturn {
-  socket: Socket | null;
+  socket: WebSocket | null;
   isConnected: boolean;
   isConnecting: boolean;
   error: string | null;
@@ -65,18 +64,22 @@ interface UseCollaborationConnectionReturn {
   sendProgressSync: (progressData: Record<string, unknown>) => void;
 }
 
-function getSocketTransports(): ("websocket" | "polling")[] {
-  const configuredTransports = process.env.NEXT_PUBLIC_WEBSOCKET_TRANSPORTS;
-  if (!configuredTransports) {
-    return ["websocket", "polling"];
+interface WebSocketEnvelope<T = unknown> {
+  type: string;
+  payload: T;
+  ts?: number;
+}
+
+function parseEnvelope(data: string): WebSocketEnvelope | null {
+  try {
+    const parsed = JSON.parse(data);
+    if (!parsed || typeof parsed !== "object" || typeof parsed.type !== "string") {
+      return null;
+    }
+    return parsed as WebSocketEnvelope;
+  } catch {
+    return null;
   }
-
-  const transports = configuredTransports
-    .split(",")
-    .map((value) => value.trim())
-    .filter((value): value is "websocket" | "polling" => value === "websocket" || value === "polling");
-
-  return transports.length > 0 ? transports : ["websocket", "polling"];
 }
 
 export function useCollaborationConnection(
@@ -90,26 +93,44 @@ export function useCollaborationConnection(
     optionsRef.current = options;
   }, [options]);
 
-  const socketRef = useRef<Socket | null>(null);
+  const socketRef = useRef<WebSocket | null>(null);
   const clientIdRef = useRef<string | null>(null);
   const userColorRef = useRef<string | null>(null);
   const typingStatusRef = useRef<Record<string, boolean>>({});
   const reconnectAttemptsRef = useRef(0);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isConnectedRef = useRef(false);
+  const reconnectFnRef = useRef<(() => void) | null>(null);
+  const manualDisconnectRef = useRef(false);
 
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [clientId, setClientId] = useState<string | null>(null);
-  const [socketState, setSocketState] = useState<Socket | null>(null);
+  const [socketState, setSocketState] = useState<WebSocket | null>(null);
 
   const userIdentity = user ? `${user.id}|${user.email}` : null;
+
+  const sendMessage = useCallback((type: string, payload: Record<string, unknown>) => {
+    const socket = socketRef.current;
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    socket.send(
+      JSON.stringify({
+        type,
+        payload,
+        ts: Date.now(),
+      } satisfies WebSocketEnvelope<Record<string, unknown>>)
+    );
+  }, []);
 
   useEffect(() => {
     if (!roomId || !userIdentity) {
       return;
     }
+
     const opts = optionsRef.current;
     const currentUser = opts.user;
     if (!currentUser) {
@@ -123,37 +144,13 @@ export function useCollaborationConnection(
       userName: currentUser.name,
     });
 
-    if (socketRef.current?.connected) {
-      return;
-    }
-
     const newClientId = generateClientId();
     clientIdRef.current = newClientId;
     if (!userColorRef.current) {
       userColorRef.current = generateUserColor(currentUser.email);
     }
 
-    const { url: wsUrl, path: wsPath } = getWebSocketConfig();
-    const wsTransports = getSocketTransports();
-
-    const socket = io(wsUrl, {
-      path: wsPath,
-      addTrailingSlash: false,
-      auth: {
-        userId: currentUser.id,
-        userEmail: currentUser.email,
-        userName: currentUser.name,
-        userImage: currentUser.image,
-        roomId,
-      },
-      transports: wsTransports,
-      upgrade: wsTransports.includes("websocket"),
-      tryAllTransports: true,
-      reconnection: false,
-    });
-
-    socketRef.current = socket;
-    isConnectedRef.current = false;
+    let disposed = false;
 
     const clearReconnectTimeout = () => {
       if (reconnectTimeoutRef.current) {
@@ -162,200 +159,321 @@ export function useCollaborationConnection(
       }
     };
 
-    const disconnectSocket = () => {
+    const cleanupSocket = () => {
       clearReconnectTimeout();
-      if (socketRef.current) {
-        socketRef.current.disconnect();
+      const socket = socketRef.current;
+      if (socket) {
+        socket.onopen = null;
+        socket.onmessage = null;
+        socket.onerror = null;
+        socket.onclose = null;
+        if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
+          socket.close();
+        }
         socketRef.current = null;
       }
+      setSocketState(null);
       typingStatusRef.current = {};
       isConnectedRef.current = false;
     };
 
-    socket.on("connect", () => {
-      isConnectedRef.current = true;
-      typingStatusRef.current = {};
-      setIsConnected(true);
-      setIsConnecting(false);
-      setError(null);
-      setClientId(newClientId);
+    const connectSocket = () => {
+      if (disposed || socketRef.current) {
+        return;
+      }
+
+      const wsUrl = getWebSocketUrl();
+      const socket = new WebSocket(wsUrl);
+      socketRef.current = socket;
       setSocketState(socket);
-      reconnectAttemptsRef.current = 0;
-      const u = optionsRef.current.user;
-      if (!u) return;
+      setIsConnecting(true);
 
-      logDebugClient("ws_socket_connect", {
-        socketId: socket.id,
-        clientId: newClientId,
-        roomId,
-        userId: u.id,
-        userEmail: u.email,
-      });
-
-      socket.emit("join-game", {
-        roomId,
-        groupId: parsedGroupId ?? undefined,
-        clientId: newClientId,
-        userId: u.id,
-        userEmail: u.email,
-        userName: u.name,
-        userImage: u.image,
-      });
-
-      logDebugClient("ws_join_game_emitted", {
-        roomId,
-        userId: u.id,
-        userEmail: u.email,
-      });
-
-      optionsRef.current.onConnected?.();
-    });
-
-    socket.on("disconnect", (reason) => {
-      isConnectedRef.current = false;
-      typingStatusRef.current = { html: false, css: false, js: false };
-      setIsConnected(false);
-      setIsConnecting(false);
-      optionsRef.current.onDisconnected?.();
-
-      if (reason === "io server disconnect") {
-        return;
-      }
-
-      if (reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
-        reconnectAttemptsRef.current++;
-        reconnectTimeoutRef.current = setTimeout(() => {
-          if (socketRef.current && !isConnectedRef.current) {
-            socketRef.current.connect();
-          }
-        }, RECONNECT_DELAY_MS);
-      } else {
-        setError("Failed to reconnect after multiple attempts");
-        optionsRef.current.onError?.("Failed to reconnect after multiple attempts");
-      }
-    });
-
-    socket.on("connect_error", (err) => {
-      setIsConnected(false);
-      setIsConnecting(false);
-      setError(err.message);
-      optionsRef.current.onError?.(err.message);
-    });
-
-    socket.on("error", (data: { error?: string }) => {
-      setError(data.error || "Unknown error");
-      optionsRef.current.onError?.(data.error || "Unknown error");
-    });
-
-    socket.on("user-joined", (data: { clientId?: string; userId: string; userEmail: string; userName?: string; userImage?: string; activeTab?: EditorType; activeLevelIndex?: number; isTyping?: boolean }) => {
-      const u = optionsRef.current.user;
-      if (!u || data.userEmail === u.email) return;
-      const joinedClientId = data.clientId ?? "";
-      if (joinedClientId) {
-        const payload = {
-          clientId: joinedClientId,
-          userId: data.userId,
-          userEmail: data.userEmail,
-          userName: data.userName,
-          userImage: data.userImage,
-          activeTab: data.activeTab,
-          activeLevelIndex: data.activeLevelIndex,
-          isTyping: data.isTyping,
-        };
-        queueMicrotask(() => optionsRef.current.onUserJoined?.(payload));
-      }
-    });
-
-    socket.on("user-left", (data: { userId: string; userEmail: string; userName?: string }) => {
-      optionsRef.current.onUserLeft?.({
-        userId: data.userId,
-        userEmail: data.userEmail,
-        userName: data.userName,
-      });
-    });
-
-    socket.on("current-users", (data: { users?: Array<{ clientId?: string; userId?: string; userEmail: string; userName?: string; userImage?: string; color?: string; activeTab?: EditorType; activeLevelIndex?: number; isTyping?: boolean }> }) => {
-      if (data.users && Array.isArray(data.users)) {
-        const mapped = data.users
-          .filter((u) => u && (u.clientId ?? "").length > 0)
-          .map((u) => ({
-            clientId: u.clientId ?? "",
-            userId: u.userId || "",
-            userEmail: u.userEmail,
-            userName: u.userName,
-            userImage: u.userImage,
-            color: u.color || generateUserColor(u.userEmail),
-            activeTab: u.activeTab,
-            activeLevelIndex: Number.isInteger(u.activeLevelIndex) ? u.activeLevelIndex : undefined,
-            isTyping: Boolean(u.isTyping),
-          }));
-        if (mapped.length > 0) {
-          queueMicrotask(() => optionsRef.current.onCurrentUsers?.(mapped));
+      socket.onopen = () => {
+        if (disposed) {
+          socket.close();
+          return;
         }
-      }
-    });
 
-    socket.on("canvas-cursor", (data: CanvasCursor & { clientId: string }) => {
-      if (data.clientId !== clientIdRef.current) {
-        optionsRef.current.onCanvasCursor?.(data);
-      }
-    });
+        isConnectedRef.current = true;
+        typingStatusRef.current = {};
+        setIsConnected(true);
+        setIsConnecting(false);
+        setError(null);
+        setClientId(newClientId);
+        reconnectAttemptsRef.current = 0;
 
-    socket.on("editor-cursor", (data: EditorCursor & { clientId: string }) => {
-      if (data.clientId !== clientIdRef.current) {
-        optionsRef.current.onEditorCursor?.(data);
-      }
-    });
-
-    socket.on("editor-change", (data: EditorChange) => {
-      if (data.clientId === clientIdRef.current) {
-        logDebugClient("ws_editor_change_ignored_self", {
-          clientId: data.clientId,
-          editorType: data.editorType,
-          nextVersion: data.nextVersion,
+        logDebugClient("ws_socket_connect", {
+          clientId: newClientId,
+          roomId,
+          userId: currentUser.id,
+          userEmail: currentUser.email,
+          wsUrl,
         });
-        return;
-      }
-      optionsRef.current.onEditorChange?.(data);
-    });
 
-    socket.on("editor-change-applied", (data: EditorChangeApplied) => {
-      optionsRef.current.onEditorChangeApplied?.(data);
-    });
+        socket.send(
+          JSON.stringify({
+            type: "join-game",
+            payload: {
+              roomId,
+              groupId: parsedGroupId ?? undefined,
+              clientId: newClientId,
+              userId: currentUser.id,
+              userEmail: currentUser.email,
+              userName: currentUser.name,
+              userImage: currentUser.image,
+            },
+            ts: Date.now(),
+          } satisfies WebSocketEnvelope<Record<string, unknown>>)
+        );
 
-    socket.on("editor-resync", (data: EditorResync) => {
-      optionsRef.current.onEditorResync?.(data);
-    });
+        logDebugClient("ws_join_game_emitted", {
+          roomId,
+          userId: currentUser.id,
+          userEmail: currentUser.email,
+        });
 
-    socket.on("tab-focus", (data: TabFocusMessage & { clientId: string }) => {
-      if (data.clientId !== clientIdRef.current) {
-        optionsRef.current.onTabFocus?.(data);
-      }
-    });
+        optionsRef.current.onConnected?.();
+      };
 
-    socket.on("typing-status", (data: TypingStatusMessage & { clientId: string }) => {
-      if (data.clientId !== clientIdRef.current) {
-        optionsRef.current.onTypingStatus?.(data);
-      }
-    });
+      socket.onmessage = (event) => {
+        if (typeof event.data !== "string") {
+          return;
+        }
 
-    socket.on("room-state-sync", (data: RoomStateSyncMessage) => {
-      optionsRef.current.onRoomStateSync?.(data);
-    });
+        const envelope = parseEnvelope(event.data);
+        if (!envelope) {
+          return;
+        }
 
-    socket.on("progress-sync", (data: ProgressSyncMessage) => {
-      optionsRef.current.onProgressSync?.(data);
-    });
+        const payload = envelope.payload;
+
+        switch (envelope.type) {
+          case "error": {
+            const nextError =
+              payload && typeof payload === "object" && typeof (payload as { error?: unknown }).error === "string"
+                ? (payload as { error: string }).error
+                : "Unknown error";
+            setError(nextError);
+            optionsRef.current.onError?.(nextError);
+            return;
+          }
+          case "user-joined": {
+            const data = payload as {
+              clientId?: string;
+              userId: string;
+              userEmail: string;
+              userName?: string;
+              userImage?: string;
+              activeTab?: EditorType;
+              activeLevelIndex?: number;
+              isTyping?: boolean;
+            };
+            const current = optionsRef.current.user;
+            if (!current || data.userEmail === current.email) {
+              return;
+            }
+            const joinedClientId = data.clientId ?? "";
+            if (joinedClientId) {
+              queueMicrotask(() => optionsRef.current.onUserJoined?.({
+                clientId: joinedClientId,
+                userId: data.userId,
+                userEmail: data.userEmail,
+                userName: data.userName,
+                userImage: data.userImage,
+                activeTab: data.activeTab,
+                activeLevelIndex: data.activeLevelIndex,
+                isTyping: data.isTyping,
+              }));
+            }
+            return;
+          }
+          case "user-left": {
+            const data = payload as { userId: string; userEmail: string; userName?: string };
+            optionsRef.current.onUserLeft?.(data);
+            return;
+          }
+          case "current-users": {
+            const data = payload as {
+              users?: Array<{
+                clientId?: string;
+                userId?: string;
+                userEmail: string;
+                userName?: string;
+                userImage?: string;
+                color?: string;
+                activeTab?: EditorType;
+                activeLevelIndex?: number;
+                isTyping?: boolean;
+              }>;
+            };
+            if (data.users && Array.isArray(data.users)) {
+              const mapped = data.users
+                .filter((entry) => entry && (entry.clientId ?? "").length > 0)
+                .map((entry) => ({
+                  clientId: entry.clientId ?? "",
+                  userId: entry.userId || "",
+                  userEmail: entry.userEmail,
+                  userName: entry.userName,
+                  userImage: entry.userImage,
+                  color: entry.color || generateUserColor(entry.userEmail),
+                  activeTab: entry.activeTab,
+                  activeLevelIndex: Number.isInteger(entry.activeLevelIndex) ? entry.activeLevelIndex : undefined,
+                  isTyping: Boolean(entry.isTyping),
+                }));
+              if (mapped.length > 0) {
+                queueMicrotask(() => optionsRef.current.onCurrentUsers?.(mapped));
+              }
+            }
+            return;
+          }
+          case "canvas-cursor": {
+            const data = payload as CanvasCursor & { clientId: string };
+            if (data.clientId !== clientIdRef.current) {
+              optionsRef.current.onCanvasCursor?.(data);
+            }
+            return;
+          }
+          case "editor-cursor": {
+            const data = payload as EditorCursor & { clientId: string };
+            if (data.clientId !== clientIdRef.current) {
+              optionsRef.current.onEditorCursor?.(data);
+            }
+            return;
+          }
+          case "editor-change": {
+            const data = payload as EditorChange;
+            if (data.clientId === clientIdRef.current) {
+              logDebugClient("ws_editor_change_ignored_self", {
+                clientId: data.clientId,
+                editorType: data.editorType,
+                nextVersion: data.nextVersion,
+              });
+              return;
+            }
+            optionsRef.current.onEditorChange?.(data);
+            return;
+          }
+          case "editor-change-applied":
+            optionsRef.current.onEditorChangeApplied?.(payload as EditorChangeApplied);
+            return;
+          case "editor-resync":
+            optionsRef.current.onEditorResync?.(payload as EditorResync);
+            return;
+          case "tab-focus": {
+            const data = payload as TabFocusMessage & { clientId: string };
+            if (data.clientId !== clientIdRef.current) {
+              optionsRef.current.onTabFocus?.(data);
+            }
+            return;
+          }
+          case "typing-status": {
+            const data = payload as TypingStatusMessage & { clientId: string };
+            if (data.clientId !== clientIdRef.current) {
+              optionsRef.current.onTypingStatus?.(data);
+            }
+            return;
+          }
+          case "room-state-sync":
+            optionsRef.current.onRoomStateSync?.(payload as RoomStateSyncMessage);
+            return;
+          case "progress-sync":
+            optionsRef.current.onProgressSync?.(payload as ProgressSyncMessage);
+            return;
+          default:
+            return;
+        }
+      };
+
+      socket.onerror = () => {
+        setIsConnected(false);
+        setIsConnecting(false);
+        setError("WebSocket connection error");
+        optionsRef.current.onError?.("WebSocket connection error");
+      };
+
+      socket.onclose = () => {
+        const wasConnected = isConnectedRef.current;
+        if (socketRef.current === socket) {
+          socketRef.current = null;
+          setSocketState(null);
+        }
+        isConnectedRef.current = false;
+        typingStatusRef.current = {};
+        setIsConnected(false);
+        setIsConnecting(false);
+
+        if (disposed || manualDisconnectRef.current) {
+          return;
+        }
+
+        if (wasConnected) {
+          optionsRef.current.onDisconnected?.();
+        }
+
+        if (reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
+          reconnectAttemptsRef.current += 1;
+          reconnectTimeoutRef.current = setTimeout(() => {
+            if (!disposed && !manualDisconnectRef.current) {
+              connectSocket();
+            }
+          }, RECONNECT_DELAY_MS);
+        } else {
+          setError("Failed to reconnect after multiple attempts");
+          optionsRef.current.onError?.("Failed to reconnect after multiple attempts");
+        }
+      };
+    };
+
+    reconnectFnRef.current = connectSocket;
+    manualDisconnectRef.current = false;
+    connectSocket();
 
     return () => {
-      clearReconnectTimeout();
-      disconnectSocket();
+      disposed = true;
+      reconnectFnRef.current = null;
+      cleanupSocket();
     };
   }, [roomId, parsedGroupId, userIdentity]);
 
+  const disconnect = useCallback(() => {
+    manualDisconnectRef.current = true;
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+    const socket = socketRef.current;
+    if (socket) {
+      socket.onopen = null;
+      socket.onmessage = null;
+      socket.onerror = null;
+      socket.onclose = null;
+      if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
+        socket.close();
+      }
+      socketRef.current = null;
+    }
+    isConnectedRef.current = false;
+    typingStatusRef.current = {};
+    setIsConnected(false);
+    setIsConnecting(false);
+    setClientId(null);
+    setSocketState(null);
+    clientIdRef.current = null;
+  }, []);
+
+  const leaveGame = useCallback(() => {
+    if (roomId) {
+      sendMessage("leave-game", {
+        roomId,
+        groupId: parsedGroupId ?? undefined,
+      });
+    }
+    disconnect();
+  }, [disconnect, parsedGroupId, roomId, sendMessage]);
+
   const sendCanvasCursor = useCallback((x: number, y: number) => {
-    if (socketRef.current && roomId && user && clientIdRef.current) {
-      socketRef.current.emit("canvas-cursor", {
+    if (roomId && user && clientIdRef.current) {
+      sendMessage("canvas-cursor", {
         roomId,
         groupId: parsedGroupId ?? undefined,
         clientId: clientIdRef.current,
@@ -367,11 +485,11 @@ export function useCollaborationConnection(
         ts: Date.now(),
       });
     }
-  }, [roomId, parsedGroupId, user]);
+  }, [parsedGroupId, roomId, sendMessage, user]);
 
   const sendEditorCursor = useCallback((editorType: "html" | "css" | "js", levelIndex: number, selection: { from: number; to: number }) => {
-    if (socketRef.current && roomId && user && clientIdRef.current) {
-      socketRef.current.emit("editor-cursor", {
+    if (roomId && user && clientIdRef.current) {
+      sendMessage("editor-cursor", {
         roomId,
         groupId: parsedGroupId ?? undefined,
         editorType,
@@ -384,7 +502,7 @@ export function useCollaborationConnection(
         ts: Date.now(),
       });
     }
-  }, [roomId, parsedGroupId, user]);
+  }, [parsedGroupId, roomId, sendMessage, user]);
 
   const sendEditorChange = useCallback((
     editorType: EditorType,
@@ -393,8 +511,8 @@ export function useCollaborationConnection(
     changeSetJson: unknown,
     selection?: { from: number; to: number }
   ) => {
-    if (socketRef.current && roomId && user && clientIdRef.current) {
-      socketRef.current.emit("editor-change", {
+    if (roomId && user && clientIdRef.current) {
+      sendMessage("editor-change", {
         roomId,
         groupId: parsedGroupId ?? undefined,
         editorType,
@@ -407,11 +525,11 @@ export function useCollaborationConnection(
         ts: Date.now(),
       });
     }
-  }, [roomId, parsedGroupId, user]);
+  }, [parsedGroupId, roomId, sendMessage, user]);
 
   const sendTabFocus = useCallback((editorType: EditorType, levelIndex: number) => {
-    if (socketRef.current && roomId && user && clientIdRef.current) {
-      socketRef.current.emit("tab-focus", {
+    if (roomId && user && clientIdRef.current) {
+      sendMessage("tab-focus", {
         roomId,
         groupId: parsedGroupId ?? undefined,
         editorType,
@@ -422,18 +540,18 @@ export function useCollaborationConnection(
         ts: Date.now(),
       });
     }
-  }, [roomId, parsedGroupId, user]);
+  }, [parsedGroupId, roomId, sendMessage, user]);
 
   const sendTypingStatus = useCallback((editorType: EditorType, levelIndex: number, isTyping: boolean) => {
-    if (socketRef.current && roomId && user && clientIdRef.current) {
+    if (roomId && user && clientIdRef.current) {
       const nextIsTyping = Boolean(isTyping);
-      const typingKey = `${levelIndex}:${editorType}` as const;
-      if ((typingStatusRef.current as Record<string, boolean>)[typingKey] === nextIsTyping) {
+      const typingKey = `${levelIndex}:${editorType}`;
+      if (typingStatusRef.current[typingKey] === nextIsTyping) {
         return;
       }
-      (typingStatusRef.current as Record<string, boolean>)[typingKey] = nextIsTyping;
+      typingStatusRef.current[typingKey] = nextIsTyping;
 
-      socketRef.current.emit("typing-status", {
+      sendMessage("typing-status", {
         roomId,
         groupId: parsedGroupId ?? undefined,
         editorType,
@@ -445,11 +563,11 @@ export function useCollaborationConnection(
         ts: Date.now(),
       });
     }
-  }, [roomId, parsedGroupId, user]);
+  }, [parsedGroupId, roomId, sendMessage, user]);
 
   const sendRoomReset = useCallback((scope: "level" | "game", levelIndex?: number) => {
-    if (socketRef.current && roomId && user && clientIdRef.current) {
-      socketRef.current.emit("reset-room-state", {
+    if (roomId && user && clientIdRef.current) {
+      sendMessage("reset-room-state", {
         roomId,
         groupId: parsedGroupId ?? undefined,
         clientId: clientIdRef.current,
@@ -459,11 +577,11 @@ export function useCollaborationConnection(
         ts: Date.now(),
       });
     }
-  }, [roomId, parsedGroupId, user]);
+  }, [parsedGroupId, roomId, sendMessage, user]);
 
   const sendProgressSync = useCallback((progressData: Record<string, unknown>) => {
-    if (socketRef.current && roomId && user && clientIdRef.current) {
-      socketRef.current.emit("progress-sync", {
+    if (roomId && user && clientIdRef.current) {
+      sendMessage("progress-sync", {
         roomId,
         groupId: parsedGroupId ?? undefined,
         clientId: clientIdRef.current,
@@ -472,35 +590,14 @@ export function useCollaborationConnection(
         ts: Date.now(),
       });
     }
-  }, [roomId, parsedGroupId, user]);
+  }, [parsedGroupId, roomId, sendMessage, user]);
 
-  const disconnect = () => {
-    if (reconnectTimeoutRef.current) {
-      clearTimeout(reconnectTimeoutRef.current);
-      reconnectTimeoutRef.current = null;
+  const connect = useCallback(() => {
+    manualDisconnectRef.current = false;
+    if (!socketRef.current) {
+      reconnectFnRef.current?.();
     }
-    if (socketRef.current) {
-      socketRef.current.disconnect();
-      socketRef.current = null;
-    }
-    isConnectedRef.current = false;
-    typingStatusRef.current = {};
-    setIsConnected(false);
-    setIsConnecting(false);
-    setClientId(null);
-    setSocketState(null);
-    clientIdRef.current = null;
-  };
-
-  const leaveGame = () => {
-    if (socketRef.current && roomId) {
-      socketRef.current.emit("leave-game", {
-        roomId,
-        groupId: parsedGroupId ?? undefined,
-      });
-    }
-    disconnect();
-  };
+  }, []);
 
   return {
     socket: socketState,
@@ -508,7 +605,7 @@ export function useCollaborationConnection(
     isConnecting,
     error,
     clientId,
-    connect: () => {},
+    connect,
     disconnect,
     joinGame: () => {},
     leaveGame,

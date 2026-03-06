@@ -53,36 +53,13 @@ export function throttle<T extends (...args: unknown[]) => void>(
 }
 
 function normalizeSocketUrl(url: string): string {
-  return url.replace("ws://", "http://").replace("wss://", "https://");
+  return url.replace("http://", "ws://").replace("https://", "wss://");
 }
 
-function normalizeSocketPath(path: string): string {
-  const trimmedPath = path.trim();
-  if (!trimmedPath) {
-    return "/";
-  }
-
-  const withLeadingSlash = trimmedPath.startsWith("/") ? trimmedPath : `/${trimmedPath}`;
-  return withLeadingSlash === "/" ? "/" : withLeadingSlash.replace(/\/$/, "");
-}
-
-export function getWebSocketConfig(): { url: string; path: string } {
+export function getWebSocketUrl(): string {
   const configuredUrl = process.env.NEXT_PUBLIC_WEBSOCKET_URL;
-  const configuredPath = process.env.NEXT_PUBLIC_WEBSOCKET_PATH;
-
   if (configuredUrl) {
-    const normalizedUrl = normalizeSocketUrl(configuredUrl);
-    const parsedUrl = new URL(normalizedUrl);
-    const derivedPath =
-      configuredPath ||
-      (parsedUrl.pathname && parsedUrl.pathname !== "/"
-        ? parsedUrl.pathname
-        : "/socket.io");
-
-    return {
-      url: parsedUrl.origin,
-      path: normalizeSocketPath(derivedPath),
-    };
+    return normalizeSocketUrl(configuredUrl);
   }
 
   if (typeof window !== "undefined") {
@@ -93,23 +70,14 @@ export function getWebSocketConfig(): { url: string; path: string } {
       hostname === "::1";
 
     if (isLocalhost) {
-      return {
-        url: `${protocol}//${hostname}:3100`,
-        path: "/socket.io",
-      };
+      return normalizeSocketUrl(`${protocol}//${hostname}:3100`);
     }
 
     const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
-    return {
-      url: origin,
-      path: normalizeSocketPath(basePath ? `${basePath}/ws` : "/"),
-    };
+    return normalizeSocketUrl(`${origin}${basePath ? `${basePath}/ws` : ""}`);
   }
 
-  return {
-    url: "http://localhost:3100",
-    path: "/socket.io",
-  };
+  return "ws://localhost:3100";
 }
 
 export function extractGroupIdFromRoomId(roomId: string | null | undefined): string | null {

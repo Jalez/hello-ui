@@ -1,17 +1,18 @@
 import { createServer } from "http";
-import { Server } from "socket.io";
+import { randomUUID } from "crypto";
 import { ChangeSet, Text } from "@codemirror/state";
+import { WebSocketServer, WebSocket } from "ws";
 
 const PORT = parseInt(process.env.PORT || "3100", 10);
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "http://localhost:3000";
 const API_BASE_URL = process.env.API_BASE_URL || "http://localhost:3000";
 const WS_SERVICE_TOKEN = process.env.WS_SERVICE_TOKEN || "";
-const SOCKET_IO_PATH = process.env.SOCKET_IO_PATH || "/socket.io";
 const WRITE_BUFFER_FLUSH_MS = 5000;
 const EDITOR_TYPES = ["html", "css", "js"];
 
-// roomId -> Map<socketId, userData>
+// roomId -> Map<WebSocket, userData>
 const rooms = new Map();
+const connectionState = new WeakMap();
 
 // roomId -> { ctx, progressData, levels, templateLevels, mapName }
 const roomEditorState = new Map();
@@ -23,19 +24,19 @@ function getRoomUsers(roomId) {
   return rooms.get(roomId) || new Map();
 }
 
-function addUserToRoom(roomId, socketId, userData) {
+function addUserToRoom(roomId, socket, userData) {
   if (!rooms.has(roomId)) {
     rooms.set(roomId, new Map());
   }
-  rooms.get(roomId).set(socketId, userData);
+  rooms.get(roomId).set(socket, userData);
 }
 
-function removeUserFromRoom(roomId, socketId) {
+function removeUserFromRoom(roomId, socket) {
   const room = rooms.get(roomId);
   if (!room) return null;
 
-  const userData = room.get(socketId);
-  room.delete(socketId);
+  const userData = room.get(socket);
+  room.delete(socket);
 
   if (room.size === 0) {
     rooms.delete(roomId);
@@ -47,6 +48,59 @@ function removeUserFromRoom(roomId, socketId) {
   }
 
   return userData;
+}
+
+function setConnectionState(socket, nextState) {
+  const current = connectionState.get(socket) || { id: randomUUID(), roomId: null };
+  connectionState.set(socket, { ...current, ...nextState });
+}
+
+function getConnectionState(socket) {
+  return connectionState.get(socket) || null;
+}
+
+function getConnectionId(socket) {
+  return getConnectionState(socket)?.id || "unknown";
+}
+
+function sendMessage(socket, type, payload) {
+  if (socket.readyState !== WebSocket.OPEN) {
+    return;
+  }
+
+  socket.send(
+    JSON.stringify({
+      type,
+      payload,
+      ts: Date.now(),
+    })
+  );
+}
+
+function broadcastToRoom(roomId, type, payload, excludeSocket = null) {
+  const room = rooms.get(roomId);
+  if (!room) {
+    return;
+  }
+
+  for (const roomSocket of room.keys()) {
+    if (roomSocket === excludeSocket) {
+      continue;
+    }
+    sendMessage(roomSocket, type, payload);
+  }
+}
+
+function parseEnvelope(rawMessage) {
+  try {
+    const parsed = JSON.parse(rawMessage);
+    if (!parsed || typeof parsed !== "object" || typeof parsed.type !== "string") {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
 }
 
 function extractGroupIdFromRoomId(roomId) {
@@ -462,333 +516,374 @@ const httpServer = createServer((req, res) => {
   res.end("Not found");
 });
 
-const io = new Server(httpServer, {
-  path: SOCKET_IO_PATH,
-  cors: {
-    origin: CORS_ORIGIN,
-    methods: ["GET", "POST"],
-    credentials: true,
-  },
-  transports: ["websocket", "polling"],
-});
+const wsServer = new WebSocketServer({ server: httpServer });
 
-io.on("connection", (socket) => {
-  const { userId, userEmail, userName, userImage, roomId: authRoomId, groupId } = socket.handshake.auth;
-  const fallbackRoomId = authRoomId || groupId;
+wsServer.on("connection", (socket) => {
+  setConnectionState(socket, { id: randomUUID(), roomId: null });
+  console.log(`[connect] socket=${getConnectionId(socket)}`);
 
-  console.log(`[connect] socket=${socket.id} userId=${userId} user=${userEmail} room=${fallbackRoomId}`);
+  const resolveRoomId = (data) => data?.roomId || data?.groupId || getConnectionState(socket)?.roomId || null;
 
-  socket.on("join-game", async (data) => {
-    const roomId = data.roomId || data.groupId || fallbackRoomId;
-    if (!roomId) return;
-
-    socket.join(roomId);
-
-    const userData = {
-      clientId: data.clientId || socket.id,
-      userId: data.userId || userId,
-      userEmail: data.userEmail || userEmail,
-      userName: data.userName || userName,
-      userImage: data.userImage || userImage,
-      activeTab: null,
-      activeLevelIndex: null,
-      isTyping: false,
-    };
-    addUserToRoom(roomId, socket.id, userData);
-
-    socket.to(roomId).emit("user-joined", userData);
-
-    const currentUsers = Array.from(getRoomUsers(roomId).values());
-    socket.emit("current-users", { users: currentUsers });
-
-    const ctx = parseRoomContext(roomId);
-    if (ctx) {
-      const state = await ensureRoomState(roomId, ctx);
-      socket.emit("room-state-sync", serializeRoomStateSync(state));
-      console.log(`[room-state-sync:emit] room=${roomId} target=${socket.id} levelsCount=${state.levels.length}`);
-    } else {
-      console.log(`[room-state-sync:skip] room=${roomId} target=${socket.id} reason=invalid-room-context`);
-    }
-
-    console.log(`[join-game] user=${userData.userEmail} room=${roomId} total=${currentUsers.length}`);
-  });
-
-  socket.on("leave-game", (data) => {
-    const roomId = data?.roomId || data?.groupId || fallbackRoomId;
-    if (!roomId) return;
-
-    const userData = removeUserFromRoom(roomId, socket.id);
-    socket.leave(roomId);
-
-    if (userData) {
-      socket.to(roomId).emit("user-left", {
-        userId: userData.userId,
-        userEmail: userData.userEmail,
-        userName: userData.userName,
-      });
-      console.log(`[leave-game] user=${userData.userEmail} room=${roomId}`);
-    }
-  });
-
-  socket.on("canvas-cursor", (data) => {
-    const roomId = data.roomId || data.groupId || fallbackRoomId;
-    if (!roomId) return;
-    socket.to(roomId).emit("canvas-cursor", data);
-  });
-
-  socket.on("editor-cursor", (data) => {
-    const roomId = data.roomId || data.groupId || fallbackRoomId;
-    if (!roomId) return;
-    console.log(
-      `[editor-cursor:recv] room=${roomId} from=${socket.id} editorType=${data.editorType} levelIndex=${data.levelIndex} selection=${JSON.stringify(data.selection)}`
-    );
-    socket.to(roomId).emit("editor-cursor", data);
-  });
-
-  socket.on("editor-change", async (data) => {
-    const roomId = data.roomId || data.groupId || fallbackRoomId;
-    if (!roomId) return;
-
-    const ctx = parseRoomContext(roomId);
-    if (!ctx) {
+  socket.on("message", async (rawMessage) => {
+    const envelope = parseEnvelope(rawMessage.toString());
+    if (!envelope) {
+      sendMessage(socket, "error", { error: "Invalid message" });
       return;
     }
 
-    const levelIndex = Number.isInteger(data.levelIndex) ? data.levelIndex : 0;
-    const state = await ensureRoomState(roomId, ctx);
-    const levelState = ensureLevelState(state, levelIndex);
-    const editorType = EDITOR_TYPES.includes(data.editorType) ? data.editorType : "html";
-    const currentVersion = levelState.versions[editorType] || 0;
+    const data = envelope.payload && typeof envelope.payload === "object" ? envelope.payload : {};
+    const socketId = getConnectionId(socket);
 
-    if (data.baseVersion !== currentVersion) {
-      socket.emit("editor-resync", {
-        roomId,
-        groupId: extractGroupIdFromRoomId(roomId),
-        editorType,
-        levelIndex,
-        content: levelState.code[editorType],
-        version: currentVersion,
-        ts: Date.now(),
-      });
-      console.log(
-        `[editor-change:resync] room=${roomId} from=${socket.id} editorType=${editorType} levelIndex=${levelIndex} clientBase=${data.baseVersion} serverVersion=${currentVersion}`
-      );
-      return;
-    }
+    switch (envelope.type) {
+      case "join-game": {
+        const roomId = resolveRoomId(data);
+        if (!roomId) {
+          return;
+        }
 
-    try {
-      const changeSet = ChangeSet.fromJSON(data.changeSetJson);
-      const nextContent = changeSet.apply(getDocumentText(levelState.code[editorType])).toString();
-      const nextVersion = currentVersion + 1;
+        setConnectionState(socket, { roomId });
+        const userData = {
+          clientId: data.clientId || socketId,
+          userId: data.userId || "",
+          userEmail: data.userEmail || "",
+          userName: data.userName || undefined,
+          userImage: data.userImage || undefined,
+          activeTab: null,
+          activeLevelIndex: null,
+          isTyping: false,
+        };
+        addUserToRoom(roomId, socket, userData);
 
-      levelState.code[editorType] = nextContent;
-      levelState.versions[editorType] = nextVersion;
+        broadcastToRoom(roomId, "user-joined", userData, socket);
 
-      markRoomDirty(roomId, ctx);
+        const currentUsers = Array.from(getRoomUsers(roomId).values());
+        sendMessage(socket, "current-users", { users: currentUsers });
 
-      const payload = {
-        roomId,
-        groupId: extractGroupIdFromRoomId(roomId),
-        editorType,
-        clientId: data.clientId,
-        userId: data.userId,
-        baseVersion: currentVersion,
-        nextVersion,
-        changeSetJson: data.changeSetJson,
-        levelIndex,
-        selection: data.selection,
-        ts: Date.now(),
-      };
+        const ctx = parseRoomContext(roomId);
+        if (ctx) {
+          const state = await ensureRoomState(roomId, ctx);
+          sendMessage(socket, "room-state-sync", serializeRoomStateSync(state));
+          console.log(`[room-state-sync:emit] room=${roomId} target=${socketId} levelsCount=${state.levels.length}`);
+        } else {
+          console.log(`[room-state-sync:skip] room=${roomId} target=${socketId} reason=invalid-room-context`);
+        }
 
-      console.log(`[editor-change:store] room=${roomId} from=${socket.id} ${JSON.stringify(summarizeEditorPayload(payload))}`);
-      socket.emit("editor-change-applied", {
-        roomId,
-        groupId: extractGroupIdFromRoomId(roomId),
-        editorType,
-        levelIndex,
-        nextVersion,
-        ts: Date.now(),
-      });
-
-      const recipients = Math.max((getRoomUsers(roomId).size || 1) - 1, 0);
-      console.log(`[editor-change:emit] room=${roomId} from=${socket.id} recipients=${recipients} ${JSON.stringify(summarizeEditorPayload(payload))}`);
-      socket.to(roomId).emit("editor-change", payload);
-    } catch (error) {
-      socket.emit("editor-resync", {
-        roomId,
-        groupId: extractGroupIdFromRoomId(roomId),
-        editorType,
-        levelIndex,
-        content: levelState.code[editorType],
-        version: currentVersion,
-        ts: Date.now(),
-      });
-      console.error(
-        `[editor-change:error] room=${roomId} from=${socket.id} editorType=${editorType} levelIndex=${levelIndex} ${error.message}`
-      );
-    }
-  });
-
-  socket.on("tab-focus", (data) => {
-    const roomId = data.roomId || data.groupId || fallbackRoomId;
-    if (!roomId) return;
-
-    const room = rooms.get(roomId);
-    if (room && room.has(socket.id)) {
-      const userData = room.get(socket.id);
-      userData.activeTab = data.editorType;
-      userData.activeLevelIndex = Number.isInteger(data.levelIndex) ? data.levelIndex : 0;
-      userData.isTyping = false;
-      room.set(socket.id, userData);
-
-      socket.to(roomId).emit("tab-focus", {
-        roomId,
-        groupId: extractGroupIdFromRoomId(roomId),
-        clientId: userData.clientId,
-        userId: userData.userId,
-        userName: userData.userName,
-        userImage: userData.userImage,
-        editorType: data.editorType,
-        levelIndex: userData.activeLevelIndex,
-        ts: Date.now(),
-      });
-      console.log(`[tab-focus] room=${roomId} from=${socket.id} editorType=${data.editorType} levelIndex=${userData.activeLevelIndex}`);
-    }
-  });
-
-  socket.on("typing-status", (data) => {
-    const roomId = data.roomId || data.groupId || fallbackRoomId;
-    if (!roomId) return;
-
-    const room = rooms.get(roomId);
-    if (room && room.has(socket.id)) {
-      const userData = room.get(socket.id);
-      const nextIsTyping = Boolean(data.isTyping);
-      const nextEditorType = data.editorType ?? userData.activeTab ?? null;
-      const nextLevelIndex = Number.isInteger(data.levelIndex)
-        ? data.levelIndex
-        : (Number.isInteger(userData.activeLevelIndex) ? userData.activeLevelIndex : 0);
-      const shouldBroadcast =
-        userData.isTyping !== nextIsTyping ||
-        userData.activeTab !== nextEditorType ||
-        userData.activeLevelIndex !== nextLevelIndex;
-
-      if (!shouldBroadcast) {
+        console.log(`[join-game] user=${userData.userEmail} room=${roomId} total=${currentUsers.length}`);
         return;
       }
+      case "leave-game": {
+        const roomId = resolveRoomId(data);
+        if (!roomId) {
+          return;
+        }
 
-      userData.isTyping = nextIsTyping;
-      userData.activeTab = nextEditorType;
-      userData.activeLevelIndex = nextLevelIndex;
-      room.set(socket.id, userData);
+        const userData = removeUserFromRoom(roomId, socket);
+        setConnectionState(socket, { roomId: null });
 
-      socket.to(roomId).emit("typing-status", {
-        roomId,
-        groupId: extractGroupIdFromRoomId(roomId),
-        clientId: userData.clientId,
-        userId: userData.userId,
-        userName: userData.userName,
-        editorType: nextEditorType,
-        levelIndex: nextLevelIndex,
-        isTyping: nextIsTyping,
-        ts: Date.now(),
-      });
-      console.log(`[typing-status] room=${roomId} from=${socket.id} editorType=${nextEditorType} levelIndex=${nextLevelIndex} isTyping=${nextIsTyping}`);
-    }
-  });
-
-  socket.on("progress-sync", async (data) => {
-    const roomId = data?.roomId || data?.groupId || fallbackRoomId;
-    if (!roomId) return;
-
-    const ctx = parseRoomContext(roomId);
-    if (!ctx || ctx.kind !== "instance") {
-      return;
-    }
-
-    const state = await ensureRoomState(roomId, ctx);
-    const incomingProgress =
-      data?.progressData && typeof data.progressData === "object" && !Array.isArray(data.progressData)
-        ? data.progressData
-        : null;
-    if (!incomingProgress) {
-      return;
-    }
-
-    state.progressData = {
-      ...state.progressData,
-      ...incomingProgress,
-      levels: state.progressData.levels,
-    };
-
-    socket.to(roomId).emit("progress-sync", {
-      progressData: incomingProgress,
-      ts: Date.now(),
-    });
-    console.log(`[progress-sync] room=${roomId} from=${socket.id} keys=${Object.keys(incomingProgress).join(",")}`);
-  });
-
-  socket.on("reset-room-state", async (data) => {
-    const roomId = data?.roomId || data?.groupId || fallbackRoomId;
-    if (!roomId) return;
-
-    const ctx = parseRoomContext(roomId);
-    if (!ctx || ctx.kind !== "instance") {
-      return;
-    }
-
-    const scope = data?.scope === "game" ? "game" : "level";
-    const levelIndex = Number.isInteger(data?.levelIndex) ? data.levelIndex : 0;
-    const currentState = await ensureRoomState(roomId, ctx);
-    let templateLevels = Array.isArray(currentState.templateLevels)
-      ? currentState.templateLevels
-      : [];
-
-    if (templateLevels.length === 0 && currentState.mapName) {
-      templateLevels = await fetchLevelsForMapName(currentState.mapName);
-    }
-    if (templateLevels.length === 0) {
-      return;
-    }
-
-    const nextState = createRoomState(ctx, serializeProgressData(currentState), {
-      templateLevels,
-      mapName: currentState.mapName,
-    });
-    if (scope === "game") {
-      nextState.levels = templateLevels.map((templateLevel) => createLevelState(templateLevel));
-    } else {
-      const templateLevel = templateLevels[levelIndex];
-      if (!templateLevel) {
+        if (userData) {
+          broadcastToRoom(
+            roomId,
+            "user-left",
+            {
+              userId: userData.userId,
+              userEmail: userData.userEmail,
+              userName: userData.userName,
+            },
+            socket
+          );
+          console.log(`[leave-game] user=${userData.userEmail} room=${roomId}`);
+        }
         return;
       }
-      nextState.levels[levelIndex] = createLevelState(templateLevel);
-    }
-    roomEditorState.set(roomId, nextState);
+      case "canvas-cursor": {
+        const roomId = resolveRoomId(data);
+        if (!roomId) {
+          return;
+        }
+        broadcastToRoom(roomId, "canvas-cursor", data, socket);
+        return;
+      }
+      case "editor-cursor": {
+        const roomId = resolveRoomId(data);
+        if (!roomId) {
+          return;
+        }
+        console.log(
+          `[editor-cursor:recv] room=${roomId} from=${socketId} editorType=${data.editorType} levelIndex=${data.levelIndex} selection=${JSON.stringify(data.selection)}`
+        );
+        broadcastToRoom(roomId, "editor-cursor", data, socket);
+        return;
+      }
+      case "editor-change": {
+        const roomId = resolveRoomId(data);
+        if (!roomId) {
+          return;
+        }
 
-    const existingBuffer = roomWriteBuffer.get(roomId);
-    if (existingBuffer?.timer) {
-      clearTimeout(existingBuffer.timer);
-    }
-    roomWriteBuffer.delete(roomId);
+        const ctx = parseRoomContext(roomId);
+        if (!ctx) {
+          return;
+        }
 
-    const ok = await saveProgressToDB(ctx, serializeCodeLevels(nextState));
-    if (!ok) {
-      markRoomDirty(roomId, ctx);
-    }
+        const levelIndex = Number.isInteger(data.levelIndex) ? data.levelIndex : 0;
+        const state = await ensureRoomState(roomId, ctx);
+        const levelState = ensureLevelState(state, levelIndex);
+        const editorType = EDITOR_TYPES.includes(data.editorType) ? data.editorType : "html";
+        const currentVersion = levelState.versions[editorType] || 0;
 
-    io.to(roomId).emit("room-state-sync", serializeRoomStateSync(nextState));
-    console.log(`[room-state-sync:emit] room=${roomId} by=${socket.id} reason=reset scope=${scope} levelIndex=${levelIndex}`);
+        if (data.baseVersion !== currentVersion) {
+          sendMessage(socket, "editor-resync", {
+            roomId,
+            groupId: extractGroupIdFromRoomId(roomId),
+            editorType,
+            levelIndex,
+            content: levelState.code[editorType],
+            version: currentVersion,
+            ts: Date.now(),
+          });
+          console.log(
+            `[editor-change:resync] room=${roomId} from=${socketId} editorType=${editorType} levelIndex=${levelIndex} clientBase=${data.baseVersion} serverVersion=${currentVersion}`
+          );
+          return;
+        }
+
+        try {
+          const changeSet = ChangeSet.fromJSON(data.changeSetJson);
+          const nextContent = changeSet.apply(getDocumentText(levelState.code[editorType])).toString();
+          const nextVersion = currentVersion + 1;
+
+          levelState.code[editorType] = nextContent;
+          levelState.versions[editorType] = nextVersion;
+          markRoomDirty(roomId, ctx);
+
+          const payload = {
+            roomId,
+            groupId: extractGroupIdFromRoomId(roomId),
+            editorType,
+            clientId: data.clientId,
+            userId: data.userId,
+            baseVersion: currentVersion,
+            nextVersion,
+            changeSetJson: data.changeSetJson,
+            levelIndex,
+            selection: data.selection,
+            ts: Date.now(),
+          };
+
+          console.log(`[editor-change:store] room=${roomId} from=${socketId} ${JSON.stringify(summarizeEditorPayload(payload))}`);
+          sendMessage(socket, "editor-change-applied", {
+            roomId,
+            groupId: extractGroupIdFromRoomId(roomId),
+            editorType,
+            levelIndex,
+            nextVersion,
+            ts: Date.now(),
+          });
+
+          const recipients = Math.max((getRoomUsers(roomId).size || 1) - 1, 0);
+          console.log(`[editor-change:emit] room=${roomId} from=${socketId} recipients=${recipients} ${JSON.stringify(summarizeEditorPayload(payload))}`);
+          broadcastToRoom(roomId, "editor-change", payload, socket);
+        } catch (error) {
+          sendMessage(socket, "editor-resync", {
+            roomId,
+            groupId: extractGroupIdFromRoomId(roomId),
+            editorType,
+            levelIndex,
+            content: levelState.code[editorType],
+            version: currentVersion,
+            ts: Date.now(),
+          });
+          console.error(
+            `[editor-change:error] room=${roomId} from=${socketId} editorType=${editorType} levelIndex=${levelIndex} ${error.message}`
+          );
+        }
+        return;
+      }
+      case "tab-focus": {
+        const roomId = resolveRoomId(data);
+        if (!roomId) {
+          return;
+        }
+
+        const room = rooms.get(roomId);
+        if (room && room.has(socket)) {
+          const userData = room.get(socket);
+          userData.activeTab = data.editorType;
+          userData.activeLevelIndex = Number.isInteger(data.levelIndex) ? data.levelIndex : 0;
+          userData.isTyping = false;
+          room.set(socket, userData);
+
+          broadcastToRoom(
+            roomId,
+            "tab-focus",
+            {
+              roomId,
+              groupId: extractGroupIdFromRoomId(roomId),
+              clientId: userData.clientId,
+              userId: userData.userId,
+              userName: userData.userName,
+              userImage: userData.userImage,
+              editorType: data.editorType,
+              levelIndex: userData.activeLevelIndex,
+              ts: Date.now(),
+            },
+            socket
+          );
+          console.log(`[tab-focus] room=${roomId} from=${socketId} editorType=${data.editorType} levelIndex=${userData.activeLevelIndex}`);
+        }
+        return;
+      }
+      case "typing-status": {
+        const roomId = resolveRoomId(data);
+        if (!roomId) {
+          return;
+        }
+
+        const room = rooms.get(roomId);
+        if (room && room.has(socket)) {
+          const userData = room.get(socket);
+          const nextIsTyping = Boolean(data.isTyping);
+          const nextEditorType = data.editorType ?? userData.activeTab ?? null;
+          const nextLevelIndex = Number.isInteger(data.levelIndex)
+            ? data.levelIndex
+            : (Number.isInteger(userData.activeLevelIndex) ? userData.activeLevelIndex : 0);
+          const shouldBroadcast =
+            userData.isTyping !== nextIsTyping ||
+            userData.activeTab !== nextEditorType ||
+            userData.activeLevelIndex !== nextLevelIndex;
+
+          if (!shouldBroadcast) {
+            return;
+          }
+
+          userData.isTyping = nextIsTyping;
+          userData.activeTab = nextEditorType;
+          userData.activeLevelIndex = nextLevelIndex;
+          room.set(socket, userData);
+
+          broadcastToRoom(
+            roomId,
+            "typing-status",
+            {
+              roomId,
+              groupId: extractGroupIdFromRoomId(roomId),
+              clientId: userData.clientId,
+              userId: userData.userId,
+              userName: userData.userName,
+              editorType: nextEditorType,
+              levelIndex: nextLevelIndex,
+              isTyping: nextIsTyping,
+              ts: Date.now(),
+            },
+            socket
+          );
+          console.log(`[typing-status] room=${roomId} from=${socketId} editorType=${nextEditorType} levelIndex=${nextLevelIndex} isTyping=${nextIsTyping}`);
+        }
+        return;
+      }
+      case "progress-sync": {
+        const roomId = resolveRoomId(data);
+        if (!roomId) {
+          return;
+        }
+
+        const ctx = parseRoomContext(roomId);
+        if (!ctx || ctx.kind !== "instance") {
+          return;
+        }
+
+        const state = await ensureRoomState(roomId, ctx);
+        const incomingProgress =
+          data?.progressData && typeof data.progressData === "object" && !Array.isArray(data.progressData)
+            ? data.progressData
+            : null;
+        if (!incomingProgress) {
+          return;
+        }
+
+        state.progressData = {
+          ...state.progressData,
+          ...incomingProgress,
+          levels: state.progressData.levels,
+        };
+
+        broadcastToRoom(roomId, "progress-sync", {
+          progressData: incomingProgress,
+          ts: Date.now(),
+        }, socket);
+        console.log(`[progress-sync] room=${roomId} from=${socketId} keys=${Object.keys(incomingProgress).join(",")}`);
+        return;
+      }
+      case "reset-room-state": {
+        const roomId = resolveRoomId(data);
+        if (!roomId) {
+          return;
+        }
+
+        const ctx = parseRoomContext(roomId);
+        if (!ctx || ctx.kind !== "instance") {
+          return;
+        }
+
+        const scope = data?.scope === "game" ? "game" : "level";
+        const levelIndex = Number.isInteger(data?.levelIndex) ? data.levelIndex : 0;
+        const currentState = await ensureRoomState(roomId, ctx);
+        let templateLevels = Array.isArray(currentState.templateLevels)
+          ? currentState.templateLevels
+          : [];
+
+        if (templateLevels.length === 0 && currentState.mapName) {
+          templateLevels = await fetchLevelsForMapName(currentState.mapName);
+        }
+        if (templateLevels.length === 0) {
+          return;
+        }
+
+        const nextState = createRoomState(ctx, serializeProgressData(currentState), {
+          templateLevels,
+          mapName: currentState.mapName,
+        });
+        if (scope === "game") {
+          nextState.levels = templateLevels.map((templateLevel) => createLevelState(templateLevel));
+        } else {
+          const templateLevel = templateLevels[levelIndex];
+          if (!templateLevel) {
+            return;
+          }
+          nextState.levels[levelIndex] = createLevelState(templateLevel);
+        }
+        roomEditorState.set(roomId, nextState);
+
+        const existingBuffer = roomWriteBuffer.get(roomId);
+        if (existingBuffer?.timer) {
+          clearTimeout(existingBuffer.timer);
+        }
+        roomWriteBuffer.delete(roomId);
+
+        const ok = await saveProgressToDB(ctx, serializeCodeLevels(nextState));
+        if (!ok) {
+          markRoomDirty(roomId, ctx);
+        }
+
+        broadcastToRoom(roomId, "room-state-sync", serializeRoomStateSync(nextState));
+        console.log(`[room-state-sync:emit] room=${roomId} by=${socketId} reason=reset scope=${scope} levelIndex=${levelIndex}`);
+        return;
+      }
+      default:
+        return;
+    }
   });
 
-  socket.on("disconnect", (reason) => {
-    console.log(`[disconnect] socket=${socket.id} reason=${reason}`);
+  socket.on("close", (code, reasonBuffer) => {
+    const socketId = getConnectionId(socket);
+    const reason = reasonBuffer?.toString?.() || String(code);
+    console.log(`[disconnect] socket=${socketId} reason=${reason}`);
 
     for (const [roomId, userMap] of rooms.entries()) {
-      if (userMap.has(socket.id)) {
-        const userData = removeUserFromRoom(roomId, socket.id);
+      if (userMap.has(socket)) {
+        const userData = removeUserFromRoom(roomId, socket);
         if (userData) {
-          io.to(roomId).emit("user-left", {
+          broadcastToRoom(roomId, "user-left", {
             userId: userData.userId,
             userEmail: userData.userEmail,
             userName: userData.userName,

@@ -2,7 +2,7 @@
   "name": "ui-designer-ws-server",
   "version": "1.0.0",
   "type": "module",
-  "description": "Socket.io collaboration WebSocket server for ui-designer",
+  "description": "Collaboration WebSocket server for ui-designer",
   "main": "server.mjs",
   "scripts": {
     "start": "node server.mjs",
@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@codemirror/state": "^6.5.2",
-    "socket.io": "^4.8.3"
+    "ws": "^8.19.0"
   },
   "engines": {
     "node": ">=20"
