@@ -6,6 +6,7 @@ const PORT = parseInt(process.env.PORT || "3100", 10);
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "http://localhost:3000";
 const API_BASE_URL = process.env.API_BASE_URL || "http://localhost:3000";
 const WS_SERVICE_TOKEN = process.env.WS_SERVICE_TOKEN || "";
+const SOCKET_IO_PATH = process.env.SOCKET_IO_PATH || "/socket.io";
 const WRITE_BUFFER_FLUSH_MS = 5000;
 const EDITOR_TYPES = ["html", "css", "js"];
 
@@ -462,6 +463,7 @@ const httpServer = createServer((req, res) => {
 });
 
 const io = new Server(httpServer, {
+  path: SOCKET_IO_PATH,
   cors: {
     origin: CORS_ORIGIN,
     methods: ["GET", "POST"],
