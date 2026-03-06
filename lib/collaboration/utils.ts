@@ -59,13 +59,11 @@ function normalizeSocketUrl(url: string): string {
 function normalizeSocketPath(path: string): string {
   const trimmedPath = path.trim();
   if (!trimmedPath) {
-    return "/socket.io";
+    return "/";
   }
 
   const withLeadingSlash = trimmedPath.startsWith("/") ? trimmedPath : `/${trimmedPath}`;
-  return withLeadingSlash.endsWith("/socket.io")
-    ? withLeadingSlash
-    : `${withLeadingSlash.replace(/\/$/, "")}/socket.io`;
+  return withLeadingSlash === "/" ? "/" : withLeadingSlash.replace(/\/$/, "");
 }
 
 export function getWebSocketConfig(): { url: string; path: string } {
@@ -104,7 +102,7 @@ export function getWebSocketConfig(): { url: string; path: string } {
     const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
     return {
       url: origin,
-      path: normalizeSocketPath(basePath ? `${basePath}/ws` : "/socket.io"),
+      path: normalizeSocketPath(basePath ? `${basePath}/ws` : "/"),
     };
   }
 
