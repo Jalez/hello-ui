@@ -123,6 +123,7 @@ export function useCollaborationConnection(
 
     const socket = io(wsUrl, {
       path: wsPath,
+      addTrailingSlash: false,
       auth: {
         userId: currentUser.id,
         userEmail: currentUser.email,
