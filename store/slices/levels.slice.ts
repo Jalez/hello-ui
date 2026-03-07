@@ -323,7 +323,12 @@ const levelsSlice = createSlice({
       const { levelId, thresholds } = action.payload;
       const level = state[levelId - 1];
       if (!level) return;
-      level.pointsThresholds = thresholds;
+      const sortedThresholds = [...thresholds].sort((a, b) => a.accuracy - b.accuracy);
+      level.pointsThresholds = sortedThresholds;
+      if (sortedThresholds.length > 0) {
+        level.percentageTreshold = sortedThresholds[0].accuracy;
+        level.percentageFullPointsTreshold = sortedThresholds[sortedThresholds.length - 1].accuracy;
+      }
       storage?.setItem(storage.key, JSON.stringify(state));
     },
     changeMaxPoints(state, action) {

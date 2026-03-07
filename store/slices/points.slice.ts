@@ -24,6 +24,64 @@ type Points = {
   levels: LevelPoints;
 };
 
+function getAverageScenarioAccuracy(level: Level, existingScenarios?: scenarioAccuracy[]): number {
+  const scenarios = existingScenarios ?? level.scenarios.map((scenario) => ({
+    scenarioId: scenario.scenarioId,
+    accuracy: scenario.accuracy,
+  }));
+
+  if (scenarios.length === 0) {
+    return Number(level.accuracy || 0);
+  }
+
+  const percentage = scenarios.reduce((acc, scenario) => acc + scenario.accuracy, 0) / scenarios.length;
+  return Math.round(percentage * 100) / 100;
+}
+
+function calculatePointsFromThresholds(level: Level, accuracy: number): number {
+  const pointsThresholds = level.pointsThresholds;
+
+  if (pointsThresholds && pointsThresholds.length > 0) {
+    const sorted = [...pointsThresholds].sort((a, b) => a.accuracy - b.accuracy);
+    let earnedPercent = 0;
+    for (const threshold of sorted) {
+      if (accuracy >= threshold.accuracy) {
+        earnedPercent = threshold.pointsPercent;
+      }
+    }
+    return Math.ceil((earnedPercent / 100) * level.maxPoints);
+  }
+
+  const percentageTreshold = level.percentageTreshold || 90;
+  const percentageFullPointsTreshold = level.percentageFullPointsTreshold || 100;
+  if (accuracy < percentageTreshold) {
+    return 0;
+  }
+  if (accuracy >= percentageFullPointsTreshold) {
+    return level.maxPoints;
+  }
+
+  const coveredRange = Math.max(percentageFullPointsTreshold - percentageTreshold, 1);
+  const progress = (accuracy - percentageTreshold) / coveredRange;
+  return Math.ceil(progress * level.maxPoints);
+}
+
+function buildLevelPoints(level: Level) {
+  const scenarios = level.scenarios.map((scenario) => ({
+    scenarioId: scenario.scenarioId,
+    accuracy: scenario.accuracy,
+  }));
+  const accuracy = getAverageScenarioAccuracy(level, scenarios);
+
+  return {
+    points: calculatePointsFromThresholds(level, accuracy),
+    maxPoints: level.maxPoints,
+    accuracy,
+    bestTime: "0:0",
+    scenarios,
+  };
+}
+
 const initialState: Points = {
   allPoints: 0,
   allMaxPoints: 0,
@@ -39,7 +97,7 @@ export const pointsSlice = createSlice({
       const levels = action.payload;
 
       state.allPoints = levels.reduce(
-        (acc, level) => acc + level.points,
+        (acc, level) => acc + calculatePointsFromThresholds(level, getAverageScenarioAccuracy(level)),
         0
       );
       state.allMaxPoints = levels.reduce(
@@ -47,16 +105,7 @@ export const pointsSlice = createSlice({
         0
       );
       levels.forEach((level) => {
-        state.levels[level.name] = {
-          points: level.points,
-          maxPoints: level.maxPoints,
-          accuracy: level?.accuracy || 0,
-          bestTime: "0:0",
-          scenarios: level.scenarios.map((scenario) => ({
-            scenarioId: scenario.scenarioId,
-            accuracy: scenario.accuracy,
-          })),
-        };
+        state.levels[level.name] = buildLevelPoints(level);
       });
 
       // Save to backend as backup
@@ -119,19 +168,9 @@ export const pointsSlice = createSlice({
       const levelName = action.payload.level.name;
       const scenarioId = action.payload.scenarioId;
       const startTime = action.payload.level.timeData.startTime;
-      const pointsThresholds = action.payload.level.pointsThresholds;
       let level = state.levels[levelName];
       if (!level) {
-        level = {
-          points: action.payload.level.points,
-          maxPoints: action.payload.level.maxPoints,
-          accuracy: action.payload.level.accuracy || 0,
-          bestTime: "0:0",
-          scenarios: action.payload.level.scenarios.map((scenario) => ({
-            scenarioId: scenario.scenarioId,
-            accuracy: scenario.accuracy,
-          })),
-        };
+        level = buildLevelPoints(action.payload.level);
         state.levels[levelName] = level;
       }
       let scenario = level.scenarios.find(
@@ -146,33 +185,41 @@ export const pointsSlice = createSlice({
       scenario.accuracy = action.payload.accuracy;
 
       // Update level accuracy as average of all scenario accuracies
-      const percentage =
-        level.scenarios.reduce((acc, s) => acc + s.accuracy, 0) /
-        level.scenarios.length;
-      level.accuracy = Math.round(percentage * 100) / 100;
-
-      let newpoints = 0;
-      if (pointsThresholds && pointsThresholds.length > 0) {
-        // Multi-threshold: award pointsPercent of maxPoints for the highest reached threshold
-        const sorted = [...pointsThresholds].sort((a, b) => a.accuracy - b.accuracy);
-        let earnedPercent = 0;
-        for (const t of sorted) {
-          if (percentage >= t.accuracy) earnedPercent = t.pointsPercent;
-        }
-        newpoints = Math.ceil((earnedPercent / 100) * level.maxPoints);
-      } else {
-        // Legacy single-threshold fallback
-        const percentageTreshold = action.payload.level?.percentageTreshold || 90;
-        if (percentage > percentageTreshold) {
-          const lastTenPercent = percentage - percentageTreshold;
-          const remainingPercentage = 100 - percentageTreshold;
-          newpoints = Math.ceil((lastTenPercent / remainingPercentage) * level.maxPoints);
-        }
-      }
+      const percentage = getAverageScenarioAccuracy(action.payload.level, level.scenarios);
+      level.accuracy = percentage;
+      level.maxPoints = action.payload.level.maxPoints;
+      const newpoints = calculatePointsFromThresholds(action.payload.level, percentage);
       if (newpoints <= level.points) return;
       level.points = newpoints;
       const currentTime = new Date().getTime();
       level.bestTime = numberTimeToMinutesAndSeconds(currentTime - startTime);
+    },
+    recalculateLevelPoints: (state, action: PayloadAction<{ level: Level }>) => {
+      const { level } = action.payload;
+      const existing = state.levels[level.name];
+      const scenarios = existing?.scenarios?.length
+        ? existing.scenarios
+        : level.scenarios.map((scenario) => ({
+            scenarioId: scenario.scenarioId,
+            accuracy: scenario.accuracy,
+          }));
+      const accuracy = getAverageScenarioAccuracy(level, scenarios);
+      const nextPoints = calculatePointsFromThresholds(level, accuracy);
+
+      state.levels[level.name] = {
+        points: nextPoints,
+        maxPoints: level.maxPoints,
+        accuracy,
+        bestTime: existing?.bestTime ?? "0:0",
+        scenarios,
+      };
+      state.allPoints = Object.values(state.levels).reduce((acc, item) => acc + item.points, 0);
+      state.allMaxPoints = Object.values(state.levels).reduce((acc, item) => acc + item.maxPoints, 0);
+
+      if (typeof window !== "undefined") {
+        const pointsStorage = backendStorage("points");
+        pointsStorage.setItem(pointsStorage.key, JSON.stringify(state));
+      }
     },
     renameLevelKey: (state, action: PayloadAction<{ oldName: string; newName: string }>) => {
       const { oldName, newName } = action.payload;
@@ -228,6 +275,7 @@ export const {
   updateLevelMaxPoints,
   updateLevelBestTime,
   updateLevelAccuracy,
+  recalculateLevelPoints,
   renameLevelKey,
   mergeSavedPoints,
 } = pointsSlice.actions;
