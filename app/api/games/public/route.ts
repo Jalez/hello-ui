@@ -18,6 +18,20 @@ function summarizeLanguages(levels: Array<{ json: Record<string, unknown> }>) {
   );
 }
 
+function summarizeDifficulties(levels: Array<{ json: Record<string, unknown> }>) {
+  const allowed = new Set(["easy", "medium", "hard"]);
+  const difficulties = new Set<string>();
+
+  for (const level of levels) {
+    const difficulty = String(level.json?.difficulty ?? "").toLowerCase();
+    if (allowed.has(difficulty)) {
+      difficulties.add(difficulty);
+    }
+  }
+
+  return ["easy", "medium", "hard"].filter((difficulty) => difficulties.has(difficulty));
+}
+
 export async function GET() {
   try {
     const games = await getPublicGames();
@@ -27,12 +41,14 @@ export async function GET() {
         return {
           game,
           languages: summarizeLanguages(levels),
+          levelsCount: levels.length,
+          difficulties: summarizeDifficulties(levels),
         };
       })
     );
 
     return NextResponse.json(
-      gamesWithLanguages.map(({ game, languages }) => ({
+      gamesWithLanguages.map(({ game, languages, levelsCount, difficulties }) => ({
         id: game.id,
         mapName: game.map_name,
         title: game.title,
@@ -44,6 +60,8 @@ export async function GET() {
         accessKeyRequired: game.access_key_required,
         collaborationMode: game.collaboration_mode,
         languages,
+        levelsCount,
+        difficulties,
         createdAt: game.created_at,
         updatedAt: game.updated_at,
       })),
