@@ -79,7 +79,7 @@ export const UserProfileMenu: React.FC = () => {
             </Button>
           </TooltipTrigger>
           {isCollapsed && (
-            <TooltipContent side="right" className="ml-2">
+            <TooltipContent side="right" className="ml-2 z-[10000]">
               <p>Sign In</p>
             </TooltipContent>
           )}
@@ -112,7 +112,7 @@ export const UserProfileMenu: React.FC = () => {
             </TooltipTrigger>
             <UserDropdownContent getUserName={getUserName} handleSignOut={handleSignOut} />
             {isCollapsed && (
-              <TooltipContent side="right" className="ml-2 ">
+              <TooltipContent side="right" className="ml-2 z-[10000]">
                 <p>Profile</p>
               </TooltipContent>
             )}

@@ -56,7 +56,7 @@ export const SidebarLink: React.FC<SidebarItemProps> = ({
         </Link>
       </TooltipTrigger>
       {isCollapsed && title && (
-        <TooltipContent side="right" className="ml-2">
+        <TooltipContent side="right" className="ml-2 z-[10000]">
           <p>{title}</p>
         </TooltipContent>
       )}

@@ -191,7 +191,24 @@ export default function CreatorSettingsPage({ params }: CreatorSettingsPageProps
   const shareUrl = game?.id ? `${origin}/game/${game.id}?mode=game` : null;
   const ltiLaunchUrl = game?.id ? `${origin}${apiUrl(`/api/lti/game/${game.id}`)}` : null;
 
-  const solutionScreenshots = Object.entries(solutionUrls).filter(([, url]) => !!url);
+  const levelSolutionThumbnails = useMemo(
+    () =>
+      levels
+        .flatMap((level) => {
+          const scenarioId = level.scenarios?.find((scenario) => Boolean(solutionUrls[scenario.scenarioId]))?.scenarioId;
+          if (!scenarioId) {
+            return [];
+          }
+
+          return [{
+            levelName: String(level.name),
+            scenarioId,
+            url: solutionUrls[scenarioId] as string,
+          }];
+        }),
+    [levels, solutionUrls],
+  );
+
   const scenarioLabel = (scenarioId: string) => {
     for (const level of levels) {
       const scenario = level.scenarios?.find((s) => s.scenarioId === scenarioId);
@@ -660,11 +677,11 @@ export default function CreatorSettingsPage({ params }: CreatorSettingsPageProps
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Thumbnail</CardTitle>
-              <CardDescription>Set custom thumbnail URL or use one of the generated solution screenshots.</CardDescription>
+              <CardDescription>Set custom thumbnail URL or use a generated level solution. Recommended size: 300 x 300.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               {draft.thumbnailUrl && (
-                <div className="relative rounded-md overflow-hidden border h-24 bg-muted">
+                <div className="relative aspect-square w-full max-w-[300px] rounded-md overflow-hidden border bg-muted">
                   <img src={draft.thumbnailUrl} alt="Thumbnail preview" className="w-full h-full object-cover" />
                 </div>
               )}
@@ -680,21 +697,24 @@ export default function CreatorSettingsPage({ params }: CreatorSettingsPageProps
                   placeholder="https://..."
                 />
               </div>
-              {solutionScreenshots.length > 0 && (
+              {levelSolutionThumbnails.length > 0 && (
                 <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">Or use a solution screenshot:</p>
+                  <p className="text-xs text-muted-foreground">Or use a level solution as the thumbnail:</p>
                   <div className="flex flex-wrap gap-2">
-                    {solutionScreenshots.map(([scenarioId, url]) => (
+                    {levelSolutionThumbnails.map(({ levelName, scenarioId, url }) => (
                       <button
                         key={scenarioId}
                         title={scenarioLabel(scenarioId)}
                         onClick={() => {
-                          setDraft((current) => (current ? { ...current, thumbnailUrl: url as string } : current));
+                          setDraft((current) => (current ? { ...current, thumbnailUrl: url } : current));
                           setSaveSuccess(null);
                         }}
-                        className="relative rounded border overflow-hidden w-20 h-14 hover:ring-2 ring-primary transition"
+                        className="relative rounded border overflow-hidden w-24 h-24 hover:ring-2 ring-primary transition"
                       >
-                        <img src={url as string} alt={scenarioLabel(scenarioId)} className="w-full h-full object-cover" />
+                        <img src={url} alt={scenarioLabel(scenarioId)} className="w-full h-full object-cover" />
+                        <span className="absolute inset-x-0 bottom-0 bg-background/85 px-1 py-0.5 text-[10px] font-medium truncate">
+                          {levelName}
+                        </span>
                       </button>
                     ))}
                   </div>

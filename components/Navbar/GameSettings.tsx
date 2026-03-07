@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { apiUrl } from "@/lib/apiUrl";
 import {
   Settings,
@@ -298,7 +298,23 @@ export const GameSettingsButton = ({ displayMode = "icon" }: GameSettingsButtonP
     [game, canRemoveCollaborators],
   );
 
-  const solutionScreenshots = Object.entries(solutionUrls).filter(([, url]) => !!url);
+  const levelSolutionThumbnails = useMemo(
+    () =>
+      levels
+        .flatMap((level) => {
+          const scenarioId = level.scenarios?.find((scenario) => Boolean(solutionUrls[scenario.scenarioId]))?.scenarioId;
+          if (!scenarioId) {
+            return [];
+          }
+
+          return [{
+            levelName: String(level.name),
+            scenarioId,
+            url: solutionUrls[scenarioId] as string,
+          }];
+        }),
+    [levels, solutionUrls],
+  );
 
   const scenarioLabel = (scenarioId: string) => {
     for (const level of levels) {
@@ -531,7 +547,7 @@ export const GameSettingsButton = ({ displayMode = "icon" }: GameSettingsButtonP
           <div className="space-y-2">
             <p className="text-sm font-semibold">Thumbnail</p>
             {game.thumbnailUrl && (
-              <div className="relative rounded-md overflow-hidden border h-24 bg-muted">
+              <div className="relative aspect-square w-full max-w-[300px] rounded-md overflow-hidden border bg-muted">
                 <img src={game.thumbnailUrl} alt="Thumbnail preview" className="w-full h-full object-cover" />
               </div>
             )}
@@ -546,18 +562,22 @@ export const GameSettingsButton = ({ displayMode = "icon" }: GameSettingsButtonP
                 Set
               </Button>
             </div>
-            {solutionScreenshots.length > 0 && (
+            <p className="text-xs text-muted-foreground">Recommended thumbnail size: 300 x 300.</p>
+            {levelSolutionThumbnails.length > 0 && (
               <div className="space-y-1">
-                <p className="text-xs text-muted-foreground">Or use a solution screenshot:</p>
+                <p className="text-xs text-muted-foreground">Or use a level solution as the thumbnail:</p>
                 <div className="flex flex-wrap gap-2">
-                  {solutionScreenshots.map(([scenarioId, url]) => (
+                  {levelSolutionThumbnails.map(({ levelName, scenarioId, url }) => (
                     <button
                       key={scenarioId}
                       title={scenarioLabel(scenarioId)}
-                      onClick={() => handleUseSolutionScreenshot(url as string)}
-                      className="relative rounded border overflow-hidden w-20 h-14 hover:ring-2 ring-primary transition"
+                      onClick={() => handleUseSolutionScreenshot(url)}
+                      className="relative rounded border overflow-hidden w-24 h-24 hover:ring-2 ring-primary transition"
                     >
-                      <img src={url as string} alt={scenarioLabel(scenarioId)} className="w-full h-full object-cover" />
+                      <img src={url} alt={scenarioLabel(scenarioId)} className="w-full h-full object-cover" />
+                      <span className="absolute inset-x-0 bottom-0 bg-background/85 px-1 py-0.5 text-[10px] font-medium truncate">
+                        {levelName}
+                      </span>
                     </button>
                   ))}
                 </div>

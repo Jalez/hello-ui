@@ -50,7 +50,7 @@ export const SidebarButton: React.FC<SidebarButtonProps> = ({
         </Button>
       </TooltipTrigger>
       {tooltip && (
-        <TooltipContent side="right" className="ml-2">
+        <TooltipContent side="right" className="ml-2 z-[10000]">
           <p>{tooltip}</p>
         </TooltipContent>
       )}
