@@ -32,7 +32,16 @@ interface LeftSidebarProps {
 }
 
 export const Sidebar: React.FC<LeftSidebarProps> = ({ isUserAdmin, sidebarHeader, children }) => {
-  const { isCollapsed, isMobile, isOverlayOpen, closeOverlay, setIsOverlayOpen, isVisible, setIsVisible } = useSidebarCollapse();
+  const {
+    isCollapsed,
+    isMobile,
+    isOverlayOpen,
+    closeOverlay,
+    setIsOverlayOpen,
+    isVisible,
+    setIsVisible,
+    toggleCollapsed,
+  } = useSidebarCollapse();
   const pathname = usePathname();
   const normalizedPathname = stripBasePath(pathname);
   const getCurrentGame = useGameStore((state) => state.getCurrentGame);
@@ -64,6 +73,19 @@ export const Sidebar: React.FC<LeftSidebarProps> = ({ isUserAdmin, sidebarHeader
 
   const isActive = (href: string) => {
     return normalizedPathname === href;
+  };
+
+  const handleDesktopRailClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (isMobile || !isCollapsed) {
+      return;
+    }
+
+    const target = event.target as HTMLElement | null;
+    if (target?.closest("a, button, input, select, textarea, [role='button']")) {
+      return;
+    }
+
+    toggleCollapsed();
   };
 
   // Get navigation items based on admin status
@@ -143,9 +165,10 @@ export const Sidebar: React.FC<LeftSidebarProps> = ({ isUserAdmin, sidebarHeader
       >
         <div
           className={`flex min-w-0 overflow-hidden flex-col items-start justify-start gap-2 group h-full bg-background border-r border-border/70 shadow-sm transition-[width] duration-300 ease-in-out ${
-            isCollapsed ? "w-16" : "w-64"
+            isCollapsed ? "w-16 cursor-expand-sidebar" : "w-64"
           }`}
           data-sidebar
+          onClick={handleDesktopRailClick}
         >
           <MobileSidebarContext.Provider value={false}>
             {renderSidebarContent(false)}
