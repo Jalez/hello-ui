@@ -3,6 +3,7 @@ import { useSession } from "next-auth/react";
 import { useCallback, useEffect, useState } from "react";
 import { useGameStore } from "../stores/gameStore";
 import { useNotificationStore } from "@/components/default/notifications";
+import { apiUrl, stripBasePath } from "@/lib/apiUrl";
 
 interface UseGameHandlersProps {
   isAuthenticated: boolean;
@@ -12,6 +13,7 @@ interface UseGameHandlersProps {
 export const useGameHandlers = ({ isAuthenticated, onGameClick }: UseGameHandlersProps) => {
   const router = useRouter();
   const pathname = usePathname();
+  const normalizedPathname = stripBasePath(pathname ?? "");
   const { data: session } = useSession();
   const { updateGame, removeGame, createGame: createGameInStore, setCurrentGameId } = useGameStore();
   const { showError, showSuccess, showLoading, hideNotification } = useNotificationStore();
@@ -21,20 +23,24 @@ export const useGameHandlers = ({ isAuthenticated, onGameClick }: UseGameHandler
   useEffect(() => {
     if (!creatingGameId) return;
     
-    if (pathname === `/game/${creatingGameId}`) {
+    if (normalizedPathname === `/game/${creatingGameId}`) {
       const timer = setTimeout(() => {
         setIsCreating(false);
         setCreatingGameId(null);
       }, 300);
       return () => clearTimeout(timer);
-    } else if (pathname && pathname !== `/game/${creatingGameId}` && !pathname.startsWith(`/game/${creatingGameId}/`)) {
+    } else if (
+      normalizedPathname &&
+      normalizedPathname !== `/game/${creatingGameId}` &&
+      !normalizedPathname.startsWith(`/game/${creatingGameId}/`)
+    ) {
       const timer = setTimeout(() => {
         setIsCreating(false);
         setCreatingGameId(null);
       }, 0);
       return () => clearTimeout(timer);
     }
-  }, [creatingGameId, pathname]);
+  }, [creatingGameId, normalizedPathname]);
 
   const handleCreateGame = useCallback(async (mapName?: string) => {
     if (isCreating) return;
@@ -57,7 +63,7 @@ export const useGameHandlers = ({ isAuthenticated, onGameClick }: UseGameHandler
 
       setCurrentGameId(newGame.id);
       setCreatingGameId(newGame.id);
-      router.push(`/game/${newGame.id}`);
+      router.push(apiUrl(`/game/${newGame.id}`));
       
       if (onGameClick) {
         onGameClick();
@@ -99,18 +105,18 @@ export const useGameHandlers = ({ isAuthenticated, onGameClick }: UseGameHandler
         await removeGame(gameId);
         
         if (
-          pathname === `/game/${gameId}` ||
-          pathname?.startsWith(`/game/${gameId}/`) ||
-          pathname === `/creator/${gameId}` ||
-          pathname?.startsWith(`/creator/${gameId}/`)
+          normalizedPathname === `/game/${gameId}` ||
+          normalizedPathname?.startsWith(`/game/${gameId}/`) ||
+          normalizedPathname === `/creator/${gameId}` ||
+          normalizedPathname?.startsWith(`/creator/${gameId}/`)
         ) {
-          router.push("/");
+          router.push(apiUrl("/"));
         }
       } catch (error) {
         console.error("Failed to delete game:", error);
       }
     },
-    [removeGame, pathname, router]
+    [removeGame, normalizedPathname, router]
   );
 
   return {

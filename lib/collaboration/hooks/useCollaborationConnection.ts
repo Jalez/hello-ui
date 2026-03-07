@@ -307,8 +307,24 @@ export function useCollaborationConnection(
               }>;
             };
             if (data.users && Array.isArray(data.users)) {
+              const current = optionsRef.current.user;
               const mapped = data.users
                 .filter((entry) => entry && (entry.clientId ?? "").length > 0)
+                .filter((entry) => {
+                  if (!current) {
+                    return true;
+                  }
+
+                  if (entry.userId && entry.userId === current.id) {
+                    return false;
+                  }
+
+                  if (entry.userEmail && entry.userEmail === current.email) {
+                    return false;
+                  }
+
+                  return true;
+                })
                 .map((entry) => ({
                   clientId: entry.clientId ?? "",
                   userId: entry.userId || "",

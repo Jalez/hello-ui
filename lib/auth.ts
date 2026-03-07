@@ -7,8 +7,45 @@ import { getOrCreateUserByEmail } from "@/app/api/_lib/services/userService";
 import { logDebug } from "@/lib/debug-logger";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH || "";
 
 const isUuid = (value?: string) => !!value && UUID_RE.test(value);
+
+function withBasePath(pathname: string): string {
+  if (!BASE_PATH) {
+    return pathname;
+  }
+
+  if (pathname === BASE_PATH || pathname.startsWith(`${BASE_PATH}/`)) {
+    return pathname;
+  }
+
+  if (pathname === "/") {
+    return BASE_PATH;
+  }
+
+  return `${BASE_PATH}${pathname}`;
+}
+
+function normalizeRedirectUrl(url: string, baseUrl: string): string {
+  try {
+    if (url.startsWith("/")) {
+      return `${baseUrl}${withBasePath(url)}`;
+    }
+
+    const parsed = new URL(url);
+    const parsedBase = new URL(baseUrl);
+
+    if (parsed.origin !== parsedBase.origin) {
+      return baseUrl;
+    }
+
+    parsed.pathname = withBasePath(parsed.pathname || "/");
+    return parsed.toString();
+  } catch {
+    return baseUrl;
+  }
+}
 
 // Extend the Session type to include userId
 declare module "next-auth" {
@@ -174,19 +211,22 @@ export const authOptions = {
 
       return true;
     },
+    async redirect({ url, baseUrl }) {
+      return normalizeRedirectUrl(url, baseUrl);
+    },
   },
   // With basePath, NextAuth must get full paths so redirects go to /css-artist/auth/error not /css-artist/error
   pages: {
-    signIn: process.env.NEXT_PUBLIC_BASE_PATH
-      ? `${process.env.NEXT_PUBLIC_BASE_PATH}/auth/signin`
+    signIn: BASE_PATH
+      ? `${BASE_PATH}/auth/signin`
       : "/auth/signin",
-    error: process.env.NEXT_PUBLIC_BASE_PATH
-      ? `${process.env.NEXT_PUBLIC_BASE_PATH}/auth/error`
+    error: BASE_PATH
+      ? `${BASE_PATH}/auth/error`
       : "/auth/error",
   },
   // When app is served under a path prefix (e.g. /css-artist), auth API is at prefix/api/auth
-  basePath: process.env.NEXT_PUBLIC_BASE_PATH
-    ? `${process.env.NEXT_PUBLIC_BASE_PATH}/api/auth`
+  basePath: BASE_PATH
+    ? `${BASE_PATH}/api/auth`
     : undefined,
   debug: process.env.NODE_ENV === "development",
 };
@@ -194,7 +234,6 @@ export const authOptions = {
 const handler = NextAuth(authOptions);
 
 export { handler as GET, handler as POST };
-
 
 
 

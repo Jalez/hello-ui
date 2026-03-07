@@ -57,11 +57,17 @@ export const Navbar = () => {
   const canEditCurrentGame = Boolean(currentGame?.canEdit ?? currentGame?.isOwner);
   const isCreator = options.creator;
   const isGameRoute = normalizedPathname.startsWith("/game/");
+  const shouldHideSidebarForPlayers = isGameRoute && Boolean(currentGame?.hideSidebar) && !canEditCurrentGame;
   const showCreatorGameMenus =
     isGameRoute &&
     Boolean(currentGame?.id) &&
     canEditCurrentGame;
-  const shouldShowMobileSidebarToggle = isGameRoute && isVisible && isMobile && !isOverlayOpen;
+  const shouldShowMobileSidebarToggle =
+    isGameRoute &&
+    isVisible &&
+    isMobile &&
+    !isOverlayOpen &&
+    !shouldHideSidebarForPlayers;
 
   const level = levels[currentLevel - 1];
   const mapEditorRef = useRef<MapEditorRef>(null);

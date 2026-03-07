@@ -2,57 +2,70 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn, useSession } from "next-auth/react";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { PageLoadingSpinner } from "@/components/scriba/ui/PageLoadingSpinner";
+import { apiUrl } from "@/lib/apiUrl";
+
+function normalizeCallbackUrl(callbackUrl: string | null): string {
+  if (!callbackUrl) {
+    return apiUrl("/");
+  }
+
+  try {
+    const decoded = decodeURIComponent(callbackUrl);
+    if (decoded.startsWith("/")) {
+      return apiUrl(decoded);
+    }
+    return decoded;
+  } catch {
+    return apiUrl("/");
+  }
+}
 
 function SignInContent() {
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [signInError, setSignInError] = useState<string | null>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
   const { data: session, status } = useSession();
-  const isAuthenticated = () => !!session?.user;
   const isInitialized = status !== "loading";
 
-  useEffect(() => {
-    // Check for OAuth callback errors
+  const authError = useMemo(() => {
     const errorParam = searchParams.get("error");
-    if (errorParam) {
-      console.error("OAuth callback error:", errorParam);
-      if (errorParam === "OAuthCallback") {
-        setError("Authentication failed. Please try signing in again.");
-      } else {
-        setError(`Authentication error: ${errorParam}`);
-      }
+    if (!errorParam) {
+      return null;
     }
+
+    console.error("OAuth callback error:", errorParam);
+    if (errorParam === "OAuthCallback") {
+      return "Authentication failed. Please try signing in again.";
+    }
+
+    return `Authentication error: ${errorParam}`;
   }, [searchParams]);
 
   useEffect(() => {
     // Check if user is already signed in and redirect
-    if (isInitialized && isAuthenticated()) {
-      // Redirect to callbackUrl if provided, otherwise go to home
-      const callbackUrl = searchParams.get("callbackUrl");
-      if (callbackUrl) {
-        router.push(decodeURIComponent(callbackUrl));
-      } else {
-        router.push("/");
-      }
+    if (isInitialized && session?.user) {
+      router.push(normalizeCallbackUrl(searchParams.get("callbackUrl")));
     }
-  }, [isInitialized, isAuthenticated, router, searchParams]);
+  }, [isInitialized, router, searchParams, session?.user]);
 
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
-    setError(null);
+    setSignInError(null);
     try {
       // Use callbackUrl from query params, fallback to home page
-      const callbackUrl = searchParams.get("callbackUrl") || "/";
+      const callbackUrl = normalizeCallbackUrl(searchParams.get("callbackUrl"));
       await signIn("google", { callbackUrl });
     } catch (error) {
       console.error("Sign in error:", error);
-      setError("Failed to initiate sign in. Please try again.");
+      setSignInError("Failed to initiate sign in. Please try again.");
       setIsLoading(false);
     }
   };
+
+  const error = signInError ?? authError;
 
   return (
     <div className="min-h-screen flex items-center justify-center">
