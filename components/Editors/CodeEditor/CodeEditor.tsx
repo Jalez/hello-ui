@@ -79,6 +79,7 @@ export default function CodeEditor({
     code,
     setCode,
     template,
+    enabled: type === "Template",
     locked,
     levelIdentifier,
     currentLevel,
