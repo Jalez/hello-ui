@@ -6,7 +6,7 @@ import {
 import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
 import { addNotificationData } from "@/store/slices/notifications.slice";
 import { Button } from "@/components/ui/button";
-import { RotateCcw, PanelLeft, Map, Flag, Settings, Trash2, Loader2 } from "lucide-react";
+import { RotateCcw, PanelLeft, Map, Flag, Settings, Trash2, Loader2, Gamepad2 } from "lucide-react";
 import LevelControls from "@/components/General/LevelControls/LevelControls";
 import { setCurrentLevel } from "@/store/slices/currentLevel.slice";
 import { resetLevel } from "@/store/slices/levels.slice";
@@ -47,6 +47,7 @@ export const Navbar = () => {
   const { openOverlay, isMobile, isOverlayOpen, isVisible } = useSidebarCollapse();
   const pathname = usePathname();
   const normalizedPathname = stripBasePath(pathname);
+  const isCreatorRoute = normalizedPathname.startsWith("/creator/");
   const levels = useAppSelector((state) => state.levels);
   const currentLevel = useAppSelector(
     (state) => state.currentLevel.currentLevel
@@ -161,6 +162,17 @@ export const Navbar = () => {
       <DropdownMenuContent align="start" className="w-72 border-0 shadow-lg">
         <DropdownMenuLabel>Game Tools</DropdownMenuLabel>
         <DropdownMenuSeparator />
+        {isCreatorRoute && currentGame?.id && canEditCurrentGame && (
+          <>
+            <DropdownMenuItem asChild>
+              <Link href={apiUrl(`/game/${currentGame.id}?mode=game`)}>
+                <Gamepad2 className="h-4 w-4 mr-2" />
+                Switch to Game Mode
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
+        )}
         {showCreatorGameMenus && (
           <>
             <DropdownMenuItem onSelect={() => togglePopper("level")}>
@@ -251,9 +263,9 @@ export const Navbar = () => {
             />
             {renderGameMenu()}
           </>
-        ) : (
+        ) : !isCreatorRoute ? (
           <ModeToggleButton displayMode="icon-label" />
-        )}
+        ) : null}
 
         {isGameRoute && !showCreatorGameMenus && (
           <Button
