@@ -73,8 +73,7 @@ export function getWebSocketUrl(): string {
       return normalizeSocketUrl(`${protocol}//${hostname}:3100`);
     }
 
-    const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
-    return normalizeSocketUrl(`${origin}${basePath ? `${basePath}/ws` : ""}`);
+    return normalizeSocketUrl(`${origin}/css-artist-ws`);
   }
 
   return "ws://localhost:3100";

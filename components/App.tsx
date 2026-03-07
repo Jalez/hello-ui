@@ -27,6 +27,7 @@ import { useGameStore } from "./default/games";
 import { useSession } from "next-auth/react";
 import type { Mode } from "@/store/slices/options.slice";
 import { useOptionalCollaboration } from "@/lib/collaboration/CollaborationProvider";
+import { apiUrl } from "@/lib/apiUrl";
 
 export const allLevels: Level[] = [];
 type SolutionsByLevelName = Record<string, { html: string; css: string; js: string }>;
@@ -101,7 +102,7 @@ function App() {
       : "game";
 
     if (isCreatorRoute && currentMode === "game" && currentGame?.id) {
-      router.replace(`/game/${currentGame.id}?mode=game`);
+      router.replace(apiUrl(`/game/${currentGame.id}?mode=game`));
       return;
     }
 
