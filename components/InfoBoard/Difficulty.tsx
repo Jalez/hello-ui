@@ -55,12 +55,12 @@ const Difficulty = () => {
               <Skull
                 key={index}
                 className={cn(
-                  "h-5 w-5 transition-colors",
+                  "h-5 w-5 fill-none transition-colors",
                   difficultyValue <= difficultyLevel
-                    ? "fill-red-500 text-red-500"
-                    : "fill-primary/15 text-primary/55",
+                    ? "text-red-500"
+                    : "text-primary/45",
                   !isCreator && "cursor-default",
-                  isCreator && "cursor-pointer hover:fill-red-400 hover:text-red-400"
+                  isCreator && "cursor-pointer hover:text-red-400"
                 )}
                 onClick={() => {
                   if (isCreator) {
