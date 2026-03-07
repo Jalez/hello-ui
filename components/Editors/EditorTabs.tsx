@@ -433,6 +433,7 @@ function EditorTabs({
                 className="flex-1 flex flex-col min-h-0 mt-0"
               >
                 <CodeEditor
+                  key={`${tab.value}-${isTemplateMode ? "template" : "solution"}-${currentLevel}-${identifier}`}
                   lang={getLanguageLang(tab.value as 'html' | 'css' | 'js')}
                   title={getLanguageTitle(tab.value as 'html' | 'css' | 'js')}
                   codeUpdater={handleCodeUpdate}
