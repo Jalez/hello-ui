@@ -47,7 +47,7 @@ export default function GamesPage() {
   const openGames = games.filter((game) => !game.accessKeyRequired);
 
   const renderGamesGrid = (items: PublicGame[]) => (
-    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+    <div className="grid grid-cols-1 justify-items-center gap-6 sm:grid-cols-2 lg:grid-cols-3">
       {items.map((game) => {
         const href = `/game/${game.id}?mode=game`;
         const languageBadges = [
@@ -60,9 +60,9 @@ export default function GamesPage() {
           <Link
             key={game.id}
             href={href}
-            className="group rounded-xl border bg-card hover:shadow-md transition overflow-hidden"
+            className="group w-full max-w-[300px] rounded-xl border bg-card hover:shadow-md transition overflow-hidden"
           >
-            <div className="relative h-36 bg-muted flex items-center justify-center overflow-hidden">
+            <div className="relative aspect-square w-full max-w-[300px] bg-muted flex items-center justify-center overflow-hidden">
               {languageBadges.length > 0 && (
                 <div className="absolute left-3 top-3 z-10 flex flex-wrap gap-1.5">
                   {languageBadges.map((label) => (

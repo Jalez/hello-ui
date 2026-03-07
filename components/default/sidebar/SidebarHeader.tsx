@@ -71,21 +71,21 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({ showCloseButton = 
             {/* Title - Only show when sidebar is expanded and transition is complete */}
             {!isCollapsed && shouldShowText && (
               <div className="flex items-center pl-2 min-w-0 flex-1">
-                <span className="text-lg font-medium text-gray-900 dark:text-white whitespace-nowrap">UI Designer</span>
+                <span className="text-lg font-medium text-gray-900 dark:text-white whitespace-nowrap">Hello UI!</span>
               </div>
             )}
 
             {/* Invisible placeholder to maintain layout while transition is happening */}
             {!isCollapsed && !shouldShowText && (
               <div className="flex items-center pl-2 min-h-[24px] min-w-0 flex-1">
-                <span className="text-lg font-medium text-gray-900 dark:text-white opacity-0 whitespace-nowrap">UI Designer</span>
+                <span className="text-lg font-medium text-gray-900 dark:text-white opacity-0 whitespace-nowrap">Hello UI!</span>
               </div>
             )}
           </Link>
         </TooltipTrigger>
         {isCollapsed && (
           <TooltipContent side="right" className="ml-2 z-[10000]">
-            <p>UI Designer</p>
+            <p>Hello UI!</p>
           </TooltipContent>
         )}
       </Tooltip>
@@ -104,6 +104,5 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({ showCloseButton = 
     </div>
   );
 };
-
 
 
