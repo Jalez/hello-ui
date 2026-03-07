@@ -298,6 +298,37 @@ function mergeTemplateAndProgressLevels(templateLevels = [], progressLevels = []
   return mergedLevels;
 }
 
+function createStarterLevel(mapName = "") {
+  return {
+    name: "template",
+    scenarios: [],
+    buildingBlocks: { pictures: [], colors: [] },
+    code: { html: "", css: "", js: "" },
+    solution: { html: "", css: "", js: "" },
+    accuracy: 0,
+    week: mapName,
+    percentageTreshold: 70,
+    percentageFullPointsTreshold: 95,
+    difficulty: "easy",
+    instructions: [],
+    question_and_answer: { question: "", answer: "" },
+    help: { description: "Start coding!", images: [], usefullCSSProperties: [] },
+    timeData: { startTime: 0, pointAndTime: { 0: "0:0", 1: "0:0", 2: "0:0", 3: "0:0", 4: "0:0", 5: "0:0" } },
+    events: [],
+    interactive: false,
+    showScenarioModel: true,
+    showHotkeys: false,
+    showModelPicture: true,
+    lockCSS: false,
+    lockHTML: false,
+    lockJS: false,
+    completed: "",
+    points: 0,
+    maxPoints: 100,
+    confettiSprinkled: false,
+  };
+}
+
 function createVersionMap(source = {}) {
   return {
     html: Number.isFinite(source?.html) ? source.html : 0,
@@ -415,11 +446,16 @@ async function ensureRoomState(roomId, ctx) {
       ? mergeTemplateAndProgressLevels(templateLevels, progressLevels)
       : progressLevels;
 
+  const finalLevels =
+    normalizedLevels.length > 0
+      ? normalizedLevels
+      : [createStarterLevel(mapName)];
+
   const nextState = createRoomState(
     ctx,
     {
       ...progressData,
-      levels: normalizedLevels,
+      levels: finalLevels,
     },
     {
       templateLevels,
@@ -430,8 +466,8 @@ async function ensureRoomState(roomId, ctx) {
   roomEditorState.set(roomId, nextState);
 
   const shouldPersistNormalizedLevels =
-    JSON.stringify(progressLevels) !== JSON.stringify(normalizedLevels);
-  if (shouldPersistNormalizedLevels && normalizedLevels.length > 0) {
+    JSON.stringify(progressLevels) !== JSON.stringify(finalLevels);
+  if (shouldPersistNormalizedLevels && finalLevels.length > 0) {
     const ok = await saveProgressToDB(ctx, serializeCodeLevels(nextState));
     if (!ok) {
       markRoomDirty(roomId, ctx);

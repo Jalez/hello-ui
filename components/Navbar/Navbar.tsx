@@ -4,8 +4,9 @@ import {
   setActiveArtTab,
 } from "@/store/slices/options.slice";
 import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
+import { addNotificationData } from "@/store/slices/notifications.slice";
 import { Button } from "@/components/ui/button";
-import { RotateCcw, PanelLeft, Map, Flag, Settings } from "lucide-react";
+import { RotateCcw, PanelLeft, Map, Flag, Settings, Trash2, Loader2 } from "lucide-react";
 import LevelControls from "@/components/General/LevelControls/LevelControls";
 import { setCurrentLevel } from "@/store/slices/currentLevel.slice";
 import { resetLevel } from "@/store/slices/levels.slice";
@@ -39,6 +40,7 @@ import Link from "next/link";
 import { useGameStore } from "@/components/default/games";
 import { CreatorMenu } from "./CreatorMenu";
 import { useOptionalCollaboration } from "@/lib/collaboration/CollaborationProvider";
+import { apiUrl } from "@/lib/apiUrl";
 
 export const Navbar = () => {
   const dispatch = useAppDispatch();
@@ -64,6 +66,7 @@ export const Navbar = () => {
   const mapEditorRef = useRef<MapEditorRef>(null);
   const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
   const [resetScope, setResetScope] = useState<"level" | "game">("level");
+  const [isResettingInstances, setIsResettingInstances] = useState(false);
 
   const levelChanger = useCallback((pickedLevel: number) => {
     dispatch(setCurrentLevel(pickedLevel));
@@ -87,6 +90,50 @@ export const Navbar = () => {
     setResetScope(scope);
     setIsResetDialogOpen(true);
   }, []);
+
+  const handleResetGameInstances = useCallback(async () => {
+    if (!currentGame?.id) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Reset all saved game instances for this game? This clears all individual and group gameplay progress and code snapshots.",
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setIsResettingInstances(true);
+      const response = await fetch(apiUrl(`/api/games/${currentGame.id}/instances/reset`), {
+        method: "POST",
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to reset game instances");
+      }
+
+      dispatch(
+        addNotificationData({
+          type: "success",
+          message:
+            data.deletedCount > 0
+              ? `Reset ${data.deletedCount} saved game instance${data.deletedCount === 1 ? "" : "s"}.`
+              : "No saved game instances to reset.",
+        }),
+      );
+    } catch (error) {
+      dispatch(
+        addNotificationData({
+          type: "error",
+          message: error instanceof Error ? error.message : "Failed to reset game instances",
+        }),
+      );
+    } finally {
+      setIsResettingInstances(false);
+    }
+  }, [currentGame?.id, dispatch]);
 
   const handleAnchorElReset = useCallback(() => {
     setIsResetDialogOpen(false);
@@ -138,6 +185,14 @@ export const Navbar = () => {
         {currentGame?.id && canEditCurrentGame && (
           <>
             <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={handleResetGameInstances} disabled={isResettingInstances}>
+              {isResettingInstances ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Trash2 className="h-4 w-4 mr-2" />
+              )}
+              Reset Game Instances
+            </DropdownMenuItem>
             <DropdownMenuItem asChild>
               <Link href={`/creator/${currentGame.id}/settings`}>
                 <Settings className="h-4 w-4 mr-2" />
