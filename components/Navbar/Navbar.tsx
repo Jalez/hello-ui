@@ -165,7 +165,7 @@ export const Navbar = () => {
         {isCreatorRoute && currentGame?.id && canEditCurrentGame && (
           <>
             <DropdownMenuItem asChild>
-              <Link href={apiUrl(`/game/${currentGame.id}?mode=game`)}>
+              <Link href={`/game/${currentGame.id}?mode=game`}>
                 <Gamepad2 className="h-4 w-4 mr-2" />
                 Switch to Game Mode
               </Link>

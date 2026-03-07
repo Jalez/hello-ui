@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { CheckCircle2, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { stripBasePath } from "@/lib/apiUrl";
 
 export interface GameSummaryData {
   finishedAt?: string;
@@ -19,13 +20,14 @@ interface GameSummaryViewProps {
 
 export function GameSummaryView({ gameTitle, progressData, className = "" }: GameSummaryViewProps) {
   const pathname = usePathname();
+  const normalizedPathname = stripBasePath(pathname);
   const searchParams = useSearchParams();
   const finishedAt = progressData.finishedAt;
   const finalScore = progressData.finalScore;
 
   const params = new URLSearchParams(searchParams.toString());
   params.set("view", "play");
-  const gamePageHref = `${pathname}?${params.toString()}`;
+  const gamePageHref = `${normalizedPathname}?${params.toString()}`;
 
   if (!finishedAt) {
     return null;
