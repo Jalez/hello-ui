@@ -106,31 +106,33 @@ export const Sidebar: React.FC<LeftSidebarProps> = ({ isUserAdmin, sidebarHeader
   // Render immediately with default values, responsive state will update shortly
 
   const renderSidebarContent = (forceExpanded: boolean) => (
-    <>
+    <div className="flex h-full w-full min-h-0 flex-col">
       {sidebarHeader}
 
-      {/* Navigation Items (for admins) */}
-      {getAdminNavItems().map((item) => (
-        <SidebarLink
-          key={item.id}
-          {...item}
-          onClick={handleItemClick}
-          isActive={isActive(item.href)}
-          isCollapsed={forceExpanded ? false : isCollapsed}
-          title={!forceExpanded && isCollapsed ? item.label : undefined}
-        />
-      ))}
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
+        <div className="flex min-h-full flex-col">
+          {/* Navigation Items (for admins) */}
+          {getAdminNavItems().map((item) => (
+            <SidebarLink
+              key={item.id}
+              {...item}
+              onClick={handleItemClick}
+              isActive={isActive(item.href)}
+              isCollapsed={forceExpanded ? false : isCollapsed}
+              title={!forceExpanded && isCollapsed ? item.label : undefined}
+            />
+          ))}
 
-      {/* Application-specific content */}
-      {children}
+          {/* Application-specific content */}
+          {children}
 
-      {/* Spacer to push credits and profile to bottom on mobile only */}
-      {forceExpanded && <div className="flex-1" />}
-
-      {!forceExpanded && <ExpandButton />}
-
-      <UserProfileMenu />
-    </>
+          <div className="mt-auto">
+            {!forceExpanded && <ExpandButton />}
+            <UserProfileMenu />
+          </div>
+        </div>
+      </div>
+    </div>
   );
 
   return (
@@ -163,7 +165,7 @@ export const Sidebar: React.FC<LeftSidebarProps> = ({ isUserAdmin, sidebarHeader
           <MobileSidebarContext.Provider value={true}>
             <div
               id="mobile-sidebar"
-              className="flex flex-col items-start justify-start gap-2 h-full w-full z-20 bg-background border-r border-border/70 shadow-sm"
+              className="flex flex-col items-start justify-start gap-2 h-full w-full min-h-0 z-20 bg-background border-r border-border/70 shadow-sm"
               data-sidebar
             >
               {renderSidebarContent(true)}
