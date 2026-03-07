@@ -23,12 +23,12 @@ export default function GamesPage() {
   useEffect(() => {
     const fetchGames = async () => {
       try {
-        const res = await fetch(apiUrl("/api/games"));
+        const res = await fetch(apiUrl("/api/games/public"));
         if (!res.ok) throw new Error("Failed to fetch games");
         const data = await res.json();
         setGames(data);
-      } catch (err: any) {
-        setError(err.message || "Something went wrong");
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : "Something went wrong");
       } finally {
         setIsLoading(false);
       }

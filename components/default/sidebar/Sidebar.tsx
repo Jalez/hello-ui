@@ -53,7 +53,10 @@ export const Sidebar: React.FC<LeftSidebarProps> = ({ isUserAdmin, sidebarHeader
 
   useEffect(() => {
     setIsVisible(!shouldHideSidebar);
-  }, [shouldHideSidebar, setIsVisible]);
+    if (shouldHideSidebar && isOverlayOpen) {
+      closeOverlay();
+    }
+  }, [closeOverlay, isOverlayOpen, setIsVisible, shouldHideSidebar]);
 
   const handleItemClick = () => {
     // Close overlay on mobile after navigation (Link handles the actual navigation)

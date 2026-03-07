@@ -3,6 +3,7 @@
 import { Crown, Lock } from "lucide-react";
 import { Button } from "@/components/tailwind/ui/button";
 import { useSubscriptionStore } from "./stores";
+import { apiUrl } from "@/lib/apiUrl";
 
 interface PremiumGateProps {
   children: React.ReactNode;
@@ -53,7 +54,7 @@ export function PremiumGate({ children, feature = "this feature", fallback, show
 
         <Button
           onClick={() => {
-            window.location.href = "/subscription";
+            window.location.href = apiUrl("/subscription");
           }}
           className="bg-yellow-500 hover:bg-yellow-600 text-white flex items-center space-x-2"
         >

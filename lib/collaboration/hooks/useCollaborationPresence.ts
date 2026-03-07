@@ -61,12 +61,18 @@ export function useCollaborationPresence(
   );
 
   const setUsers = useCallback((users: ActiveUser[]) => {
-    setActiveUsers(
-      users.map((u) => ({
-        ...u,
-        color: u.color || generateUserColor(u.userEmail),
-      }))
-    );
+    const uniqueUsers = new Map<string, ActiveUser>();
+    for (const user of users) {
+      const dedupeKey = user.userId || user.userEmail || user.clientId;
+      if (!dedupeKey || uniqueUsers.has(dedupeKey)) {
+        continue;
+      }
+      uniqueUsers.set(dedupeKey, {
+        ...user,
+        color: user.color || generateUserColor(user.userEmail),
+      });
+    }
+    setActiveUsers(Array.from(uniqueUsers.values()));
   }, []);
 
   const clearUsers = useCallback(() => {

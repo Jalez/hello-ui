@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import type { Subscription } from "@/app/api/_lib/services/stripeService/subscriptionService";
 import { Button } from "@/components/tailwind/ui/button";
 import { useSubscriptionStore } from "./stores/subscriptionStore";
+import { apiUrl } from "@/lib/apiUrl";
 
 interface SubscriptionStatusProps {
   initialSubscription?: Subscription;
@@ -65,7 +66,7 @@ export function SubscriptionStatus({ initialSubscription }: SubscriptionStatusPr
 
 
   const handleUpgrade = () => {
-    window.location.href = "/subscription";
+    window.location.href = apiUrl("/subscription");
   };
 
   if (isLoading) {

@@ -20,6 +20,7 @@ import { useNewLevel } from "./hooks/useNewLevel";
 import MagicButton, { MagicButtonRef } from "./UniversalMagicButton";
 import MapEditor, { MapEditorRef } from "./MapEditor";
 import { useRouter } from "next/navigation";
+import { apiUrl } from "@/lib/apiUrl";
 
 type CreatorControlsDisplayMode = "icon-label" | "icon" | "menu";
 
@@ -53,7 +54,7 @@ const CreatorControls = ({ displayMode = "icon-label" }: CreatorControlsProps) =
         <Sparkles className="h-4 w-4" />
         Generate
       </Button>
-      <Button variant="ghost" size="sm" className="gap-2" onClick={() => router.push("/account/generation")}>
+      <Button variant="ghost" size="sm" className="gap-2" onClick={() => router.push(apiUrl("/account/generation"))}>
         <SlidersHorizontal className="h-4 w-4" />
         Generation Settings
       </Button>
@@ -90,7 +91,7 @@ const CreatorControls = ({ displayMode = "icon-label" }: CreatorControlsProps) =
         </Button>
       </PoppingTitle>
       <PoppingTitle topTitle="Generation Settings">
-        <Button variant="ghost" size="icon" onClick={() => router.push("/account/generation")}>
+        <Button variant="ghost" size="icon" onClick={() => router.push(apiUrl("/account/generation"))}>
           <SlidersHorizontal className="h-4 w-4" />
         </Button>
       </PoppingTitle>
@@ -149,7 +150,7 @@ const CreatorControls = ({ displayMode = "icon-label" }: CreatorControlsProps) =
           <Sparkles className="h-4 w-4 mr-2" />
           Generate Level
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => router.push("/account/generation")}>
+        <DropdownMenuItem onClick={() => router.push(apiUrl("/account/generation"))}>
           <SlidersHorizontal className="h-4 w-4 mr-2" />
           Generation Settings
         </DropdownMenuItem>
