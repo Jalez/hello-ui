@@ -13,21 +13,11 @@ import { setupIframeThemeListener, type Theme } from "./iframeThemeListener";
  * It should be placed inside a ThemeProvider to work correctly.
  */
 export const IframeThemeOverride: React.FC = () => {
-  const { setTheme, theme } = useTheme();
+  const { setTheme } = useTheme();
 
   useEffect(() => {
-    // Only set up iframe theme listener if we're running in an iframe
-    const isInIframe = window.self !== window.top;
-
-    if (!isInIframe) {
-      return;
-    }
-
-    console.log("CLIENT: IFRAME-THEME: Setting up iframe theme listener");
-
-    // Set up listener for theme change messages from parent iframe
+    // Listen for THEME_CHANGE postMessage events from embedding hosts.
     const cleanup = setupIframeThemeListener((receivedTheme: Theme) => {
-      console.log(`CLIENT: IFRAME-THEME: Received theme override from parent: ${receivedTheme}`);
       setTheme(receivedTheme);
     });
 

@@ -9,6 +9,7 @@ import { LoadingProvider } from "@/components/default/loading";
 import { NotificationProvider } from "@/components/default/notifications";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ReduxProvider } from "@/components/providers/ReduxProvider";
+import { IframeThemeOverride } from "@/components/tailwind/utils/IframeThemeOverride";
 
 const ToasterProvider = () => {
   const { theme } = useTheme() as {
@@ -50,6 +51,7 @@ export default function Providers({ children, session }: ProvidersProps) {
         refetchWhenOffline={false}
       >
         <ThemeProvider attribute="class" enableSystem disableTransitionOnChange defaultTheme="system">
+          <IframeThemeOverride />
           <LoadingProvider>
             <ReduxProvider>
               <NotificationProvider />
