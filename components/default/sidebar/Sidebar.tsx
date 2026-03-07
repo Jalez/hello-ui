@@ -11,6 +11,7 @@ import { ExpandButton } from "./SidebarExpandButton";
 import { SidebarLink } from "./SidebarLink";
 import { UserProfileMenu } from "./UserProfileMenu";
 import { useGameStore } from "../games";
+import { stripBasePath } from "@/lib/apiUrl";
 
 // Context to override isCollapsed for mobile drawer
 const MobileSidebarContext = createContext<boolean>(false);
@@ -34,13 +35,14 @@ interface LeftSidebarProps {
 export const Sidebar: React.FC<LeftSidebarProps> = ({ isUserAdmin, sidebarHeader, children }) => {
   const { isCollapsed, isMobile, isOverlayOpen, openOverlay, closeOverlay, setIsOverlayOpen, isVisible, setIsVisible } = useSidebarCollapse();
   const pathname = usePathname();
+  const normalizedPathname = stripBasePath(pathname);
   const getCurrentGame = useGameStore((state) => state.getCurrentGame);
   const game = getCurrentGame();
 
-  const isCreatorRoute = pathname.startsWith("/creator/");
-  const isGameRoute = pathname.startsWith("/game/");
-  const isAuthRoute = pathname.startsWith("/auth/");
-  const isHomeRoute = pathname === "/";
+  const isCreatorRoute = normalizedPathname.startsWith("/creator/");
+  const isGameRoute = normalizedPathname.startsWith("/game/");
+  const isAuthRoute = normalizedPathname.startsWith("/auth/");
+  const isHomeRoute = normalizedPathname === "/";
   const isPlayerRoute = isGameRoute;
   const showInlineSidebarOnMobile = false;
   const isResolvingGameOnGameRoute = isGameRoute && !game;
@@ -61,7 +63,7 @@ export const Sidebar: React.FC<LeftSidebarProps> = ({ isUserAdmin, sidebarHeader
   };
 
   const isActive = (href: string) => {
-    return pathname === href;
+    return normalizedPathname === href;
   };
 
   // Get navigation items based on admin status

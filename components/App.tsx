@@ -27,7 +27,7 @@ import { useGameStore } from "./default/games";
 import { useSession } from "next-auth/react";
 import type { Mode } from "@/store/slices/options.slice";
 import { useOptionalCollaboration } from "@/lib/collaboration/CollaborationProvider";
-import { apiUrl } from "@/lib/apiUrl";
+import { apiUrl, stripBasePath } from "@/lib/apiUrl";
 
 export const allLevels: Level[] = [];
 type SolutionsByLevelName = Record<string, { html: string; css: string; js: string }>;
@@ -53,6 +53,7 @@ function App() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
+  const normalizedPathname = stripBasePath(pathname);
   const params = useParams<{ gameId?: string }>();
   const mode = searchParams.get('mode');
   const routeGameIdParam = params?.gameId;
@@ -85,8 +86,8 @@ function App() {
     const urlParams = typeof window !== 'undefined'
       ? new URLSearchParams(window.location.search)
       : new URLSearchParams();
-    const isGameRoute = pathname.startsWith('/game/');
-    const isCreatorRoute = pathname.startsWith('/creator/');
+    const isGameRoute = normalizedPathname.startsWith('/game/');
+    const isCreatorRoute = normalizedPathname.startsWith('/creator/');
     const isGameContextRoute = isGameRoute || isCreatorRoute;
     const defaultMode: Mode = "game";
     const rawRequestedMode = (urlParams.get("mode") || defaultMode) as Mode;
@@ -119,7 +120,7 @@ function App() {
     if (isGameContextRoute && requestedMode !== currentMode && !isCreatorRoute) {
       const normalizedParams = new URLSearchParams(urlParams.toString());
       normalizedParams.set("mode", currentMode);
-      router.replace(`${pathname}?${normalizedParams.toString()}`);
+      router.replace(apiUrl(`${normalizedPathname}?${normalizedParams.toString()}`));
     }
 
     const currentGameId = currentGame?.id || null;
@@ -283,7 +284,7 @@ function App() {
     currentGame?.userId,
     mode,
     routeGameId,
-    pathname,
+    normalizedPathname,
     router,
     session?.userId,
     session?.user?.email,

@@ -12,3 +12,28 @@ export function apiUrl(path: string): string {
   const p = path.startsWith("/") ? path : `/${path}`;
   return basePath ? `${basePath}${p}` : p;
 }
+
+/**
+ * Normalize a pathname returned by Next navigation hooks so route checks can be
+ * written against app-internal paths (`/game/...`, `/creator/...`) regardless
+ * of whether a deployment basePath is present.
+ */
+export function stripBasePath(pathname: string): string {
+  if (!pathname) {
+    return "/";
+  }
+
+  if (!basePath) {
+    return pathname;
+  }
+
+  if (pathname === basePath) {
+    return "/";
+  }
+
+  if (pathname.startsWith(`${basePath}/`)) {
+    return pathname.slice(basePath.length) || "/";
+  }
+
+  return pathname;
+}
