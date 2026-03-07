@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { apiUrl } from "@/lib/apiUrl";
 import Link from "next/link";
 import { Globe, Loader2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 interface PublicGame {
   id: string;
@@ -13,6 +14,11 @@ interface PublicGame {
   shareToken: string | null;
   createdAt: string;
   updatedAt: string;
+  languages: {
+    html: boolean;
+    css: boolean;
+    js: boolean;
+  };
 }
 
 export default function GamesPage() {
@@ -62,13 +68,32 @@ export default function GamesPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
         {games.map((game) => {
           const href = `/game/${game.id}?mode=game`;
+          const languageBadges = [
+            game.languages.html ? "HTML" : null,
+            game.languages.css ? "CSS" : null,
+            game.languages.js ? "JS" : null,
+          ].filter(Boolean) as string[];
+
           return (
             <Link
               key={game.id}
               href={href}
               className="group rounded-xl border bg-card hover:shadow-md transition overflow-hidden"
             >
-              <div className="h-36 bg-muted flex items-center justify-center overflow-hidden">
+              <div className="relative h-36 bg-muted flex items-center justify-center overflow-hidden">
+                {languageBadges.length > 0 && (
+                  <div className="absolute left-3 top-3 z-10 flex flex-wrap gap-1.5">
+                    {languageBadges.map((label) => (
+                      <Badge
+                        key={label}
+                        variant="secondary"
+                        className="border border-background/70 bg-background/90 text-[10px] font-semibold tracking-[0.18em] uppercase shadow-sm"
+                      >
+                        {label}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
                 {game.thumbnailUrl ? (
                   <img
                     src={game.thumbnailUrl}
