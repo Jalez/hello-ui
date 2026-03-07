@@ -262,6 +262,7 @@ export default function CreatorSettingsPage({ params }: CreatorSettingsPageProps
     setTimeout(() => setCopiedAccessKey(false), 2000);
   };
 
+
   const handleAddCollaborator = async () => {
     if (!game || !canManageCollaborators || !collaboratorEmail.trim()) return;
 

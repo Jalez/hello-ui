@@ -98,7 +98,12 @@ export const useGameHandlers = ({ isAuthenticated, onGameClick }: UseGameHandler
       try {
         await removeGame(gameId);
         
-        if (pathname === `/game/${gameId}` || pathname?.startsWith(`/game/${gameId}/`)) {
+        if (
+          pathname === `/game/${gameId}` ||
+          pathname?.startsWith(`/game/${gameId}/`) ||
+          pathname === `/creator/${gameId}` ||
+          pathname?.startsWith(`/creator/${gameId}/`)
+        ) {
           router.push("/");
         }
       } catch (error) {
