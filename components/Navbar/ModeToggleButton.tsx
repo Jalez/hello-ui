@@ -7,6 +7,7 @@ import { Code2, Gamepad2 } from "lucide-react";
 import PoppingTitle from "@/components/General/PoppingTitle";
 import { useGameStore } from "@/components/default/games";
 import { useSession } from "next-auth/react";
+import { apiUrl } from "@/lib/apiUrl";
 
 type NavbarActionDisplayMode = "icon-label" | "icon";
 
@@ -31,11 +32,11 @@ export const ModeToggleButton = ({ displayMode = "icon" }: ModeToggleButtonProps
     if (isCreatorRoute) {
       const params = new URLSearchParams(searchParams.toString());
       params.set("mode", "game");
-      router.push(`/game/${game.id}?${params.toString()}`);
+      router.push(apiUrl(`/game/${game.id}?${params.toString()}`));
       return;
     }
-    router.push(`/creator/${game.id}`);
-  }, [game?.id, isCreatorRoute, router, searchParams]);
+    router.push(apiUrl(`/creator/${game.id}`));
+  }, [game, isCreatorRoute, router, searchParams]);
 
   if (!canEdit || !game?.id) {
     return null;

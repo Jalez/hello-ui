@@ -13,6 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { apiUrl } from "@/lib/apiUrl";
 
 interface ActiveGroupInstance {
   groupId: string;
@@ -126,21 +127,21 @@ export function CreatorMenu({ gameId, collaborationMode }: CreatorMenuProps) {
   );
 
   const openCreatorMode = useCallback(() => {
-    router.push(`/creator/${gameId}`);
+    router.push(apiUrl(`/creator/${gameId}`));
   }, [gameId, router]);
 
   const openCreatorPreview = useCallback(() => {
     const params = new URLSearchParams(searchParams.toString());
     params.set("mode", "game");
     params.delete("groupId");
-    router.push(`/game/${gameId}?${params.toString()}`);
+    router.push(apiUrl(`/game/${gameId}?${params.toString()}`));
   }, [gameId, router, searchParams]);
 
   const openGroupInstance = useCallback((groupId: string) => {
     const params = new URLSearchParams(searchParams.toString());
     params.set("mode", "game");
     params.set("groupId", groupId);
-    router.push(`/game/${gameId}?${params.toString()}`);
+    router.push(apiUrl(`/game/${gameId}?${params.toString()}`));
   }, [gameId, router, searchParams]);
 
   const triggerLabel = isCreatorRoute
