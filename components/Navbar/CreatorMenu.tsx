@@ -13,7 +13,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { apiUrl } from "@/lib/apiUrl";
 
 interface ActiveGroupInstance {
   groupId: string;
