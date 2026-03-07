@@ -326,21 +326,6 @@ function EditorTabs({
                       </DropdownMenuItem>
                     );
                   })}
-
-                  {isCreator && (
-                    <>
-                      <DropdownMenuSeparator />
-                      <div className="flex items-center justify-between px-2 py-1.5">
-                        <span className="text-sm text-muted-foreground">Template</span>
-                        <Switch
-                          checked={!isTemplateMode}
-                          onCheckedChange={(checked) => setIsTemplateMode(!checked)}
-                          aria-label="Toggle between template and solution"
-                        />
-                        <span className="text-sm text-muted-foreground">Solution</span>
-                      </div>
-                    </>
-                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
@@ -399,12 +384,25 @@ function EditorTabs({
             </TabsList>
 
             {/* Active Tab Display on Mobile - Shows current tab with user avatars */}
-            <div className="md:hidden flex-1 flex items-center justify-center gap-2 px-2">
-              <span className="text-sm font-medium text-primary">
-                {languageTabs.find(tab => tab.value === activeLanguage)?.label}
-              </span>
-              {isConnected && (otherUsersByTab[activeLanguage] || []).length > 0 && (
-                <TabPresence users={otherUsersByTab[activeLanguage]} size="sm" />
+            <div className="md:hidden flex-1 flex items-center justify-between gap-2 px-2 min-w-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-sm font-medium text-primary truncate">
+                  {languageTabs.find(tab => tab.value === activeLanguage)?.label}
+                </span>
+                {isConnected && (otherUsersByTab[activeLanguage] || []).length > 0 && (
+                  <TabPresence users={otherUsersByTab[activeLanguage]} size="sm" />
+                )}
+              </div>
+              {isCreator && (
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-xs text-muted-foreground">Template</span>
+                  <Switch
+                    checked={!isTemplateMode}
+                    onCheckedChange={(checked) => setIsTemplateMode(!checked)}
+                    aria-label="Toggle between template and solution"
+                  />
+                  <span className="text-xs text-muted-foreground">Solution</span>
+                </div>
               )}
             </div>
 
