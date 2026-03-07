@@ -1,8 +1,5 @@
 'use client';
 
-import {
-  setActiveArtTab,
-} from "@/store/slices/options.slice";
 import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
 import { addNotificationData } from "@/store/slices/notifications.slice";
 import { Button } from "@/components/ui/button";
@@ -11,7 +8,6 @@ import LevelControls from "@/components/General/LevelControls/LevelControls";
 import { setCurrentLevel } from "@/store/slices/currentLevel.slice";
 import { resetLevel } from "@/store/slices/levels.slice";
 import { useCallback, useEffect, useRef, useState } from "react";
-import PoppingTitle from "@/components/General/PoppingTitle";
 import CreatorControls from "@/components/CreatorControls/CreatorControls";
 import MapEditor, { MapEditorRef } from "@/components/CreatorControls/MapEditor";
 import { useSidebarCollapse } from "@/components/default/sidebar/context/SidebarCollapseContext";
@@ -33,7 +29,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import InfoGamePoints from "../InfoBoard/InfoGamePoints";
-import { Switch } from "@/components/ui/switch";
 import { ModeToggleButton } from "./ModeToggleButton";
 import { AplusSubmitButton } from "./AplusSubmitButton";
 import Link from "next/link";
@@ -52,11 +47,10 @@ export const Navbar = () => {
   const currentLevel = useAppSelector(
     (state) => state.currentLevel.currentLevel
   );
-  const options = useAppSelector((state) => state.options);
+  const isCreator = useAppSelector((state) => state.options.creator);
   const currentGame = useGameStore((state) => state.getCurrentGame());
   const collaboration = useOptionalCollaboration();
   const canEditCurrentGame = Boolean(currentGame?.canEdit ?? currentGame?.isOwner);
-  const isCreator = options.creator;
   const isGameRoute = normalizedPathname.startsWith("/game/");
   const shouldHideSidebarForPlayers = isGameRoute && Boolean(currentGame?.hideSidebar) && !canEditCurrentGame;
   const showCreatorGameMenus =
@@ -146,11 +140,6 @@ export const Navbar = () => {
   const handleAnchorElReset = useCallback(() => {
     setIsResetDialogOpen(false);
   }, []);
-
-  const activeArtTab = options.activeArtTab;
-  const handleArtTabSwitch = useCallback(() => {
-    dispatch(setActiveArtTab(activeArtTab === 0 ? 1 : 0));
-  }, [activeArtTab, dispatch]);
 
   const renderGameMenu = () => (
     <DropdownMenu>
@@ -289,11 +278,7 @@ export const Navbar = () => {
       <div className="hidden 2xl:flex flex-row gap-2 justify-center items-center flex-[1_0_25%]">
         {isCreator && !isGameRoute ? (
           <CreatorControls displayMode="icon-label" />
-        ) : (
-          <PoppingTitle topTitle={activeArtTab === 0 ? "Model solution" : "Your design"}>
-            <Switch checked={activeArtTab === 1} onCheckedChange={handleArtTabSwitch} />
-          </PoppingTitle>
-        )}
+        ) : null}
       </div>
 
       {/* Center section - Mode toggle, Reset, and Level controls */}
