@@ -17,6 +17,7 @@ interface UseCodeEditorCollaborationOptions {
   code: string;
   setCode: Dispatch<SetStateAction<string>>;
   template: string;
+  enabled?: boolean;
   locked: boolean;
   levelIdentifier: string;
   currentLevel: number;
@@ -66,19 +67,20 @@ export function useCodeEditorCollaboration({
   code,
   setCode,
   template,
+  enabled = true,
   locked,
   levelIdentifier,
   currentLevel,
   onLocalChange,
 }: UseCodeEditorCollaborationOptions) {
   const collaboration = useOptionalCollaboration();
-  const isConnected = collaboration?.isConnected ?? false;
+  const isConnected = enabled && (collaboration?.isConnected ?? false);
   const setTyping = collaboration?.setTyping;
   const applyEditorChange = collaboration?.applyEditorChange;
   const updateEditorSelection = collaboration?.updateEditorSelection;
-  const editorCursors = collaboration?.editorCursors ?? EMPTY_EDITOR_CURSORS;
-  const remoteCodeChanges = collaboration?.remoteCodeChanges ?? EMPTY_REMOTE_CODE_CHANGES;
-  const remoteCodeResyncs = collaboration?.remoteCodeResyncs ?? EMPTY_REMOTE_CODE_RESYNCS;
+  const editorCursors = enabled ? (collaboration?.editorCursors ?? EMPTY_EDITOR_CURSORS) : EMPTY_EDITOR_CURSORS;
+  const remoteCodeChanges = enabled ? (collaboration?.remoteCodeChanges ?? EMPTY_REMOTE_CODE_CHANGES) : EMPTY_REMOTE_CODE_CHANGES;
+  const remoteCodeResyncs = enabled ? (collaboration?.remoteCodeResyncs ?? EMPTY_REMOTE_CODE_RESYNCS) : EMPTY_REMOTE_CODE_RESYNCS;
   const editorType = titleToEditorType(title);
 
   const editorViewRef = useRef<EditorView | null>(null);
