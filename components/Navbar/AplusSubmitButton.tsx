@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, type ReactNode } from "react";
 import { useParams, usePathname, useSearchParams } from "next/navigation";
-import { apiUrl } from "@/lib/apiUrl";
+import { apiUrl, stripBasePath } from "@/lib/apiUrl";
 import { Flag, Loader2, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -36,6 +36,7 @@ interface AplusSubmitButtonProps {
 export const AplusSubmitButton = ({ displayMode = "icon", renderTrigger }: AplusSubmitButtonProps) => {
   const params = useParams();
   const pathname = usePathname();
+  const normalizedPathname = stripBasePath(pathname);
   const searchParams = useSearchParams();
   const currentGame = useGameStore((s) => s.getCurrentGame());
   const addGameToStore = useGameStore((s) => s.addGameToStore);
@@ -49,7 +50,7 @@ export const AplusSubmitButton = ({ displayMode = "icon", renderTrigger }: Aplus
 
   const gameIdParam = params?.gameId;
   const gameId = typeof gameIdParam === "string" ? gameIdParam : Array.isArray(gameIdParam) ? gameIdParam[0] : null;
-  const isGameRoute = pathname.startsWith("/game/") && Boolean(gameId);
+  const isGameRoute = normalizedPathname.startsWith("/game/") && Boolean(gameId);
 
   useEffect(() => {
     fetch(apiUrl("/api/games/lti-session"))

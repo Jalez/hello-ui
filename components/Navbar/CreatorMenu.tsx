@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Code2, Eye, Loader2, Users } from "lucide-react";
-import { apiUrl } from "@/lib/apiUrl";
+import { apiUrl, stripBasePath } from "@/lib/apiUrl";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -83,9 +83,10 @@ function formatGroupSecondaryLine(group: Pick<ActiveGroupInstance, "name" | "mem
 export function CreatorMenu({ gameId, collaborationMode }: CreatorMenuProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const normalizedPathname = stripBasePath(pathname);
   const searchParams = useSearchParams();
   const currentGroupId = searchParams.get("groupId");
-  const isCreatorRoute = pathname.startsWith("/creator/");
+  const isCreatorRoute = normalizedPathname.startsWith("/creator/");
 
   const [groups, setGroups] = useState<ActiveGroupInstance[]>([]);
   const [isLoading, setIsLoading] = useState(false);

@@ -7,7 +7,7 @@ import { Gamepad2 } from "lucide-react";
 import PoppingTitle from "@/components/General/PoppingTitle";
 import { useGameStore } from "@/components/default/games";
 import { useSession } from "next-auth/react";
-import { apiUrl } from "@/lib/apiUrl";
+import { apiUrl, stripBasePath } from "@/lib/apiUrl";
 
 type NavbarActionDisplayMode = "icon-label" | "icon";
 
@@ -18,6 +18,7 @@ interface GameModeButtonProps {
 export const GameModeButton = ({ displayMode = "icon" }: GameModeButtonProps) => {
   const router = useRouter();
   const pathname = usePathname();
+  const normalizedPathname = stripBasePath(pathname);
   const searchParams = useSearchParams();
   const { data: session } = useSession();
   const getCurrentGame = useGameStore((state) => state.getCurrentGame);
@@ -25,7 +26,7 @@ export const GameModeButton = ({ displayMode = "icon" }: GameModeButtonProps) =>
   const sessionUserId = session?.userId || session?.user?.email || "";
   const gameOwnerId = game?.userId || "";
   const canEdit = Boolean(game?.canEdit ?? (gameOwnerId && sessionUserId === gameOwnerId));
-  const isCreatorRoute = pathname.startsWith("/creator/");
+  const isCreatorRoute = normalizedPathname.startsWith("/creator/");
 
   const enterGameMode = useCallback(() => {
     if (!game?.id) return;

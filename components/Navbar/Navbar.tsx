@@ -40,12 +40,13 @@ import Link from "next/link";
 import { useGameStore } from "@/components/default/games";
 import { CreatorMenu } from "./CreatorMenu";
 import { useOptionalCollaboration } from "@/lib/collaboration/CollaborationProvider";
-import { apiUrl } from "@/lib/apiUrl";
+import { apiUrl, stripBasePath } from "@/lib/apiUrl";
 
 export const Navbar = () => {
   const dispatch = useAppDispatch();
   const { openOverlay, isMobile, isOverlayOpen, isVisible } = useSidebarCollapse();
   const pathname = usePathname();
+  const normalizedPathname = stripBasePath(pathname);
   const levels = useAppSelector((state) => state.levels);
   const currentLevel = useAppSelector(
     (state) => state.currentLevel.currentLevel
@@ -55,7 +56,7 @@ export const Navbar = () => {
   const collaboration = useOptionalCollaboration();
   const canEditCurrentGame = Boolean(currentGame?.canEdit ?? currentGame?.isOwner);
   const isCreator = options.creator;
-  const isGameRoute = pathname.startsWith("/game/");
+  const isGameRoute = normalizedPathname.startsWith("/game/");
   const showCreatorGameMenus =
     isGameRoute &&
     Boolean(currentGame?.id) &&
