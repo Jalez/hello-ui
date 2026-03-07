@@ -1,10 +1,10 @@
 'use client';
 
 import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { changeLevelDifficulty } from "@/store/slices/levels.slice";
 import PoppingTitle from "../General/PoppingTitle";
-import { Star } from "lucide-react";
+import { Skull } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 //difficulty can either be easy, medium, or hard
 
@@ -27,7 +27,11 @@ const Difficulty = () => {
   const difficulty = level.difficulty;
   const options = useAppSelector((state) => state.options);
   const isCreator = options.creator;
-  const [stars, setStars] = useState(difficulties[difficulty]);
+  const [difficultyLevel, setDifficultyLevel] = useState(difficulties[difficulty]);
+
+  useEffect(() => {
+    setDifficultyLevel(difficulties[difficulty]);
+  }, [difficulty]);
   //   if difficulty is easy, value
   const handleChange = (value: number) => {
     // fidn the difficulty
@@ -37,7 +41,7 @@ const Difficulty = () => {
     dispatch(changeLevelDifficulty({ levelId: currentLevel, difficulty }));
   };
 
-  const maxStars = Object.keys(difficulties).length;
+  const maxDifficultyIcons = Object.keys(difficulties).length;
 
   return (
     <div className="flex flex-col justify-center items-center m-0 p-0">
@@ -45,23 +49,23 @@ const Difficulty = () => {
         topTitle={isCreator ? "Set Difficulty" : "Difficulty"}
       >
         <div className="flex gap-1">
-          {Array.from({ length: maxStars }).map((_, index) => {
-            const starValue = index + 1;
+          {Array.from({ length: maxDifficultyIcons }).map((_, index) => {
+            const difficultyValue = index + 1;
             return (
-              <Star
+              <Skull
                 key={index}
                 className={cn(
                   "h-5 w-5 transition-colors",
-                  starValue <= stars
-                    ? "fill-yellow-400 text-yellow-400"
-                    : "fill-primary/20 text-primary",
+                  difficultyValue <= difficultyLevel
+                    ? "fill-red-500 text-red-500"
+                    : "fill-primary/15 text-primary/55",
                   !isCreator && "cursor-default",
-                  isCreator && "cursor-pointer hover:fill-yellow-300 hover:text-yellow-300"
+                  isCreator && "cursor-pointer hover:fill-red-400 hover:text-red-400"
                 )}
                 onClick={() => {
                   if (isCreator) {
-                    const newValue = starValue;
-                    setStars(newValue);
+                    const newValue = difficultyValue;
+                    setDifficultyLevel(newValue);
                     handleChange(newValue);
                   }
                 }}

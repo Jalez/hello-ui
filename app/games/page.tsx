@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { apiUrl } from "@/lib/apiUrl";
 import Link from "next/link";
-import { Globe, KeyRound, Loader2, Unlock } from "lucide-react";
+import { Globe, KeyRound, Layers3, Loader2, Skull, Unlock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 interface PublicGame {
@@ -20,6 +20,8 @@ interface PublicGame {
     css: boolean;
     js: boolean;
   };
+  levelsCount: number;
+  difficulties: string[];
 }
 
 export default function GamesPage() {
@@ -86,9 +88,23 @@ export default function GamesPage() {
                 <Globe className="h-10 w-10 text-muted-foreground/30" />
               )}
             </div>
-            <div className="p-4">
+            <div className="space-y-3 p-4">
               <p className="font-semibold truncate">{game.title || "Untitled Game"}</p>
               <p className="text-xs text-muted-foreground mt-1 truncate">{game.mapName}</p>
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <div className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1">
+                  <Layers3 className="h-3.5 w-3.5" />
+                  <span>
+                    {game.levelsCount} level{game.levelsCount === 1 ? "" : "s"}
+                  </span>
+                </div>
+                {game.difficulties.length > 0 && (
+                  <div className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1">
+                    <Skull className="h-3.5 w-3.5" />
+                    <span>{game.difficulties.join(" · ")}</span>
+                  </div>
+                )}
+              </div>
             </div>
           </Link>
         );
@@ -97,57 +113,59 @@ export default function GamesPage() {
   );
 
   return (
-    <div className="container mx-auto max-w-5xl px-4 py-10">
-      <div className="flex items-center gap-3 mb-8">
-        <Globe className="h-6 w-6 text-primary" />
-        <h1 className="text-2xl font-bold">Public Games</h1>
+    <div className="h-full overflow-y-auto">
+      <div className="container mx-auto max-w-5xl px-4 py-10">
+        <div className="flex items-center gap-3 mb-8">
+          <Globe className="h-6 w-6 text-primary" />
+          <h1 className="text-2xl font-bold">Public Games</h1>
+        </div>
+
+        {isLoading && (
+          <div className="flex justify-center py-20">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+        )}
+
+        {error && (
+          <p className="text-center text-destructive py-10">{error}</p>
+        )}
+
+        {!isLoading && !error && games.length === 0 && (
+          <p className="text-center text-muted-foreground py-10">
+            No public games yet. Create a game and set it to public!
+          </p>
+        )}
+
+        {!isLoading && !error && games.length > 0 && (
+          <div className="space-y-10 pb-10">
+            <section className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Unlock className="h-4 w-4 text-muted-foreground" />
+                <h2 className="text-lg font-semibold">Open Access</h2>
+                <Badge variant="secondary">{openGames.length}</Badge>
+              </div>
+              {openGames.length > 0 ? (
+                renderGamesGrid(openGames)
+              ) : (
+                <p className="text-sm text-muted-foreground">No open-access games.</p>
+              )}
+            </section>
+
+            <section className="space-y-4">
+              <div className="flex items-center gap-2">
+                <KeyRound className="h-4 w-4 text-muted-foreground" />
+                <h2 className="text-lg font-semibold">Access Key Required</h2>
+                <Badge variant="secondary">{protectedGames.length}</Badge>
+              </div>
+              {protectedGames.length > 0 ? (
+                renderGamesGrid(protectedGames)
+              ) : (
+                <p className="text-sm text-muted-foreground">No key-protected games.</p>
+              )}
+            </section>
+          </div>
+        )}
       </div>
-
-      {isLoading && (
-        <div className="flex justify-center py-20">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
-      )}
-
-      {error && (
-        <p className="text-center text-destructive py-10">{error}</p>
-      )}
-
-      {!isLoading && !error && games.length === 0 && (
-        <p className="text-center text-muted-foreground py-10">
-          No public games yet. Create a game and set it to public!
-        </p>
-      )}
-
-      {!isLoading && !error && games.length > 0 && (
-        <div className="space-y-10">
-          <section className="space-y-4">
-            <div className="flex items-center gap-2">
-              <Unlock className="h-4 w-4 text-muted-foreground" />
-              <h2 className="text-lg font-semibold">Open Access</h2>
-              <Badge variant="secondary">{openGames.length}</Badge>
-            </div>
-            {openGames.length > 0 ? (
-              renderGamesGrid(openGames)
-            ) : (
-              <p className="text-sm text-muted-foreground">No open-access games.</p>
-            )}
-          </section>
-
-          <section className="space-y-4">
-            <div className="flex items-center gap-2">
-              <KeyRound className="h-4 w-4 text-muted-foreground" />
-              <h2 className="text-lg font-semibold">Access Key Required</h2>
-              <Badge variant="secondary">{protectedGames.length}</Badge>
-            </div>
-            {protectedGames.length > 0 ? (
-              renderGamesGrid(protectedGames)
-            ) : (
-              <p className="text-sm text-muted-foreground">No key-protected games.</p>
-            )}
-          </section>
-        </div>
-      )}
     </div>
   );
 }
