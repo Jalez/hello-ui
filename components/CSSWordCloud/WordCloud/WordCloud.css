@@ -1,21 +1,80 @@
+.word-cloud-root {
+  --wc-base-fill: rgb(82, 82, 82);
+  --wc-hover-fill: #222;
+  --wc-wave-fill: rgb(106, 106, 106);
+  --wc-featured-fill: rgb(110, 110, 110);
+  --wc-featured-active-fill: #111;
+  --wc-wave-opacity: 0.24;
+  --wc-hover-opacity: 0.55;
+}
+
+.dark .word-cloud-root {
+  --wc-base-fill: rgb(146, 146, 146);
+  --wc-hover-fill: rgb(215, 215, 215);
+  --wc-wave-fill: rgb(166, 166, 166);
+  --wc-featured-fill: rgb(205, 205, 205);
+  --wc-featured-active-fill: rgb(245, 245, 245);
+  --wc-wave-opacity: 0.26;
+  --wc-hover-opacity: 0.62;
+}
+
 /* disable text selection in text element */
-text {
+.word-cloud-root text {
   -webkit-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
   user-select: none;
-  fill: rgb(230, 230, 230);
+  fill: var(--wc-base-fill);
   z-index: 0;
   text-shadow: none;
 }
 
 /* Add a transform to whenever the fill changes */
-text {
-  transition: fill 10s;
+.word-cloud-root text {
+  transition: fill 300ms ease, opacity 2200ms ease-out;
+  opacity: 0;
+}
+
+.word-cloud-root .word-cloud-wave-visible {
+  fill: var(--wc-wave-fill);
+  opacity: var(--wc-wave-opacity);
+}
+
+.word-cloud-root .word-cloud-wave-visible.word-cloud-featured-active {
+  opacity: 1;
+}
+
+/* Force non-featured wave words to stay clearly subdued */
+.word-cloud-root .word-cloud-wave-visible:not(.word-cloud-featured-active) {
+  fill: var(--wc-wave-fill) !important;
+  opacity: 0.18 !important;
+}
+
+.dark .word-cloud-root .word-cloud-wave-visible:not(.word-cloud-featured-active) {
+  opacity: 0.2 !important;
 }
 
 /* Add a hover effect to text elements */
-text:hover {
-  fill: #222;
+.word-cloud-root text:hover {
+  fill: var(--wc-hover-fill);
   transition: fill 100ms;
+  opacity: var(--wc-hover-opacity);
+}
+
+.word-cloud-root .word-cloud-featured {
+  fill: var(--wc-featured-fill);
+}
+
+.word-cloud-root .word-cloud-featured-active {
+  fill: var(--wc-featured-active-fill);
+  opacity: 1;
+}
+
+.word-cloud-root .word-cloud-featured:hover {
+  opacity: 1;
+}
+
+.word-cloud-root .word-cloud-hero {
+  letter-spacing: 1px;
+  fill: var(--wc-featured-active-fill);
 }

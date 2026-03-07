@@ -1,6 +1,7 @@
 "use client";
 
-import { Settings, Trash2, Users } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { PanelLeft, Settings, Trash2, Users } from "lucide-react";
 import { usePathname } from "next/navigation";
 import type React from "react";
 import { useEffect, createContext, useContext } from "react";
@@ -31,7 +32,7 @@ interface LeftSidebarProps {
 }
 
 export const Sidebar: React.FC<LeftSidebarProps> = ({ isUserAdmin, sidebarHeader, children }) => {
-  const { isCollapsed, isMobile, isOverlayOpen, closeOverlay, setIsOverlayOpen, isVisible, setIsVisible } = useSidebarCollapse();
+  const { isCollapsed, isMobile, isOverlayOpen, openOverlay, closeOverlay, setIsOverlayOpen, isVisible, setIsVisible } = useSidebarCollapse();
   const pathname = usePathname();
   const getCurrentGame = useGameStore((state) => state.getCurrentGame);
   const game = getCurrentGame();
@@ -39,12 +40,14 @@ export const Sidebar: React.FC<LeftSidebarProps> = ({ isUserAdmin, sidebarHeader
   const isCreatorRoute = pathname.startsWith("/creator/");
   const isGameRoute = pathname.startsWith("/game/");
   const isAuthRoute = pathname.startsWith("/auth/");
+  const isHomeRoute = pathname === "/";
   const isPlayerRoute = isGameRoute;
-  const showInlineSidebarOnMobile = !isPlayerRoute && !isAuthRoute;
+  const showInlineSidebarOnMobile = false;
   const isResolvingGameOnGameRoute = isGameRoute && !game;
   const shouldHideForPlayerContext = isPlayerRoute && Boolean(game?.hideSidebar);
   const shouldHideSidebar =
     isResolvingGameOnGameRoute || (!isCreatorRoute && shouldHideForPlayerContext) || isAuthRoute;
+  const shouldShowMobileSidebarToggle = isMobile && !isOverlayOpen && !isGameRoute && !isAuthRoute;
 
   useEffect(() => {
     setIsVisible(!shouldHideSidebar);
@@ -94,27 +97,6 @@ export const Sidebar: React.FC<LeftSidebarProps> = ({ isUserAdmin, sidebarHeader
     return items;
   };
 
-  // Close overlay when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (isOverlayOpen && isMobile) {
-        console.log("isOverlayOpen", isOverlayOpen);
-        const sidebar = document.getElementById("mobile-sidebar");
-        if (sidebar && !sidebar.contains(event.target as Node)) {
-          closeOverlay();
-        }
-      }
-    };
-
-    if (isOverlayOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [isOverlayOpen, isMobile, closeOverlay]);
-
   if (!isVisible || shouldHideSidebar) {
     return null;
   }
@@ -151,16 +133,40 @@ export const Sidebar: React.FC<LeftSidebarProps> = ({ isUserAdmin, sidebarHeader
 
   return (
     <>
+      {shouldShowMobileSidebarToggle && (
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className="fixed left-2 top-2 z-30 md:hidden h-8 w-8 bg-background text-foreground border border-border shadow-sm hover:bg-background"
+          onClick={openOverlay}
+          title="Open sidebar"
+          aria-label="Open sidebar"
+        >
+          <PanelLeft className="h-5 w-5" />
+        </Button>
+      )}
+
       {/* Desktop Sidebar */}
       <div
-        className={`${showInlineSidebarOnMobile ? "flex" : "hidden md:flex"} min-w-0 overflow-hidden flex-col items-start justify-start gap-2 relative group h-full bg-muted/30 transition-[width] duration-300 ease-in-out ${
-          isCollapsed ? "w-16" : "w-64"
-        }`}
-        data-sidebar
+        className={`${showInlineSidebarOnMobile ? "flex" : "hidden md:flex"} relative z-20 h-full overflow-visible`}
       >
-        <MobileSidebarContext.Provider value={false}>
-          {renderSidebarContent(false)}
-        </MobileSidebarContext.Provider>
+        <div
+          className={`flex min-w-0 overflow-hidden flex-col items-start justify-start gap-2 group h-full bg-background border-r border-border/70 shadow-sm transition-[width] duration-300 ease-in-out ${
+            isCollapsed ? "w-16" : "w-64"
+          }`}
+          data-sidebar
+        >
+          <MobileSidebarContext.Provider value={false}>
+            {renderSidebarContent(false)}
+          </MobileSidebarContext.Provider>
+        </div>
+        {isHomeRoute && (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute left-full top-0 h-full w-32 bg-gradient-to-r from-background/85 via-background/55 to-transparent"
+          />
+        )}
       </div>
 
       {/* Mobile Sidebar Drawer */}
@@ -169,7 +175,7 @@ export const Sidebar: React.FC<LeftSidebarProps> = ({ isUserAdmin, sidebarHeader
           <MobileSidebarContext.Provider value={true}>
             <div
               id="mobile-sidebar"
-              className="flex flex-col items-start justify-start gap-2 h-full bg-muted/30 w-full"
+              className="flex flex-col items-start justify-start gap-2 h-full w-full z-20 bg-background border-r border-border/70 shadow-sm"
               data-sidebar
             >
               {renderSidebarContent(true)}
