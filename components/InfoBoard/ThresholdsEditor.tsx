@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
 import { updatePointsThresholds } from "@/store/slices/levels.slice";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -9,24 +9,43 @@ import { Input } from "@/components/ui/input";
 import { Plus, Trash2 } from "lucide-react";
 import InfoBox from "./InfoBox";
 
+type PointsThreshold = { accuracy: number; pointsPercent: number };
+
+const DEFAULT_THRESHOLDS: PointsThreshold[] = [
+  { accuracy: 70, pointsPercent: 25 },
+  { accuracy: 85, pointsPercent: 60 },
+  { accuracy: 95, pointsPercent: 100 },
+];
+
 export const ThresholdsEditor = () => {
   const dispatch = useAppDispatch();
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const level = useAppSelector((state) => state.levels[currentLevel - 1]);
   const [open, setOpen] = useState(false);
+  const [draftThresholds, setDraftThresholds] = useState<PointsThreshold[]>(DEFAULT_THRESHOLDS);
+  const thresholds = level?.pointsThresholds ?? DEFAULT_THRESHOLDS;
+  const sorted = useMemo(
+    () => [...thresholds].sort((a, b) => a.accuracy - b.accuracy),
+    [thresholds],
+  );
+  const sortedDraft = useMemo(
+    () => [...draftThresholds].sort((a, b) => a.accuracy - b.accuracy),
+    [draftThresholds],
+  );
+  const isDirty = JSON.stringify(sortedDraft) !== JSON.stringify(sorted);
+  const handleOpenChange = useCallback((nextOpen: boolean) => {
+    setOpen(nextOpen);
+    if (nextOpen) {
+      setDraftThresholds(sorted);
+    }
+  }, [sorted]);
 
   if (!level) return null;
 
-  const thresholds = level.pointsThresholds ?? [
-    { accuracy: 70, pointsPercent: 25 },
-    { accuracy: 85, pointsPercent: 60 },
-    { accuracy: 95, pointsPercent: 100 },
-  ];
+  const normalizeValue = (value: string) => Math.min(100, Math.max(0, Number(value)));
 
-  const sorted = [...thresholds].sort((a, b) => a.accuracy - b.accuracy);
-
-  const update = (updated: { accuracy: number; pointsPercent: number }[]) => {
-    dispatch(updatePointsThresholds({ levelId: currentLevel, thresholds: updated }));
+  const updateDraft = (updated: PointsThreshold[]) => {
+    setDraftThresholds(updated);
   };
 
   const handleChange = (
@@ -34,25 +53,38 @@ export const ThresholdsEditor = () => {
     field: "accuracy" | "pointsPercent",
     value: string
   ) => {
-    const next = sorted.map((t, i) =>
-      i === index ? { ...t, [field]: Math.min(100, Math.max(0, Number(value))) } : t
+    const next = sortedDraft.map((t, i) =>
+      i === index ? { ...t, [field]: normalizeValue(value) } : t
     );
-    update(next);
+    updateDraft(next);
   };
 
   const handleAdd = () => {
-    const next = [...sorted, { accuracy: 100, pointsPercent: 100 }];
-    update(next);
+    updateDraft([...sortedDraft, { accuracy: 100, pointsPercent: 100 }]);
   };
 
   const handleRemove = (index: number) => {
-    const next = sorted.filter((_, i) => i !== index);
-    update(next);
+    updateDraft(sortedDraft.filter((_, i) => i !== index));
+  };
+
+  const handleCancel = () => {
+    setDraftThresholds(sorted);
+    setOpen(false);
+  };
+
+  const handleSubmit = () => {
+    if (!isDirty) {
+      setOpen(false);
+      return;
+    }
+
+    dispatch(updatePointsThresholds({ levelId: currentLevel, thresholds: sortedDraft }));
+    setOpen(false);
   };
 
   return (
     <InfoBox>
-      <Popover open={open} onOpenChange={setOpen}>
+      <Popover open={open} onOpenChange={handleOpenChange}>
         <PopoverTrigger asChild>
           <button className="cursor-pointer hover:opacity-70 transition-opacity text-sm font-semibold text-primary">
             Thresholds
@@ -70,7 +102,7 @@ export const ThresholdsEditor = () => {
               <span>Points %</span>
               <span />
             </div>
-            {sorted.map((t, i) => (
+            {sortedDraft.map((t, i) => (
               <div key={i} className="grid grid-cols-[1fr_auto_1fr_auto] gap-x-2 items-center">
                 <Input
                   type="number"
@@ -108,6 +140,24 @@ export const ThresholdsEditor = () => {
           >
             <Plus className="h-4 w-4 mr-1" /> Add threshold
           </Button>
+          <div className="flex items-center gap-2 pt-1">
+            <Button
+              size="sm"
+              variant="ghost"
+              className="flex-1"
+              onClick={handleCancel}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              className="flex-1"
+              disabled={!isDirty}
+              onClick={handleSubmit}
+            >
+              Save thresholds
+            </Button>
+          </div>
         </PopoverContent>
       </Popover>
     </InfoBox>
