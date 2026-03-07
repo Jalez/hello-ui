@@ -3,7 +3,6 @@
 import { Monitor, Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 import type React from "react";
-import { useEffect, useState } from "react";
 import {
   DropdownMenuItem,
   DropdownMenuPortal,
@@ -14,14 +13,8 @@ import {
 
 export const ThemeSwitcher: React.FC = () => {
   const { theme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   const getThemeIcon = () => {
-    if (!mounted) return <Monitor className="mr-2 h-4 w-4" />;
     switch (theme) {
       case "light":
         return <Sun className="mr-2 h-4 w-4" />;
@@ -33,7 +26,6 @@ export const ThemeSwitcher: React.FC = () => {
   };
 
   const getThemeLabel = () => {
-    if (!mounted) return "System";
     switch (theme) {
       case "light":
         return "Light";
@@ -52,7 +44,7 @@ export const ThemeSwitcher: React.FC = () => {
         <span className="ml-auto text-xs text-muted-foreground">{getThemeLabel()}</span>
       </DropdownMenuSubTrigger>
       <DropdownMenuPortal>
-        <DropdownMenuSubContent>
+        <DropdownMenuSubContent className="z-[10011]">
           <DropdownMenuItem onClick={() => setTheme("system")} className={theme === "system" ? "bg-accent" : ""}>
             <Monitor className="mr-2 h-4 w-4" />
             <span>System</span>

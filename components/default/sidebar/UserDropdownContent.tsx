@@ -18,7 +18,7 @@ interface UserDropdownContentProps {
 
 export const UserDropdownContent: React.FC<UserDropdownContentProps> = ({ getUserName, handleSignOut }) => {
     return (
-        <DropdownMenuContent align="start" className="w-64">
+        <DropdownMenuContent align="start" className="w-64 z-[10010]">
             <DropdownMenuLabel className="font-normal">
                 <div className="flex flex-col">
                     <span className="font-medium text-sm">{getUserName()}</span>

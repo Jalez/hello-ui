@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { createGame } from "@/components/default/games/service/basic/create";
 import { Loader2, LogIn, Play, Plus } from "lucide-react";
+import { CSSWordCloud } from "@/components/CSSWordCloud/CSSWordCloud";
 
 export default function Home() {
   const { data: session, status } = useSession();
@@ -28,16 +29,9 @@ export default function Home() {
   const isLoading = status === "loading";
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-8">
-      <div className="max-w-2xl text-center space-y-6">
-        <h1 className="text-5xl font-bold tracking-tight">
-          Welcome to UI Designer
-        </h1>
-        <p className="text-xl text-muted-foreground">
-          Master CSS and web design through interactive challenges and projects.
-        </p>
-
-        <div className="flex flex-wrap gap-4 justify-center mt-8">
+    <div className="relative min-h-screen overflow-hidden">
+      <div className="absolute bottom-8 left-1/2 z-10 w-full max-w-2xl -translate-x-1/2 px-8 md:bottom-12">
+        <div className="flex flex-wrap gap-4 justify-center">
           {isLoading ? (
             <Button size="lg" disabled className="text-lg px-8 py-6">
               <Loader2 className="h-5 w-5 animate-spin mr-2" />
@@ -82,6 +76,7 @@ export default function Home() {
           </Link>
         </div>
       </div>
+      <CSSWordCloud />
     </div>
   );
 }
