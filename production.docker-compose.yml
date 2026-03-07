@@ -56,6 +56,7 @@ services:
       DB_CLIENT: postgres
       TZ: Europe/Helsinki
       NODE_ENV: production
+      WS_SERVICE_TOKEN: ${WS_SERVICE_TOKEN:-ws-service-secret}
       NEXT_PUBLIC_APP_URL: "https://tie-lukioplus.rd.tuni.fi/css-artist"
       NEXT_PUBLIC_BASE_PATH: "/css-artist"
       NEXT_PUBLIC_DRAWBOARD_URL: "https://tie-lukioplus.rd.tuni.fi/drawboard"
@@ -85,6 +86,7 @@ services:
       API_BASE_URL: http://app:3000
       CORS_ORIGIN: https://tie-lukioplus.rd.tuni.fi
       TZ: Europe/Helsinki
+      WS_SERVICE_TOKEN: ${WS_SERVICE_TOKEN:-ws-service-secret}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
       interval: 10s
