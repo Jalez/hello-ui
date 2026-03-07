@@ -182,7 +182,7 @@ async function fetchInstanceSnapshotFromDB(ctx) {
 
 async function saveProgressToDB(ctx, progressData) {
   if (ctx.kind !== "instance") {
-    return true;
+    return { ok: true, permanentFailure: false };
   }
 
   const qs = buildInstanceQueryParams(ctx);
@@ -200,13 +200,16 @@ async function saveProgressToDB(ctx, progressData) {
     if (!response.ok) {
       const errorText = await response.text().catch(() => "");
       console.error(`[db-save:error] status=${response.status} url=${url}${errorText ? ` body=${errorText}` : ""}`);
-      return false;
+      return {
+        ok: false,
+        permanentFailure: response.status === 404,
+      };
     }
     console.log(`[db-save:ok] gameId=${ctx.gameId}`);
-    return true;
+    return { ok: true, permanentFailure: false };
   } catch (err) {
     console.error(`[db-save:error] url=${url}`, err.message);
-    return false;
+    return { ok: false, permanentFailure: false };
   }
 }
 
@@ -468,8 +471,8 @@ async function ensureRoomState(roomId, ctx) {
   const shouldPersistNormalizedLevels =
     JSON.stringify(progressLevels) !== JSON.stringify(finalLevels);
   if (shouldPersistNormalizedLevels && finalLevels.length > 0) {
-    const ok = await saveProgressToDB(ctx, serializeCodeLevels(nextState));
-    if (!ok) {
+    const result = await saveProgressToDB(ctx, serializeCodeLevels(nextState));
+    if (!result.ok && !result.permanentFailure) {
       markRoomDirty(roomId, ctx);
     }
   }
@@ -530,13 +533,19 @@ async function flushWriteBuffer(roomId) {
     buffer.timer = null;
   }
 
-  const ok = await saveProgressToDB(state.ctx, serializeCodeLevels(state));
+  const result = await saveProgressToDB(state.ctx, serializeCodeLevels(state));
 
-  if (ok) {
+  if (result.ok) {
     roomWriteBuffer.delete(roomId);
     if (!rooms.has(roomId)) {
       roomEditorState.delete(roomId);
     }
+  } else if (result.permanentFailure) {
+    roomWriteBuffer.delete(roomId);
+    if (!rooms.has(roomId)) {
+      roomEditorState.delete(roomId);
+    }
+    console.warn(`[db-save:drop-room] room=${roomId} gameId=${state.ctx.gameId} reason=not-found`);
   } else {
     scheduleFlush(roomId);
   }
@@ -896,8 +905,8 @@ wsServer.on("connection", (socket) => {
         }
         roomWriteBuffer.delete(roomId);
 
-        const ok = await saveProgressToDB(ctx, serializeCodeLevels(nextState));
-        if (!ok) {
+        const result = await saveProgressToDB(ctx, serializeCodeLevels(nextState));
+        if (!result.ok && !result.permanentFailure) {
           markRoomDirty(roomId, ctx);
         }
 
