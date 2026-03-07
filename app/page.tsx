@@ -29,7 +29,7 @@ export default function Home() {
   const isLoading = status === "loading";
 
   return (
-    <div className="relative min-h-screen overflow-hidden">
+    <div className="relative h-full overflow-hidden">
       <div className="absolute bottom-20 left-1/2 z-10 w-full max-w-2xl -translate-x-1/2 px-6 sm:px-8 md:bottom-24">
         <div className="flex flex-wrap gap-4 justify-center">
           {isLoading ? (
