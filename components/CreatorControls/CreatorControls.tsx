@@ -154,11 +154,6 @@ const CreatorControls = ({ displayMode = "icon-label" }: CreatorControlsProps) =
           <SlidersHorizontal className="h-4 w-4 mr-2" />
           Generation Settings
         </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => mapEditorRef.current?.triggerOpen()}>
-          <Map className="h-4 w-4 mr-2" />
-          Game Levels
-        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
