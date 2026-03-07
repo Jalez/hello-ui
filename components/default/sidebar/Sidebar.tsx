@@ -1,7 +1,6 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { PanelLeft, Settings, Trash2, Users } from "lucide-react";
+import { Settings, Trash2, Users } from "lucide-react";
 import { usePathname } from "next/navigation";
 import type React from "react";
 import { useEffect, createContext, useContext } from "react";
@@ -33,7 +32,7 @@ interface LeftSidebarProps {
 }
 
 export const Sidebar: React.FC<LeftSidebarProps> = ({ isUserAdmin, sidebarHeader, children }) => {
-  const { isCollapsed, isMobile, isOverlayOpen, openOverlay, closeOverlay, setIsOverlayOpen, isVisible, setIsVisible } = useSidebarCollapse();
+  const { isCollapsed, isMobile, isOverlayOpen, closeOverlay, setIsOverlayOpen, isVisible, setIsVisible } = useSidebarCollapse();
   const pathname = usePathname();
   const normalizedPathname = stripBasePath(pathname);
   const getCurrentGame = useGameStore((state) => state.getCurrentGame);
@@ -49,8 +48,6 @@ export const Sidebar: React.FC<LeftSidebarProps> = ({ isUserAdmin, sidebarHeader
   const shouldHideForPlayerContext = isPlayerRoute && Boolean(game?.hideSidebar);
   const shouldHideSidebar =
     isResolvingGameOnGameRoute || (!isCreatorRoute && shouldHideForPlayerContext) || isAuthRoute;
-  const shouldShowMobileSidebarToggle = isMobile && !isOverlayOpen && !isGameRoute && !isAuthRoute;
-
   useEffect(() => {
     setIsVisible(!shouldHideSidebar);
     if (shouldHideSidebar && isOverlayOpen) {
@@ -138,20 +135,6 @@ export const Sidebar: React.FC<LeftSidebarProps> = ({ isUserAdmin, sidebarHeader
 
   return (
     <>
-      {shouldShowMobileSidebarToggle && (
-        <Button
-          type="button"
-          size="icon"
-          variant="ghost"
-          className="fixed left-2 top-2 z-30 md:hidden h-8 w-8 bg-background text-foreground border border-border shadow-sm hover:bg-background"
-          onClick={openOverlay}
-          title="Open sidebar"
-          aria-label="Open sidebar"
-        >
-          <PanelLeft className="h-5 w-5" />
-        </Button>
-      )}
-
       {/* Desktop Sidebar */}
       <div
         className={`${showInlineSidebarOnMobile ? "flex" : "hidden md:flex"} relative z-20 h-full overflow-visible`}
