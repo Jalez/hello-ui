@@ -47,6 +47,46 @@ export interface ProgressSyncMessage {
   ts: number;
 }
 
+export interface GroupStartReadyUser {
+  userId: string;
+  userName?: string;
+  userEmail?: string;
+  userImage?: string;
+  readyAt?: string;
+}
+
+export interface GroupStartGateState {
+  status: "waiting" | "started";
+  minReadyCount: number;
+  readyUserIds: string[];
+  readyUsers: Record<string, GroupStartReadyUser>;
+  startedAt?: string | null;
+  startedByUserId?: string | null;
+}
+
+export interface GroupStartSyncMessage {
+  roomId: string;
+  groupId?: string;
+  gate: GroupStartGateState;
+  ts: number;
+}
+
+export interface LobbyChatEntry {
+  id: string;
+  userId: string;
+  userEmail?: string;
+  userName?: string;
+  userImage?: string;
+  text: string;
+  createdAt: string;
+}
+
+export interface LobbyChatSyncMessage {
+  roomId: string;
+  messages: LobbyChatEntry[];
+  ts: number;
+}
+
 export interface EditorChange {
   roomId: string;
   groupId?: string;

@@ -10,13 +10,14 @@ import {
   extractLtiOutcomeService,
 } from "@/lib/lti/types";
 import { resolveLtiIdentity } from "@/lib/lti/identity";
-import { deriveLtiGroupContext } from "@/lib/lti/group-context";
+import { deriveLtiGroupContext, getExplicitLtiGroupScopeValue } from "@/lib/lti/group-context";
 import { getOrCreateUserByEmail, getUserByEmail, updateUserProfile } from "@/app/api/_lib/services/userService";
 import {
   getOrCreateGroupByLtiContext,
   addGroupMember,
 } from "@/app/api/_lib/services/groupService";
 import { getSql } from "@/app/api/_lib/db";
+import { extractRows } from "@/app/api/_lib/db/shared";
 import { logDebug } from "@/lib/debug-logger";
 import { authOptions } from "@/lib/auth";
 import { createOneTimeCode } from "@/lib/lti/one-time-code";
@@ -55,6 +56,25 @@ export async function POST(
       Object.entries(ltiData).filter(([key, value]) => key.startsWith("custom_") && !!value)
     );
 
+    // Log exact incoming LTI params so we can confirm what the LMS sends (e.g. groupID vs custom_group_id)
+    const allParamNames = Object.keys(body).sort();
+    const groupAndContextParams = Object.fromEntries(
+      Object.entries(body).filter(
+        ([key]) =>
+          key.includes("group") ||
+          key.includes("context") ||
+          key.startsWith("custom_") ||
+          key.startsWith("resource_link")
+      )
+    );
+
+    logDebug("lti_game_lti_raw", {
+      allParamNames,
+      groupAndContextParams,
+    });
+    // Always log LTI payload (param names + group/context) so we can confirm what the LMS sends
+    console.log("[LTI launch] params:", allParamNames.join(", "), "| group/context:", JSON.stringify(groupAndContextParams));
+
     logDebug("lti_game_lti_data", {
       user_id: ltiData.user_id,
       lis_person_contact_email_primary: ltiData.lis_person_contact_email_primary,
@@ -78,7 +98,7 @@ export async function POST(
       "SELECT consumer_key, consumer_secret FROM lti_credentials WHERE consumer_key = $1",
       [ltiData.oauth_consumer_key]
     );
-    const credRows = (credResult as any).rows ?? credResult;
+    const credRows = extractRows(credResult) as Array<{ consumer_key: string; consumer_secret: string }>;
     if (!credRows || credRows.length === 0) {
       return NextResponse.json({ error: "Consumer key not found" }, { status: 401 });
     }
@@ -163,24 +183,48 @@ export async function POST(
       await updateUserProfile(user.id, { name: userInfo.name });
     }
 
-    // Create or find the LTI group (for grade posting context)
+    // Group-mode gameplay should redirect quickly.
+    // If the LMS did not send an explicit group identifier, do not block this launch
+    // on an extra A+ API lookup here. The game page can resolve or ask for the group
+    // after redirect while showing a proper loading / lobby UI.
     const groupName = userInfo.contextTitle || userInfo.contextId || `LTI Group ${Date.now()}`;
-    const ltiGroupContext = deriveLtiGroupContext(ltiData);
-    const group = await getOrCreateGroupByLtiContext(
-      ltiGroupContext.key,
-      groupName,
-      userInfo.resourceLinkId
-    );
     const role = getLtiRole(userInfo.roles);
-    await addGroupMember({ groupId: group.id, userId: user.id, role });
+    const explicitGroupScopeValue = getExplicitLtiGroupScopeValue(ltiData);
+    let resolvedGroupId: string | null = null;
+    let resolvedGroupName: string | null = null;
+    let resolvedGroupScopeSource: string | null = null;
+    let resolvedGroupScopeValue: string | null = null;
+
+    if (explicitGroupScopeValue) {
+      const ltiGroupContext = deriveLtiGroupContext(ltiData);
+      const group = await getOrCreateGroupByLtiContext(
+        ltiGroupContext.key,
+        groupName,
+        userInfo.resourceLinkId
+      );
+      await addGroupMember({ groupId: group.id, userId: user.id, role });
+      resolvedGroupId = group.id;
+      resolvedGroupName = group.name;
+      resolvedGroupScopeSource = ltiGroupContext.scopeSource;
+      resolvedGroupScopeValue = ltiGroupContext.scopeValue;
+    }
 
     logDebug("lti_game_group", {
-      groupId: group.id,
-      groupName: group.name,
-      groupContextKey: ltiGroupContext.key,
-      groupScopeSource: ltiGroupContext.scopeSource,
+      groupId: resolvedGroupId,
+      groupName: resolvedGroupName ?? groupName,
+      groupContextKey: resolvedGroupId ? "resolved" : null,
+      groupScopeSource: resolvedGroupScopeSource ?? "pending",
+      groupScopeValue: resolvedGroupScopeValue ?? explicitGroupScopeValue,
       role,
     });
+    console.log(
+      "[LTI launch] group scope:",
+      resolvedGroupScopeSource ?? "pending",
+      "value:",
+      resolvedGroupScopeValue ?? explicitGroupScopeValue ?? null,
+      "groupId:",
+      resolvedGroupId
+    );
 
     const outcomeService = extractLtiOutcomeService(ltiData, consumer_key, consumer_secret);
     const documentTarget = ltiData.launch_presentation_document_target || "window";
@@ -190,8 +234,9 @@ export async function POST(
       userId: user.id,
       userEmail: user.email,
       userName: user.name || userInfo.name || user.email,
-      groupId: group.id,
-      groupName: group.name,
+      groupId: resolvedGroupId,
+      groupName: resolvedGroupName ?? groupName,
+      groupResolution: resolvedGroupId ? "resolved" : "pending",
       role,
       outcomeService,
       documentTarget,
@@ -216,7 +261,7 @@ export async function POST(
       "SELECT id, group_id, collaboration_mode FROM projects WHERE id = $1 LIMIT 1",
       [gameId]
     );
-    const gameRows = (gameResult as any).rows ?? gameResult;
+    const gameRows = extractRows(gameResult) as Array<{ id: string; group_id: string | null; collaboration_mode: string | null }>;
     if (!gameRows?.length) {
       return NextResponse.json({ error: "Game not found" }, { status: 404 });
     }
@@ -226,10 +271,10 @@ export async function POST(
 
     if (collaborationMode === "group") {
       const gameGroupId = gameRows[0].group_id;
-      if (!gameGroupId) {
+      if (!gameGroupId && resolvedGroupId) {
         await sql.query(
           "UPDATE projects SET group_id = $1 WHERE id = $2 AND group_id IS NULL",
-          [group.id, gameRows[0].id]
+          [resolvedGroupId, gameRows[0].id]
         );
       }
     }
@@ -252,13 +297,14 @@ export async function POST(
       jwtUserId: user.id,
       jwtEmail: user.email,
       jwtName: user.name || userInfo.name || user.email,
-      redirectGroupId: group.id,
+      redirectGroupId: resolvedGroupId,
       collaborationMode,
     });
 
-    const dest = collaborationMode === "group"
-      ? `/game/${resolvedGameId}?mode=game&groupId=${group.id}`
-      : `/game/${resolvedGameId}?mode=game`;
+    const dest =
+      collaborationMode === "group" && resolvedGroupId
+        ? `/game/${resolvedGameId}?mode=game&groupId=${resolvedGroupId}`
+        : `/game/${resolvedGameId}?mode=game`;
 
     // Redirect with a one-time code instead of the JWT in the URL (code is exchanged server-side for the token).
     const code = createOneTimeCode(ltiSignInToken, dest);

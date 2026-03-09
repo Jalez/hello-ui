@@ -22,12 +22,14 @@ interface GroupSelectorProps {
   selectedGroupId?: string | null;
   onGroupSelect: (groupId: string) => void;
   className?: string;
+  showRefreshButton?: boolean;
 }
 
 export function GroupSelector({
   selectedGroupId,
   onGroupSelect,
   className,
+  showRefreshButton = false,
 }: GroupSelectorProps) {
   const [groups, setGroups] = useState<Group[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -102,6 +104,11 @@ export function GroupSelector({
         <p className="text-sm text-muted-foreground">
           You are not a member of any group yet.
         </p>
+      )}
+      {showRefreshButton && (
+        <Button variant="outline" size="sm" onClick={fetchGroups}>
+          Refresh Groups
+        </Button>
       )}
     </div>
   );

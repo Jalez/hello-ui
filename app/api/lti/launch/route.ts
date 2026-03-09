@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import jwt from "jsonwebtoken";
 import { isLti10Launch, extractLtiUserInfo, getLtiRole, Lti10Data, extractLtiOutcomeService } from "@/lib/lti/types";
 import { resolveLtiIdentity } from "@/lib/lti/identity";
-import { deriveLtiGroupContext } from "@/lib/lti/group-context";
+import { resolveLtiGroupContext } from "@/lib/lti/group-context";
 import { getOrCreateUserByEmail, updateUserProfile } from "@/app/api/_lib/services/userService";
 import {
   getOrCreateGroupByLtiContext,
@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
     }
 
     const groupName = userInfo.contextTitle || userInfo.contextId || `LTI Group ${Date.now()}`;
-    const ltiGroupContext = deriveLtiGroupContext(ltiData);
+    const ltiGroupContext = await resolveLtiGroupContext(ltiData);
 
     const group = await getOrCreateGroupByLtiContext(
       ltiGroupContext.key,

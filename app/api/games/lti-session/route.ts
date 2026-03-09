@@ -19,6 +19,7 @@ export async function GET() {
     hasOutcomeService: hasOutcomeService(session),
     isInIframe: isInIframe(session),
     courseName: session.groupName || session.ltiData.context_title || null,
+    contextId: session.ltiData.context_id || null,
     returnUrl: session.returnUrl || null,
     role: session.role,
   });

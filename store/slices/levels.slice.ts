@@ -223,6 +223,13 @@ const levelsSlice = createSlice({
       level.timeData.startTime = new Date().getTime();
       storage?.setItem(storage.key, JSON.stringify(state));
     },
+    startLevelTimerAt(state, action) {
+      const { levelId, startTime } = action.payload as { levelId: number; startTime: number };
+      const level = state[levelId - 1];
+      if (!level) return;
+      level.timeData.startTime = startTime;
+      storage?.setItem(storage.key, JSON.stringify(state));
+    },
     updateSolutionCode(state, action) {
       const { id, code } = action.payload;
       const level = state[id - 1];
@@ -541,6 +548,7 @@ export const {
   updateWeek,
   resetLevel,
   startLevelTimer,
+  startLevelTimerAt,
   toggleShowModelSolution,
   toggleImageInteractivity,
   toggleShowScenarioModel,

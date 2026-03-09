@@ -8,6 +8,10 @@ import {
   EditorChange,
   EditorChangeApplied,
   EditorResync,
+  GroupStartGateState,
+  GroupStartSyncMessage,
+  LobbyChatEntry,
+  LobbyChatSyncMessage,
   ProgressSyncMessage,
   RoomStateSyncMessage,
   UserIdentity,
@@ -42,6 +46,7 @@ export interface RemoteCodeResync {
 
 export type RoomStateSync = RoomStateSyncMessage | null;
 export type ProgressSync = ProgressSyncMessage | null;
+export type GroupStartSync = GroupStartSyncMessage | null;
 
 interface CollaborationContextValue {
   isConnected: boolean;
@@ -57,6 +62,8 @@ interface CollaborationContextValue {
   remoteCodeChanges: RemoteCodeChange[];
   remoteCodeResyncs: RemoteCodeResync[];
   lastProgressSync: ProgressSync;
+  groupStartGate: GroupStartGateState | null;
+  lobbyMessages: LobbyChatEntry[];
   initialRoomState: RoomStateSync;
   codeSyncReady: boolean;
   updateCanvasCursor: (x: number, y: number) => void;
@@ -71,6 +78,8 @@ interface CollaborationContextValue {
   setTyping: (editorType: EditorType, levelIndex: number, isTyping: boolean) => void;
   resetRoomState: (scope: "level" | "game", levelIndex?: number) => void;
   syncProgressData: (progressData: Record<string, unknown>) => void;
+  setGroupReady: (isReady: boolean) => void;
+  sendLobbyChat: (text: string) => void;
   connect: () => void;
   disconnect: () => void;
 }
@@ -92,6 +101,8 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
   const [remoteCodeChanges, setRemoteCodeChanges] = useState<RemoteCodeChange[]>([]);
   const [remoteCodeResyncs, setRemoteCodeResyncs] = useState<RemoteCodeResync[]>([]);
   const [lastProgressSync, setLastProgressSync] = useState<ProgressSync>(null);
+  const [groupStartGate, setGroupStartGate] = useState<GroupStartGateState | null>(null);
+  const [lobbyMessages, setLobbyMessages] = useState<LobbyChatEntry[]>([]);
   const [initialRoomState, setInitialRoomState] = useState<RoomStateSync>(null);
   const [codeSyncReady, setCodeSyncReady] = useState(false);
   const remoteEventSeqRef = React.useRef(0);
@@ -245,6 +256,18 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
     setLastProgressSync(message);
   }, []);
 
+  const handleGroupStartSync = useCallback((message: GroupStartSyncMessage) => {
+    setGroupStartGate(message.gate);
+  }, []);
+
+  const handleLobbyChatSync = useCallback((message: LobbyChatSyncMessage) => {
+    setLobbyMessages(Array.isArray(message.messages) ? message.messages : []);
+  }, []);
+
+  const handleLobbyChatMessage = useCallback((message: LobbyChatEntry) => {
+    setLobbyMessages((prev) => [...prev.slice(-99), message]);
+  }, []);
+
   const handleTabFocus = useCallback((message: TabFocusMessage) => {
     updateUserTabRef.current?.(message.clientId, message.editorType, message.levelIndex);
     setEditorCursors((prev) => {
@@ -279,6 +302,9 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
     sendTypingStatus,
     sendRoomReset,
     sendProgressSync,
+    sendGroupStartReady,
+    sendGroupStartUnready,
+    sendLobbyChat,
   } = useCollaborationConnection({
     roomId: resolvedRoomId,
     user,
@@ -294,6 +320,9 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
     onTypingStatus: handleTypingStatus,
     onRoomStateSync: handleRoomStateSync,
     onProgressSync: handleProgressSync,
+    onGroupStartSync: handleGroupStartSync,
+    onLobbyChatSync: handleLobbyChatSync,
+    onLobbyChatMessage: handleLobbyChatMessage,
   });
 
   const { activeUsers, usersByTab, addUser, setUsers, removeUser, clearUsers, updateUserTab, updateUserTyping } = useCollaborationPresence({});
@@ -339,6 +368,8 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       setRemoteCodeChanges([]);
       setRemoteCodeResyncs([]);
       setLastProgressSync(null);
+      setGroupStartGate(null);
+      setLobbyMessages([]);
       setInitialRoomState(null);
       setCodeSyncReady(false);
       setCanvasCursors(new Map());
@@ -383,6 +414,14 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
     sendProgressSync(progressData);
   }, [sendProgressSync]);
 
+  const setGroupReady = useCallback((isReady: boolean) => {
+    if (isReady) {
+      sendGroupStartReady();
+      return;
+    }
+    sendGroupStartUnready();
+  }, [sendGroupStartReady, sendGroupStartUnready]);
+
   const applyEditorChangeWrapper = useCallback(
     (editorType: EditorType, changeSetJson: unknown, levelIndex: number, selection?: { from: number; to: number }) => {
       applyLocalChange(editorType, changeSetJson, levelIndex, selection);
@@ -405,6 +444,8 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       remoteCodeChanges,
       remoteCodeResyncs,
       lastProgressSync,
+      groupStartGate,
+      lobbyMessages,
       initialRoomState,
       codeSyncReady,
       updateCanvasCursor,
@@ -414,6 +455,8 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       setTyping,
       resetRoomState,
       syncProgressData,
+      setGroupReady,
+      sendLobbyChat,
       connect,
       disconnect,
     }),
@@ -431,6 +474,8 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       remoteCodeChanges,
       remoteCodeResyncs,
       lastProgressSync,
+      groupStartGate,
+      lobbyMessages,
       initialRoomState,
       codeSyncReady,
       updateCanvasCursor,
@@ -440,6 +485,8 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       setTyping,
       resetRoomState,
       syncProgressData,
+      setGroupReady,
+      sendLobbyChat,
       connect,
       disconnect,
     ]

@@ -56,23 +56,107 @@ function normalizeProgressData(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
+const GROUP_START_MIN_READY_COUNT = 2;
+
+function normalizeGroupStartGate(value: unknown) {
+  const source = value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+  const readyUserIds = Array.isArray(source.readyUserIds)
+    ? Array.from(new Set(source.readyUserIds.filter((entry): entry is string => typeof entry === "string" && entry.length > 0)))
+    : [];
+  const rawReadyUsers =
+    source.readyUsers && typeof source.readyUsers === "object" && !Array.isArray(source.readyUsers)
+      ? source.readyUsers as Record<string, unknown>
+      : {};
+  const readyUsers = readyUserIds.reduce<Record<string, Record<string, unknown>>>((acc, userId) => {
+    const user = rawReadyUsers[userId];
+    const userRecord = user && typeof user === "object" && !Array.isArray(user)
+      ? user as Record<string, unknown>
+      : {};
+    acc[userId] = {
+      userId,
+      ...(typeof userRecord.userName === "string" ? { userName: userRecord.userName } : {}),
+      ...(typeof userRecord.userEmail === "string" ? { userEmail: userRecord.userEmail } : {}),
+      ...(typeof userRecord.userImage === "string" ? { userImage: userRecord.userImage } : {}),
+      ...(typeof userRecord.readyAt === "string" ? { readyAt: userRecord.readyAt } : {}),
+    };
+    return acc;
+  }, {});
+
+  return {
+    status: source.status === "started" ? "started" as const : "waiting" as const,
+    minReadyCount: GROUP_START_MIN_READY_COUNT,
+    readyUserIds,
+    readyUsers,
+    startedAt: typeof source.startedAt === "string" ? source.startedAt : null,
+    startedByUserId: typeof source.startedByUserId === "string" ? source.startedByUserId : null,
+  };
+}
+
+function ensureGroupStartGateProgressData(
+  progressData: Record<string, unknown>,
+  collaborationMode: "group" | "individual",
+): Record<string, unknown> {
+  if (collaborationMode !== "group") {
+    return progressData;
+  }
+
+  return {
+    ...progressData,
+    groupStartGate: normalizeGroupStartGate(progressData.groupStartGate),
+  };
+}
+
 function mergeProgressData(
   existingProgressData: unknown,
   nextProgressData: unknown,
 ): Record<string, unknown> {
   const existing = normalizeProgressData(existingProgressData);
   const next = normalizeProgressData(nextProgressData);
+  const mergedGameplayTelemetry =
+    existing.gameplayTelemetry && typeof existing.gameplayTelemetry === "object" && !Array.isArray(existing.gameplayTelemetry)
+      ? existing.gameplayTelemetry as Record<string, unknown>
+      : {};
+  const nextGameplayTelemetry =
+    next.gameplayTelemetry && typeof next.gameplayTelemetry === "object" && !Array.isArray(next.gameplayTelemetry)
+      ? next.gameplayTelemetry as Record<string, unknown>
+      : {};
+  const existingGroupStartGate = normalizeGroupStartGate(existing.groupStartGate);
+  const nextHasGroupStartGate = "groupStartGate" in next;
+  const nextGroupStartGate = nextHasGroupStartGate ? normalizeGroupStartGate(next.groupStartGate) : null;
+  const gameplayTelemetry =
+    mergedGameplayTelemetry.users || nextGameplayTelemetry.users
+      ? {
+          ...mergedGameplayTelemetry,
+          ...nextGameplayTelemetry,
+          users: {
+            ...(mergedGameplayTelemetry.users && typeof mergedGameplayTelemetry.users === "object" ? mergedGameplayTelemetry.users : {}),
+            ...(nextGameplayTelemetry.users && typeof nextGameplayTelemetry.users === "object" ? nextGameplayTelemetry.users : {}),
+          },
+        }
+      : undefined;
+  const groupStartGate =
+    nextGroupStartGate
+      ? existingGroupStartGate.status === "started" && nextGroupStartGate.status !== "started"
+        ? existingGroupStartGate
+        : nextGroupStartGate
+      : ("groupStartGate" in existing ? existingGroupStartGate : undefined);
 
   if ("levels" in next) {
     return {
       ...existing,
       ...next,
+      ...(gameplayTelemetry ? { gameplayTelemetry } : {}),
+      ...(groupStartGate ? { groupStartGate } : {}),
     };
   }
 
   return {
     ...existing,
     ...next,
+    ...(gameplayTelemetry ? { gameplayTelemetry } : {}),
+    ...(groupStartGate ? { groupStartGate } : {}),
     ...(existing.levels === undefined ? {} : { levels: existing.levels }),
   };
 }
@@ -103,22 +187,26 @@ async function resolveGroupInstance(sql: Awaited<ReturnType<typeof getSql>>, gam
   );
   const existingRows = getRows(existingResult);
   if (existingRows.length) {
+    const progressData = ensureGroupStartGateProgressData(
+      normalizeProgressData(existingRows[0].progress_data),
+      "group",
+    );
     return {
       instance: {
         id: existingRows[0].id,
         scope: "group" as const,
         groupId,
         userId: null,
-        progressData: existingRows[0].progress_data ?? {},
+        progressData,
       },
     } as const;
   }
 
   const createdResult = await sql.query(
     `INSERT INTO game_instances (game_id, scope, group_id, progress_data)
-     VALUES ($1, 'group', $2, '{}')
+     VALUES ($1, 'group', $2, $3)
      RETURNING id, progress_data`,
-    [gameId, groupId],
+    [gameId, groupId, ensureGroupStartGateProgressData({}, "group")],
   );
   const createdRows = getRows(createdResult);
   return {
@@ -127,7 +215,10 @@ async function resolveGroupInstance(sql: Awaited<ReturnType<typeof getSql>>, gam
       scope: "group" as const,
       groupId,
       userId: null,
-      progressData: createdRows[0].progress_data ?? {},
+      progressData: ensureGroupStartGateProgressData(
+        normalizeProgressData(createdRows[0].progress_data),
+        "group",
+      ),
     },
   } as const;
 }
@@ -256,7 +347,10 @@ async function resolveServiceTokenAuth(request: NextRequest, gameId: string) {
           scope: "group" as const,
           groupId,
           userId: null,
-          progressData: existingRows[0].progress_data ?? {},
+          progressData: ensureGroupStartGateProgressData(
+            normalizeProgressData(existingRows[0].progress_data),
+            "group",
+          ),
         },
         collaborationMode: mode,
         mapName: (gameRows[0].map_name as string) || "",
@@ -264,9 +358,9 @@ async function resolveServiceTokenAuth(request: NextRequest, gameId: string) {
     }
     const createdResult = await sql.query(
       `INSERT INTO game_instances (game_id, scope, group_id, progress_data)
-       VALUES ($1, 'group', $2, '{}')
+       VALUES ($1, 'group', $2, $3)
        RETURNING id, progress_data`,
-      [gameId, groupId],
+      [gameId, groupId, ensureGroupStartGateProgressData({}, "group")],
     );
     const createdRows = getRows(createdResult);
     return {
@@ -275,7 +369,10 @@ async function resolveServiceTokenAuth(request: NextRequest, gameId: string) {
         scope: "group" as const,
         groupId,
         userId: null,
-        progressData: createdRows[0].progress_data ?? {},
+        progressData: ensureGroupStartGateProgressData(
+          normalizeProgressData(createdRows[0].progress_data),
+          "group",
+        ),
       },
       collaborationMode: mode,
       mapName: (gameRows[0].map_name as string) || "",

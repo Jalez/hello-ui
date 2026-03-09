@@ -5,8 +5,9 @@ export interface LtiSession {
   userId: string;
   userEmail: string;
   userName: string;
-  groupId: string;
-  groupName: string;
+  groupId: string | null;
+  groupName: string | null;
+  groupResolution?: "resolved" | "pending";
   role: "instructor" | "member";
   outcomeService?: LtiOutcomeService;
   documentTarget?: string;
