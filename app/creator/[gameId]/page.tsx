@@ -15,6 +15,7 @@ interface CreatorPageProps {
 export default function CreatorPage({ params }: CreatorPageProps) {
   const { gameId } = use(params);
   const { data: session } = useSession();
+  const hasUser = Boolean(session?.user);
   const { loadGameById, setCurrentGameId } = useGameStore();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -22,7 +23,7 @@ export default function CreatorPage({ params }: CreatorPageProps) {
 
   useEffect(() => {
     const initializeGame = async () => {
-      if (!session?.user) {
+      if (!hasUser) {
         setIsLoading(false);
         return;
       }
@@ -48,7 +49,7 @@ export default function CreatorPage({ params }: CreatorPageProps) {
     };
 
     initializeGame();
-  }, [gameId, session, loadGameById, setCurrentGameId]);
+  }, [gameId, hasUser, loadGameById, setCurrentGameId]);
 
   if (isLoading) {
     return (

@@ -90,8 +90,15 @@ export const Navbar = () => {
     recordReset(scope, currentLevel - 1);
     if (collaboration?.isConnected && collaboration.resetRoomState) {
       collaboration.resetRoomState(scope, currentLevel - 1);
+      return;
     }
-  }, [collaboration, currentGame?.id, currentLevel, recordReset]);
+
+    if (scope === "level") {
+      dispatch(resetLevel(currentLevel));
+    }
+  }, [collaboration, currentGame?.id, currentLevel, dispatch, recordReset]);
+
+  const shouldUseSharedReset = isGameRoute && Boolean(collaboration?.resetRoomState);
 
   const togglePopper = useCallback((scope: "level" | "game" = "level") => {
     setResetScope(scope);
@@ -404,7 +411,7 @@ export const Navbar = () => {
             : "This is an irreversible action. All progress will be lost, but timer is not affected. Are you sure you want to reset the level?"
         }
         title={showCreatorGameMenus ? (resetScope === "game" ? "Reset Game" : "Reset Level") : "Reset Level"}
-        handleConfirmation={showCreatorGameMenus ? () => handleSharedReset(resetScope) : handleLevelReset}
+        handleConfirmation={shouldUseSharedReset ? () => handleSharedReset(resetScope) : handleLevelReset}
         resetAnchorEl={handleAnchorElReset}
       />
     </div>

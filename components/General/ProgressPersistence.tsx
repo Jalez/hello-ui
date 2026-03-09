@@ -7,6 +7,7 @@ import { useGameStore } from "@/components/default/games";
 import { apiUrl } from "@/lib/apiUrl";
 import { useOptionalCollaboration } from "@/lib/collaboration/CollaborationProvider";
 import { mergeSavedPoints } from "@/store/slices/points.slice";
+import { addNotificationData } from "@/store/slices/notifications.slice";
 
 const SAVE_DEBOUNCE_MS = 2000;
 
@@ -14,6 +15,9 @@ function sanitizeReplayProgressData(progressData: Record<string, unknown>, repla
   const sanitized = Object.fromEntries(
     Object.entries(progressData).filter(([key]) => key !== "levels")
   );
+
+  delete sanitized.ltiGradeRefreshAt;
+  delete sanitized.resetNotice;
 
   if (replaying) {
     delete sanitized.finishedAt;
@@ -57,6 +61,8 @@ export function ProgressPersistence() {
   const lastSavedSnapshotRef = useRef<string | null>(null);
   const inFlightSnapshotRef = useRef<string | null>(null);
   const lastAppliedProgressSyncTsRef = useRef<number | null>(null);
+  const lastAppliedLtiGradeRefreshAtRef = useRef<string | null>(null);
+  const lastAppliedResetNoticeAtRef = useRef<string | null>(null);
 
   const gameId = typeof params?.gameId === "string" ? params.gameId : Array.isArray(params?.gameId) ? params.gameId[0] : null;
   const isReplayView = searchParams.get("view") === "play";
@@ -65,6 +71,8 @@ export function ProgressPersistence() {
     lastSavedSnapshotRef.current = null;
     inFlightSnapshotRef.current = null;
     lastAppliedProgressSyncTsRef.current = null;
+    lastAppliedLtiGradeRefreshAtRef.current = null;
+    lastAppliedResetNoticeAtRef.current = null;
   }, [gameId, currentGame?.id]);
 
   useEffect(() => {
@@ -99,6 +107,60 @@ export function ProgressPersistence() {
         ...currentGame,
         progressData: mergedProgressData,
       });
+    }
+
+    const ltiGradeRefreshAt =
+      typeof syncedProgressData.ltiGradeRefreshAt === "string"
+        ? syncedProgressData.ltiGradeRefreshAt
+        : null;
+
+    if (
+      ltiGradeRefreshAt &&
+      ltiGradeRefreshAt !== lastAppliedLtiGradeRefreshAtRef.current &&
+      typeof window !== "undefined" &&
+      window.parent
+    ) {
+      lastAppliedLtiGradeRefreshAtRef.current = ltiGradeRefreshAt;
+      setTimeout(() => {
+        window.parent.postMessage({ type: "a-plus-refresh-stats" }, "*");
+        if (window.top) {
+          window.top.location.reload();
+        }
+      }, 500);
+    }
+
+    const resetNotice =
+      syncedProgressData.resetNotice &&
+      typeof syncedProgressData.resetNotice === "object" &&
+      !Array.isArray(syncedProgressData.resetNotice)
+        ? syncedProgressData.resetNotice as {
+            scope?: unknown;
+            userId?: unknown;
+            userName?: unknown;
+            userEmail?: unknown;
+            at?: unknown;
+          }
+        : null;
+
+    if (
+      resetNotice?.at &&
+      typeof resetNotice.at === "string" &&
+      resetNotice.at !== lastAppliedResetNoticeAtRef.current
+    ) {
+      lastAppliedResetNoticeAtRef.current = resetNotice.at;
+      const label =
+        (typeof resetNotice.userName === "string" && resetNotice.userName) ||
+        (typeof resetNotice.userEmail === "string" && resetNotice.userEmail) ||
+        "Someone";
+      dispatch(
+        addNotificationData({
+          type: "info",
+          message:
+            resetNotice.scope === "game"
+              ? `${label} reset the game back to the template.`
+              : `${label} reset this level back to the template.`,
+        }),
+      );
     }
 
     const pointsByLevel = syncedProgressData.pointsByLevel;

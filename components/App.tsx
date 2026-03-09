@@ -23,6 +23,7 @@ import { initializePointsFromLevelsStateThunk } from "@/store/actions/score.acti
 import { mergeSavedPoints } from "@/store/slices/points.slice";
 import { ProgressionSync } from "./General/ProgressionSync";
 import { ProgressPersistence } from "./General/ProgressPersistence";
+import { GameplayTelemetryTracker } from "./General/GameplayTelemetryTracker";
 import { useGameStore } from "./default/games";
 import { useSession } from "next-auth/react";
 import type { Mode } from "@/store/slices/options.slice";
@@ -319,6 +320,7 @@ function App() {
     <SnackbarProvider>
       <ProgressionSync />
       <ProgressPersistence />
+      <GameplayTelemetryTracker />
       <article id="App" className="h-full flex flex-col justify-between">
         <LevelUpdater />
         <div className="flex-1">

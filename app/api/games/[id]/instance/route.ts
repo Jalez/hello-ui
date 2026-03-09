@@ -10,6 +10,7 @@ import {
   getRawAccessKeyFromRequest,
   resolveAccessKeyForGame,
 } from "@/app/api/_lib/services/gameService/accessCookie";
+import { getLtiSession, hasOutcomeService } from "@/lib/lti";
 
 export function getRows(result: { rows?: unknown[] } | unknown[] | null | undefined): Record<string, unknown>[] {
   if (!result) {
@@ -122,6 +123,14 @@ function mergeProgressData(
     next.gameplayTelemetry && typeof next.gameplayTelemetry === "object" && !Array.isArray(next.gameplayTelemetry)
       ? next.gameplayTelemetry as Record<string, unknown>
       : {};
+  const existingLtiGroupOutcomeTargets =
+    existing.ltiGroupOutcomeTargets && typeof existing.ltiGroupOutcomeTargets === "object" && !Array.isArray(existing.ltiGroupOutcomeTargets)
+      ? existing.ltiGroupOutcomeTargets as Record<string, unknown>
+      : {};
+  const nextLtiGroupOutcomeTargets =
+    next.ltiGroupOutcomeTargets && typeof next.ltiGroupOutcomeTargets === "object" && !Array.isArray(next.ltiGroupOutcomeTargets)
+      ? next.ltiGroupOutcomeTargets as Record<string, unknown>
+      : {};
   const existingGroupStartGate = normalizeGroupStartGate(existing.groupStartGate);
   const nextHasGroupStartGate = "groupStartGate" in next;
   const nextGroupStartGate = nextHasGroupStartGate ? normalizeGroupStartGate(next.groupStartGate) : null;
@@ -136,6 +145,13 @@ function mergeProgressData(
           },
         }
       : undefined;
+  const ltiGroupOutcomeTargets =
+    Object.keys(existingLtiGroupOutcomeTargets).length || Object.keys(nextLtiGroupOutcomeTargets).length
+      ? {
+          ...existingLtiGroupOutcomeTargets,
+          ...nextLtiGroupOutcomeTargets,
+        }
+      : undefined;
   const groupStartGate =
     nextGroupStartGate
       ? existingGroupStartGate.status === "started" && nextGroupStartGate.status !== "started"
@@ -148,6 +164,7 @@ function mergeProgressData(
       ...existing,
       ...next,
       ...(gameplayTelemetry ? { gameplayTelemetry } : {}),
+      ...(ltiGroupOutcomeTargets ? { ltiGroupOutcomeTargets } : {}),
       ...(groupStartGate ? { groupStartGate } : {}),
     };
   }
@@ -156,9 +173,62 @@ function mergeProgressData(
     ...existing,
     ...next,
     ...(gameplayTelemetry ? { gameplayTelemetry } : {}),
+    ...(ltiGroupOutcomeTargets ? { ltiGroupOutcomeTargets } : {}),
     ...(groupStartGate ? { groupStartGate } : {}),
     ...(existing.levels === undefined ? {} : { levels: existing.levels }),
   };
+}
+
+async function attachCurrentLtiOutcomeTarget(
+  instanceId: string,
+  existingProgressData: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const ltiSession = await getLtiSession();
+  if (!ltiSession || !hasOutcomeService(ltiSession)) {
+    return existingProgressData;
+  }
+
+  const userId = ltiSession.userId;
+  if (!userId) {
+    return existingProgressData;
+  }
+
+  const currentTargets =
+    existingProgressData.ltiGroupOutcomeTargets &&
+    typeof existingProgressData.ltiGroupOutcomeTargets === "object" &&
+    !Array.isArray(existingProgressData.ltiGroupOutcomeTargets)
+      ? existingProgressData.ltiGroupOutcomeTargets as Record<string, unknown>
+      : {};
+  const currentTarget =
+    currentTargets[userId] && typeof currentTargets[userId] === "object" && !Array.isArray(currentTargets[userId])
+      ? currentTargets[userId] as Record<string, unknown>
+      : null;
+
+  if (currentTarget?.sourcedid === ltiSession.outcomeService.sourcedid) {
+    return existingProgressData;
+  }
+
+  const nextProgressData = {
+    ...existingProgressData,
+    ltiGroupOutcomeTargets: {
+      ...currentTargets,
+      [userId]: {
+        userId,
+        userEmail: ltiSession.userEmail,
+        userName: ltiSession.userName,
+        sourcedid: ltiSession.outcomeService.sourcedid,
+        updatedAt: new Date().toISOString(),
+      },
+    },
+  };
+
+  const { persistedProgressData } = await updateInstanceProgressData(
+    instanceId,
+    existingProgressData,
+    nextProgressData,
+  );
+
+  return normalizeProgressData(persistedProgressData);
 }
 
 async function updateInstanceProgressData(
@@ -485,11 +555,22 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: resolved.error }, { status: resolved.status });
     }
 
+    const instance =
+      mode === "group"
+        ? {
+            ...resolved.instance,
+            progressData: await attachCurrentLtiOutcomeTarget(
+              String(resolved.instance.id),
+              normalizeProgressData(resolved.instance.progressData),
+            ),
+          }
+        : resolved.instance;
+
     const response = NextResponse.json({
       gameId: id,
       collaborationMode: mode,
       mapName: game.map_name,
-      instance: resolved.instance,
+      instance,
     });
     attachGameAccessCookie(request, response, game, rawAccessKey);
     return response;
@@ -512,11 +593,22 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ error: resolved.error }, { status: resolved.status });
   }
 
+  const instance =
+    mode === "group"
+      ? {
+          ...resolved.instance,
+          progressData: await attachCurrentLtiOutcomeTarget(
+            String(resolved.instance.id),
+            normalizeProgressData(resolved.instance.progressData),
+          ),
+        }
+      : resolved.instance;
+
   return NextResponse.json({
     gameId: id,
     collaborationMode: mode,
     mapName: game.map_name,
-    instance: resolved.instance,
+    instance,
   });
 }
 

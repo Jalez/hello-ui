@@ -106,6 +106,7 @@ function createDraft(game: {
 export default function CreatorSettingsPage({ params }: CreatorSettingsPageProps) {
   const { gameId } = use(params);
   const { data: session } = useSession();
+  const hasUser = Boolean(session?.user);
   const { loadGameById, setCurrentGameId, getCurrentGame, updateGame } = useGameStore();
 
   const levels = useAppSelector((state) => state.levels);
@@ -136,7 +137,7 @@ export default function CreatorSettingsPage({ params }: CreatorSettingsPageProps
 
   useEffect(() => {
     const initializeGame = async () => {
-      if (!session?.user) {
+      if (!hasUser) {
         setIsLoading(false);
         return;
       }
@@ -180,7 +181,7 @@ export default function CreatorSettingsPage({ params }: CreatorSettingsPageProps
     };
 
     initializeGame();
-  }, [gameId, session, loadGameById, setCurrentGameId]);
+  }, [gameId, hasUser, loadGameById, setCurrentGameId]);
 
   const hasChanges = useMemo(() => {
     if (!draft || !initialDraft) return false;

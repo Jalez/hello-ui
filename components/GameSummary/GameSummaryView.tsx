@@ -1,10 +1,12 @@
 'use client';
 
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { CheckCircle2, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { stripBasePath } from "@/lib/apiUrl";
+import { apiUrl, stripBasePath } from "@/lib/apiUrl";
+import { LeaderboardDialog } from "@/components/GameStatistics/LeaderboardDialog";
+import { useGameStore } from "@/components/default/games";
 
 export interface GameSummaryData {
   finishedAt?: string;
@@ -13,21 +15,72 @@ export interface GameSummaryData {
 }
 
 interface GameSummaryViewProps {
+  gameId: string;
   gameTitle?: string;
   progressData: GameSummaryData;
   className?: string;
 }
 
-export function GameSummaryView({ gameTitle, progressData, className = "" }: GameSummaryViewProps) {
+function stripCodeLevelsFromProgressData(progressData: Record<string, unknown>) {
+  return Object.fromEntries(
+    Object.entries(progressData).filter(([key]) => key !== "levels")
+  );
+}
+
+export function GameSummaryView({ gameId, gameTitle, progressData, className = "" }: GameSummaryViewProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const normalizedPathname = stripBasePath(pathname);
   const searchParams = useSearchParams();
+  const currentGame = useGameStore((state) => state.getCurrentGame());
+  const addGameToStore = useGameStore((state) => state.addGameToStore);
   const finishedAt = progressData.finishedAt;
   const finalScore = progressData.finalScore;
 
   const params = new URLSearchParams(searchParams.toString());
   params.set("view", "play");
   const gamePageHref = `${normalizedPathname}?${params.toString()}`;
+
+  const handleBackToGame = async () => {
+    if (!currentGame) {
+      router.push(gamePageHref);
+      return;
+    }
+
+    const currentProgressData =
+      currentGame.progressData && typeof currentGame.progressData === "object" && !Array.isArray(currentGame.progressData)
+        ? currentGame.progressData
+        : {};
+    const nextProgressData = stripCodeLevelsFromProgressData({ ...currentProgressData });
+    delete nextProgressData.finishedAt;
+    delete nextProgressData.finalScore;
+
+    addGameToStore({
+      ...currentGame,
+      progressData: nextProgressData,
+    });
+
+    const query = new URLSearchParams();
+    query.set("accessContext", "game");
+    const groupId = searchParams.get("groupId");
+    const guestId = searchParams.get("guestId");
+    const key = searchParams.get("key");
+    if (groupId) query.set("groupId", groupId);
+    if (guestId) query.set("guestId", guestId);
+    if (key) query.set("key", key);
+
+    try {
+      await fetch(`${apiUrl(`/api/games/${gameId}/instance`)}?${query.toString()}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ progressData: nextProgressData }),
+      });
+    } catch {
+      // Local state already reflects replay mode; persistence can catch up later.
+    }
+
+    router.push(gamePageHref);
+  };
 
   if (!finishedAt) {
     return null;
@@ -74,11 +127,10 @@ export function GameSummaryView({ gameTitle, progressData, className = "" }: Gam
         </p>
 
         <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
-          <Button asChild variant="outline" className="gap-2">
-            <Link href={gamePageHref}>
-              <ArrowLeft className="h-4 w-4" />
-              Back to game
-            </Link>
+          <LeaderboardDialog gameId={gameId} gameTitle={gameTitle} />
+          <Button variant="outline" className="gap-2" onClick={handleBackToGame}>
+            <ArrowLeft className="h-4 w-4" />
+            Back to game
           </Button>
           <Button asChild variant="secondary" className="gap-2">
             <Link href="/games">View all games</Link>
