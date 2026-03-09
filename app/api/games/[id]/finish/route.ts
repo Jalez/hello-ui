@@ -5,6 +5,7 @@ import { getSql } from "@/app/api/_lib/db";
 import { evaluateGameRouteAccess, getGameById, getGameByIdForGameplay } from "@/app/api/_lib/services/gameService";
 import { resolveAccessKeyForGame } from "@/app/api/_lib/services/gameService/accessCookie";
 import { getOrCreateUserByEmail } from "@/app/api/_lib/services/userService";
+import { finalizeGameAttempt } from "@/app/api/_lib/services/gameStatisticsService";
 import {
   accessDenied,
   getRows,
@@ -22,6 +23,7 @@ export async function POST(
     points?: number;
     maxPoints?: number;
     pointsByLevel?: Record<string, { points?: number; maxPoints?: number; accuracy?: number; bestTime?: string; scenarios?: { scenarioId: string; accuracy: number }[] }>;
+    progressData?: Record<string, unknown>;
   } = {};
   try {
     body = await request.json();
@@ -88,9 +90,41 @@ export async function POST(
   }
 
   const existing = (resolved.instance.progressData || {}) as Record<string, unknown>;
+  const incomingProgressData =
+    body.progressData && typeof body.progressData === "object" && !Array.isArray(body.progressData)
+      ? body.progressData
+      : {};
+  const existingGameplayTelemetry =
+    existing.gameplayTelemetry && typeof existing.gameplayTelemetry === "object" && !Array.isArray(existing.gameplayTelemetry)
+      ? existing.gameplayTelemetry as Record<string, unknown>
+      : {};
+  const incomingGameplayTelemetry =
+    incomingProgressData.gameplayTelemetry &&
+    typeof incomingProgressData.gameplayTelemetry === "object" &&
+    !Array.isArray(incomingProgressData.gameplayTelemetry)
+      ? incomingProgressData.gameplayTelemetry as Record<string, unknown>
+      : {};
+  const finishedAt = new Date();
   const progressData: Record<string, unknown> = {
     ...existing,
-    finishedAt: new Date().toISOString(),
+    ...incomingProgressData,
+    ...((existingGameplayTelemetry.users || incomingGameplayTelemetry.users)
+      ? {
+          gameplayTelemetry: {
+            ...existingGameplayTelemetry,
+            ...incomingGameplayTelemetry,
+            users: {
+              ...(existingGameplayTelemetry.users && typeof existingGameplayTelemetry.users === "object"
+                ? existingGameplayTelemetry.users
+                : {}),
+              ...(incomingGameplayTelemetry.users && typeof incomingGameplayTelemetry.users === "object"
+                ? incomingGameplayTelemetry.users
+                : {}),
+            },
+          },
+        }
+      : {}),
+    finishedAt: finishedAt.toISOString(),
     finalScore: { points, maxPoints },
   };
   if (body.pointsByLevel && typeof body.pointsByLevel === "object" && !Array.isArray(body.pointsByLevel)) {
@@ -103,12 +137,34 @@ export async function POST(
     [resolved.instance.id, progressData]
   );
   const updatedRows = getRows(updatedResult);
+  const persistedProgressData =
+    (updatedRows[0] as { progress_data?: Record<string, unknown> })?.progress_data ?? progressData;
+
+  const actorDisplayName = session?.user?.name || session?.user?.email || (actorUserId ? "Guest" : null);
+  const resolvedUserId = mode === "individual" ? actorUserId : null;
+  const resolvedGroupId = mode === "group" ? (resolved.instance.groupId ?? request.nextUrl.searchParams.get("groupId")) : null;
+
+  const statistics = await finalizeGameAttempt({
+    gameId,
+    mapName: game.map_name,
+    instanceId: String(resolved.instance.id),
+    scope: mode,
+    userId: resolvedUserId,
+    groupId: resolvedGroupId,
+    playerDisplayName: actorDisplayName,
+    points,
+    maxPoints,
+    progressData: persistedProgressData,
+    pointsByLevel: body.pointsByLevel,
+    finishedAt,
+  });
 
   return NextResponse.json({
     success: true,
+    statistics,
     instance: {
       ...resolved.instance,
-      progressData: (updatedRows[0] as { progress_data?: Record<string, unknown> })?.progress_data ?? progressData,
+      progressData: persistedProgressData,
     },
   });
 }

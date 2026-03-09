@@ -30,6 +30,7 @@ const ADMIN_SCHEMA = resolve(SCRIPT_DIR, "sql/admin-schema.sql");
 const PROJECTS_SCHEMA = resolve(SCRIPT_DIR, "sql/projects-schema.sql");
 const UI_DESIGNER_SCHEMA = resolve(SCRIPT_DIR, "sql/ui-designer-schema.sql");
 const GROUPS_SCHEMA = resolve(SCRIPT_DIR, "sql/groups-schema.sql");
+const GAME_STATISTICS_SCHEMA = resolve(SCRIPT_DIR, "sql/game-statistics-schema.sql");
 const WEBHOOK_SCHEMA = resolve(SCRIPT_DIR, "sql/webhook-schema.sql");
 const AI_SCHEMA = resolve(SCRIPT_DIR, "sql/ai-schema.sql");
 const LTI_CREDENTIALS_SCHEMA = resolve(SCRIPT_DIR, "sql/lti-credentials-schema.sql");
@@ -131,12 +132,17 @@ async function initializeDatabase() {
     await client.query(groupsSQL);
 
     console.log("");
-    console.log("🪝 Step 7/9: Applying webhook schema (webhook processing, idempotency)...");
+    console.log("📊 Step 7/10: Applying game statistics schema (leaderboards, analytics)...");
+    const gameStatisticsSQL = readFileSync(GAME_STATISTICS_SCHEMA, "utf-8");
+    await client.query(gameStatisticsSQL);
+
+    console.log("");
+    console.log("🪝 Step 8/10: Applying webhook schema (webhook processing, idempotency)...");
     const webhookSQL = readFileSync(WEBHOOK_SCHEMA, "utf-8");
     await client.query(webhookSQL);
 
     console.log("");
-    console.log("🔑 Step 8/9: Applying LTI credentials schema (per-user LTI keys) [OPTIONAL]...");
+    console.log("🔑 Step 9/10: Applying LTI credentials schema (per-user LTI keys) [OPTIONAL]...");
 
     try {
       const ltiCredentialsSQL = readFileSync(LTI_CREDENTIALS_SCHEMA, "utf-8");
@@ -151,7 +157,7 @@ async function initializeDatabase() {
     }
 
     console.log("");
-    console.log("🤖 Step 9/9: Applying AI schema (models, providers) [OPTIONAL]...");
+    console.log("🤖 Step 10/10: Applying AI schema (models, providers) [OPTIONAL]...");
 
     try {
       const aiSQL = readFileSync(AI_SCHEMA, "utf-8");

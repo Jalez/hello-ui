@@ -55,6 +55,7 @@ async function main() {
 
   const optional = [
     "groups-schema.sql",
+    "game-statistics-schema.sql",
     "games-migration.sql",
     "lti-credentials-schema.sql",
     "group-game-migration.sql",
