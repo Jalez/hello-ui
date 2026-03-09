@@ -106,7 +106,6 @@ export default function CodeEditor({
     if (pendingCode === null || applyingExternalUpdateRef.current || pendingCode === template) {
       return;
     }
-
     codeUpdater({ [title.toLowerCase()]: pendingCode }, type);
   }, [applyingExternalUpdateRef, codeUpdater, template, title, type]);
 
