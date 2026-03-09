@@ -16,6 +16,8 @@ const isValidUUID = (str: string): boolean => UUID_REGEX.test(str);
 // Module-level guard: prevents duplicate POST requests when multiple hook instances
 // exist (e.g. two <CreatorControls> rendered for responsive layouts).
 let globalCreateInFlight = false;
+const globalSaveTokensInFlight = new Set<string>();
+const globalLastSavedSnapshotByLevel = new Map<string, string>();
 
 export const useLevelSaver = () => {
   const dispatch = useAppDispatch();
@@ -31,6 +33,14 @@ export const useLevelSaver = () => {
   const pendingSaveCountRef = useRef(0);
   const autoSaveScheduledRef = useRef(false);
   const createInFlightRef = useRef(false);
+
+  const getLevelAutosaveKey = (levelToSave: typeof level): string => {
+    const stableIdentifier =
+      levelToSave?.identifier && isValidUUID(levelToSave.identifier)
+        ? levelToSave.identifier
+        : `${currentGame?.id || currentGame?.mapName || "local"}:${currentLevel}:${levelToSave?.name || "unnamed"}`;
+    return stableIdentifier;
+  };
 
   const serializeLevel = (levelToSerialize: typeof level): string =>
     JSON.stringify(levelToSerialize ?? null);
@@ -52,10 +62,19 @@ export const useLevelSaver = () => {
       // Avoid duplicate creates for a brand-new unsaved level while create request is in flight.
       return;
     }
+    const levelAutosaveKey = getLevelAutosaveKey(levelToSave);
+    const levelSnapshot = serializeLevel(levelToSave);
+    const saveToken = `${levelAutosaveKey}:${levelSnapshot}`;
+    if (globalSaveTokensInFlight.has(saveToken)) {
+      return;
+    }
+    if (globalLastSavedSnapshotByLevel.get(levelAutosaveKey) === levelSnapshot) {
+      return;
+    }
     const url = isUpdate ? `${levelUrl}/${levelToSave.identifier}` : levelUrl;
     const method = isUpdate ? "PUT" : "POST";
 
-    const { identifier, name, ...json } = levelToSave;
+    const { name, ...json } = levelToSave;
     const body = { name, ...json };
 
     pendingSaveCountRef.current += 1;
@@ -66,6 +85,7 @@ export const useLevelSaver = () => {
       createInFlightRef.current = true;
       globalCreateInFlight = true;
     }
+    globalSaveTokensInFlight.add(saveToken);
     try {
       const response = await fetch(url, {
         method,
@@ -96,9 +116,11 @@ export const useLevelSaver = () => {
         }
       }
 
-      lastSavedSnapshotRef.current = serializeLevel(levelToSave);
+      lastSavedSnapshotRef.current = levelSnapshot;
+      globalLastSavedSnapshotByLevel.set(levelAutosaveKey, levelSnapshot);
       dispatch(setLastSaved(Date.now()));
     } finally {
+      globalSaveTokensInFlight.delete(saveToken);
       if (!isUpdate) {
         createInFlightRef.current = false;
         globalCreateInFlight = false;
@@ -132,12 +154,17 @@ export const useLevelSaver = () => {
     if (!isCreator || !autoSaveEnabled || !level) return;
 
     const currentSnapshot = serializeLevel(level);
+    const currentLevelAutosaveKey = getLevelAutosaveKey(level);
     if (!isMounted.current) {
       isMounted.current = true;
       lastSavedSnapshotRef.current = currentSnapshot;
+      globalLastSavedSnapshotByLevel.set(currentLevelAutosaveKey, currentSnapshot);
       return;
     }
-    if (lastSavedSnapshotRef.current === currentSnapshot) {
+    if (
+      lastSavedSnapshotRef.current === currentSnapshot ||
+      globalLastSavedSnapshotByLevel.get(currentLevelAutosaveKey) === currentSnapshot
+    ) {
       if (autoSaveTimer.current) {
         clearTimeout(autoSaveTimer.current);
         autoSaveTimer.current = null;

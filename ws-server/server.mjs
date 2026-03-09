@@ -1121,6 +1121,8 @@ wsServer.on("connection", (socket) => {
           return;
         }
 
+        const room = rooms.get(roomId);
+        const resetUser = room?.get(socket) || null;
         const scope = data?.scope === "game" ? "game" : "level";
         const levelIndex = Number.isInteger(data?.levelIndex) ? data.levelIndex : 0;
         const currentState = await ensureRoomState(roomId, ctx);
@@ -1148,6 +1150,7 @@ wsServer.on("connection", (socket) => {
           }
           nextState.levels[levelIndex] = createLevelState(templateLevel);
         }
+        applyStartedGateToLevels(nextState);
         roomEditorState.set(roomId, nextState);
 
         const existingBuffer = roomWriteBuffer.get(roomId);
@@ -1161,11 +1164,49 @@ wsServer.on("connection", (socket) => {
           markRoomDirty(roomId, ctx);
         }
 
+        const resyncIndices =
+          scope === "game"
+            ? nextState.levels.map((_, index) => index)
+            : [levelIndex];
+        for (const resyncLevelIndex of resyncIndices) {
+          const resyncLevel = nextState.levels[resyncLevelIndex];
+          if (!resyncLevel) {
+            continue;
+          }
+          for (const editorType of EDITOR_TYPES) {
+            broadcastToRoom(roomId, "editor-resync", {
+              roomId,
+              groupId: extractGroupIdFromRoomId(roomId),
+              editorType,
+              levelIndex: resyncLevelIndex,
+              content: resyncLevel.code[editorType],
+              version: resyncLevel.versions[editorType] || 0,
+              ts: Date.now(),
+            });
+          }
+        }
+
         broadcastToRoom(roomId, "room-state-sync", serializeRoomStateSync(nextState));
         const groupStartSync = serializeGroupStartSync(roomId, nextState);
         if (groupStartSync) {
           broadcastToRoom(roomId, "group-start-sync", groupStartSync);
         }
+        const resetNotice = {
+          scope,
+          levelIndex,
+          userId: resetUser?.userId || (typeof data?.userId === "string" ? data.userId : ""),
+          ...(typeof resetUser?.userName === "string" && resetUser.userName
+            ? { userName: resetUser.userName }
+            : {}),
+          ...(typeof resetUser?.userEmail === "string" && resetUser.userEmail
+            ? { userEmail: resetUser.userEmail }
+            : {}),
+          at: new Date().toISOString(),
+        };
+        broadcastToRoom(roomId, "progress-sync", {
+          progressData: { resetNotice },
+          ts: Date.now(),
+        }, socket);
         console.log(`[room-state-sync:emit] room=${roomId} by=${socketId} reason=reset scope=${scope} levelIndex=${levelIndex}`);
         return;
       }

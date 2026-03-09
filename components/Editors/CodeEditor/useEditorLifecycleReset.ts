@@ -28,6 +28,7 @@ export function useEditorLifecycleReset({
 }: UseEditorLifecycleResetOptions) {
   const applyingExternalUpdateRef = useRef(false);
   const lastLevelIdentifierRef = useRef(levelIdentifier);
+  const lastTemplateRef = useRef(template);
 
   useEffect(() => {
     const levelChanged = lastLevelIdentifierRef.current !== levelIdentifier;
@@ -78,6 +79,33 @@ export function useEditorLifecycleReset({
       applyingExternalUpdateRef.current = false;
     }
   }, [code, template]);
+
+  useEffect(() => {
+    const templateChanged = lastTemplateRef.current !== template;
+    lastTemplateRef.current = template;
+
+    if (!templateChanged || code === template) {
+      return;
+    }
+
+    lastSyncedCodeRef.current = template;
+    applyingExternalUpdateRef.current = true;
+    suppressCollaborationUpdateRef.current = true;
+    pendingChangeSetRef.current = null;
+    if (syncTimeoutRef.current) {
+      clearTimeout(syncTimeoutRef.current);
+      syncTimeoutRef.current = null;
+    }
+    setCode(template);
+  }, [
+    code,
+    lastSyncedCodeRef,
+    pendingChangeSetRef,
+    setCode,
+    suppressCollaborationUpdateRef,
+    syncTimeoutRef,
+    template,
+  ]);
 
   return {
     applyingExternalUpdateRef,
