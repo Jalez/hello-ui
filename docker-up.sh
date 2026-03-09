@@ -60,6 +60,15 @@ if [[ "$(hostname)" =~ tie-lukioplus.rd.tuni.fi ]]; then
     ui-designer-db-init
   echo "Migrations complete."
 
+  # 3.5 Apply latest Drizzle schema changes so newly added tables/columns exist
+  echo "Running Drizzle schema push..."
+  docker run --rm --network "${NETWORK_NAME}" \
+    -e DATABASE_URL=postgresql://postgres:postgres@db:5432/ui_designer \
+    -e DB_CLIENT=postgres \
+    ui-designer-app:latest \
+    bash -lc "cd /app && pnpm db:push"
+  echo "Drizzle schema push complete."
+
   # 4. Bring up all services (images already built, no --build needed)
   docker-compose --file ${COMPOSE_YML} up -d
 else

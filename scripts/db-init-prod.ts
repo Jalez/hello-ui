@@ -24,6 +24,7 @@ const SCRIPT_DIR = __dirname;
 const DOCUMENTS_SCHEMA = resolve(SCRIPT_DIR, "sql/documents-schema.sql");
 const CREDITS_SCHEMA = resolve(SCRIPT_DIR, "sql/credits-schema.sql");
 const ADMIN_SCHEMA = resolve(SCRIPT_DIR, "sql/admin-schema.sql");
+const GAME_STATISTICS_SCHEMA = resolve(SCRIPT_DIR, "sql/game-statistics-schema.sql");
 const AI_SCHEMA = resolve(SCRIPT_DIR, "sql/ai-schema.sql");
 
 const pool = new Pool({
@@ -54,7 +55,12 @@ async function initializeProductionDatabase() {
     await client.query(adminSQL);
 
     console.log("");
-    console.log("🤖 Step 4/4: Applying AI schema (models, providers) [PRODUCTION]...");
+    console.log("📊 Step 4/5: Applying game statistics schema (leaderboards, analytics)...");
+    const gameStatisticsSQL = readFileSync(GAME_STATISTICS_SCHEMA, "utf-8");
+    await client.query(gameStatisticsSQL);
+
+    console.log("");
+    console.log("🤖 Step 5/5: Applying AI schema (models, providers) [PRODUCTION]...");
     console.log("   Note: Applying AI schema with production-ready services...");
 
     try {

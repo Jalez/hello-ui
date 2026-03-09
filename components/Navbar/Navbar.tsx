@@ -3,7 +3,7 @@
 import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
 import { addNotificationData } from "@/store/slices/notifications.slice";
 import { Button } from "@/components/ui/button";
-import { RotateCcw, PanelLeft, Map, Flag, Settings, Trash2, Loader2, Gamepad2 } from "lucide-react";
+import { RotateCcw, PanelLeft, Map, Flag, Settings, Trash2, Loader2, Gamepad2, BarChart3 } from "lucide-react";
 import LevelControls from "@/components/General/LevelControls/LevelControls";
 import { setCurrentLevel } from "@/store/slices/currentLevel.slice";
 import { resetLevel } from "@/store/slices/levels.slice";
@@ -36,6 +36,7 @@ import { useGameStore } from "@/components/default/games";
 import { CreatorMenu } from "./CreatorMenu";
 import { useOptionalCollaboration } from "@/lib/collaboration/CollaborationProvider";
 import { apiUrl, stripBasePath } from "@/lib/apiUrl";
+import { useGameplayTelemetry } from "@/components/General/useGameplayTelemetry";
 
 export const Navbar = () => {
   const dispatch = useAppDispatch();
@@ -50,6 +51,7 @@ export const Navbar = () => {
   const isCreator = useAppSelector((state) => state.options.creator);
   const currentGame = useGameStore((state) => state.getCurrentGame());
   const collaboration = useOptionalCollaboration();
+  const { recordReset } = useGameplayTelemetry();
   const canEditCurrentGame = Boolean(currentGame?.canEdit ?? currentGame?.isOwner);
   const isGameRoute = normalizedPathname.startsWith("/game/");
   const shouldHideSidebarForPlayers = isGameRoute && Boolean(currentGame?.hideSidebar) && !canEditCurrentGame;
@@ -69,24 +71,27 @@ export const Navbar = () => {
   const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
   const [resetScope, setResetScope] = useState<"level" | "game">("level");
   const [isResettingInstances, setIsResettingInstances] = useState(false);
+  const [isFinishDialogOpen, setIsFinishDialogOpen] = useState(false);
 
   const levelChanger = useCallback((pickedLevel: number) => {
     dispatch(setCurrentLevel(pickedLevel));
   }, [dispatch]);
 
   const handleLevelReset = useCallback(() => {
+    recordReset("level", currentLevel - 1);
     dispatch(resetLevel(currentLevel));
-  }, [currentLevel, dispatch]);
+  }, [currentLevel, dispatch, recordReset]);
 
   const handleSharedReset = useCallback((scope: "level" | "game") => {
     if (!currentGame?.id) {
       return;
     }
 
+    recordReset(scope, currentLevel - 1);
     if (collaboration?.isConnected && collaboration.resetRoomState) {
       collaboration.resetRoomState(scope, currentLevel - 1);
     }
-  }, [collaboration, currentGame?.id, currentLevel]);
+  }, [collaboration, currentGame?.id, currentLevel, recordReset]);
 
   const togglePopper = useCallback((scope: "level" | "game" = "level") => {
     setResetScope(scope);
@@ -137,6 +142,50 @@ export const Navbar = () => {
     }
   }, [currentGame?.id, dispatch]);
 
+  const handleResetLeaderboard = useCallback(async () => {
+    if (!currentGame?.id) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Reset all leaderboard data for this game? This deletes recorded attempt statistics but does not remove the game itself.",
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setIsResettingInstances(true);
+      const response = await fetch(apiUrl(`/api/games/${currentGame.id}/leaderboard/reset`), {
+        method: "POST",
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to reset leaderboard");
+      }
+
+      dispatch(
+        addNotificationData({
+          type: "success",
+          message:
+            data.deletedAttempts > 0
+              ? `Reset leaderboard for ${data.deletedAttempts} attempt${data.deletedAttempts === 1 ? "" : "s"}.`
+              : "No leaderboard data to reset.",
+        }),
+      );
+    } catch (error) {
+      dispatch(
+        addNotificationData({
+          type: "error",
+          message: error instanceof Error ? error.message : "Failed to reset leaderboard",
+        }),
+      );
+    } finally {
+      setIsResettingInstances(false);
+    }
+  }, [currentGame?.id, dispatch]);
+
   const handleAnchorElReset = useCallback(() => {
     setIsResetDialogOpen(false);
   }, []);
@@ -172,17 +221,10 @@ export const Navbar = () => {
               <RotateCcw className="h-4 w-4 mr-2" />
               Reset Game
             </DropdownMenuItem>
-            <AplusSubmitButton
-              renderTrigger={({ openDialog }) => (
-                <DropdownMenuItem onSelect={(event) => {
-                  event.preventDefault();
-                  openDialog();
-                }}>
-                  <Flag className="h-4 w-4 mr-2" />
-                  Finish Game
-                </DropdownMenuItem>
-              )}
-            />
+            <DropdownMenuItem onSelect={() => setIsFinishDialogOpen(true)}>
+              <Flag className="h-4 w-4 mr-2" />
+              Finish Game
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
           </>
         )}
@@ -193,6 +235,12 @@ export const Navbar = () => {
         {currentGame?.id && canEditCurrentGame && (
           <>
             <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link href={`/creator/${currentGame.id}/statistics`}>
+                <BarChart3 className="h-4 w-4 mr-2" />
+                Statistics
+              </Link>
+            </DropdownMenuItem>
             <DropdownMenuItem onSelect={handleResetGameInstances} disabled={isResettingInstances}>
               {isResettingInstances ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -200,6 +248,14 @@ export const Navbar = () => {
                 <Trash2 className="h-4 w-4 mr-2" />
               )}
               Reset Game Instances
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={handleResetLeaderboard} disabled={isResettingInstances}>
+              {isResettingInstances ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Trash2 className="h-4 w-4 mr-2" />
+              )}
+              Reset Leaderboard
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
               <Link href={`/creator/${currentGame.id}/settings`}>
@@ -331,6 +387,11 @@ export const Navbar = () => {
 
       {/* Game Levels dialog controlled from navbar menu */}
       <MapEditor ref={mapEditorRef} renderButton={false} />
+      <AplusSubmitButton
+        open={isFinishDialogOpen}
+        onOpenChange={setIsFinishDialogOpen}
+        renderTrigger={() => null}
+      />
 
       {/* Dialog for reset confirmation */}
       <NavPopper

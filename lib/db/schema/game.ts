@@ -1,4 +1,5 @@
 import { pgTable, uuid, text, integer, boolean, jsonb, timestamp, index, primaryKey } from "drizzle-orm/pg-core";
+import { groups } from "./groups";
 
 export const levels = pgTable(
   "levels",
@@ -120,5 +121,101 @@ export const gameInstances = pgTable(
     index("idx_game_instances_user_id").on(table.userId),
     index("idx_game_instances_scope").on(table.scope),
     index("idx_game_instances_updated_at").on(table.updatedAt),
+  ],
+);
+
+export const gameAttempts = pgTable(
+  "game_attempts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    gameId: uuid("game_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+    instanceId: uuid("instance_id").references(() => gameInstances.id, { onDelete: "set null" }),
+    userId: uuid("user_id"),
+    groupId: uuid("group_id").references(() => groups.id, { onDelete: "set null" }),
+    scope: text("scope").notNull(),
+    playerDisplayName: text("player_display_name"),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }).notNull(),
+    durationMs: integer("duration_ms"),
+    finalPoints: integer("final_points").notNull().default(0),
+    maxPoints: integer("max_points").notNull().default(0),
+    accuracyPercent: integer("accuracy_percent").notNull().default(0),
+    attemptNumber: integer("attempt_number").notNull().default(1),
+    isFinished: boolean("is_finished").notNull().default(true),
+    metadata: jsonb("metadata").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("idx_game_attempts_game_id").on(table.gameId),
+    index("idx_game_attempts_finished_at").on(table.finishedAt),
+    index("idx_game_attempts_game_score_time").on(table.gameId, table.finalPoints, table.durationMs),
+    index("idx_game_attempts_user_id").on(table.userId),
+    index("idx_game_attempts_group_id").on(table.groupId),
+    index("idx_game_attempts_instance_id").on(table.instanceId),
+  ],
+);
+
+export const gameAttemptLevels = pgTable(
+  "game_attempt_levels",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    attemptId: uuid("attempt_id").notNull().references(() => gameAttempts.id, { onDelete: "cascade" }),
+    levelIndex: integer("level_index").notNull(),
+    levelName: text("level_name").notNull(),
+    points: integer("points").notNull().default(0),
+    maxPoints: integer("max_points").notNull().default(0),
+    accuracyPercent: integer("accuracy_percent").notNull().default(0),
+    bestTimeMs: integer("best_time_ms"),
+    rawBestTime: text("raw_best_time"),
+    difficulty: text("difficulty"),
+    metadata: jsonb("metadata").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("idx_game_attempt_levels_attempt_id").on(table.attemptId),
+    index("idx_game_attempt_levels_level_index").on(table.levelIndex),
+  ],
+);
+
+export const gameAttemptParticipants = pgTable(
+  "game_attempt_participants",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    attemptId: uuid("attempt_id").notNull().references(() => gameAttempts.id, { onDelete: "cascade" }),
+    userId: uuid("user_id"),
+    displayName: text("display_name"),
+    contributionScore: integer("contribution_score").notNull().default(0),
+    pasteCount: integer("paste_count").notNull().default(0),
+    largePasteCount: integer("large_paste_count").notNull().default(0),
+    focusLossCount: integer("focus_loss_count").notNull().default(0),
+    activeEditMs: integer("active_edit_ms").notNull().default(0),
+    editCount: integer("edit_count").notNull().default(0),
+    resetLevelCount: integer("reset_level_count").notNull().default(0),
+    resetGameCount: integer("reset_game_count").notNull().default(0),
+    metadata: jsonb("metadata").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("idx_game_attempt_participants_attempt_id").on(table.attemptId),
+    index("idx_game_attempt_participants_user_id").on(table.userId),
+  ],
+);
+
+export const gameAttemptEvents = pgTable(
+  "game_attempt_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    attemptId: uuid("attempt_id").notNull().references(() => gameAttempts.id, { onDelete: "cascade" }),
+    userId: uuid("user_id"),
+    levelIndex: integer("level_index"),
+    eventType: text("event_type").notNull(),
+    eventValue: jsonb("event_value").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("idx_game_attempt_events_attempt_id").on(table.attemptId),
+    index("idx_game_attempt_events_user_id").on(table.userId),
+    index("idx_game_attempt_events_level_index").on(table.levelIndex),
   ],
 );

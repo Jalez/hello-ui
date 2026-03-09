@@ -5,6 +5,8 @@ import { apiUrl } from "@/lib/apiUrl";
 import Link from "next/link";
 import { Globe, KeyRound, Layers3, Loader2, Skull, Unlock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { LeaderboardDialog } from "@/components/GameStatistics/LeaderboardDialog";
 
 interface PublicGame {
   id: string;
@@ -59,35 +61,36 @@ export default function GamesPage() {
         ].filter(Boolean) as string[];
 
         return (
-          <Link
+          <div
             key={game.id}
-            href={href}
             className="group w-full max-w-[300px] rounded-xl border bg-card hover:shadow-md transition overflow-hidden"
           >
-            <div className="relative aspect-square w-full max-w-[300px] bg-muted flex items-center justify-center overflow-hidden">
-              {languageBadges.length > 0 && (
-                <div className="absolute left-3 top-3 z-10 flex flex-wrap gap-1.5">
-                  {languageBadges.map((label) => (
-                    <Badge
-                      key={label}
-                      variant="secondary"
-                      className="border border-background/70 bg-background/90 text-[10px] font-semibold tracking-[0.18em] uppercase shadow-sm"
-                    >
-                      {label}
-                    </Badge>
-                  ))}
-                </div>
-              )}
-              {game.thumbnailUrl ? (
-                <img
-                  src={game.thumbnailUrl}
-                  alt={game.title}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                />
-              ) : (
-                <Globe className="h-10 w-10 text-muted-foreground/30" />
-              )}
-            </div>
+            <Link href={href} className="block">
+              <div className="relative aspect-square w-full max-w-[300px] bg-muted flex items-center justify-center overflow-hidden">
+                {languageBadges.length > 0 && (
+                  <div className="absolute left-3 top-3 z-10 flex flex-wrap gap-1.5">
+                    {languageBadges.map((label) => (
+                      <Badge
+                        key={label}
+                        variant="secondary"
+                        className="border border-background/70 bg-background/90 text-[10px] font-semibold tracking-[0.18em] uppercase shadow-sm"
+                      >
+                        {label}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+                {game.thumbnailUrl ? (
+                  <img
+                    src={game.thumbnailUrl}
+                    alt={game.title}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  />
+                ) : (
+                  <Globe className="h-10 w-10 text-muted-foreground/30" />
+                )}
+              </div>
+            </Link>
             <div className="space-y-3 p-4">
               <p className="font-semibold truncate">{game.title || "Untitled Game"}</p>
               <p className="text-xs text-muted-foreground mt-1 truncate">{game.mapName}</p>
@@ -105,8 +108,22 @@ export default function GamesPage() {
                   </div>
                 )}
               </div>
+              <div className="flex gap-2">
+                <Button asChild size="sm" className="h-8 flex-1">
+                  <Link href={href}>Play</Link>
+                </Button>
+                <LeaderboardDialog
+                  gameId={game.id}
+                  gameTitle={game.title}
+                  trigger={({ openDialog }) => (
+                    <Button type="button" size="sm" variant="outline" className="h-8 flex-1" onClick={openDialog}>
+                      Leaderboard
+                    </Button>
+                  )}
+                />
+              </div>
             </div>
-          </Link>
+          </div>
         );
       })}
     </div>
