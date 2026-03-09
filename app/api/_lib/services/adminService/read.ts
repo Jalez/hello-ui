@@ -76,9 +76,26 @@ export async function ensureAdminForEmailMatch(
     const rows = extractRows(existing);
     if (rows.length === 0) return false;
     const adminUserId = (rows[0] as { user_id: string }).user_id;
-    if (adminUserId === userId) return true;
+    const targetUserLookup = await sql`
+      SELECT id
+      FROM users
+      WHERE id = ${userId}
+      LIMIT 1
+    `;
+    const targetRows = extractRows(targetUserLookup) as Array<{ id: string }>;
+    let targetUserId = userId;
+
+    // Old sessions can carry a provider-side or stale userId that is not a real row in users.
+    // In that case, resolve the canonical DB user by email and sync admin to that row instead.
+    if (targetRows.length === 0) {
+      const { getOrCreateUserByEmail } = await import("../userService");
+      const resolvedUser = await getOrCreateUserByEmail(normalized);
+      targetUserId = resolvedUser.id;
+    }
+
+    if (adminUserId === targetUserId) return true;
     const { addAdmin } = await import("./create");
-    return addAdmin(userId, "admin", adminUserId);
+    return addAdmin(targetUserId, "admin", adminUserId);
   } catch (error) {
     console.error("DB: ensureAdminForEmailMatch error:", error);
     return false;

@@ -8,6 +8,18 @@ export async function addAdmin(userId: string, role?: string, grantedByUserId?: 
   try {
     const sql = await getSqlInstance();
 
+    const existingUser = await sql`
+      SELECT id
+      FROM users
+      WHERE id = ${userId}
+      LIMIT 1
+    `;
+    const existingUserRows = extractRows(existingUser);
+    if (existingUserRows.length === 0) {
+      console.warn("addAdmin skipped: user does not exist", { userId });
+      return false;
+    }
+
     // Check if user is already an admin
     const existingAdmin = await sql`
       SELECT id, is_active FROM admin_roles
