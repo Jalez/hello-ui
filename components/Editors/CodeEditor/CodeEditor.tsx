@@ -13,6 +13,7 @@ import { useTheme } from "next-themes";
 
 import EditorMagicButton from "@/components/CreatorControls/EditorMagicButton";
 import { useAppSelector } from "@/store/hooks/hooks";
+import { useGameplayTelemetry } from "@/components/General/useGameplayTelemetry";
 
 import { AiReviewPanel } from "./AiReviewPanel";
 import {
@@ -40,10 +41,9 @@ export default function CodeEditor({
   levelIdentifier,
 }: CodeEditorProps) {
   const [code, setCode] = useState(template);
-  const localUpdateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pendingCodeForReduxRef = useRef<string | null>(null);
   const currentLevel = useAppSelector((state) => state.currentLevel.currentLevel);
   const options = useAppSelector((state) => state.options);
+  const { recordPaste, recordEditorActivity } = useGameplayTelemetry();
   const { theme: nextTheme } = useTheme();
   const isDark =
     nextTheme === "dark" ||
@@ -52,6 +52,7 @@ export default function CodeEditor({
       window.matchMedia("(prefers-color-scheme: dark)").matches);
   const theme = isDark ? vscodeDark : githubLight;
   const consistentLineTheme = createConsistentLineTheme(isDark);
+  const lastActivityTsRef = useRef<number | null>(null);
 
   const {
     review,
@@ -101,15 +102,12 @@ export default function CodeEditor({
     });
   }, [editorViewRef, review]);
 
-  const flushPendingLocalCodeUpdate = useCallback(() => {
-    const pendingCode = pendingCodeForReduxRef.current;
+  const flushPendingLocalCodeUpdate = useCallback((pendingCode) => {
     if (pendingCode === null || applyingExternalUpdateRef.current || pendingCode === template) {
-      pendingCodeForReduxRef.current = null;
       return;
     }
 
     codeUpdater({ [title.toLowerCase()]: pendingCode }, type);
-    pendingCodeForReduxRef.current = null;
   }, [applyingExternalUpdateRef, codeUpdater, template, title, type]);
 
   useEffect(() => {
@@ -118,34 +116,17 @@ export default function CodeEditor({
     }
 
     if (code === template) {
-      if (localUpdateTimeoutRef.current) {
-        clearTimeout(localUpdateTimeoutRef.current);
-        localUpdateTimeoutRef.current = null;
-      }
-      pendingCodeForReduxRef.current = null;
       return;
     }
-
-    pendingCodeForReduxRef.current = code;
-    if (localUpdateTimeoutRef.current) {
-      clearTimeout(localUpdateTimeoutRef.current);
-    }
-
-    localUpdateTimeoutRef.current = setTimeout(() => {
-      localUpdateTimeoutRef.current = null;
-      flushPendingLocalCodeUpdate();
+    const timeout = setTimeout(() => {
+      flushPendingLocalCodeUpdate(code);
     }, LOCAL_REDUX_UPDATE_DEBOUNCE_MS);
+
+    return () => {
+      clearTimeout(timeout);
+    }
   }, [applyingExternalUpdateRef, code, flushPendingLocalCodeUpdate, template]);
 
-  useEffect(() => {
-    return () => {
-      if (localUpdateTimeoutRef.current) {
-        clearTimeout(localUpdateTimeoutRef.current);
-        localUpdateTimeoutRef.current = null;
-      }
-      flushPendingLocalCodeUpdate();
-    };
-  }, [flushPendingLocalCodeUpdate]);
 
   useEffect(() => {
     clearReview();
@@ -162,13 +143,31 @@ export default function CodeEditor({
       EditorState.readOnly.of(locked),
       EditorView.editable.of(!locked),
       EditorView.lineWrapping,
+      EditorView.domEventHandlers({
+        paste: (event) => {
+          if (options.mode !== "game") {
+            return false;
+          }
+          const clipboardText = event.clipboardData?.getData("text") ?? "";
+          recordPaste(currentLevel - 1, clipboardText.length);
+          return false;
+        },
+      }),
       ...sharedExtensions,
       commentKeymapCompartment.of(keymap.of(getCommentKeymap(title))),
       reviewDecorationsCompartment.of([]),
     ],
     theme,
     placeholder: `Write your ${title} here...`,
-    onChange: handleCodeUpdate,
+    onChange: (value) => {
+      if (options.mode === "game") {
+        const now = Date.now();
+        const delta = lastActivityTsRef.current == null ? 1200 : now - lastActivityTsRef.current;
+        lastActivityTsRef.current = now;
+        recordEditorActivity(currentLevel - 1, delta);
+      }
+      handleCodeUpdate(value);
+    },
     onCreateEditor: handleEditorCreate,
     onUpdate: handleEditorUpdate,
   };
