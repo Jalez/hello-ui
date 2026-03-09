@@ -10,6 +10,19 @@ import { mergeSavedPoints } from "@/store/slices/points.slice";
 
 const SAVE_DEBOUNCE_MS = 2000;
 
+function sanitizeReplayProgressData(progressData: Record<string, unknown>, replaying: boolean) {
+  const sanitized = Object.fromEntries(
+    Object.entries(progressData).filter(([key]) => key !== "levels")
+  );
+
+  if (replaying) {
+    delete sanitized.finishedAt;
+    delete sanitized.finalScore;
+  }
+
+  return sanitized;
+}
+
 function stableSerialize(value: unknown): string {
   if (value === null || typeof value !== "object") {
     return JSON.stringify(value);
@@ -46,6 +59,7 @@ export function ProgressPersistence() {
   const lastAppliedProgressSyncTsRef = useRef<number | null>(null);
 
   const gameId = typeof params?.gameId === "string" ? params.gameId : Array.isArray(params?.gameId) ? params.gameId[0] : null;
+  const isReplayView = searchParams.get("view") === "play";
 
   useEffect(() => {
     lastSavedSnapshotRef.current = null;
@@ -64,10 +78,10 @@ export function ProgressPersistence() {
       return;
     }
 
-    const mergedProgressData = {
+    const mergedProgressData = sanitizeReplayProgressData({
       ...(typeof currentGame.progressData === "object" && currentGame.progressData !== null ? currentGame.progressData : {}),
       ...syncedProgressData,
-    };
+    }, isReplayView);
 
     const currentProgressSnapshot = stableSerialize(currentGame.progressData ?? {});
     const mergedProgressSnapshot = stableSerialize(mergedProgressData);
@@ -75,6 +89,12 @@ export function ProgressPersistence() {
     lastAppliedProgressSyncTsRef.current = syncMessage.ts;
 
     if (currentProgressSnapshot !== mergedProgressSnapshot) {
+      console.log("[ProgressPersistence] applying remote progress sync", {
+        ts: syncMessage.ts,
+        isReplayView,
+        keys: Object.keys(syncedProgressData),
+        mergedKeys: Object.keys(mergedProgressData),
+      });
       addGameToStore({
         ...currentGame,
         progressData: mergedProgressData,
@@ -91,7 +111,7 @@ export function ProgressPersistence() {
         scenarios?: { scenarioId: string; accuracy: number }[];
       }>));
     }
-  }, [addGameToStore, collaboration?.lastProgressSync, currentGame, dispatch, mode]);
+  }, [addGameToStore, collaboration?.lastProgressSync, currentGame, dispatch, isReplayView, mode]);
 
   useEffect(() => {
     if (mode !== "game") return;
@@ -103,8 +123,9 @@ export function ProgressPersistence() {
         ? currentGame.progressData
         : {};
 
-    const baseProgressWithoutLevels = Object.fromEntries(
-      Object.entries(baseProgressData as Record<string, unknown>).filter(([key]) => key !== "levels")
+    const baseProgressWithoutLevels = sanitizeReplayProgressData(
+      baseProgressData as Record<string, unknown>,
+      isReplayView
     );
 
     const progressData: Record<string, unknown> = {
@@ -141,6 +162,13 @@ export function ProgressPersistence() {
     timeoutRef.current = setTimeout(() => {
       timeoutRef.current = null;
       inFlightSnapshotRef.current = nextSnapshot;
+      console.log("[ProgressPersistence] persisting progress", {
+        gameId,
+        isReplayView,
+        keys: Object.keys(progressData),
+        hasFinishedAt: "finishedAt" in progressData,
+        hasFinalScore: "finalScore" in progressData,
+      });
 
       const qs = new URLSearchParams();
       qs.set("accessContext", "game");
@@ -169,9 +197,6 @@ export function ProgressPersistence() {
               progressData: data.instance.progressData,
             });
           }
-          if (collaboration?.roomId && collaboration.isConnected && collaboration.codeSyncReady) {
-            collaboration.syncProgressData(progressData);
-          }
           return data;
         })
         .catch(() => {
@@ -185,7 +210,7 @@ export function ProgressPersistence() {
         timeoutRef.current = null;
       }
     };
-  }, [addGameToStore, collaboration, currentGame, gameId, levels.length, mode, points.levels, searchParams]);
+  }, [addGameToStore, collaboration, currentGame, gameId, isReplayView, levels.length, mode, points.levels, searchParams]);
 
   return null;
 }
