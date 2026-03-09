@@ -53,8 +53,26 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "Group not found" }, { status: 404 });
     }
 
+    const currentUser = await getOrCreateUserByEmail(session.user.email);
     const body = await request.json();
-    const { email, role } = body;
+    const { email, role, joinKey } = body;
+
+    if (!email) {
+      const isCreator = group.createdBy === currentUser.id;
+      const alreadyMember = await isGroupMember(groupId, currentUser.id);
+      const normalizedJoinKey = typeof joinKey === "string" ? joinKey.trim().toUpperCase() : "";
+      if (!isCreator && !alreadyMember && normalizedJoinKey !== group.joinKey.trim().toUpperCase()) {
+        return NextResponse.json({ error: "Invalid group key" }, { status: 403 });
+      }
+
+      const membership = await addGroupMember({
+        groupId,
+        userId: currentUser.id,
+        role: "member",
+      });
+
+      return NextResponse.json({ member: membership }, { status: 201 });
+    }
 
     if (!email || typeof email !== "string") {
       return NextResponse.json({ error: "Email is required" }, { status: 400 });

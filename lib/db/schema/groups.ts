@@ -5,6 +5,7 @@ export const groups = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     name: text("name").notNull(),
+    joinKey: text("join_key").notNull(),
     ltiContextId: text("lti_context_id").unique(),
     ltiContextTitle: text("lti_context_title"),
     resourceLinkId: text("resource_link_id"),
@@ -15,6 +16,7 @@ export const groups = pgTable(
   (table) => [
     index("idx_groups_lti_context_id").on(table.ltiContextId),
     index("idx_groups_created_by").on(table.createdBy),
+    unique("groups_join_key_unique").on(table.joinKey),
   ]
 );
 

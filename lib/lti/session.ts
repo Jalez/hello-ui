@@ -20,6 +20,11 @@ export interface LtiSession {
     roles?: string;
     lis_outcome_service_url?: string;
     lis_result_sourcedid?: string;
+    custom_context_api?: string;
+    custom_context_api_id?: string;
+    custom_user_api_token?: string;
+    custom_student_id?: string;
+    _aplus_group?: string;
   };
 }
 

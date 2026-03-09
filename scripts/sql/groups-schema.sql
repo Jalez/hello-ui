@@ -8,6 +8,7 @@
 CREATE TABLE IF NOT EXISTS groups (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL CHECK (name <> '' AND char_length(name) <= 255),
+  join_key TEXT NOT NULL,
   lti_context_id TEXT UNIQUE,
   lti_context_title TEXT,
   resource_link_id TEXT,
@@ -15,6 +16,11 @@ CREATE TABLE IF NOT EXISTS groups (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+ALTER TABLE groups ADD COLUMN IF NOT EXISTS join_key TEXT;
+UPDATE groups
+SET join_key = UPPER(SUBSTRING(ENCODE(gen_random_bytes(5), 'hex') FROM 1 FOR 10))
+WHERE join_key IS NULL OR join_key = '';
 
 -- Group members table
 CREATE TABLE IF NOT EXISTS group_members (
@@ -31,6 +37,7 @@ CREATE TABLE IF NOT EXISTS group_members (
 -- Create indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_groups_lti_context_id ON groups(lti_context_id);
 CREATE INDEX IF NOT EXISTS idx_groups_created_by ON groups(created_by);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_groups_join_key ON groups(join_key);
 CREATE INDEX IF NOT EXISTS idx_group_members_group_id ON group_members(group_id);
 CREATE INDEX IF NOT EXISTS idx_group_members_user_id ON group_members(user_id);
 
