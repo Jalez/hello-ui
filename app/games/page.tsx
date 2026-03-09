@@ -67,19 +67,6 @@ export default function GamesPage() {
           >
             <Link href={href} className="block">
               <div className="relative aspect-square w-full max-w-[300px] bg-muted flex items-center justify-center overflow-hidden">
-                {languageBadges.length > 0 && (
-                  <div className="absolute left-3 top-3 z-10 flex flex-wrap gap-1.5">
-                    {languageBadges.map((label) => (
-                      <Badge
-                        key={label}
-                        variant="secondary"
-                        className="border border-background/70 bg-background/90 text-[10px] font-semibold tracking-[0.18em] uppercase shadow-sm"
-                      >
-                        {label}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
                 {game.thumbnailUrl ? (
                   <img
                     src={game.thumbnailUrl}
@@ -92,7 +79,22 @@ export default function GamesPage() {
               </div>
             </Link>
             <div className="space-y-3 p-4">
-              <p className="font-semibold truncate">{game.title || "Untitled Game"}</p>
+              <div className="flex items-start justify-between gap-3">
+                <p className="min-w-0 flex-1 truncate font-semibold">{game.title || "Untitled Game"}</p>
+                {languageBadges.length > 0 && (
+                  <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
+                    {languageBadges.map((label) => (
+                      <Badge
+                        key={label}
+                        variant="secondary"
+                        className="text-[10px] font-semibold tracking-[0.18em] uppercase"
+                      >
+                        {label}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
               <p className="text-xs text-muted-foreground mt-1 truncate">{game.mapName}</p>
               <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                 <div className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1">

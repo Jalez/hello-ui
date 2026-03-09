@@ -30,7 +30,7 @@ export default function Home() {
 
   return (
     <div className="relative h-full overflow-hidden">
-      <div className="absolute bottom-20 left-1/2 z-10 w-full max-w-2xl -translate-x-1/2 px-6 sm:px-8 md:bottom-24">
+      <div className="absolute bottom-20 left-1/2 z-10 hidden w-full max-w-2xl -translate-x-1/2 px-6 sm:px-8 md:bottom-24 md:block">
         <div className="flex flex-wrap gap-4 justify-center">
           {isLoading ? (
             <Button size="lg" disabled className="text-lg px-8 py-6">
