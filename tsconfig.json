@@ -51,6 +51,7 @@
   "exclude": [
     "node_modules",
     "drawBoard",
-    "ws-server"
+    "ws-server",
+    "nextjs-lti-test"
   ]
 }
