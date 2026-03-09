@@ -9,6 +9,7 @@ const API_BASE_URL = process.env.API_BASE_URL || "http://localhost:3000";
 const WS_SERVICE_TOKEN = process.env.WS_SERVICE_TOKEN || "";
 const WRITE_BUFFER_FLUSH_MS = 5000;
 const EDITOR_TYPES = ["html", "css", "js"];
+const GROUP_START_MIN_READY_COUNT = 2;
 
 // roomId -> Map<WebSocket, userData>
 const rooms = new Map();
@@ -16,6 +17,7 @@ const connectionState = new WeakMap();
 
 // roomId -> { ctx, progressData, levels, templateLevels, mapName }
 const roomEditorState = new Map();
+const roomLobbyState = new Map();
 
 // roomId -> { ctx, timer }
 const roomWriteBuffer = new Map();
@@ -43,11 +45,23 @@ function removeUserFromRoom(roomId, socket) {
     flushWriteBuffer(roomId).finally(() => {
       if (!rooms.has(roomId) && !roomWriteBuffer.has(roomId)) {
         roomEditorState.delete(roomId);
+        roomLobbyState.delete(roomId);
       }
     });
   }
 
   return userData;
+}
+
+function isLobbyRoom(roomId) {
+  return typeof roomId === "string" && roomId.startsWith("lobby:");
+}
+
+function ensureLobbyState(roomId) {
+  if (!roomLobbyState.has(roomId)) {
+    roomLobbyState.set(roomId, { messages: [] });
+  }
+  return roomLobbyState.get(roomId);
 }
 
 function setConnectionState(socket, nextState) {
@@ -143,6 +157,107 @@ function parseRoomContext(roomId) {
   }
 
   return null;
+}
+
+function isGroupInstanceContext(ctx) {
+  return Boolean(ctx && ctx.kind === "instance" && ctx.groupId);
+}
+
+function normalizeGroupStartGate(value) {
+  const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const readyUserIds = Array.isArray(source.readyUserIds)
+    ? [...new Set(source.readyUserIds.filter((entry) => typeof entry === "string" && entry.length > 0))]
+    : [];
+  const rawReadyUsers =
+    source.readyUsers && typeof source.readyUsers === "object" && !Array.isArray(source.readyUsers)
+      ? source.readyUsers
+      : {};
+  const readyUsers = readyUserIds.reduce((acc, userId) => {
+    const user = rawReadyUsers[userId];
+    const normalizedUser = user && typeof user === "object" && !Array.isArray(user) ? user : {};
+    acc[userId] = {
+      userId,
+      ...(typeof normalizedUser.userName === "string" ? { userName: normalizedUser.userName } : {}),
+      ...(typeof normalizedUser.userEmail === "string" ? { userEmail: normalizedUser.userEmail } : {}),
+      ...(typeof normalizedUser.userImage === "string" ? { userImage: normalizedUser.userImage } : {}),
+      ...(typeof normalizedUser.readyAt === "string" ? { readyAt: normalizedUser.readyAt } : {}),
+    };
+    return acc;
+  }, {});
+
+  return {
+    status: source.status === "started" ? "started" : "waiting",
+    minReadyCount: GROUP_START_MIN_READY_COUNT,
+    readyUserIds,
+    readyUsers,
+    startedAt: typeof source.startedAt === "string" ? source.startedAt : null,
+    startedByUserId: typeof source.startedByUserId === "string" ? source.startedByUserId : null,
+  };
+}
+
+function ensureGroupStartGate(state) {
+  if (!isGroupInstanceContext(state?.ctx)) {
+    return null;
+  }
+
+  const gate = normalizeGroupStartGate(state.progressData?.groupStartGate);
+  state.progressData = {
+    ...state.progressData,
+    groupStartGate: gate,
+  };
+  return gate;
+}
+
+function ensureLevelTimerStart(levelState, startedAtMs) {
+  if (!levelState) {
+    return;
+  }
+
+  const timeData =
+    levelState.meta?.timeData && typeof levelState.meta.timeData === "object" && !Array.isArray(levelState.meta.timeData)
+      ? levelState.meta.timeData
+      : { startTime: 0, pointAndTime: {} };
+  const currentStartTime = Number(timeData.startTime || 0);
+  if (currentStartTime > 0) {
+    return;
+  }
+
+  levelState.meta = {
+    ...levelState.meta,
+    timeData: {
+      ...timeData,
+      startTime: startedAtMs,
+    },
+  };
+}
+
+function applyStartedGateToLevels(state) {
+  const gate = ensureGroupStartGate(state);
+  if (!gate || gate.status !== "started" || !gate.startedAt) {
+    return;
+  }
+
+  const startedAtMs = Date.parse(gate.startedAt);
+  if (!Number.isFinite(startedAtMs) || startedAtMs <= 0) {
+    return;
+  }
+
+  const firstLevel = ensureLevelState(state, 0);
+  ensureLevelTimerStart(firstLevel, startedAtMs);
+}
+
+function serializeGroupStartSync(roomId, state) {
+  const gate = ensureGroupStartGate(state);
+  if (!gate) {
+    return null;
+  }
+
+  return {
+    roomId,
+    groupId: extractGroupIdFromRoomId(roomId),
+    gate,
+    ts: Date.now(),
+  };
 }
 
 function buildInstanceQueryParams(ctx) {
@@ -413,9 +528,14 @@ function serializeProgressData(state) {
 }
 
 function serializeCodeLevels(state) {
-  return {
+  const payload = {
     levels: state.levels.map((level) => serializeLevelState(level)),
   };
+  const gate = ensureGroupStartGate(state);
+  if (gate) {
+    payload.groupStartGate = gate;
+  }
+  return payload;
 }
 
 async function ensureRoomState(roomId, ctx) {
@@ -465,6 +585,8 @@ async function ensureRoomState(roomId, ctx) {
       mapName,
     }
   );
+  ensureGroupStartGate(nextState);
+  applyStartedGateToLevels(nextState);
 
   roomEditorState.set(roomId, nextState);
 
@@ -608,7 +730,18 @@ wsServer.on("connection", (socket) => {
         if (ctx) {
           const state = await ensureRoomState(roomId, ctx);
           sendMessage(socket, "room-state-sync", serializeRoomStateSync(state));
+          const groupStartSync = serializeGroupStartSync(roomId, state);
+          if (groupStartSync) {
+            sendMessage(socket, "group-start-sync", groupStartSync);
+          }
           console.log(`[room-state-sync:emit] room=${roomId} target=${socketId} levelsCount=${state.levels.length}`);
+        } else if (isLobbyRoom(roomId)) {
+          const lobbyState = ensureLobbyState(roomId);
+          sendMessage(socket, "lobby-chat-sync", {
+            roomId,
+            messages: lobbyState.messages,
+            ts: Date.now(),
+          });
         } else {
           console.log(`[room-state-sync:skip] room=${roomId} target=${socketId} reason=invalid-room-context`);
         }
@@ -638,6 +771,33 @@ wsServer.on("connection", (socket) => {
           );
           console.log(`[leave-game] user=${userData.userEmail} room=${roomId}`);
         }
+        return;
+      }
+      case "lobby-chat-send": {
+        const roomId = resolveRoomId(data);
+        if (!roomId || !isLobbyRoom(roomId)) {
+          return;
+        }
+
+        const text = typeof data.text === "string" ? data.text.trim() : "";
+        if (!text) {
+          return;
+        }
+
+        const lobbyState = ensureLobbyState(roomId);
+        const entry = {
+          id: randomUUID(),
+          userId: typeof data.userId === "string" ? data.userId : "",
+          ...(typeof data.userEmail === "string" ? { userEmail: data.userEmail } : {}),
+          ...(typeof data.userName === "string" ? { userName: data.userName } : {}),
+          ...(typeof data.userImage === "string" ? { userImage: data.userImage } : {}),
+          text,
+          createdAt: new Date().toISOString(),
+        };
+        lobbyState.messages = [...lobbyState.messages.slice(-99), entry];
+
+        sendMessage(socket, "lobby-chat-message", entry);
+        broadcastToRoom(roomId, "lobby-chat-message", entry, socket);
         return;
       }
       case "canvas-cursor": {
@@ -846,17 +1006,108 @@ wsServer.on("connection", (socket) => {
           return;
         }
 
+        if (isGroupInstanceContext(ctx) && "groupStartGate" in incomingProgress) {
+          delete incomingProgress.groupStartGate;
+        }
+
         state.progressData = {
           ...state.progressData,
           ...incomingProgress,
           levels: state.progressData.levels,
         };
+        applyStartedGateToLevels(state);
 
         broadcastToRoom(roomId, "progress-sync", {
           progressData: incomingProgress,
           ts: Date.now(),
         }, socket);
         console.log(`[progress-sync] room=${roomId} from=${socketId} keys=${Object.keys(incomingProgress).join(",")}`);
+        return;
+      }
+      case "group-start-ready":
+      case "group-start-unready": {
+        const roomId = resolveRoomId(data);
+        if (!roomId) {
+          return;
+        }
+
+        const ctx = parseRoomContext(roomId);
+        if (!isGroupInstanceContext(ctx)) {
+          return;
+        }
+
+        const userId = typeof data.userId === "string" ? data.userId : "";
+        if (!userId) {
+          return;
+        }
+
+        const state = await ensureRoomState(roomId, ctx);
+        const gate = ensureGroupStartGate(state);
+        if (!gate) {
+          return;
+        }
+
+        if (gate.status === "started") {
+          const startedSync = serializeGroupStartSync(roomId, state);
+          if (startedSync) {
+            sendMessage(socket, "group-start-sync", startedSync);
+          }
+          return;
+        }
+
+        if (envelope.type === "group-start-ready") {
+          if (!gate.readyUserIds.includes(userId)) {
+            gate.readyUserIds = [...gate.readyUserIds, userId];
+          }
+          gate.readyUsers = {
+            ...gate.readyUsers,
+            [userId]: {
+              userId,
+              ...(typeof data.userName === "string" ? { userName: data.userName } : {}),
+              ...(typeof data.userEmail === "string" ? { userEmail: data.userEmail } : {}),
+              ...(typeof data.userImage === "string" ? { userImage: data.userImage } : {}),
+              readyAt: new Date().toISOString(),
+            },
+          };
+        } else {
+          gate.readyUserIds = gate.readyUserIds.filter((entry) => entry !== userId);
+          const nextReadyUsers = { ...gate.readyUsers };
+          delete nextReadyUsers[userId];
+          gate.readyUsers = nextReadyUsers;
+        }
+
+        if (gate.readyUserIds.length >= gate.minReadyCount) {
+          gate.status = "started";
+          gate.startedAt = new Date().toISOString();
+          gate.startedByUserId = userId;
+          applyStartedGateToLevels(state);
+          sendMessage(socket, "room-state-sync", serializeRoomStateSync(state));
+          broadcastToRoom(roomId, "room-state-sync", serializeRoomStateSync(state), socket);
+        }
+
+        state.progressData = {
+          ...state.progressData,
+          groupStartGate: gate,
+        };
+        markRoomDirty(roomId, ctx);
+
+        const syncPayload = serializeGroupStartSync(roomId, state);
+        if (syncPayload) {
+          sendMessage(socket, "group-start-sync", syncPayload);
+          broadcastToRoom(roomId, "group-start-sync", syncPayload, socket);
+        }
+
+        broadcastToRoom(roomId, "progress-sync", {
+          progressData: { groupStartGate: gate },
+          ts: Date.now(),
+        }, socket);
+        sendMessage(socket, "progress-sync", {
+          progressData: { groupStartGate: gate },
+          ts: Date.now(),
+        });
+        console.log(
+          `[group-start:${envelope.type === "group-start-ready" ? "ready" : "unready"}] room=${roomId} from=${socketId} userId=${userId} readyCount=${gate.readyUserIds.length}/${gate.minReadyCount} status=${gate.status}`
+        );
         return;
       }
       case "reset-room-state": {
@@ -911,6 +1162,10 @@ wsServer.on("connection", (socket) => {
         }
 
         broadcastToRoom(roomId, "room-state-sync", serializeRoomStateSync(nextState));
+        const groupStartSync = serializeGroupStartSync(roomId, nextState);
+        if (groupStartSync) {
+          broadcastToRoom(roomId, "group-start-sync", groupStartSync);
+        }
         console.log(`[room-state-sync:emit] room=${roomId} by=${socketId} reason=reset scope=${scope} levelIndex=${levelIndex}`);
         return;
       }

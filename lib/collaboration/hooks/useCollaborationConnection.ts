@@ -8,6 +8,9 @@ import {
   EditorChangeApplied,
   EditorCursor,
   EditorResync,
+  GroupStartSyncMessage,
+  LobbyChatEntry,
+  LobbyChatSyncMessage,
   ProgressSyncMessage,
   RoomStateSyncMessage,
   UserIdentity,
@@ -37,6 +40,9 @@ interface UseCollaborationConnectionOptions {
   onTypingStatus?: (message: TypingStatusMessage) => void;
   onRoomStateSync?: (roomState: RoomStateSyncMessage) => void;
   onProgressSync?: (message: ProgressSyncMessage) => void;
+  onGroupStartSync?: (message: GroupStartSyncMessage) => void;
+  onLobbyChatSync?: (message: LobbyChatSyncMessage) => void;
+  onLobbyChatMessage?: (message: LobbyChatEntry) => void;
 }
 
 interface UseCollaborationConnectionReturn {
@@ -62,6 +68,9 @@ interface UseCollaborationConnectionReturn {
   sendTypingStatus: (editorType: EditorType, levelIndex: number, isTyping: boolean) => void;
   sendRoomReset: (scope: "level" | "game", levelIndex?: number) => void;
   sendProgressSync: (progressData: Record<string, unknown>) => void;
+  sendGroupStartReady: () => void;
+  sendGroupStartUnready: () => void;
+  sendLobbyChat: (text: string) => void;
 }
 
 interface WebSocketEnvelope<T = unknown> {
@@ -395,6 +404,15 @@ export function useCollaborationConnection(
           case "progress-sync":
             optionsRef.current.onProgressSync?.(payload as ProgressSyncMessage);
             return;
+          case "group-start-sync":
+            optionsRef.current.onGroupStartSync?.(payload as GroupStartSyncMessage);
+            return;
+          case "lobby-chat-sync":
+            optionsRef.current.onLobbyChatSync?.(payload as LobbyChatSyncMessage);
+            return;
+          case "lobby-chat-message":
+            optionsRef.current.onLobbyChatMessage?.(payload as LobbyChatEntry);
+            return;
           default:
             return;
         }
@@ -608,6 +626,53 @@ export function useCollaborationConnection(
     }
   }, [parsedGroupId, roomId, sendMessage, user]);
 
+  const sendGroupStartReady = useCallback(() => {
+    if (roomId && user && clientIdRef.current) {
+      sendMessage("group-start-ready", {
+        roomId,
+        groupId: parsedGroupId ?? undefined,
+        clientId: clientIdRef.current,
+        userId: user.id,
+        userEmail: user.email,
+        userName: user.name,
+        userImage: user.image,
+        ts: Date.now(),
+      });
+    }
+  }, [parsedGroupId, roomId, sendMessage, user]);
+
+  const sendGroupStartUnready = useCallback(() => {
+    if (roomId && user && clientIdRef.current) {
+      sendMessage("group-start-unready", {
+        roomId,
+        groupId: parsedGroupId ?? undefined,
+        clientId: clientIdRef.current,
+        userId: user.id,
+        userEmail: user.email,
+        userName: user.name,
+        userImage: user.image,
+        ts: Date.now(),
+      });
+    }
+  }, [parsedGroupId, roomId, sendMessage, user]);
+
+  const sendLobbyChat = useCallback((text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed || !roomId || !user || !clientIdRef.current) {
+      return;
+    }
+    sendMessage("lobby-chat-send", {
+      roomId,
+      clientId: clientIdRef.current,
+      userId: user.id,
+      userEmail: user.email,
+      userName: user.name,
+      userImage: user.image,
+      text: trimmed,
+      ts: Date.now(),
+    });
+  }, [roomId, sendMessage, user]);
+
   const connect = useCallback(() => {
     manualDisconnectRef.current = false;
     if (!socketRef.current) {
@@ -632,5 +697,8 @@ export function useCollaborationConnection(
     sendTypingStatus,
     sendRoomReset,
     sendProgressSync,
+    sendGroupStartReady,
+    sendGroupStartUnready,
+    sendLobbyChat,
   };
 }

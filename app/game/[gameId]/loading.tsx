@@ -1,14 +1,4 @@
-import { Suspense } from "react";
-
-import GamePageClient from "./GamePageClient";
-
-interface GamePageProps {
-  params: Promise<{
-    gameId: string;
-  }>;
-}
-
-function GamePageFallback() {
+export default function GameRouteLoading() {
   return (
     <div className="flex h-screen items-center justify-center">
       <div className="text-center">
@@ -18,13 +8,5 @@ function GamePageFallback() {
         </p>
       </div>
     </div>
-  );
-}
-
-export default function GamePage(props: GamePageProps) {
-  return (
-    <Suspense fallback={<GamePageFallback />}>
-      <GamePageClient {...props} />
-    </Suspense>
   );
 }
