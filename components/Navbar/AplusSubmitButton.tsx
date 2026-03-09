@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, type ReactNode } from "react";
-import { useParams, usePathname, useSearchParams } from "next/navigation";
+import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { apiUrl, stripBasePath } from "@/lib/apiUrl";
 import { Flag, Loader2, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ import {
 import { useAppSelector } from "@/store/hooks/hooks";
 import PoppingTitle from "@/components/General/PoppingTitle";
 import { useGameStore } from "@/components/default/games";
+import { useOptionalCollaboration } from "@/lib/collaboration/CollaborationProvider";
 
 interface LtiSessionInfo {
   isLtiMode: boolean;
@@ -28,29 +29,51 @@ interface LtiSessionInfo {
 
 type NavbarActionDisplayMode = "icon-label" | "icon";
 
+function stripCodeLevelsFromProgressData(progressData: Record<string, unknown> | undefined) {
+  if (!progressData) {
+    return undefined;
+  }
+
+  return Object.fromEntries(
+    Object.entries(progressData).filter(([key]) => key !== "levels")
+  );
+}
+
 interface AplusSubmitButtonProps {
   displayMode?: NavbarActionDisplayMode;
   renderTrigger?: (options: { openDialog: () => void }) => ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export const AplusSubmitButton = ({ displayMode = "icon", renderTrigger }: AplusSubmitButtonProps) => {
+export const AplusSubmitButton = ({
+  displayMode = "icon",
+  renderTrigger,
+  open,
+  onOpenChange,
+}: AplusSubmitButtonProps) => {
   const params = useParams();
   const pathname = usePathname();
   const normalizedPathname = stripBasePath(pathname);
+  const router = useRouter();
   const searchParams = useSearchParams();
   const currentGame = useGameStore((s) => s.getCurrentGame());
   const addGameToStore = useGameStore((s) => s.addGameToStore);
+  const collaboration = useOptionalCollaboration();
 
   const [ltiInfo, setLtiInfo] = useState<LtiSessionInfo | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showDialog, setShowDialog] = useState(false);
+  const [internalShowDialog, setInternalShowDialog] = useState(false);
   const [result, setResult] = useState<{ success: boolean; message?: string; error?: string } | null>(null);
+  const showDialog = open ?? internalShowDialog;
+  const setShowDialog = onOpenChange ?? setInternalShowDialog;
 
   const points = useAppSelector((state) => state.points);
 
   const gameIdParam = params?.gameId;
   const gameId = typeof gameIdParam === "string" ? gameIdParam : Array.isArray(gameIdParam) ? gameIdParam[0] : null;
   const isGameRoute = normalizedPathname.startsWith("/game/") && Boolean(gameId);
+  const isGroupGameplay = Boolean(searchParams.get("groupId"));
 
   useEffect(() => {
     fetch(apiUrl("/api/games/lti-session"))
@@ -74,6 +97,46 @@ export const AplusSubmitButton = ({ displayMode = "icon", renderTrigger }: Aplus
     return `${apiUrl(`/api/games/${gameId}/finish`)}?${params.toString()}`;
   }, [gameId, searchParams]);
 
+  const triggerAplusRefresh = useCallback(() => {
+    if (typeof window === "undefined" || !window.parent) {
+      return;
+    }
+
+    setTimeout(() => {
+      window.parent.postMessage({ type: "a-plus-refresh-stats" }, "*");
+      if (window.top) {
+        window.top.location.reload();
+      }
+    }, 500);
+  }, []);
+
+  const notifyGroupMembersAboutGradeSubmit = useCallback((finishedAt?: string) => {
+    collaboration?.syncProgressData({
+      finishedAt: finishedAt ?? new Date().toISOString(),
+      finalScore: { points: points.allPoints, maxPoints: points.allMaxPoints },
+      ltiGradeRefreshAt: new Date().toISOString(),
+    });
+  }, [collaboration, points.allMaxPoints, points.allPoints]);
+
+  const submitGradeDirectly = useCallback(async () => {
+    const gradeRes = await fetch(apiUrl("/api/games/submit-grade"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        gameId,
+        points: points.allPoints,
+        maxPoints: points.allMaxPoints,
+      }),
+    });
+
+    return gradeRes.json() as Promise<{
+      success?: boolean;
+      message?: string;
+      error?: string;
+      isInIframe?: boolean;
+    }>;
+  }, [gameId, points.allMaxPoints, points.allPoints]);
+
   const handleFinishGame = useCallback(async () => {
     if (!gameId) return;
 
@@ -87,6 +150,10 @@ export const AplusSubmitButton = ({ displayMode = "icon", renderTrigger }: Aplus
         body: JSON.stringify({
           points: points.allPoints,
           maxPoints: points.allMaxPoints,
+          progressData:
+            currentGame?.progressData && typeof currentGame.progressData === "object" && !Array.isArray(currentGame.progressData)
+              ? stripCodeLevelsFromProgressData(currentGame.progressData)
+              : undefined,
           pointsByLevel: Object.fromEntries(
             Object.entries(points.levels).map(([name, data]) => [
               name,
@@ -114,25 +181,20 @@ export const AplusSubmitButton = ({ displayMode = "icon", renderTrigger }: Aplus
         });
       }
 
-      if (ltiInfo?.hasOutcomeService) {
-        const gradeRes = await fetch(apiUrl("/api/games/submit-grade"), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            points: points.allPoints,
-            maxPoints: points.allMaxPoints,
-          }),
-        });
-        const gradeData = await gradeRes.json();
+      const nextParams = new URLSearchParams(searchParams.toString());
+      nextParams.delete("view");
+      const nextQuery = nextParams.toString();
+      const nextHref = nextQuery ? `${normalizedPathname}?${nextQuery}` : normalizedPathname;
 
-        if (gradeData.success) {
-          setResult({ success: true, message: gradeData.message });
+      if (ltiInfo?.hasOutcomeService) {
+        const fallbackGradeData = await submitGradeDirectly();
+
+        if (fallbackGradeData.success) {
+          setResult({ success: true, message: fallbackGradeData.message });
           setShowDialog(false);
-          if (gradeData.isInIframe && typeof window !== "undefined" && window.parent) {
-            setTimeout(() => {
-              window.parent.postMessage({ type: "a-plus-refresh-stats" }, "*");
-              if (window.top) window.top.location.reload();
-            }, 500);
+          notifyGroupMembersAboutGradeSubmit(finishData.instance?.progressData?.finishedAt);
+          if (fallbackGradeData.isInIframe) {
+            triggerAplusRefresh();
           }
         } else {
           setResult({
@@ -145,6 +207,8 @@ export const AplusSubmitButton = ({ displayMode = "icon", renderTrigger }: Aplus
         setResult({ success: true, message: "Game finished. Your result has been saved." });
         setShowDialog(false);
       }
+
+      router.replace(nextHref);
     } catch (error) {
       setResult({
         success: false,
@@ -162,6 +226,13 @@ export const AplusSubmitButton = ({ displayMode = "icon", renderTrigger }: Aplus
     currentGame,
     addGameToStore,
     ltiInfo?.hasOutcomeService,
+    normalizedPathname,
+    router,
+    searchParams,
+    setShowDialog,
+    submitGradeDirectly,
+    notifyGroupMembersAboutGradeSubmit,
+    triggerAplusRefresh,
   ]);
 
   const percentage =
@@ -209,7 +280,11 @@ export const AplusSubmitButton = ({ displayMode = "icon", renderTrigger }: Aplus
             <DialogTitle>Finish game</DialogTitle>
             <DialogDescription>
               Save your result and mark this game as finished. You can view your summary when you return.
-              {ltiInfo?.hasOutcomeService && " Your score will also be submitted to A+ (Plussa)."}
+              {ltiInfo?.hasOutcomeService && (
+                isGroupGameplay
+                  ? " In group games, each member must submit their own score to A+ (Plussa)."
+                  : " Your score will also be submitted to A+ (Plussa)."
+              )}
             </DialogDescription>
           </DialogHeader>
 
@@ -224,6 +299,13 @@ export const AplusSubmitButton = ({ displayMode = "icon", renderTrigger }: Aplus
             {ltiInfo?.courseName && (
               <p className="text-sm text-muted-foreground mt-4">
                 Course: <strong>{ltiInfo.courseName}</strong>
+              </p>
+            )}
+
+            {ltiInfo?.hasOutcomeService && isGroupGameplay && (
+              <p className="text-sm text-muted-foreground mt-3">
+                This game is collaborative, but A+ grading is individual. Ask each group member to finish and submit
+                their own score after the group is done.
               </p>
             )}
 
@@ -252,7 +334,7 @@ export const AplusSubmitButton = ({ displayMode = "icon", renderTrigger }: Aplus
               ) : ltiInfo?.hasOutcomeService ? (
                 <>
                   <Send className="h-4 w-4 mr-2" />
-                  Finish and submit to A+
+                  {isGroupGameplay ? "Finish and submit your score" : "Finish and submit to A+"}
                 </>
               ) : (
                 "Finish game"

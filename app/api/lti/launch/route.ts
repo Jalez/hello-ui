@@ -2,12 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import jwt from "jsonwebtoken";
 import { isLti10Launch, extractLtiUserInfo, getLtiRole, Lti10Data, extractLtiOutcomeService } from "@/lib/lti/types";
 import { resolveLtiIdentity } from "@/lib/lti/identity";
-import { resolveLtiGroupContext } from "@/lib/lti/group-context";
 import { getOrCreateUserByEmail, updateUserProfile } from "@/app/api/_lib/services/userService";
-import {
-  getOrCreateGroupByLtiContext,
-  addGroupMember,
-} from "@/app/api/_lib/services/groupService";
 import { getSql } from "@/app/api/_lib/db";
 import { logDebug } from "@/lib/debug-logger";
 import { createOneTimeCode } from "@/lib/lti/one-time-code";
@@ -60,7 +55,9 @@ export async function POST(request: NextRequest) {
       "SELECT consumer_key, consumer_secret FROM lti_credentials WHERE consumer_key = $1",
       [ltiData.oauth_consumer_key]
     );
-    const credRows = (credResult as any).rows ?? credResult;
+    const credRows = Array.isArray(credResult)
+      ? credResult
+      : ("rows" in credResult ? credResult.rows : []);
     if (!credRows || credRows.length === 0) {
       return NextResponse.json({ error: "Consumer key not found" }, { status: 401 });
     }
@@ -110,27 +107,14 @@ export async function POST(request: NextRequest) {
       await updateUserProfile(user.id, { name: userInfo.name });
     }
 
-    const groupName = userInfo.contextTitle || userInfo.contextId || `LTI Group ${Date.now()}`;
-    const ltiGroupContext = await resolveLtiGroupContext(ltiData);
-
-    const group = await getOrCreateGroupByLtiContext(
-      ltiGroupContext.key,
-      groupName,
-      userInfo.resourceLinkId
-    );
-
     const role = getLtiRole(userInfo.roles);
-    await addGroupMember({
-      groupId: group.id,
-      userId: user.id,
-      role,
-    });
+    const groupName = userInfo.contextTitle || userInfo.contextId || `LTI Group ${Date.now()}`;
 
     logDebug("lti_launch_group", {
-      groupId: group.id,
-      groupName: group.name,
-      groupContextKey: ltiGroupContext.key,
-      groupScopeSource: ltiGroupContext.scopeSource,
+      groupId: null,
+      groupName,
+      groupContextKey: null,
+      groupScopeSource: "pending",
       role,
     });
 
@@ -143,8 +127,9 @@ export async function POST(request: NextRequest) {
       userId: user.id,
       userEmail: user.email,
       userName: user.name || userInfo.name || user.email,
-      groupId: group.id,
-      groupName: group.name,
+      groupId: null,
+      groupName,
+      groupResolution: "pending" as const,
       role,
       outcomeService,
       documentTarget,
@@ -157,6 +142,11 @@ export async function POST(request: NextRequest) {
         roles: ltiData.roles,
         lis_outcome_service_url: ltiData.lis_outcome_service_url,
         lis_result_sourcedid: ltiData.lis_result_sourcedid,
+        custom_context_api: ltiData.custom_context_api,
+        custom_context_api_id: ltiData.custom_context_api_id,
+        custom_user_api_token: ltiData.custom_user_api_token,
+        custom_student_id: ltiData.custom_student_id,
+        _aplus_group: ltiData._aplus_group,
       },
     };
 

@@ -5,6 +5,7 @@ import { groups, groupMembers } from "@/lib/db/schema";
 export interface Group {
   id: string;
   name: string;
+  joinKey: string;
   ltiContextId: string | null;
   ltiContextTitle: string | null;
   resourceLinkId: string | null;
@@ -43,6 +44,7 @@ function mapGroup(row: typeof groups.$inferSelect): Group {
   return {
     id: row.id,
     name: row.name,
+    joinKey: row.joinKey,
     ltiContextId: row.ltiContextId,
     ltiContextTitle: row.ltiContextTitle,
     resourceLinkId: row.resourceLinkId,
@@ -62,22 +64,29 @@ function mapGroupMember(row: typeof groupMembers.$inferSelect): GroupMember {
   };
 }
 
+function generateJoinKey(): string {
+  return Math.random().toString(36).slice(2, 8).toUpperCase();
+}
+
 export async function createGroup(options: CreateGroupOptions): Promise<Group> {
   const db = getDb();
-  
-  const result = await db.insert(groups).values({
-    name: options.name,
-    ltiContextId: options.ltiContextId ?? null,
-    ltiContextTitle: options.ltiContextTitle ?? null,
-    resourceLinkId: options.resourceLinkId ?? null,
-    createdBy: options.createdBy ?? null,
-  }).returning();
-  
-  if (result.length === 0) {
-    throw new Error("Failed to create group");
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const result = await db.insert(groups).values({
+      name: options.name,
+      joinKey: generateJoinKey(),
+      ltiContextId: options.ltiContextId ?? null,
+      ltiContextTitle: options.ltiContextTitle ?? null,
+      resourceLinkId: options.resourceLinkId ?? null,
+      createdBy: options.createdBy ?? null,
+    }).onConflictDoNothing().returning();
+
+    if (result.length > 0) {
+      return mapGroup(result[0]);
+    }
   }
-  
-  return mapGroup(result[0]);
+
+  throw new Error("Failed to create group");
 }
 
 export async function getGroupById(groupId: string): Promise<Group | null> {
@@ -163,6 +172,33 @@ export async function getUserGroups(userId: string): Promise<Group[]> {
     .orderBy(groups.createdAt);
   
   return result.map((row) => mapGroup(row.group));
+}
+
+export async function getGroupsForContext(options: {
+  ltiContextId?: string | null;
+  resourceLinkId?: string | null;
+}): Promise<Group[]> {
+  const db = getDb();
+
+  if (!options.ltiContextId && !options.resourceLinkId) {
+    return [];
+  }
+
+  const filters = [];
+  if (options.ltiContextId) {
+    filters.push(eq(groups.ltiContextId, options.ltiContextId));
+  }
+  if (options.resourceLinkId) {
+    filters.push(eq(groups.resourceLinkId, options.resourceLinkId));
+  }
+
+  const whereClause = filters.length === 1 ? filters[0] : and(...filters);
+  if (!whereClause) {
+    return [];
+  }
+
+  const result = await db.select().from(groups).where(whereClause).orderBy(groups.createdAt);
+  return result.map(mapGroup);
 }
 
 export async function isGroupMember(groupId: string, userId: string): Promise<boolean> {

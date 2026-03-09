@@ -3,12 +3,36 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import {
   createGroup,
+  getGroupsForContext,
   getUserGroups,
   type CreateGroupOptions,
 } from "@/app/api/_lib/services/groupService";
 import { getOrCreateUserByEmail } from "@/app/api/_lib/services/userService";
 
-export async function GET() {
+function toPublicGroup(group: {
+  id: string;
+  name: string;
+  ltiContextId: string | null;
+  ltiContextTitle: string | null;
+  resourceLinkId: string | null;
+  createdBy: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}, options?: { isMember?: boolean }) {
+  return {
+    id: group.id,
+    name: group.name,
+    ltiContextId: group.ltiContextId,
+    ltiContextTitle: group.ltiContextTitle,
+    resourceLinkId: group.resourceLinkId,
+    createdBy: group.createdBy,
+    createdAt: group.createdAt,
+    updatedAt: group.updatedAt,
+    isMember: Boolean(options?.isMember),
+  };
+}
+
+export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
 
@@ -17,9 +41,22 @@ export async function GET() {
     }
 
     const user = await getOrCreateUserByEmail(session.user.email);
-    const groups = await getUserGroups(user.id);
+    const ltiContextId = request.nextUrl.searchParams.get("ltiContextId");
+    const resourceLinkId = request.nextUrl.searchParams.get("resourceLinkId");
 
-    return NextResponse.json({ groups });
+    const [userGroups, contextGroups] = await Promise.all([
+      getUserGroups(user.id),
+      getGroupsForContext({ ltiContextId, resourceLinkId }),
+    ]);
+
+    const groups = [...userGroups, ...contextGroups].filter((group, index, all) =>
+      all.findIndex((candidate) => candidate.id === group.id) === index
+    );
+    const memberIds = new Set(userGroups.map((group) => group.id));
+
+    return NextResponse.json({
+      groups: groups.map((group) => toPublicGroup(group, { isMember: memberIds.has(group.id) })),
+    });
   } catch (error) {
     console.error("Error fetching groups:", error);
     return NextResponse.json({ error: "Failed to fetch groups" }, { status: 500 });
@@ -61,7 +98,7 @@ export async function POST(request: NextRequest) {
       role: "instructor",
     });
 
-    return NextResponse.json({ group }, { status: 201 });
+    return NextResponse.json({ group: toPublicGroup(group) }, { status: 201 });
   } catch (error) {
     console.error("Error creating group:", error);
     return NextResponse.json({ error: "Failed to create group" }, { status: 500 });

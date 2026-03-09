@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
 import jwt from "jsonwebtoken";
 import { createHash, randomUUID } from "crypto";
 import {
@@ -10,16 +9,10 @@ import {
   extractLtiOutcomeService,
 } from "@/lib/lti/types";
 import { resolveLtiIdentity } from "@/lib/lti/identity";
-import { deriveLtiGroupContext, getExplicitLtiGroupScopeValue } from "@/lib/lti/group-context";
-import { getOrCreateUserByEmail, getUserByEmail, updateUserProfile } from "@/app/api/_lib/services/userService";
-import {
-  getOrCreateGroupByLtiContext,
-  addGroupMember,
-} from "@/app/api/_lib/services/groupService";
+import { getOrCreateUserByEmail, updateUserProfile } from "@/app/api/_lib/services/userService";
 import { getSql } from "@/app/api/_lib/db";
 import { extractRows } from "@/app/api/_lib/db/shared";
 import { logDebug } from "@/lib/debug-logger";
-import { authOptions } from "@/lib/auth";
 import { createOneTimeCode } from "@/lib/lti/one-time-code";
 
 // POST /api/lti/game/[gameId]
@@ -148,30 +141,7 @@ export async function POST(
       ltiUniqueEmail,
     });
 
-    const ltiUser = await getOrCreateUserByEmail(ltiUniqueEmail);
-
-    let user = ltiUser;
-    const preserveSessionIdentity =
-      process.env.LTI_PLAY_PRESERVE_SESSION_IDENTITY !== "false";
-
-    if (preserveSessionIdentity) {
-      const existingSession = await getServerSession(authOptions);
-      const sessionEmail = existingSession?.user?.email || null;
-      if (sessionEmail) {
-        const sessionUser = await getUserByEmail(sessionEmail);
-        if (sessionUser && sessionUser.id !== ltiUser.id) {
-          user = sessionUser;
-          logDebug("lti_game_identity_override", {
-            strategy: "session_preferred",
-            sessionUserId: sessionUser.id,
-            sessionUserEmail: sessionUser.email,
-            ltiUserId: ltiUser.id,
-            ltiUserEmail: ltiUser.email,
-            identitySource: identity.source,
-          });
-        }
-      }
-    }
+    const user = await getOrCreateUserByEmail(ltiUniqueEmail);
 
     logDebug("lti_game_db_user", {
       dbUserId: user.id,
@@ -183,47 +153,27 @@ export async function POST(
       await updateUserProfile(user.id, { name: userInfo.name });
     }
 
-    // Group-mode gameplay should redirect quickly.
-    // If the LMS did not send an explicit group identifier, do not block this launch
-    // on an extra A+ API lookup here. The game page can resolve or ask for the group
-    // after redirect while showing a proper loading / lobby UI.
+    // Group-mode gameplay is app-owned. LTI launch may carry group information,
+    // but we no longer bind gameplay grouping directly to LMS/Plussa groups.
+    // The game route will use the app's own group-selection / lobby flow.
     const groupName = userInfo.contextTitle || userInfo.contextId || `LTI Group ${Date.now()}`;
     const role = getLtiRole(userInfo.roles);
-    const explicitGroupScopeValue = getExplicitLtiGroupScopeValue(ltiData);
-    let resolvedGroupId: string | null = null;
-    let resolvedGroupName: string | null = null;
-    let resolvedGroupScopeSource: string | null = null;
-    let resolvedGroupScopeValue: string | null = null;
-
-    if (explicitGroupScopeValue) {
-      const ltiGroupContext = deriveLtiGroupContext(ltiData);
-      const group = await getOrCreateGroupByLtiContext(
-        ltiGroupContext.key,
-        groupName,
-        userInfo.resourceLinkId
-      );
-      await addGroupMember({ groupId: group.id, userId: user.id, role });
-      resolvedGroupId = group.id;
-      resolvedGroupName = group.name;
-      resolvedGroupScopeSource = ltiGroupContext.scopeSource;
-      resolvedGroupScopeValue = ltiGroupContext.scopeValue;
-    }
 
     logDebug("lti_game_group", {
-      groupId: resolvedGroupId,
-      groupName: resolvedGroupName ?? groupName,
-      groupContextKey: resolvedGroupId ? "resolved" : null,
-      groupScopeSource: resolvedGroupScopeSource ?? "pending",
-      groupScopeValue: resolvedGroupScopeValue ?? explicitGroupScopeValue,
+      groupId: null,
+      groupName,
+      groupContextKey: null,
+      groupScopeSource: "pending",
+      groupScopeValue: null,
       role,
     });
     console.log(
       "[LTI launch] group scope:",
-      resolvedGroupScopeSource ?? "pending",
+      "pending",
       "value:",
-      resolvedGroupScopeValue ?? explicitGroupScopeValue ?? null,
+      null,
       "groupId:",
-      resolvedGroupId
+      null
     );
 
     const outcomeService = extractLtiOutcomeService(ltiData, consumer_key, consumer_secret);
@@ -234,9 +184,9 @@ export async function POST(
       userId: user.id,
       userEmail: user.email,
       userName: user.name || userInfo.name || user.email,
-      groupId: resolvedGroupId,
-      groupName: resolvedGroupName ?? groupName,
-      groupResolution: resolvedGroupId ? "resolved" : "pending",
+      groupId: null,
+      groupName: groupName,
+      groupResolution: "pending",
       role,
       outcomeService,
       documentTarget,
@@ -249,6 +199,11 @@ export async function POST(
         roles: ltiData.roles,
         lis_outcome_service_url: ltiData.lis_outcome_service_url,
         lis_result_sourcedid: ltiData.lis_result_sourcedid,
+        custom_context_api: ltiData.custom_context_api,
+        custom_context_api_id: ltiData.custom_context_api_id,
+        custom_user_api_token: ltiData.custom_user_api_token,
+        custom_student_id: ltiData.custom_student_id,
+        _aplus_group: ltiData._aplus_group,
       },
     };
 
@@ -269,16 +224,6 @@ export async function POST(
     resolvedGameId = gameRows[0].id;
     collaborationMode = gameRows[0].collaboration_mode === "group" ? "group" : "individual";
 
-    if (collaborationMode === "group") {
-      const gameGroupId = gameRows[0].group_id;
-      if (!gameGroupId && resolvedGroupId) {
-        await sql.query(
-          "UPDATE projects SET group_id = $1 WHERE id = $2 AND group_id IS NULL",
-          [resolvedGroupId, gameRows[0].id]
-        );
-      }
-    }
-
     // App root URL for redirects. Prefer APP_ROOT_URL (server-only) so prod redirects stay correct behind a proxy.
     const appRootUrl =
       process.env.APP_ROOT_URL ||
@@ -297,14 +242,11 @@ export async function POST(
       jwtUserId: user.id,
       jwtEmail: user.email,
       jwtName: user.name || userInfo.name || user.email,
-      redirectGroupId: resolvedGroupId,
+      redirectGroupId: null,
       collaborationMode,
     });
 
-    const dest =
-      collaborationMode === "group" && resolvedGroupId
-        ? `/game/${resolvedGameId}?mode=game&groupId=${resolvedGroupId}`
-        : `/game/${resolvedGameId}?mode=game`;
+    const dest = `/game/${resolvedGameId}?mode=game`;
 
     // Redirect with a one-time code instead of the JWT in the URL (code is exchanged server-side for the token).
     const code = createOneTimeCode(ltiSignInToken, dest);

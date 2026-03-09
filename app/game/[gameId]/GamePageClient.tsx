@@ -10,7 +10,10 @@ import { GroupSelector } from "@/components/groups";
 import { useSidebarCollapse } from "@/components/default/sidebar/context/SidebarCollapseContext";
 import { GameSummaryView } from "@/components/GameSummary/GameSummaryView";
 import { apiUrl } from "@/lib/apiUrl";
+import { cn } from "@/lib/utils/cn";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import type { GroupStartGateState, LobbyChatEntry, UserIdentity } from "@/lib/collaboration/types";
 import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
 import { startLevelTimerAt } from "@/store/slices/levels.slice";
@@ -176,13 +179,67 @@ function hasSharedStartTime(initialRoomState: { levels?: Array<Record<string, un
   return Number(timeData?.startTime ?? 0) > 0;
 }
 
+function getInitials(label: string): string {
+  return label
+    .split(" ")
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+}
+
+function PresenceStack({
+  users,
+  readyUserIds = [],
+  className,
+}: {
+  users: Array<{
+    userId?: string;
+    userEmail?: string;
+    userName?: string;
+    userImage?: string;
+    color?: string;
+  }>;
+  readyUserIds?: string[];
+  className?: string;
+}) {
+  return (
+    <div className={cn("flex items-center -space-x-2", className)}>
+      {users.map((user) => {
+        const label = user.userName || user.userEmail || user.userId || "Anonymous";
+        const isReady = user.userId ? readyUserIds.includes(user.userId) : false;
+        return (
+          <Avatar
+            key={user.userId || user.userEmail}
+            className={cn(
+              "h-9 w-9 border-2 border-background ring-1 ring-border",
+              isReady && "ring-2 ring-emerald-500"
+            )}
+            style={{ borderColor: user.color || undefined }}
+            title={`${label}${isReady ? " • Ready" : ""}`}
+          >
+            {user.userImage && <AvatarImage src={user.userImage} alt={label} />}
+            <AvatarFallback className="text-xs font-medium">
+              {getInitials(label)}
+            </AvatarFallback>
+          </Avatar>
+        );
+      })}
+    </div>
+  );
+}
+
 function GroupWaitingRoom({
   gameTitle,
   groupId,
+  groupName,
+  joinKey,
   currentUser,
 }: {
   gameTitle: string;
   groupId: string;
+  groupName?: string | null;
+  joinKey?: string | null;
   currentUser: UserIdentity;
 }) {
   const collaboration = useCollaboration();
@@ -219,20 +276,6 @@ function GroupWaitingRoom({
     });
   }, [collaboration.activeUsers, currentUser.email, currentUser.id, currentUser.image, currentUser.name]);
 
-  const readyUsers = gate.readyUserIds.map((userId) => {
-    const readyUser = gate.readyUsers[userId];
-    const connectedUser = connectedUsers.find((entry) => entry.userId === userId || entry.userEmail === readyUser?.userEmail);
-    return {
-      userId,
-      label:
-        readyUser?.userName ||
-        connectedUser?.userName ||
-        readyUser?.userEmail ||
-        connectedUser?.userEmail ||
-        userId,
-      readyAt: readyUser?.readyAt ?? null,
-    };
-  });
   const isReady = gate.readyUserIds.includes(currentUser.id);
   const isStarted = gate.status === "started";
   const startedAtMs = gate.startedAt ? Date.parse(gate.startedAt) : 0;
@@ -281,88 +324,57 @@ function GroupWaitingRoom({
           <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">Group Waiting Room</p>
           <h1 className="text-3xl font-bold">{gameTitle}</h1>
           <p className="text-sm text-muted-foreground">
-            Group <span className="font-mono">{groupId}</span>
+            Group <span className={groupName ? "" : "font-mono"}>{groupName || groupId}</span>
           </p>
         </div>
 
-        <div className="mt-6 grid gap-4 md:grid-cols-3">
-          <div className="rounded-lg border p-4">
-            <p className="text-sm text-muted-foreground">Ready to start</p>
-            <p className="mt-2 text-3xl font-semibold">
-              {gate.readyUserIds.length} / {gate.minReadyCount}
-            </p>
-            <p className="mt-2 text-sm text-muted-foreground">
-              The game starts for the whole group as soon as two members are ready.
-            </p>
-          </div>
-          <div className="rounded-lg border p-4">
-            <p className="text-sm text-muted-foreground">Connected right now</p>
-            <p className="mt-2 text-3xl font-semibold">{connectedUsers.length}</p>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Later joiners will skip this waiting room and enter the running game directly.
-            </p>
-          </div>
-          <div className="rounded-lg border p-4">
-            <p className="text-sm text-muted-foreground">Status</p>
-            <p className="mt-2 text-xl font-semibold">
-              {isStarted ? "Starting game..." : isReady ? "You are ready" : "Waiting for players"}
-            </p>
-            <p className="mt-2 text-sm text-muted-foreground">
-              {collaboration.isConnected ? "Connected to shared room" : "Reconnecting to shared room..."}
-            </p>
+        <div className="mt-6 rounded-lg border p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm text-muted-foreground">Group status</p>
+              <p className="mt-1 text-xl font-semibold">
+                {isStarted ? "Starting game..." : isReady ? "You are ready" : "Waiting for players"}
+              </p>
+            </div>
+            <PresenceStack users={connectedUsers} readyUserIds={gate.readyUserIds} />
           </div>
         </div>
 
-        <div className="mt-6 flex flex-wrap gap-3">
-          <Button
-            onClick={() => collaboration.setGroupReady(true)}
-            disabled={!collaboration.isConnected || isReady || isStarted}
-          >
-            Start Game
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => collaboration.setGroupReady(false)}
-            disabled={!collaboration.isConnected || !isReady || isStarted}
-          >
-            Cancel Ready
-          </Button>
+        <div className="mt-6 flex flex-col gap-3 rounded-lg border p-4 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-wrap gap-3">
+            <Button
+              onClick={() => collaboration.setGroupReady(true)}
+              disabled={!collaboration.isConnected || isReady || isStarted}
+            >
+              Start Game
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => collaboration.setGroupReady(false)}
+              disabled={!collaboration.isConnected || !isReady || isStarted}
+            >
+              Cancel Ready
+            </Button>
+          </div>
+          <p className="max-w-xl text-sm text-muted-foreground">
+            The game starts for the whole group as soon as at least two members are ready. Later joiners skip this
+            waiting room and enter the running game directly.
+          </p>
         </div>
 
-        <div className="mt-8 grid gap-4 md:grid-cols-2">
-          <div className="rounded-lg border p-4">
-            <h2 className="text-lg font-semibold">Connected Players</h2>
-            <div className="mt-3 space-y-2">
-              {connectedUsers.map((entry) => {
-                const label = entry.userName || entry.userEmail || entry.userId;
-                const ready = gate.readyUserIds.includes(entry.userId);
-                return (
-                  <div key={entry.userId || entry.userEmail} className="flex items-center justify-between rounded-md bg-muted/40 px-3 py-2">
-                    <span className="text-sm font-medium">{label}</span>
-                    <span className="text-xs text-muted-foreground">{ready ? "Ready" : "Not ready"}</span>
-                  </div>
-                );
-              })}
-            </div>
+        {joinKey && (
+          <div className="mt-4 rounded-lg border bg-muted/20 p-4">
+            <p className="text-sm text-muted-foreground">Group join key</p>
+            <p className="mt-1 text-2xl font-mono font-semibold tracking-[0.2em]">{joinKey}</p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Share this key with teammates so they can join this group from the lobby.
+            </p>
           </div>
+        )}
 
-          <div className="rounded-lg border p-4">
-            <h2 className="text-lg font-semibold">Ready Players</h2>
-            <div className="mt-3 space-y-2">
-              {readyUsers.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No one is ready yet.</p>
-              ) : (
-                readyUsers.map((entry) => (
-                  <div key={entry.userId} className="flex items-center justify-between rounded-md bg-muted/40 px-3 py-2">
-                    <span className="text-sm font-medium">{entry.label}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {entry.readyAt ? new Date(entry.readyAt).toLocaleTimeString() : "Ready"}
-                    </span>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
+        <div className="mt-4 text-sm text-muted-foreground">
+          {connectedUsers.length} player{connectedUsers.length === 1 ? "" : "s"} in this room.
+          {!collaboration.isConnected && " Reconnecting to shared room..."}
         </div>
       </div>
     </div>
@@ -371,16 +383,18 @@ function GroupWaitingRoom({
 
 function PublicGroupLobby({
   gameId,
+  groupId,
   gameTitle,
   courseName,
   currentUser,
   onGroupSelect,
 }: {
   gameId: string;
+  groupId: string | null;
   gameTitle: string;
   courseName: string | null;
   currentUser: UserIdentity;
-  onGroupSelect: (groupId: string) => void;
+  onGroupSelect: (groupId: string) => void | Promise<void>;
 }) {
   const collaboration = useCollaboration();
   const [draftMessage, setDraftMessage] = useState("");
@@ -392,6 +406,7 @@ function PublicGroupLobby({
         userId: currentUser.id,
         userEmail: currentUser.email,
         userName: currentUser.name,
+        userImage: currentUser.image,
       },
       ...collaboration.activeUsers,
     ];
@@ -402,7 +417,7 @@ function PublicGroupLobby({
       seen.add(key);
       return true;
     });
-  }, [collaboration.activeUsers, currentUser.email, currentUser.id, currentUser.name]);
+  }, [collaboration.activeUsers, currentUser.email, currentUser.id, currentUser.image, currentUser.name]);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -415,52 +430,51 @@ function PublicGroupLobby({
 
   return (
     <div className="flex h-full items-center justify-center px-4 py-8 overflow-y-auto">
-      <div className="w-full max-w-5xl rounded-xl border bg-card p-6 shadow-sm">
+      <div className="w-full max-w-5xl rounded-xl border bg-card p-5 shadow-sm">
         <div className="space-y-2">
           <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">Public Group Lobby</p>
-          <h1 className="text-3xl font-bold">{gameTitle}</h1>
+          <h1 className="text-2xl font-bold">{gameTitle}</h1>
           <p className="text-sm text-muted-foreground">
             {courseName ? `Course: ${courseName}` : `Game: ${gameId}`}
           </p>
-          <p className="text-sm text-muted-foreground">
-            Your LTI launch did not resolve to a specific group. Use this temporary room to coordinate with other players,
-            then choose your actual group when it becomes available.
+        </div>
+
+        <div className="mt-5 rounded-lg border p-4">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <p className="text-sm text-muted-foreground">Lobby status</p>
+              <p className="mt-1 text-2xl font-semibold">{connectedUsers.length} online</p>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {collaboration.isConnected ? "Connected" : "Connecting..."}
+            </p>
+          </div>
+          <div className="mt-4 space-y-2 text-sm text-muted-foreground">
+            <p><strong className="text-foreground">1.</strong> Create an app group or pick an existing one.</p>
+            <p><strong className="text-foreground">2.</strong> Ask your teammates to join the same group.</p>
+            <p><strong className="text-foreground">3.</strong> Enter the group waiting room and start together.</p>
+          </div>
+          <p className="mt-4 text-xs text-muted-foreground">
+            This temporary lobby and its chat disappear automatically when everyone leaves.
           </p>
         </div>
 
-        <div className="mt-6 grid gap-4 md:grid-cols-3">
-          <div className="rounded-lg border p-4">
-            <p className="text-sm text-muted-foreground">Connected in lobby</p>
-            <p className="mt-2 text-3xl font-semibold">{connectedUsers.length}</p>
-            <p className="mt-2 text-sm text-muted-foreground">
-              This room is temporary and is destroyed automatically when everyone leaves.
-            </p>
-          </div>
-          <div className="rounded-lg border p-4">
-            <p className="text-sm text-muted-foreground">Status</p>
-            <p className="mt-2 text-xl font-semibold">
-              {collaboration.isConnected ? "Connected to lobby" : "Connecting to lobby..."}
-            </p>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Chat here while you form a group, then enter the real shared group workspace.
-            </p>
-          </div>
-          <div className="rounded-lg border p-4">
-            <p className="text-sm text-muted-foreground">Next step</p>
-            <p className="mt-2 text-xl font-semibold">Choose your group</p>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Refresh the group list once your instructor or teammates have placed you into the correct group.
-            </p>
-          </div>
-        </div>
+        <Tabs defaultValue="chat" className="mt-6">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="chat">Lobby Chat</TabsTrigger>
+            <TabsTrigger value="group">Enter Your Group</TabsTrigger>
+          </TabsList>
 
-        <div className="mt-8 grid gap-4 lg:grid-cols-[1.2fr,0.8fr]">
-          <div className="rounded-lg border p-4">
-            <h2 className="text-lg font-semibold">Lobby Chat</h2>
+          <TabsContent value="chat" className="mt-4">
+            <div className="rounded-lg border p-4">
+              <div className="flex items-center justify-between gap-4">
+                <h2 className="text-lg font-semibold">Lobby Chat</h2>
+                <PresenceStack users={connectedUsers} className="justify-end" />
+              </div>
             <div className="mt-3 h-72 overflow-y-auto space-y-3 rounded-md bg-muted/30 p-3">
               {collaboration.lobbyMessages.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  No messages yet. Introduce yourselves and agree on your group before starting.
+                  No messages yet. Introduce yourselves and agree on a shared app group before starting.
                 </p>
               ) : (
                 collaboration.lobbyMessages.map((entry) => (
@@ -488,35 +502,32 @@ function PublicGroupLobby({
                 Send
               </Button>
             </form>
-          </div>
-
-          <div className="space-y-4 rounded-lg border p-4">
-            <div>
-              <h2 className="text-lg font-semibold">Connected Players</h2>
-              <div className="mt-3 space-y-2">
-                {connectedUsers.map((entry) => (
-                  <div key={entry.userId || entry.userEmail} className="rounded-md bg-muted/40 px-3 py-2 text-sm">
-                    {entry.userName || entry.userEmail || entry.userId}
-                  </div>
-                ))}
-              </div>
             </div>
+          </TabsContent>
 
-            <div className="border-t pt-4">
+          <TabsContent value="group" className="mt-4">
+            <div className="rounded-lg border p-4">
               <h2 className="text-lg font-semibold">Enter Your Group</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Once your actual group exists for this course, select it here to move into the group waiting room.
+                Use your app group here. If none exists yet, create one with a name your teammates can recognize.
               </p>
               <div className="mt-3">
                 <GroupSelector
-                  selectedGroupId={null}
+                  selectedGroupId={groupId}
                   onGroupSelect={onGroupSelect}
                   showRefreshButton
+                  allowCreate
+                  createContext={{
+                    ltiContextTitle: courseName,
+                    resourceLinkId: gameId,
+                  }}
+                  createPlaceholder="Example: Team 2 / UI Squad"
+                  currentUserId={currentUser.id}
                 />
               </div>
             </div>
-          </div>
-        </div>
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );
@@ -529,13 +540,16 @@ export default function GamePage({ params }: GamePageProps) {
   const sessionUserId = session?.userId || session?.user?.email || "";
   const { setCurrentGameId, addGameToStore } = useGameStore();
   const searchParams = useSearchParams();
+  const selectedGroupId = searchParams.get("groupId");
   const router = useRouter();
   const pathname = usePathname();
   const [isLoading, setIsLoading] = useState(true);
   const [loadingMessage, setLoadingMessage] = useState("Loading game...");
   const [error, setError] = useState<string | null>(null);
   const [requiresGroup, setRequiresGroup] = useState(false);
-  const [publicLobby, setPublicLobby] = useState<{ roomId: string; courseName: string | null } | null>(null);
+  const [publicLobby, setPublicLobby] = useState<{ roomId: string; courseName: string | null; contextId: string | null } | null>(null);
+  const [currentGroupName, setCurrentGroupName] = useState<string | null>(null);
+  const [currentGroupJoinKey, setCurrentGroupJoinKey] = useState<string | null>(null);
   const [requiresAccessKey, setRequiresAccessKey] = useState(false);
   const [accessKeyInput, setAccessKeyInput] = useState("");
   const [submittedAccessKey, setSubmittedAccessKey] = useState("");
@@ -687,6 +701,7 @@ export default function GamePage({ params }: GamePageProps) {
               setPublicLobby({
                 roomId: lobbyRoomId,
                 courseName: nextLtiInfo.courseName,
+                contextId: nextLtiInfo.contextId,
               });
             } else {
               setRequiresGroup(true);
@@ -796,7 +811,37 @@ export default function GamePage({ params }: GamePageProps) {
     initializeGame();
   }, [gameId, hasUser, sessionUserId, guestId, setCurrentGameId, searchParams, router, pathname, addGameToStore, loadAttempt, accessKeyReady, submittedAccessKey, isReplayView]);
 
-  const handleGroupSelect = (groupId: string) => {
+  const handleGroupSelect = async (groupId: string, options?: { joinKey?: string }) => {
+    if (hasUser && session?.user?.email) {
+      const membershipResponse = await fetch(apiUrl(`/api/groups/${groupId}/members`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          joinKey: options?.joinKey,
+        }),
+      });
+
+      if (!membershipResponse.ok) {
+        const membershipData = await membershipResponse.json().catch(() => ({}));
+        throw new Error(membershipData.error || "Failed to join group");
+      }
+    }
+
+    try {
+      const response = await fetch(apiUrl(`/api/groups/${groupId}`));
+      if (response.ok) {
+        const data = await response.json();
+        setCurrentGroupName(data.group?.name ?? null);
+        setCurrentGroupJoinKey(data.group?.joinKey ?? null);
+      } else {
+        setCurrentGroupName(null);
+        setCurrentGroupJoinKey(null);
+      }
+    } catch {
+      setCurrentGroupName(null);
+      setCurrentGroupJoinKey(null);
+    }
+
     const normalizedParams = new URLSearchParams(searchParams.toString());
     normalizedParams.set("mode", "game");
     normalizedParams.set("groupId", groupId);
@@ -804,6 +849,39 @@ export default function GamePage({ params }: GamePageProps) {
     setRequiresGroup(false);
     setIsLoading(true);
   };
+
+  useEffect(() => {
+    const groupId = searchParams.get("groupId");
+    if (!groupId || !hasUser) {
+      return;
+    }
+
+    let cancelled = false;
+    const loadGroupDetails = async () => {
+      try {
+        const response = await fetch(apiUrl(`/api/groups/${groupId}`));
+        if (!response.ok || cancelled) {
+          return;
+        }
+        const data = await response.json();
+        if (cancelled) {
+          return;
+        }
+        setCurrentGroupName(data.group?.name ?? null);
+        setCurrentGroupJoinKey(data.group?.joinKey ?? null);
+      } catch {
+        if (!cancelled) {
+          setCurrentGroupName(null);
+          setCurrentGroupJoinKey(null);
+        }
+      }
+    };
+
+    loadGroupDetails();
+    return () => {
+      cancelled = true;
+    };
+  }, [hasUser, searchParams]);
 
   if (isLoading) {
     return (
@@ -838,11 +916,15 @@ export default function GamePage({ params }: GamePageProps) {
             This game is in Group Work Mode. Choose one of your existing groups to open the shared instance.
           </p>
           <p className="text-sm text-muted-foreground">
-            If you do not see a group here, ask the game creator or your instructor to add you before entering.
+            If you do not see the right group yet, create one here or return to the public lobby and coordinate with your teammates.
           </p>
           <GroupSelector
             selectedGroupId={searchParams.get("groupId")}
             onGroupSelect={handleGroupSelect}
+            allowCreate
+            createContext={{ resourceLinkId: gameId }}
+            createPlaceholder="Create a group name"
+            currentUserId={sessionUserId}
           />
         </div>
       </div>
@@ -870,6 +952,7 @@ export default function GamePage({ params }: GamePageProps) {
       <CollaborationProvider roomId={publicLobby.roomId} user={user}>
         <PublicGroupLobby
           gameId={gameId}
+          groupId={selectedGroupId}
           gameTitle={currentGame?.title || "Group Game"}
           courseName={publicLobby.courseName}
           currentUser={user}
@@ -928,6 +1011,8 @@ export default function GamePage({ params }: GamePageProps) {
         <GroupWaitingRoom
           gameTitle={currentGame.title}
           groupId={searchParams.get("groupId") || roomId.split(":")[1] || ""}
+          groupName={currentGroupName}
+          joinKey={currentGroupJoinKey}
           currentUser={user}
         />
       ) : (
