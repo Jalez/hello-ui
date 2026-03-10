@@ -1126,12 +1126,17 @@ wsServer.on("connection", (socket) => {
         const scope = data?.scope === "game" ? "game" : "level";
         const levelIndex = Number.isInteger(data?.levelIndex) ? data.levelIndex : 0;
         const currentState = await ensureRoomState(roomId, ctx);
-        let templateLevels = Array.isArray(currentState.templateLevels)
-          ? currentState.templateLevels
+        // Reset should prefer the latest creator-saved map levels instead of the
+        // room's cached template snapshot. Fall back to the cached snapshot only
+        // if the refresh fails or returns nothing.
+        let templateLevels = currentState.mapName
+          ? await fetchLevelsForMapName(currentState.mapName)
           : [];
 
-        if (templateLevels.length === 0 && currentState.mapName) {
-          templateLevels = await fetchLevelsForMapName(currentState.mapName);
+        if (templateLevels.length === 0) {
+          templateLevels = Array.isArray(currentState.templateLevels)
+            ? currentState.templateLevels
+            : [];
         }
         if (templateLevels.length === 0) {
           return;
