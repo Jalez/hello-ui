@@ -116,17 +116,16 @@ export function ProgressPersistence() {
 
     if (
       ltiGradeRefreshAt &&
-      ltiGradeRefreshAt !== lastAppliedLtiGradeRefreshAtRef.current &&
-      typeof window !== "undefined" &&
-      window.parent
+      ltiGradeRefreshAt !== lastAppliedLtiGradeRefreshAtRef.current
     ) {
       lastAppliedLtiGradeRefreshAtRef.current = ltiGradeRefreshAt;
-      setTimeout(() => {
-        window.parent.postMessage({ type: "a-plus-refresh-stats" }, "*");
-        if (window.top) {
-          window.top.location.reload();
-        }
-      }, 500);
+      dispatch(
+        addNotificationData({
+          type: "info",
+          message:
+            "A group member has finished the game. Please click 'Finish game' to save your progress and submit your score to A+.",
+        }),
+      );
     }
 
     const resetNotice =

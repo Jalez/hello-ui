@@ -8,7 +8,17 @@ interface StoredPayload {
   expiresAt: number;
 }
 
-const store = new Map<string, StoredPayload>();
+// In Next.js, API routes might run in different module contexts or be reloaded in dev mode.
+// We must attach the store to globalThis so the Map is shared across endpoints like
+// /api/lti/game/[gameId] and /api/lti/exchange.
+const globalStore = globalThis as unknown as {
+  __oneTimeCodeStore?: Map<string, StoredPayload>;
+};
+
+if (!globalStore.__oneTimeCodeStore) {
+  globalStore.__oneTimeCodeStore = new Map();
+}
+const store = globalStore.__oneTimeCodeStore;
 
 function prune(): void {
   const now = Date.now();
