@@ -17,6 +17,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import type { GroupStartGateState, LobbyChatEntry, UserIdentity } from "@/lib/collaboration/types";
 import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
 import { startLevelTimerAt } from "@/store/slices/levels.slice";
+import { logDebugClient } from "@/lib/debug-logger";
 
 interface GamePageProps {
   params: Promise<{
@@ -28,6 +29,15 @@ interface LtiSessionInfo {
   isLtiMode: boolean;
   courseName: string | null;
   contextId: string | null;
+  role?: "instructor" | "member";
+}
+
+interface PersistedGroupMember {
+  id: string;
+  userId: string;
+  userEmail?: string | null;
+  userName?: string | null;
+  userImage?: string | null;
   role?: "instructor" | "member";
 }
 
@@ -235,12 +245,14 @@ function GroupWaitingRoom({
   groupName,
   joinKey,
   currentUser,
+  groupMembers,
 }: {
   gameTitle: string;
   groupId: string;
   groupName?: string | null;
   joinKey?: string | null;
   currentUser: UserIdentity;
+  groupMembers: PersistedGroupMember[];
 }) {
   const collaboration = useCollaboration();
   const dispatch = useAppDispatch();
@@ -254,8 +266,18 @@ function GroupWaitingRoom({
   const gateSnapshotRef = useRef<string>("");
 
   const connectedUsers = useMemo(() => {
-    const seen = new Set<string>();
-    const combined = [
+    const presenceByKey = new Map<
+      string,
+      {
+        userId?: string;
+        userEmail?: string;
+        userName?: string;
+        userImage?: string;
+        color?: string;
+      }
+    >();
+
+    for (const entry of [
       {
         userId: currentUser.id,
         userEmail: currentUser.email,
@@ -264,17 +286,46 @@ function GroupWaitingRoom({
         clientId: "self",
       },
       ...collaboration.activeUsers,
-    ];
-
-    return combined.filter((entry) => {
+    ]) {
       const key = entry.userId || entry.userEmail || entry.clientId;
-      if (!key || seen.has(key)) {
-        return false;
+      if (!key || presenceByKey.has(key)) {
+        continue;
       }
-      seen.add(key);
-      return true;
+      presenceByKey.set(key, entry);
+    }
+
+    const roster = groupMembers.map((member) => {
+      const key = member.userId || member.userEmail || member.id;
+      const liveEntry = presenceByKey.get(key);
+      return {
+        userId: member.userId,
+        userEmail: member.userEmail ?? liveEntry?.userEmail,
+        userName: member.userName ?? liveEntry?.userName,
+        userImage: member.userImage ?? liveEntry?.userImage,
+        color: liveEntry?.color,
+        isConnected: Boolean(liveEntry),
+      };
     });
-  }, [collaboration.activeUsers, currentUser.email, currentUser.id, currentUser.image, currentUser.name]);
+
+    const rosterKeys = new Set(
+      roster.map((entry) => entry.userId || entry.userEmail).filter((entry): entry is string => Boolean(entry)),
+    );
+    const extras = Array.from(presenceByKey.values())
+      .filter((entry) => {
+        const key = entry.userId || entry.userEmail;
+        return Boolean(key) && !rosterKeys.has(key);
+      })
+      .map((entry) => ({
+        userId: entry.userId,
+        userEmail: entry.userEmail,
+        userName: entry.userName,
+        userImage: entry.userImage,
+        color: entry.color,
+        isConnected: true,
+      }));
+
+    return [...roster, ...extras];
+  }, [collaboration.activeUsers, currentUser.email, currentUser.id, currentUser.image, currentUser.name, groupMembers]);
 
   const isReady = gate.readyUserIds.includes(currentUser.id);
   const isStarted = gate.status === "started";
@@ -338,6 +389,27 @@ function GroupWaitingRoom({
             </div>
             <PresenceStack users={connectedUsers} readyUserIds={gate.readyUserIds} />
           </div>
+          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+            {connectedUsers.map((user) => {
+              const label = user.userName || user.userEmail || user.userId || "Anonymous";
+              return (
+                <div
+                  key={user.userId || user.userEmail}
+                  className="flex items-center justify-between rounded-md border bg-muted/20 px-3 py-2"
+                >
+                  <span className="truncate text-sm">{label}</span>
+                  <span
+                    className={cn(
+                      "text-xs font-medium",
+                      user.isConnected ? "text-emerald-600" : "text-muted-foreground",
+                    )}
+                  >
+                    {user.isConnected ? "Connected" : "Offline"}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         <div className="mt-6 flex flex-col gap-3 rounded-lg border p-4 md:flex-row md:items-center md:justify-between">
@@ -373,7 +445,8 @@ function GroupWaitingRoom({
         )}
 
         <div className="mt-4 text-sm text-muted-foreground">
-          {connectedUsers.length} player{connectedUsers.length === 1 ? "" : "s"} in this room.
+          {connectedUsers.filter((user) => user.isConnected).length} player
+          {connectedUsers.filter((user) => user.isConnected).length === 1 ? "" : "s"} currently connected.
           {!collaboration.isConnected && " Reconnecting to shared room..."}
         </div>
       </div>
@@ -550,6 +623,7 @@ export default function GamePage({ params }: GamePageProps) {
   const [publicLobby, setPublicLobby] = useState<{ roomId: string; courseName: string | null; contextId: string | null } | null>(null);
   const [currentGroupName, setCurrentGroupName] = useState<string | null>(null);
   const [currentGroupJoinKey, setCurrentGroupJoinKey] = useState<string | null>(null);
+  const [currentGroupMembers, setCurrentGroupMembers] = useState<PersistedGroupMember[]>([]);
   const [requiresAccessKey, setRequiresAccessKey] = useState(false);
   const [accessKeyInput, setAccessKeyInput] = useState("");
   const [submittedAccessKey, setSubmittedAccessKey] = useState("");
@@ -698,6 +772,13 @@ export default function GamePage({ params }: GamePageProps) {
               addGameToStore(game);
               setCurrentGameId(gameId);
               setRoomId(lobbyRoomId);
+              logDebugClient("room_resolution_lti_lobby", {
+                gameId,
+                roomId: lobbyRoomId,
+                contextId: nextLtiInfo.contextId,
+                courseName: nextLtiInfo.courseName,
+                href: typeof window !== "undefined" ? window.location.href : null,
+              });
               setPublicLobby({
                 roomId: lobbyRoomId,
                 courseName: nextLtiInfo.courseName,
@@ -752,7 +833,15 @@ export default function GamePage({ params }: GamePageProps) {
             sanitizedKeys: Object.keys(progressData),
           });
           addGameToStore({ ...game, progressData });
-          setRoomId(getRoomIdForInstance(gameId, instancePayload.instance));
+          const nextRoomId = getRoomIdForInstance(gameId, instancePayload.instance);
+          setRoomId(nextRoomId);
+          logDebugClient("room_resolution_group_instance", {
+            gameId,
+            groupId,
+            roomId: nextRoomId,
+            instanceId: instancePayload.instance?.id ?? null,
+            href: typeof window !== "undefined" ? window.location.href : null,
+          });
         } else {
           const instanceParams = new URLSearchParams();
           instanceParams.set("accessContext", "game");
@@ -780,7 +869,14 @@ export default function GamePage({ params }: GamePageProps) {
               sanitizedKeys: Object.keys(progressData),
             });
             addGameToStore({ ...game, progressData });
-            setRoomId(getRoomIdForInstance(gameId, instancePayload.instance));
+            const nextRoomId = getRoomIdForInstance(gameId, instancePayload.instance);
+            setRoomId(nextRoomId);
+            logDebugClient("room_resolution_individual_instance", {
+              gameId,
+              roomId: nextRoomId,
+              instanceId: instancePayload.instance?.id ?? null,
+              href: typeof window !== "undefined" ? window.location.href : null,
+            });
           } else {
             const payload = await instanceRes.json().catch(() => ({}));
             if (instanceRes.status === 403 && (payload.requiresAccessKey || payload.reason === "access_key_required" || payload.reason === "access_key_invalid")) {
@@ -795,7 +891,13 @@ export default function GamePage({ params }: GamePageProps) {
             const userId = hasUser
               ? sessionUserId
               : guestId;
-            setRoomId(`individual:${userId}:game:${gameId}`);
+            const nextRoomId = `individual:${userId}:game:${gameId}`;
+            setRoomId(nextRoomId);
+            logDebugClient("room_resolution_individual_fallback", {
+              gameId,
+              roomId: nextRoomId,
+              href: typeof window !== "undefined" ? window.location.href : null,
+            });
           }
         }
 
@@ -833,13 +935,25 @@ export default function GamePage({ params }: GamePageProps) {
         const data = await response.json();
         setCurrentGroupName(data.group?.name ?? null);
         setCurrentGroupJoinKey(data.group?.joinKey ?? null);
+        setCurrentGroupMembers(Array.isArray(data.members) ? data.members : []);
+        logDebugClient("group_join_success", {
+          groupId,
+          groupName: data.group?.name ?? null,
+          joinKey: data.group?.joinKey ?? null,
+          memberNames: Array.isArray(data.members)
+            ? data.members.map((member: { userName?: string; userEmail?: string; userId?: string }) => member.userName || member.userEmail || member.userId || "unknown")
+            : [],
+          href: typeof window !== "undefined" ? window.location.href : null,
+        });
       } else {
         setCurrentGroupName(null);
         setCurrentGroupJoinKey(null);
+        setCurrentGroupMembers([]);
       }
     } catch {
       setCurrentGroupName(null);
       setCurrentGroupJoinKey(null);
+      setCurrentGroupMembers([]);
     }
 
     const normalizedParams = new URLSearchParams(searchParams.toString());
@@ -869,10 +983,12 @@ export default function GamePage({ params }: GamePageProps) {
         }
         setCurrentGroupName(data.group?.name ?? null);
         setCurrentGroupJoinKey(data.group?.joinKey ?? null);
+        setCurrentGroupMembers(Array.isArray(data.members) ? data.members : []);
       } catch {
         if (!cancelled) {
           setCurrentGroupName(null);
           setCurrentGroupJoinKey(null);
+          setCurrentGroupMembers([]);
         }
       }
     };
@@ -1014,6 +1130,7 @@ export default function GamePage({ params }: GamePageProps) {
           groupName={currentGroupName}
           joinKey={currentGroupJoinKey}
           currentUser={user}
+          groupMembers={currentGroupMembers}
         />
       ) : (
         <App />

@@ -40,6 +40,11 @@ type ProgressTelemetry = {
   users?: Record<string, ProgressTelemetryUser>;
 };
 
+type AttemptParticipant = ProgressTelemetryUser & {
+  displayName?: string;
+  email?: string;
+};
+
 export type FinalizeAttemptInput = {
   gameId: string;
   mapName: string;
@@ -215,8 +220,14 @@ export async function finalizeGameAttempt(input: FinalizeAttemptInput) {
   }
 
   const telemetryUsers = telemetry.users && typeof telemetry.users === "object" ? Object.values(telemetry.users) : [];
-  let participantRows = telemetryUsers;
-  if (input.scope === "group" && input.groupId && participantRows.length === 0) {
+  const telemetryByUserId = new Map<string, ProgressTelemetryUser>(
+    telemetryUsers
+      .filter((participant) => typeof participant.userId === "string" && participant.userId.length > 0)
+      .map((participant) => [participant.userId, participant]),
+  );
+
+  let participantRows: AttemptParticipant[] = telemetryUsers;
+  if (input.scope === "group" && input.groupId) {
     const groupMembersResult = await sql.query(
       `SELECT gm.user_id, COALESCE(u.name, u.email, gm.user_id::text) AS display_name, u.email
        FROM group_members gm
@@ -225,11 +236,31 @@ export async function finalizeGameAttempt(input: FinalizeAttemptInput) {
        ORDER BY display_name ASC`,
       [input.groupId],
     );
-    participantRows = getRows(groupMembersResult).map((row) => ({
-      userId: String(row.user_id),
-      displayName: row.display_name as string,
-      email: row.email as string | undefined,
-    }));
+    const groupMemberIds = new Set<string>();
+    participantRows = getRows(groupMembersResult).map((row) => {
+      const userId = String(row.user_id);
+      groupMemberIds.add(userId);
+      const telemetryParticipant = telemetryByUserId.get(userId);
+      return {
+        userId,
+        displayName: (telemetryParticipant?.displayName || row.display_name) as string | undefined,
+        email: (telemetryParticipant?.email || row.email) as string | undefined,
+        pasteCount: telemetryParticipant?.pasteCount,
+        largePasteCount: telemetryParticipant?.largePasteCount,
+        focusLossCount: telemetryParticipant?.focusLossCount,
+        activeEditMs: telemetryParticipant?.activeEditMs,
+        editCount: telemetryParticipant?.editCount,
+        resetLevelCount: telemetryParticipant?.resetLevelCount,
+        resetGameCount: telemetryParticipant?.resetGameCount,
+        levels: telemetryParticipant?.levels,
+      };
+    });
+
+    for (const telemetryParticipant of telemetryUsers) {
+      if (!telemetryParticipant.userId || groupMemberIds.has(telemetryParticipant.userId) === false) {
+        participantRows.push(telemetryParticipant);
+      }
+    }
   }
 
   for (const participant of participantRows) {

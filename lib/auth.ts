@@ -8,6 +8,19 @@ import { logDebug } from "@/lib/debug-logger";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH || "";
+const DEV_LOCAL_AUTH_ENABLED = process.env.NODE_ENV === "development";
+
+function normalizeDevUsername(value: string): string {
+  return value.trim().toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+function formatDevDisplayName(username: string): string {
+  return username
+    .split(/[._-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
 
 const isUuid = (value?: string) => !!value && UUID_RE.test(value);
 
@@ -72,6 +85,33 @@ export const authOptions = {
     updateAge: 24 * 60 * 60, // 24 hours
   },
   providers: [
+    ...(DEV_LOCAL_AUTH_ENABLED
+      ? [
+          CredentialsProvider({
+            id: "dev-user",
+            name: "Local Dev User",
+            credentials: {
+              username: { type: "text" },
+            },
+            async authorize(credentials) {
+              const normalizedUsername = normalizeDevUsername(credentials?.username || "");
+              if (!normalizedUsername) {
+                logDebug("dev_auth_invalid_username", {
+                  providedUsername: credentials?.username || null,
+                });
+                return null;
+              }
+
+              const email = `dev+${normalizedUsername}@local.test`;
+              return {
+                id: email,
+                email,
+                name: formatDevDisplayName(normalizedUsername),
+              };
+            },
+          }),
+        ]
+      : []),
     // LTI credentials provider — accepts a short-lived signed JWT issued by /api/lti/launch
     CredentialsProvider({
       id: "lti",
@@ -234,7 +274,6 @@ export const authOptions = {
 const handler = NextAuth(authOptions);
 
 export { handler as GET, handler as POST };
-
 
 
 

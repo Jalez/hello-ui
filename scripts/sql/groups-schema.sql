@@ -4,6 +4,8 @@
 -- Groups for collaborative gameplay and LTI integration
 -- ============================================================================
 
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 -- Groups table (collaborative game groups)
 CREATE TABLE IF NOT EXISTS groups (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

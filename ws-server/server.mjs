@@ -10,6 +10,8 @@ const WS_SERVICE_TOKEN = process.env.WS_SERVICE_TOKEN || "";
 const WRITE_BUFFER_FLUSH_MS = 5000;
 const EDITOR_TYPES = ["html", "css", "js"];
 const GROUP_START_MIN_READY_COUNT = 2;
+const WS_ARTIFICIAL_DELAY_MS = parseInt(process.env.WS_ARTIFICIAL_DELAY_MS || "0", 10);
+const WS_ARTIFICIAL_JITTER_MS = parseInt(process.env.WS_ARTIFICIAL_JITTER_MS || "0", 10);
 
 // roomId -> Map<WebSocket, userData>
 const rooms = new Map();
@@ -21,6 +23,18 @@ const roomLobbyState = new Map();
 
 // roomId -> { ctx, timer }
 const roomWriteBuffer = new Map();
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function maybeDelaySocketHandling() {
+  if (WS_ARTIFICIAL_DELAY_MS <= 0 && WS_ARTIFICIAL_JITTER_MS <= 0) {
+    return;
+  }
+  const jitter = WS_ARTIFICIAL_JITTER_MS > 0 ? Math.floor(Math.random() * WS_ARTIFICIAL_JITTER_MS) : 0;
+  await sleep(WS_ARTIFICIAL_DELAY_MS + jitter);
+}
 
 function getRoomUsers(roomId) {
   return rooms.get(roomId) || new Map();
@@ -75,6 +89,23 @@ function getConnectionState(socket) {
 
 function getConnectionId(socket) {
   return getConnectionState(socket)?.id || "unknown";
+}
+
+function summarizeRoomMembers(roomId) {
+  return Array.from(getRoomUsers(roomId).values()).map((user) => ({
+    userId: user.userId || "",
+    userEmail: user.userEmail || "",
+    userName: user.userName || "",
+    clientId: user.clientId || "",
+  }));
+}
+
+function logRoomSnapshot(reason, roomId, extra = {}) {
+  const ctx = parseRoomContext(roomId);
+  const state = roomEditorState.get(roomId);
+  console.log(
+    `[room-snapshot:${reason}] room=${roomId} gameId=${ctx?.gameId || "none"} groupId=${ctx?.groupId || "none"} instanceId=${state?.instanceId || "none"} roomUsers=${getRoomUsers(roomId).size} members=${JSON.stringify(summarizeRoomMembers(roomId))} extra=${JSON.stringify(extra)}`
+  );
 }
 
 function sendMessage(socket, type, payload) {
@@ -286,6 +317,7 @@ async function fetchInstanceSnapshotFromDB(ctx) {
     }
     const data = await response.json();
     return {
+      instanceId: data?.instance?.id ?? null,
       progressData: data?.instance?.progressData ?? null,
       mapName: typeof data?.mapName === "string" ? data.mapName : "",
     };
@@ -482,7 +514,7 @@ function serializeLevelState(level) {
 }
 
 function createRoomState(ctx, progressData, options = {}) {
-  const { templateLevels = [], mapName = "" } = options;
+  const { templateLevels = [], mapName = "", instanceId = null } = options;
   const normalizedProgressData =
     progressData && typeof progressData === "object" && !Array.isArray(progressData)
       ? { ...progressData }
@@ -500,6 +532,7 @@ function createRoomState(ctx, progressData, options = {}) {
     levels,
     templateLevels: normalizedTemplateLevels,
     mapName: typeof mapName === "string" ? mapName : "",
+    instanceId: typeof instanceId === "string" ? instanceId : null,
   };
 }
 
@@ -550,6 +583,7 @@ async function ensureRoomState(roomId, ctx) {
     const nextState = createRoomState(ctx, { levels: creatorLevels }, {
       templateLevels: creatorLevels,
       mapName: ctx.mapName,
+      instanceId: null,
     });
     roomEditorState.set(roomId, nextState);
     return nextState;
@@ -583,6 +617,7 @@ async function ensureRoomState(roomId, ctx) {
     {
       templateLevels,
       mapName,
+      instanceId: instanceSnapshot?.instanceId ?? null,
     }
   );
   ensureGroupStartGate(nextState);
@@ -692,6 +727,7 @@ wsServer.on("connection", (socket) => {
   const resolveRoomId = (data) => data?.roomId || data?.groupId || getConnectionState(socket)?.roomId || null;
 
   socket.on("message", async (rawMessage) => {
+    await maybeDelaySocketHandling();
     const envelope = parseEnvelope(rawMessage.toString());
     if (!envelope) {
       sendMessage(socket, "error", { error: "Invalid message" });
@@ -747,6 +783,7 @@ wsServer.on("connection", (socket) => {
         }
 
         console.log(`[join-game] user=${userData.userEmail} room=${roomId} total=${currentUsers.length}`);
+        logRoomSnapshot("join", roomId, { by: socketId });
         return;
       }
       case "leave-game": {
@@ -770,6 +807,7 @@ wsServer.on("connection", (socket) => {
             socket
           );
           console.log(`[leave-game] user=${userData.userEmail} room=${roomId}`);
+          logRoomSnapshot("leave", roomId, { by: socketId });
         }
         return;
       }
@@ -847,7 +885,7 @@ wsServer.on("connection", (socket) => {
             ts: Date.now(),
           });
           console.log(
-            `[editor-change:resync] room=${roomId} from=${socketId} editorType=${editorType} levelIndex=${levelIndex} clientBase=${data.baseVersion} serverVersion=${currentVersion}`
+            `[editor-change:resync] room=${roomId} from=${socketId} groupId=${extractGroupIdFromRoomId(roomId) || "none"} editorType=${editorType} levelIndex=${levelIndex} clientBase=${data.baseVersion} serverVersion=${currentVersion} serverContentLen=${levelState.code[editorType].length} roomUsers=${getRoomUsers(roomId).size || 0}`
           );
           return;
         }
@@ -856,6 +894,7 @@ wsServer.on("connection", (socket) => {
           const changeSet = ChangeSet.fromJSON(data.changeSetJson);
           const nextContent = changeSet.apply(getDocumentText(levelState.code[editorType])).toString();
           const nextVersion = currentVersion + 1;
+          const previousContentLength = levelState.code[editorType].length;
 
           levelState.code[editorType] = nextContent;
           levelState.versions[editorType] = nextVersion;
@@ -886,7 +925,7 @@ wsServer.on("connection", (socket) => {
           });
 
           const recipients = Math.max((getRoomUsers(roomId).size || 1) - 1, 0);
-          console.log(`[editor-change:emit] room=${roomId} from=${socketId} recipients=${recipients} ${JSON.stringify(summarizeEditorPayload(payload))}`);
+          console.log(`[editor-change:emit] room=${roomId} from=${socketId} groupId=${extractGroupIdFromRoomId(roomId) || "none"} recipients=${recipients} prevLen=${previousContentLength} nextLen=${nextContent.length} roomUsers=${getRoomUsers(roomId).size || 0} ${JSON.stringify(summarizeEditorPayload(payload))}`);
           broadcastToRoom(roomId, "editor-change", payload, socket);
         } catch (error) {
           sendMessage(socket, "editor-resync", {
@@ -899,7 +938,7 @@ wsServer.on("connection", (socket) => {
             ts: Date.now(),
           });
           console.error(
-            `[editor-change:error] room=${roomId} from=${socketId} editorType=${editorType} levelIndex=${levelIndex} ${error.message}`
+            `[editor-change:error] room=${roomId} from=${socketId} groupId=${extractGroupIdFromRoomId(roomId) || "none"} editorType=${editorType} levelIndex=${levelIndex} serverContentLen=${levelState.code[editorType].length} roomUsers=${getRoomUsers(roomId).size || 0} ${error.message}`
           );
         }
         return;
@@ -1022,6 +1061,18 @@ wsServer.on("connection", (socket) => {
           ts: Date.now(),
         }, socket);
         console.log(`[progress-sync] room=${roomId} from=${socketId} keys=${Object.keys(incomingProgress).join(",")}`);
+        if (Array.isArray(state.progressData.levels) && Array.isArray(incomingProgress.levels)) {
+          incomingProgress.levels.forEach((incomingLevel, levelIndex) => {
+            const previousLevel = state.progressData.levels[levelIndex] || {};
+            ["lockHTML", "lockCSS", "lockJS"].forEach((lockKey) => {
+              if (typeof incomingLevel?.[lockKey] === "boolean" && incomingLevel[lockKey] !== previousLevel?.[lockKey]) {
+                console.log(
+                  `[lock-state] room=${roomId} from=${socketId} gameId=${ctx.gameId} groupId=${ctx.groupId || "none"} instanceId=${state.instanceId || "none"} levelIndex=${levelIndex} key=${lockKey} prev=${Boolean(previousLevel?.[lockKey])} next=${Boolean(incomingLevel[lockKey])}`
+                );
+              }
+            });
+          });
+        }
         return;
       }
       case "group-start-ready":
@@ -1108,6 +1159,11 @@ wsServer.on("connection", (socket) => {
         console.log(
           `[group-start:${envelope.type === "group-start-ready" ? "ready" : "unready"}] room=${roomId} from=${socketId} userId=${userId} readyCount=${gate.readyUserIds.length}/${gate.minReadyCount} status=${gate.status}`
         );
+        logRoomSnapshot(envelope.type === "group-start-ready" ? "start-ready" : "start-unready", roomId, {
+          by: socketId,
+          readyCount: gate.readyUserIds.length,
+          status: gate.status,
+        });
         return;
       }
       case "reset-room-state": {
@@ -1126,6 +1182,9 @@ wsServer.on("connection", (socket) => {
         const scope = data?.scope === "game" ? "game" : "level";
         const levelIndex = Number.isInteger(data?.levelIndex) ? data.levelIndex : 0;
         const currentState = await ensureRoomState(roomId, ctx);
+        console.log(
+          `[room-state-reset:start] room=${roomId} by=${socketId} groupId=${extractGroupIdFromRoomId(roomId) || "none"} scope=${scope} levelIndex=${levelIndex} levelsCount=${currentState.levels.length} mapName=${currentState.mapName || "none"}`
+        );
         // Reset should prefer the latest creator-saved map levels instead of the
         // room's cached template snapshot. Fall back to the cached snapshot only
         // if the refresh fails or returns nothing.
@@ -1139,6 +1198,9 @@ wsServer.on("connection", (socket) => {
             : [];
         }
         if (templateLevels.length === 0) {
+          console.warn(
+            `[room-state-reset:skip] room=${roomId} by=${socketId} reason=no-template-levels scope=${scope} levelIndex=${levelIndex}`
+          );
           return;
         }
 
@@ -1168,6 +1230,9 @@ wsServer.on("connection", (socket) => {
         if (!result.ok && !result.permanentFailure) {
           markRoomDirty(roomId, ctx);
         }
+        console.log(
+          `[room-state-reset:save] room=${roomId} by=${socketId} ok=${result.ok} permanentFailure=${result.permanentFailure} dirty=${!result.ok && !result.permanentFailure} scope=${scope} levelIndex=${levelIndex}`
+        );
 
         const resyncIndices =
           scope === "game"
@@ -1179,15 +1244,19 @@ wsServer.on("connection", (socket) => {
             continue;
           }
           for (const editorType of EDITOR_TYPES) {
+            const content = resyncLevel.code[editorType];
             broadcastToRoom(roomId, "editor-resync", {
               roomId,
               groupId: extractGroupIdFromRoomId(roomId),
               editorType,
               levelIndex: resyncLevelIndex,
-              content: resyncLevel.code[editorType],
+              content,
               version: resyncLevel.versions[editorType] || 0,
               ts: Date.now(),
             });
+            console.log(
+              `[room-state-reset:resync] room=${roomId} by=${socketId} groupId=${extractGroupIdFromRoomId(roomId) || "none"} editorType=${editorType} levelIndex=${resyncLevelIndex} version=${resyncLevel.versions[editorType] || 0} contentLen=${typeof content === "string" ? content.length : 0}`
+            );
           }
         }
 
@@ -1234,6 +1303,7 @@ wsServer.on("connection", (socket) => {
             userEmail: userData.userEmail,
             userName: userData.userName,
           });
+          logRoomSnapshot("disconnect", roomId, { by: socketId, reason });
         }
       }
     }

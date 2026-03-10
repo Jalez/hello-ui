@@ -23,8 +23,11 @@ function normalizeCallbackUrl(callbackUrl: string | null): string {
 }
 
 function SignInContent() {
+  const isDevAuthEnabled = process.env.NODE_ENV === "development";
   const [isLoading, setIsLoading] = useState(false);
+  const [isDevSigningIn, setIsDevSigningIn] = useState(false);
   const [signInError, setSignInError] = useState<string | null>(null);
+  const [devUsername, setDevUsername] = useState("");
   const router = useRouter();
   const searchParams = useSearchParams();
   const { data: session, status } = useSession();
@@ -65,6 +68,38 @@ function SignInContent() {
     }
   };
 
+  const handleDevSignIn = async () => {
+    const normalizedUsername = devUsername.trim().toLowerCase();
+    if (!normalizedUsername) {
+      setSignInError("Enter a local test username first.");
+      return;
+    }
+
+    setIsDevSigningIn(true);
+    setSignInError(null);
+
+    try {
+      const callbackUrl = normalizeCallbackUrl(searchParams.get("callbackUrl"));
+      const result = await signIn("dev-user", {
+        username: normalizedUsername,
+        callbackUrl,
+        redirect: false,
+      });
+
+      if (result?.error) {
+        setSignInError(result.error);
+        setIsDevSigningIn(false);
+        return;
+      }
+
+      router.push(callbackUrl);
+    } catch (error) {
+      console.error("Dev sign in error:", error);
+      setSignInError("Failed to sign in as local test user.");
+      setIsDevSigningIn(false);
+    }
+  };
+
   const error = signInError ?? authError;
 
   return (
@@ -82,10 +117,37 @@ function SignInContent() {
           )}
         </div>
         <div className="mt-8 space-y-6">
+          {isDevAuthEnabled && (
+            <div className="rounded-md border border-border bg-card p-4 space-y-3">
+              <div>
+                <h3 className="text-sm font-semibold text-foreground">Local Multi-User Testing</h3>
+                <p className="text-sm text-muted-foreground">
+                  Use separate browser profiles and sign in as names like <code>alice</code>, <code>bob</code>, and <code>carol</code>.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={devUsername}
+                  onChange={(event) => setDevUsername(event.target.value)}
+                  placeholder="alice"
+                  className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
+                />
+                <button
+                  type="button"
+                  onClick={handleDevSignIn}
+                  disabled={isDevSigningIn}
+                  className="rounded-md bg-secondary px-4 py-2 text-sm font-medium text-secondary-foreground hover:bg-secondary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isDevSigningIn ? "Signing in..." : "Use Local User"}
+                </button>
+              </div>
+            </div>
+          )}
           <button
             type="button"
             onClick={handleGoogleSignIn}
-            disabled={isLoading}
+            disabled={isLoading || isDevSigningIn}
             className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-primary-foreground bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ring disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {isLoading ? (

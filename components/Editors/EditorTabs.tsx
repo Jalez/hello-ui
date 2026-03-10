@@ -26,6 +26,7 @@ import { apiUrl } from "@/lib/apiUrl";
 import { RemoteCodeChange, RemoteCodeResync, useOptionalCollaboration } from "@/lib/collaboration/CollaborationProvider";
 import { TabPresence } from "@/components/collaboration/TabPresence";
 import { ActiveUser, EditorType } from "@/lib/collaboration/types";
+import { logDebugClient } from "@/lib/debug-logger";
 
 interface LanguageData {
   code: string;
@@ -205,6 +206,15 @@ function EditorTabs({
       lockCSS: language === "css" ? !level.lockCSS : level.lockCSS,
       lockJS: language === "js" ? !level.lockJS : level.lockJS,
     };
+    logDebugClient("lock_toggle_click", {
+      levelIndex: currentLevel - 1,
+      language,
+      identifier,
+      roomId: collaboration?.roomId ?? null,
+      groupId: collaboration?.groupId ?? null,
+      nextLocks,
+      href: typeof window !== "undefined" ? window.location.href : null,
+    });
 
     try {
       const response = await fetch(apiUrl(`/api/levels/${identifier}`), {

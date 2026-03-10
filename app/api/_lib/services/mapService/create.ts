@@ -8,20 +8,38 @@ import type { Map, CreateMapOptions } from "./types";
 export async function createMap(options: CreateMapOptions): Promise<Map> {
   const sqlInstance = await sql();
 
-  const result = await sqlInstance`
-    INSERT INTO maps (
-      name,
-      random,
-      can_use_ai
-    )
-    VALUES (
-      ${options.name},
-      ${options.random ?? 0},
-      ${options.can_use_ai ?? false}
-    )
-    RETURNING
-      name, random, can_use_ai, created_at, updated_at
-  `;
+  const columnResult = await sqlInstance.query(
+    `SELECT column_name
+     FROM information_schema.columns
+     WHERE table_name = 'maps'
+       AND table_schema = current_schema()`,
+  );
+  const availableColumns = new Set(extractRows(columnResult).map((row) => String(row.column_name)));
+
+  const insertColumns = ["name", "random", "can_use_ai"];
+  const insertValues: unknown[] = [
+    options.name,
+    options.random ?? 0,
+    options.can_use_ai ?? false,
+  ];
+
+  // Some local databases still have legacy level-point columns without defaults.
+  // Populate them when present so map creation works against both schemas.
+  for (const columnName of ["easy_level_points", "medium_level_points", "hard_level_points"]) {
+    if (availableColumns.has(columnName)) {
+      insertColumns.push(columnName);
+      insertValues.push(0);
+    }
+  }
+
+  const placeholders = insertValues.map((_, index) => `$${index + 1}`).join(", ");
+
+  const result = await sqlInstance.query(
+    `INSERT INTO maps (${insertColumns.join(", ")})
+     VALUES (${placeholders})
+     RETURNING name, random, can_use_ai, created_at, updated_at`,
+    insertValues,
+  );
 
   const rows = extractRows(result);
 
