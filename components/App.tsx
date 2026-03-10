@@ -248,8 +248,17 @@ function App() {
 
     setIsLoadingAsync(true);
     if (shouldUseWsCodeSource) {
+      const isYjsActive = collaboration?.isYjsEnabled ?? false;
+      // On initial load with Yjs, blank code to prevent dual-bootstrap (Y.Doc is
+      // the single source of truth). On subsequent syncs (e.g. after a reset),
+      // pass code through so Redux gets the correct template content immediately.
+      const shouldBlankCode = isYjsActive && !hasFetchedRef.current;
       const roomStateLevels = normalizeRoomStateLevels(
         (collaboration?.initialRoomState?.levels || []) as Array<Record<string, unknown>>
+      ).map((level) =>
+        shouldBlankCode
+          ? { ...level, code: { html: "", css: "", js: "" } }
+          : level
       );
       applyLevels(roomStateLevels, currentGame!.mapName);
     } else {

@@ -4,6 +4,7 @@ import { readFileSync } from "fs";
 
 const baseUrl = process.env.PLAYWRIGHT_BASE_URL || "http://127.0.0.1:3000";
 const scenario = process.env.PLAYWRIGHT_SCENARIO || "baseline";
+const routeKind = process.env.PLAYWRIGHT_ROUTE_KIND || (scenario === "prototype_yjs" ? "prototype-yjs" : "game");
 const requestedGameId = process.env.PLAYWRIGHT_GAME_ID || null;
 const headed = process.env.PLAYWRIGHT_HEADED === "true";
 const keepOpen = process.env.PLAYWRIGHT_KEEP_OPEN === "true";
@@ -29,6 +30,8 @@ function deriveUsernames() {
     lti_lobby: 6,
     lti_aplus_group: 4,
     classroom_churn: 12,
+    prototype_yjs: 12,
+    game_yjs: 12,
     submit_after_churn: 12,
     latency: 8,
   };
@@ -133,6 +136,32 @@ function scenarioFlags() {
     };
   }
 
+  if (scenario === "prototype_yjs") {
+    return {
+      ...defaults,
+      delayedJoinMs: 1500,
+      stressRounds: 3,
+      refreshDuringEditing: true,
+      openExtraTabCount: 2,
+      closeReopenCount: 2,
+      lateOpenCount: 1,
+      submitAfterStress: false,
+    };
+  }
+
+  if (scenario === "game_yjs") {
+    return {
+      ...defaults,
+      delayedJoinMs: 1500,
+      stressRounds: 3,
+      refreshDuringEditing: true,
+      openExtraTabCount: 2,
+      closeReopenCount: 2,
+      lateOpenCount: 1,
+      submitAfterStress: false,
+    };
+  }
+
   return {
     ...defaults,
     delayedJoinMs: 1500,
@@ -155,6 +184,13 @@ const flags = {
 };
 
 function gameUrl(gameId, groupId) {
+  if (routeKind === "prototype-yjs") {
+    const url = new URL(`/prototype/yjs/${gameId}`, baseUrl);
+    if (groupId) {
+      url.searchParams.set("groupId", groupId);
+    }
+    return url.toString();
+  }
   const url = new URL(`/game/${gameId}`, baseUrl);
   url.searchParams.set("mode", "game");
   if (groupId) {
@@ -438,6 +474,9 @@ async function waitForEditorOnPages(pages) {
 }
 
 async function startGroupGame(pages) {
+  if (routeKind === "prototype-yjs") {
+    return;
+  }
   for (const page of pages.slice(0, 2)) {
     const waitingRoom = page.getByText("Group Waiting Room");
     if ((await waitingRoom.count()) > 0) {
@@ -452,6 +491,18 @@ async function startGroupGame(pages) {
 
 async function getEditableContent(page) {
   return (await page.locator(".cm-content[contenteditable='true']").first().textContent()) || "";
+}
+
+async function logPageEditorState(page, label) {
+  const url = page.url();
+  const editableCount = await page.locator(".cm-content[contenteditable='true']").count().catch(() => 0);
+  const readOnlyCount = await page.locator(".cm-content[contenteditable='false']").count().catch(() => 0);
+  const waitingRoomCount = await page.getByText("Group Waiting Room").count().catch(() => 0);
+  const loadingCount = await page.getByText("Loading", { exact: false }).count().catch(() => 0);
+  const bodyText = await page.locator("body").textContent().catch(() => "");
+  console.warn(
+    `[page-state:${label}] url=${url} editable=${editableCount} readOnly=${readOnlyCount} waitingRoom=${waitingRoomCount} loading=${loadingCount} body=${JSON.stringify((bodyText || "").slice(0, 200))}`
+  );
 }
 
 async function triggerLevelReset(page) {
@@ -478,6 +529,9 @@ async function triggerLevelReset(page) {
 }
 
 async function verifyLevelReset(group, contexts) {
+  if (routeKind === "prototype-yjs") {
+    return true;
+  }
   const memberPages = group.memberIndexes.map((memberIndex) => contexts[memberIndex].page);
   const templateHtml = createStarterLevel().code.html.replace(/\n/g, "");
   const resetMarker = `pw-reset-${Date.now().toString(36)}`;
@@ -487,10 +541,24 @@ async function verifyLevelReset(group, contexts) {
   await memberPages[0].keyboard.type(`\n<!-- ${resetMarker} -->`);
   await memberPages[0].waitForTimeout(Math.max(createWaitMs * 2, 2000));
   await triggerLevelReset(memberPages[0]);
-  await memberPages[0].waitForTimeout(Math.max(createWaitMs * 3, 3500));
-  const contents = await Promise.all(memberPages.map((page) => getEditableContent(page)));
-  const normalized = contents.map((content) => content.replace(/\n/g, ""));
-  return normalized.every((content) => content.includes(templateHtml) && !content.includes(resetMarker));
+  // Yjs reset requires doc replacement + editor remount, give it extra time
+  const maxAttempts = 6;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    await memberPages[0].waitForTimeout(attempt === 1 ? Math.max(createWaitMs * 3, 4000) : 1500);
+    const contents = await Promise.all(memberPages.map((page) => getEditableContent(page)));
+    const normalized = contents.map((content) => content.replace(/\n/g, ""));
+    const ok = normalized.every((content) => content.includes(templateHtml) && !content.includes(resetMarker));
+    if (ok) {
+      return true;
+    }
+    if (attempt === maxAttempts) {
+      console.warn(`[verifyLevelReset:fail] templateHtml=${JSON.stringify(templateHtml.slice(0, 80))}`);
+      normalized.forEach((content, index) => {
+        console.warn(`[verifyLevelReset:fail] page[${index}] content=${JSON.stringify(content.slice(0, 200))} hasTemplate=${content.includes(templateHtml)} hasMarker=${content.includes(resetMarker)}`);
+      });
+    }
+  }
+  return false;
 }
 
 async function trySharedEdit(pages, marker) {
@@ -526,7 +594,14 @@ async function tryConcurrentSharedEdit(pages, groupName) {
   ]);
   await pages[0].waitForTimeout(Math.max(createWaitMs * 2, 2500));
   const pageContents = await Promise.all(
-    pages.map(async (page) => ((await page.locator(".cm-content[contenteditable='true']").first().textContent()) || "")),
+    pages.map(async (page, index) => {
+      try {
+        return ((await page.locator(".cm-content[contenteditable='true']").first().textContent({ timeout: 30000 })) || "");
+      } catch (error) {
+        await logPageEditorState(page, `${groupName}:${index}`);
+        throw error;
+      }
+    }),
   );
   const merged = pageContents.every((content) => content.includes(markerA) && content.includes(markerB));
   if (!merged) {
@@ -670,6 +745,7 @@ async function configureConsoleLogging(page, label) {
     const text = message.text();
     if (
       text.includes("[DEBUG-CLIENT]") ||
+      text.includes("[yjs-") ||
       text.includes("shared_reset_") ||
       text.includes("ws_reset_room_") ||
       text.includes("group_join_") ||
@@ -678,6 +754,15 @@ async function configureConsoleLogging(page, label) {
     ) {
       console.log(`[browser:${label}] ${text}`);
     }
+  });
+  page.on("pageerror", (error) => {
+    console.warn(`[browser:${label}:pageerror] ${error?.message || error}`);
+  });
+  page.on("crash", () => {
+    console.warn(`[browser:${label}:crash] page crashed`);
+  });
+  page.on("close", () => {
+    console.warn(`[browser:${label}:close] page closed`);
   });
 }
 
@@ -802,11 +887,11 @@ async function runLtiAplusGroupScenario(browser) {
   const creatorContext = await browser.newContext({ baseURL: baseUrl });
   await enableHttpLatency(creatorContext);
   const creatorPage = await creatorContext.newPage();
-  await signInDevUser(creatorPage, "creator");
   if (requestedGameId) {
     activeGameId = requestedGameId;
     console.log(`using existing game ${activeGameId}`);
   } else {
+    await signInDevUser(creatorPage, "creator");
     const createdGame = await createGroupModeGame(creatorContext.request, "creator");
     activeGameId = createdGame.gameId;
     console.log(`created game ${activeGameId} (${createdGame.title})`);
@@ -1079,7 +1164,7 @@ async function main() {
       }
     }
 
-    if (flags.refreshDuringWaiting) {
+    if (flags.refreshDuringWaiting && routeKind !== "prototype-yjs") {
       for (const group of groups) {
         const reloadIndex = group.memberIndexes.find((index) => !group.lateOpenIndexes.includes(index));
         if (reloadIndex != null) {

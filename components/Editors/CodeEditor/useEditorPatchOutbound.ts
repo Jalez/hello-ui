@@ -5,8 +5,6 @@ import type { ViewUpdate } from "@codemirror/view";
 import type { LocalCodeAck } from "@/lib/collaboration/CollaborationProvider";
 import type { EditorType } from "@/lib/collaboration/types";
 
-import { applyChangeSetToContent } from "./collaborationUtils";
-
 interface UseEditorPatchOutboundOptions {
   isConnected: boolean;
   locked: boolean;
@@ -14,6 +12,7 @@ interface UseEditorPatchOutboundOptions {
     editorType: EditorType,
     changeSetJson: unknown,
     levelIndex: number,
+    baseVersion: number,
     selection?: { from: number; to: number }
   ) => void;
   updateEditorSelection?: (
@@ -32,6 +31,9 @@ interface UseEditorPatchOutboundOptions {
   syncTimeoutRef: MutableRefObject<ReturnType<typeof setTimeout> | null>;
   suppressCollaborationUpdateRef: MutableRefObject<boolean>;
   lastSyncedCodeRef: MutableRefObject<string>;
+  lastSyncedVersionRef: MutableRefObject<number>;
+  retryBackoffUntilRef: MutableRefObject<number>;
+  retryBackoffMsRef: MutableRefObject<number>;
   debounceMs: number;
   localCodeAcks: LocalCodeAck[];
 }
@@ -50,6 +52,9 @@ export function useEditorPatchOutbound({
   syncTimeoutRef,
   suppressCollaborationUpdateRef,
   lastSyncedCodeRef,
+  lastSyncedVersionRef,
+  retryBackoffUntilRef,
+  retryBackoffMsRef,
   debounceMs,
   localCodeAcks,
 }: UseEditorPatchOutboundOptions) {
@@ -64,6 +69,7 @@ export function useEditorPatchOutbound({
       clearTimeout(syncTimeoutRef.current);
     }
 
+    const waitMs = Math.max(debounceMs, retryBackoffUntilRef.current - Date.now(), 0);
     syncTimeoutRef.current = setTimeout(() => {
       if (inflightChangeSetRef.current) {
         return;
@@ -72,13 +78,19 @@ export function useEditorPatchOutbound({
       if (nextChangeSet) {
         inflightChangeSetRef.current = nextChangeSet;
         inflightSelectionRef.current = pendingSelectionRef.current;
-        applyEditorChange(editorType, nextChangeSet.toJSON(), levelIndex, pendingSelectionRef.current);
+        applyEditorChange(
+          editorType,
+          nextChangeSet.toJSON(),
+          levelIndex,
+          lastSyncedVersionRef.current,
+          pendingSelectionRef.current,
+        );
         pendingChangeSetRef.current = null;
       }
 
       updateEditorSelection(editorType, levelIndex, pendingSelectionRef.current);
       syncTimeoutRef.current = null;
-    }, debounceMs);
+    }, waitMs);
   }, [
     applyEditorChange,
     debounceMs,
@@ -86,10 +98,12 @@ export function useEditorPatchOutbound({
     inflightChangeSetRef,
     inflightSelectionRef,
     isConnected,
+    lastSyncedVersionRef,
     levelIndex,
     locked,
     pendingChangeSetRef,
     pendingSelectionRef,
+    retryBackoffUntilRef,
     syncTimeoutRef,
     updateEditorSelection,
   ]);
@@ -107,7 +121,10 @@ export function useEditorPatchOutbound({
 
     const latestAck = matchingAcks[matchingAcks.length - 1];
     lastHandledAckSeqRef.current = latestAck.seq;
-    lastSyncedCodeRef.current = applyChangeSetToContent(lastSyncedCodeRef.current, inflightChangeSetRef.current);
+    lastSyncedCodeRef.current = latestAck.content;
+    lastSyncedVersionRef.current = latestAck.nextVersion;
+    retryBackoffUntilRef.current = 0;
+    retryBackoffMsRef.current = 0;
     inflightChangeSetRef.current = null;
     inflightSelectionRef.current = null;
 
@@ -123,9 +140,12 @@ export function useEditorPatchOutbound({
     inflightChangeSetRef,
     inflightSelectionRef,
     lastSyncedCodeRef,
+    lastSyncedVersionRef,
     levelIndex,
     localCodeAcks,
     pendingChangeSetRef,
+    retryBackoffMsRef,
+    retryBackoffUntilRef,
     scheduleDebouncedSync,
     syncTimeoutRef,
   ]);

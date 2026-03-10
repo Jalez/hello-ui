@@ -17,6 +17,9 @@ import {
   TabFocusMessage,
   TypingStatusMessage,
   EditorType,
+  YjsSyncMessage,
+  YjsSyncRequestMessage,
+  YjsUpdateMessage,
 } from "../types";
 import { extractGroupIdFromRoomId, generateClientId, generateUserColor, getWebSocketUrl } from "../utils";
 import { RECONNECT_DELAY_MS, MAX_RECONNECT_ATTEMPTS } from "../constants";
@@ -43,6 +46,9 @@ interface UseCollaborationConnectionOptions {
   onGroupStartSync?: (message: GroupStartSyncMessage) => void;
   onLobbyChatSync?: (message: LobbyChatSyncMessage) => void;
   onLobbyChatMessage?: (message: LobbyChatEntry) => void;
+  onYjsSync?: (message: YjsSyncMessage) => void;
+  onYjsReset?: (message: YjsSyncMessage) => void;
+  onYjsUpdate?: (message: YjsUpdateMessage) => void;
 }
 
 interface UseCollaborationConnectionReturn {
@@ -66,6 +72,9 @@ interface UseCollaborationConnectionReturn {
   ) => void;
   sendTabFocus: (editorType: EditorType, levelIndex: number) => void;
   sendTypingStatus: (editorType: EditorType, levelIndex: number, isTyping: boolean) => void;
+  requestRoomStateSync: (reason?: string) => void;
+  requestYjsSync: () => void;
+  sendYjsUpdate: (updateBase64: string) => void;
   sendRoomReset: (scope: "level" | "game", levelIndex?: number) => void;
   sendProgressSync: (progressData: Record<string, unknown>) => void;
   sendGroupStartReady: () => void;
@@ -413,6 +422,15 @@ export function useCollaborationConnection(
           case "lobby-chat-message":
             optionsRef.current.onLobbyChatMessage?.(payload as LobbyChatEntry);
             return;
+          case "yjs-sync":
+            optionsRef.current.onYjsSync?.(payload as YjsSyncMessage);
+            return;
+          case "yjs-reset":
+            optionsRef.current.onYjsReset?.(payload as YjsSyncMessage);
+            return;
+          case "yjs-update":
+            optionsRef.current.onYjsUpdate?.(payload as YjsUpdateMessage);
+            return;
           default:
             return;
         }
@@ -427,6 +445,13 @@ export function useCollaborationConnection(
 
       socket.onclose = () => {
         const wasConnected = isConnectedRef.current;
+        logDebugClient("ws_socket_close", {
+          roomId,
+          clientId: clientIdRef.current,
+          userId: currentUser.id,
+          userEmail: currentUser.email,
+          readyState: socket.readyState,
+        });
         if (socketRef.current === socket) {
           socketRef.current = null;
           setSocketState(null);
@@ -599,6 +624,55 @@ export function useCollaborationConnection(
     }
   }, [parsedGroupId, roomId, sendMessage, user]);
 
+  const requestRoomStateSync = useCallback((reason = "client_request") => {
+    if (!roomId) {
+      return;
+    }
+    sendMessage("request-room-state-sync", {
+      roomId,
+      groupId: parsedGroupId ?? undefined,
+      reason,
+    });
+    logDebugClient("ws_room_state_sync_requested", {
+      roomId,
+      groupId: parsedGroupId,
+      reason,
+    });
+  }, [parsedGroupId, roomId, sendMessage]);
+
+  const requestYjsSync = useCallback(() => {
+    if (!roomId) {
+      return;
+    }
+
+    logDebugClient("ws_yjs_sync_requested", {
+      roomId,
+      groupId: parsedGroupId,
+    });
+    sendMessage("yjs-sync-request", {
+      roomId,
+      groupId: parsedGroupId ?? undefined,
+    } satisfies YjsSyncRequestMessage);
+  }, [parsedGroupId, roomId, sendMessage]);
+
+  const sendYjsUpdate = useCallback((updateBase64: string) => {
+    if (!roomId || !updateBase64) {
+      return;
+    }
+
+    logDebugClient("ws_yjs_update_emit", {
+      roomId,
+      groupId: parsedGroupId,
+      updateLength: updateBase64.length,
+    });
+    sendMessage("yjs-update", {
+      roomId,
+      groupId: parsedGroupId ?? undefined,
+      updateBase64,
+      ts: Date.now(),
+    } satisfies YjsUpdateMessage);
+  }, [parsedGroupId, roomId, sendMessage]);
+
   const sendRoomReset = useCallback((scope: "level" | "game", levelIndex?: number) => {
     if (roomId && user && clientIdRef.current) {
       logDebugClient("ws_reset_room_emit", {
@@ -713,6 +787,9 @@ export function useCollaborationConnection(
     sendEditorChange,
     sendTabFocus,
     sendTypingStatus,
+    requestRoomStateSync,
+    requestYjsSync,
+    sendYjsUpdate,
     sendRoomReset,
     sendProgressSync,
     sendGroupStartReady,

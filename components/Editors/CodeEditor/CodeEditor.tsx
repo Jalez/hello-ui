@@ -8,6 +8,7 @@ import { githubLight } from "@uiw/codemirror-theme-github";
 import { vscodeDark } from "@uiw/codemirror-theme-vscode";
 import CodeMirror from "@uiw/react-codemirror";
 import type { ReactCodeMirrorProps } from "@uiw/react-codemirror";
+import { useCodeMirror } from "@uiw/react-codemirror";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTheme } from "next-themes";
 
@@ -30,6 +31,32 @@ import { useCodeEditorCollaboration } from "./useCodeEditorCollaboration";
 import { buildReviewDecorations, useCodeEditorReview } from "./useCodeEditorReview";
 
 const lineNumberCompartment = new Compartment();
+
+function YjsEditorSurface({
+  editorProps,
+  editorKey,
+  editorInitialState,
+  style,
+}: {
+  editorProps: ReactCodeMirrorProps;
+  editorKey: string;
+  editorInitialState: { json: unknown };
+  style: React.CSSProperties;
+}) {
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const { setContainer } = useCodeMirror({
+    ...editorProps,
+    initialState: editorInitialState,
+  });
+
+  useEffect(() => {
+    if (hostRef.current) {
+      setContainer(hostRef.current);
+    }
+  }, [setContainer]);
+
+  return <div key={editorKey} ref={hostRef} style={style} />;
+}
 
 export default function CodeEditor({
   lang = html(),
@@ -72,6 +99,10 @@ export default function CodeEditor({
     editorViewportRef,
     editorViewRef,
     applyingExternalUpdateRef,
+    isYjsManaged,
+    editorExtensions,
+    editorKey,
+    editorInitialState,
     handleCodeUpdate,
     handleEditorCreate,
     handleEditorUpdate,
@@ -85,6 +116,14 @@ export default function CodeEditor({
     levelIdentifier,
     currentLevel,
     onLocalChange: review ? clearReview : undefined,
+    onLocalUserInput: options.mode === "game"
+      ? () => {
+          const now = Date.now();
+          const delta = lastActivityTsRef.current == null ? 1200 : now - lastActivityTsRef.current;
+          lastActivityTsRef.current = now;
+          recordEditorActivity(currentLevel - 1, delta);
+        }
+      : undefined,
   });
 
   useEffect(() => {
@@ -103,14 +142,20 @@ export default function CodeEditor({
   }, [editorViewRef, review]);
 
   const flushPendingLocalCodeUpdate = useCallback((pendingCode) => {
-    if (pendingCode === null || applyingExternalUpdateRef.current || pendingCode === template) {
+    if (pendingCode === null || pendingCode === template) {
+      return;
+    }
+    // In custom engine mode, skip if applying external update (avoids echo).
+    // In Yjs mode, always flush — Yjs handles WS sync independently and
+    // Redux needs every change for preview, scoring, and submission.
+    if (!isYjsManaged && applyingExternalUpdateRef.current) {
       return;
     }
     codeUpdater({ [title.toLowerCase()]: pendingCode }, type);
-  }, [applyingExternalUpdateRef, codeUpdater, template, title, type]);
+  }, [applyingExternalUpdateRef, codeUpdater, isYjsManaged, template, title, type]);
 
   useEffect(() => {
-    if (applyingExternalUpdateRef.current) {
+    if (!isYjsManaged && applyingExternalUpdateRef.current) {
       return;
     }
 
@@ -124,7 +169,7 @@ export default function CodeEditor({
     return () => {
       clearTimeout(timeout);
     }
-  }, [applyingExternalUpdateRef, code, flushPendingLocalCodeUpdate, template]);
+  }, [applyingExternalUpdateRef, code, flushPendingLocalCodeUpdate, isYjsManaged, template]);
 
 
   useEffect(() => {
@@ -155,18 +200,23 @@ export default function CodeEditor({
       ...sharedExtensions,
       commentKeymapCompartment.of(keymap.of(getCommentKeymap(title))),
       reviewDecorationsCompartment.of([]),
+      ...editorExtensions,
     ],
     theme,
     placeholder: `Write your ${title} here...`,
-    onChange: (value) => {
-      if (options.mode === "game") {
-        const now = Date.now();
-        const delta = lastActivityTsRef.current == null ? 1200 : now - lastActivityTsRef.current;
-        lastActivityTsRef.current = now;
-        recordEditorActivity(currentLevel - 1, delta);
-      }
-      handleCodeUpdate(value);
-    },
+    ...(isYjsManaged
+      ? {}
+      : {
+          onChange: (value: string) => {
+            if (options.mode === "game") {
+              const now = Date.now();
+              const delta = lastActivityTsRef.current == null ? 1200 : now - lastActivityTsRef.current;
+              lastActivityTsRef.current = now;
+              recordEditorActivity(currentLevel - 1, delta);
+            }
+            handleCodeUpdate(value);
+          },
+        }),
     onCreateEditor: handleEditorCreate,
     onUpdate: handleEditorUpdate,
   };
@@ -181,6 +231,13 @@ export default function CodeEditor({
     ],
     theme,
     placeholder: `Write your ${title} here...`,
+  };
+
+  const editorStyle: React.CSSProperties = {
+    overflow: "auto",
+    boxSizing: "border-box",
+    margin: "0",
+    padding: "0",
   };
 
   return (
@@ -233,16 +290,21 @@ export default function CodeEditor({
         )}
 
         <div ref={editorViewportRef} className="relative">
-          <CodeMirror
-            {...editableEditorProps}
-            value={code}
-            style={{
-              overflow: "auto",
-              boxSizing: "border-box",
-              margin: "0",
-              padding: "0",
-            }}
-          />
+          {isYjsManaged ? (
+            <YjsEditorSurface
+              editorProps={editableEditorProps}
+              editorKey={editorKey}
+              editorInitialState={editorInitialState}
+              style={editorStyle}
+            />
+          ) : (
+            <CodeMirror
+              {...editableEditorProps}
+              key={editorKey}
+              value={code}
+              style={editorStyle}
+            />
+          )}
           {isConnected && <RemoteCaretsOverlay carets={remoteCarets} />}
         </div>
 
