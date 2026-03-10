@@ -7,6 +7,8 @@ SCRIPT_DIR=$(dirname "${SCRIPT_PATH}")
 cd "${SCRIPT_DIR}"
 
 export WS_SERVICE_TOKEN="${WS_SERVICE_TOKEN:-ws-service-secret}"
+export COLLAB_ENGINE="${COLLAB_ENGINE:-${NEXT_PUBLIC_COLLAB_ENGINE:-yjs}}"
+export NEXT_PUBLIC_COLLAB_ENGINE="${NEXT_PUBLIC_COLLAB_ENGINE:-${COLLAB_ENGINE}}"
 
 # Function to clean up background processes on exit
 cleanup() {
