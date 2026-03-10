@@ -298,20 +298,22 @@ export async function POST(
 
     const role = getLtiRole(userInfo.roles);
     const explicitAplusGroup = typeof ltiData._aplus_group === "string" ? ltiData._aplus_group.trim() : "";
-    const canAutoResolveGroup =
+    let canAutoResolveGroup =
       collaborationMode === "group" &&
-      explicitAplusGroup.length > 0;
+      explicitAplusGroup.length > 0 &&
+      explicitAplusGroup !== "0"; // A+ sends "0" when no real subgroup is selected
+    //canAutoResolveGroup = false;
     console.log("[LTI launch] auto group branch:", canAutoResolveGroup, explicitAplusGroup);
     const baseGroupName = userInfo.contextTitle || userInfo.contextId || `LTI Group ${Date.now()}`;
     const resolvedGroup = canAutoResolveGroup
       ? await resolveAplusAppGroup({
-          sql,
-          resourceLinkId: ltiData.resource_link_id || resolvedGameId,
-          contextTitle: ltiData.context_title || null,
-          aplusGroup: explicitAplusGroup,
-          userId: user.id,
-          role,
-        })
+        sql,
+        resourceLinkId: ltiData.resource_link_id || resolvedGameId,
+        contextTitle: ltiData.context_title || null,
+        aplusGroup: explicitAplusGroup,
+        userId: user.id,
+        role,
+      })
       : null;
     console.log("[LTI launch] resolved group:", resolvedGroup?.groupId ?? null, resolvedGroup?.groupName ?? null);
 
