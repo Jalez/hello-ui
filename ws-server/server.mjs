@@ -2,11 +2,13 @@ import { createServer } from "http";
 import { randomUUID } from "crypto";
 import { ChangeSet, Text } from "@codemirror/state";
 import { WebSocketServer, WebSocket } from "ws";
+import * as Y from "yjs";
 
 const PORT = parseInt(process.env.PORT || "3100", 10);
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "http://localhost:3000";
 const API_BASE_URL = process.env.API_BASE_URL || "http://localhost:3000";
-const WS_SERVICE_TOKEN = process.env.WS_SERVICE_TOKEN || "";
+const WS_SERVICE_TOKEN = process.env.WS_SERVICE_TOKEN || (process.env.NODE_ENV !== "production" ? "ws-service-secret" : "");
+const COLLAB_ENGINE = process.env.COLLAB_ENGINE || process.env.NEXT_PUBLIC_COLLAB_ENGINE || "custom";
 const WRITE_BUFFER_FLUSH_MS = 5000;
 const EDITOR_TYPES = ["html", "css", "js"];
 const GROUP_START_MIN_READY_COUNT = 2;
@@ -20,6 +22,7 @@ const connectionState = new WeakMap();
 // roomId -> { ctx, progressData, levels, templateLevels, mapName }
 const roomEditorState = new Map();
 const roomLobbyState = new Map();
+const roomYDocs = new Map();
 
 // roomId -> { ctx, timer }
 const roomWriteBuffer = new Map();
@@ -60,6 +63,7 @@ function removeUserFromRoom(roomId, socket) {
       if (!rooms.has(roomId) && !roomWriteBuffer.has(roomId)) {
         roomEditorState.delete(roomId);
         roomLobbyState.delete(roomId);
+        roomYDocs.delete(roomId);
       }
     });
   }
@@ -120,6 +124,67 @@ function sendMessage(socket, type, payload) {
       ts: Date.now(),
     })
   );
+}
+
+function isYjsEnabled() {
+  return COLLAB_ENGINE === "yjs";
+}
+
+function encodeUpdateToBase64(update) {
+  return Buffer.from(update).toString("base64");
+}
+
+function decodeBase64Update(value) {
+  return new Uint8Array(Buffer.from(value, "base64"));
+}
+
+function getYTextKey(editorType, levelIndex) {
+  return `level:${levelIndex}:${editorType}`;
+}
+
+function hydrateYDocFromState(doc, state) {
+  doc.transact(() => {
+    state.levels.forEach((level, levelIndex) => {
+      for (const editorType of EDITOR_TYPES) {
+        const text = doc.getText(getYTextKey(editorType, levelIndex));
+        const nextValue = typeof level?.code?.[editorType] === "string" ? level.code[editorType] : "";
+        if (text.toString() === nextValue) {
+          continue;
+        }
+        text.delete(0, text.length);
+        text.insert(0, nextValue);
+      }
+    });
+  }, "hydrate-room-state");
+}
+
+function getOrCreateYDoc(roomId, state) {
+  if (!isYjsEnabled()) {
+    return null;
+  }
+  const existing = roomYDocs.get(roomId);
+  if (existing) {
+    return existing;
+  }
+  const doc = new Y.Doc();
+  hydrateYDocFromState(doc, state);
+  roomYDocs.set(roomId, doc);
+  return doc;
+}
+
+function syncStateFromYDoc(roomId, state) {
+  if (!isYjsEnabled()) {
+    return;
+  }
+  const doc = roomYDocs.get(roomId);
+  if (!doc) {
+    return;
+  }
+  state.levels.forEach((level, levelIndex) => {
+    for (const editorType of EDITOR_TYPES) {
+      level.code[editorType] = doc.getText(getYTextKey(editorType, levelIndex)).toString();
+    }
+  });
 }
 
 function broadcastToRoom(roomId, type, payload, excludeSocket = null) {
@@ -296,6 +361,7 @@ function buildInstanceQueryParams(ctx) {
     return "";
   }
   const params = new URLSearchParams();
+  params.set("accessContext", "game");
   if (ctx.groupId) params.set("groupId", ctx.groupId);
   if (ctx.userId) params.set("userId", ctx.userId);
   return params.toString();
@@ -543,7 +609,8 @@ function ensureLevelState(state, levelIndex) {
   return state.levels[levelIndex];
 }
 
-function serializeRoomStateSync(state) {
+function serializeRoomStateSync(roomId, state) {
+  syncStateFromYDoc(roomId, state);
   return {
     levels: state.levels.map((level) => ({
       ...serializeLevelState(level),
@@ -560,7 +627,8 @@ function serializeProgressData(state) {
   };
 }
 
-function serializeCodeLevels(state) {
+function serializeCodeLevels(roomId, state) {
+  syncStateFromYDoc(roomId, state);
   const payload = {
     levels: state.levels.map((level) => serializeLevelState(level)),
   };
@@ -586,6 +654,7 @@ async function ensureRoomState(roomId, ctx) {
       instanceId: null,
     });
     roomEditorState.set(roomId, nextState);
+    getOrCreateYDoc(roomId, nextState);
     return nextState;
   }
 
@@ -624,11 +693,12 @@ async function ensureRoomState(roomId, ctx) {
   applyStartedGateToLevels(nextState);
 
   roomEditorState.set(roomId, nextState);
+  getOrCreateYDoc(roomId, nextState);
 
   const shouldPersistNormalizedLevels =
     JSON.stringify(progressLevels) !== JSON.stringify(finalLevels);
   if (shouldPersistNormalizedLevels && finalLevels.length > 0) {
-    const result = await saveProgressToDB(ctx, serializeCodeLevels(nextState));
+    const result = await saveProgressToDB(ctx, serializeCodeLevels(roomId, nextState));
     if (!result.ok && !result.permanentFailure) {
       markRoomDirty(roomId, ctx);
     }
@@ -690,17 +760,19 @@ async function flushWriteBuffer(roomId) {
     buffer.timer = null;
   }
 
-  const result = await saveProgressToDB(state.ctx, serializeCodeLevels(state));
+  const result = await saveProgressToDB(state.ctx, serializeCodeLevels(roomId, state));
 
   if (result.ok) {
     roomWriteBuffer.delete(roomId);
     if (!rooms.has(roomId)) {
       roomEditorState.delete(roomId);
+      roomYDocs.delete(roomId);
     }
   } else if (result.permanentFailure) {
     roomWriteBuffer.delete(roomId);
     if (!rooms.has(roomId)) {
       roomEditorState.delete(roomId);
+      roomYDocs.delete(roomId);
     }
     console.warn(`[db-save:drop-room] room=${roomId} gameId=${state.ctx.gameId} reason=not-found`);
   } else {
@@ -765,7 +837,16 @@ wsServer.on("connection", (socket) => {
         const ctx = parseRoomContext(roomId);
         if (ctx) {
           const state = await ensureRoomState(roomId, ctx);
-          sendMessage(socket, "room-state-sync", serializeRoomStateSync(state));
+          sendMessage(socket, "room-state-sync", serializeRoomStateSync(roomId, state));
+          if (isYjsEnabled()) {
+            const doc = getOrCreateYDoc(roomId, state);
+            sendMessage(socket, "yjs-sync", {
+              roomId,
+              groupId: extractGroupIdFromRoomId(roomId),
+              updateBase64: encodeUpdateToBase64(Y.encodeStateAsUpdate(doc)),
+              ts: Date.now(),
+            });
+          }
           const groupStartSync = serializeGroupStartSync(roomId, state);
           if (groupStartSync) {
             sendMessage(socket, "group-start-sync", groupStartSync);
@@ -784,6 +865,96 @@ wsServer.on("connection", (socket) => {
 
         console.log(`[join-game] user=${userData.userEmail} room=${roomId} total=${currentUsers.length}`);
         logRoomSnapshot("join", roomId, { by: socketId });
+        return;
+      }
+      case "request-room-state-sync": {
+        const roomId = resolveRoomId(data);
+        if (!roomId) {
+          return;
+        }
+
+        const ctx = parseRoomContext(roomId);
+        if (!ctx) {
+          console.log(`[room-state-sync:skip] room=${roomId} target=${socketId} reason=invalid-room-context-request`);
+          return;
+        }
+
+        const state = await ensureRoomState(roomId, ctx);
+        sendMessage(socket, "room-state-sync", serializeRoomStateSync(roomId, state));
+        if (isYjsEnabled()) {
+          const doc = getOrCreateYDoc(roomId, state);
+          sendMessage(socket, "yjs-sync", {
+            roomId,
+            groupId: extractGroupIdFromRoomId(roomId),
+            updateBase64: encodeUpdateToBase64(Y.encodeStateAsUpdate(doc)),
+            ts: Date.now(),
+          });
+        }
+        const groupStartSync = serializeGroupStartSync(roomId, state);
+        if (groupStartSync) {
+          sendMessage(socket, "group-start-sync", groupStartSync);
+        }
+        console.log(
+          `[room-state-sync:emit] room=${roomId} target=${socketId} reason=request levelsCount=${state.levels.length}`
+        );
+        return;
+      }
+      case "yjs-sync-request": {
+        if (!isYjsEnabled()) {
+          return;
+        }
+
+        const roomId = resolveRoomId(data);
+        if (!roomId) {
+          return;
+        }
+
+        const ctx = parseRoomContext(roomId);
+        if (!ctx) {
+          return;
+        }
+
+        const state = await ensureRoomState(roomId, ctx);
+        const doc = getOrCreateYDoc(roomId, state);
+        console.log(`[yjs-sync:emit] room=${roomId} target=${socketId} stateBytes=${Y.encodeStateAsUpdate(doc).byteLength}`);
+        sendMessage(socket, "yjs-sync", {
+          roomId,
+          groupId: extractGroupIdFromRoomId(roomId),
+          updateBase64: encodeUpdateToBase64(Y.encodeStateAsUpdate(doc)),
+          ts: Date.now(),
+        });
+        return;
+      }
+      case "yjs-update": {
+        if (!isYjsEnabled()) {
+          return;
+        }
+
+        const roomId = resolveRoomId(data);
+        if (!roomId || typeof data.updateBase64 !== "string" || data.updateBase64.length === 0) {
+          return;
+        }
+
+        const ctx = parseRoomContext(roomId);
+        if (!ctx) {
+          return;
+        }
+
+        const state = await ensureRoomState(roomId, ctx);
+        const doc = getOrCreateYDoc(roomId, state);
+        const beforeHtmlLen = state.levels?.[0]?.code?.html?.length ?? 0;
+        console.log(`[yjs-update:recv] room=${roomId} socket=${socketId} updateLen=${data.updateBase64.length} beforeHtmlLen=${beforeHtmlLen}`);
+        Y.applyUpdate(doc, decodeBase64Update(data.updateBase64), socketId);
+        syncStateFromYDoc(roomId, state);
+        const afterHtmlLen = state.levels?.[0]?.code?.html?.length ?? 0;
+        markRoomDirty(roomId, ctx);
+        console.log(`[yjs-update:broadcast] room=${roomId} socket=${socketId} afterHtmlLen=${afterHtmlLen}`);
+        broadcastToRoom(roomId, "yjs-update", {
+          roomId,
+          groupId: extractGroupIdFromRoomId(roomId),
+          updateBase64: data.updateBase64,
+          ts: Date.now(),
+        }, socket);
         return;
       }
       case "leave-game": {
@@ -858,6 +1029,9 @@ wsServer.on("connection", (socket) => {
         return;
       }
       case "editor-change": {
+        if (isYjsEnabled()) {
+          return;
+        }
         const roomId = resolveRoomId(data);
         if (!roomId) {
           return;
@@ -921,6 +1095,7 @@ wsServer.on("connection", (socket) => {
             editorType,
             levelIndex,
             nextVersion,
+            content: nextContent,
             ts: Date.now(),
           });
 
@@ -1132,8 +1307,8 @@ wsServer.on("connection", (socket) => {
           gate.startedAt = new Date().toISOString();
           gate.startedByUserId = userId;
           applyStartedGateToLevels(state);
-          sendMessage(socket, "room-state-sync", serializeRoomStateSync(state));
-          broadcastToRoom(roomId, "room-state-sync", serializeRoomStateSync(state), socket);
+          sendMessage(socket, "room-state-sync", serializeRoomStateSync(roomId, state));
+          broadcastToRoom(roomId, "room-state-sync", serializeRoomStateSync(roomId, state), socket);
         }
 
         state.progressData = {
@@ -1219,6 +1394,12 @@ wsServer.on("connection", (socket) => {
         }
         applyStartedGateToLevels(nextState);
         roomEditorState.set(roomId, nextState);
+        if (isYjsEnabled()) {
+          // Create a fresh Y.Doc to avoid CRDT tombstone/merge conflicts on reset
+          const freshDoc = new Y.Doc();
+          hydrateYDocFromState(freshDoc, nextState);
+          roomYDocs.set(roomId, freshDoc);
+        }
 
         const existingBuffer = roomWriteBuffer.get(roomId);
         if (existingBuffer?.timer) {
@@ -1226,7 +1407,7 @@ wsServer.on("connection", (socket) => {
         }
         roomWriteBuffer.delete(roomId);
 
-        const result = await saveProgressToDB(ctx, serializeCodeLevels(nextState));
+        const result = await saveProgressToDB(ctx, serializeCodeLevels(roomId, nextState));
         if (!result.ok && !result.permanentFailure) {
           markRoomDirty(roomId, ctx);
         }
@@ -1238,29 +1419,39 @@ wsServer.on("connection", (socket) => {
           scope === "game"
             ? nextState.levels.map((_, index) => index)
             : [levelIndex];
-        for (const resyncLevelIndex of resyncIndices) {
-          const resyncLevel = nextState.levels[resyncLevelIndex];
-          if (!resyncLevel) {
-            continue;
-          }
-          for (const editorType of EDITOR_TYPES) {
-            const content = resyncLevel.code[editorType];
-            broadcastToRoom(roomId, "editor-resync", {
-              roomId,
-              groupId: extractGroupIdFromRoomId(roomId),
-              editorType,
-              levelIndex: resyncLevelIndex,
-              content,
-              version: resyncLevel.versions[editorType] || 0,
-              ts: Date.now(),
-            });
-            console.log(
-              `[room-state-reset:resync] room=${roomId} by=${socketId} groupId=${extractGroupIdFromRoomId(roomId) || "none"} editorType=${editorType} levelIndex=${resyncLevelIndex} version=${resyncLevel.versions[editorType] || 0} contentLen=${typeof content === "string" ? content.length : 0}`
-            );
+        if (isYjsEnabled()) {
+          const doc = roomYDocs.get(roomId);
+          broadcastToRoom(roomId, "yjs-reset", {
+            roomId,
+            groupId: extractGroupIdFromRoomId(roomId),
+            updateBase64: encodeUpdateToBase64(Y.encodeStateAsUpdate(doc)),
+            ts: Date.now(),
+          });
+        } else {
+          for (const resyncLevelIndex of resyncIndices) {
+            const resyncLevel = nextState.levels[resyncLevelIndex];
+            if (!resyncLevel) {
+              continue;
+            }
+            for (const editorType of EDITOR_TYPES) {
+              const content = resyncLevel.code[editorType];
+              broadcastToRoom(roomId, "editor-resync", {
+                roomId,
+                groupId: extractGroupIdFromRoomId(roomId),
+                editorType,
+                levelIndex: resyncLevelIndex,
+                content,
+                version: resyncLevel.versions[editorType] || 0,
+                ts: Date.now(),
+              });
+              console.log(
+                `[room-state-reset:resync] room=${roomId} by=${socketId} groupId=${extractGroupIdFromRoomId(roomId) || "none"} editorType=${editorType} levelIndex=${resyncLevelIndex} version=${resyncLevel.versions[editorType] || 0} contentLen=${typeof content === "string" ? content.length : 0}`
+              );
+            }
           }
         }
 
-        broadcastToRoom(roomId, "room-state-sync", serializeRoomStateSync(nextState));
+        broadcastToRoom(roomId, "room-state-sync", serializeRoomStateSync(roomId, nextState));
         const groupStartSync = serializeGroupStartSync(roomId, nextState);
         if (groupStartSync) {
           broadcastToRoom(roomId, "group-start-sync", groupStartSync);

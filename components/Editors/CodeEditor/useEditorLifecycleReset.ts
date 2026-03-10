@@ -11,6 +11,9 @@ interface UseEditorLifecycleResetOptions {
   pendingChangeSetRef: MutableRefObject<ChangeSet | null>;
   syncTimeoutRef: MutableRefObject<ReturnType<typeof setTimeout> | null>;
   lastSyncedCodeRef: MutableRefObject<string>;
+  lastSyncedVersionRef: MutableRefObject<number>;
+  retryBackoffUntilRef: MutableRefObject<number>;
+  retryBackoffMsRef: MutableRefObject<number>;
   suppressCollaborationUpdateRef: MutableRefObject<boolean>;
 }
 
@@ -24,6 +27,9 @@ export function useEditorLifecycleReset({
   pendingChangeSetRef,
   syncTimeoutRef,
   lastSyncedCodeRef,
+  lastSyncedVersionRef,
+  retryBackoffUntilRef,
+  retryBackoffMsRef,
   suppressCollaborationUpdateRef,
 }: UseEditorLifecycleResetOptions) {
   const applyingExternalUpdateRef = useRef(false);
@@ -49,6 +55,9 @@ export function useEditorLifecycleReset({
       }
 
       lastSyncedCodeRef.current = template;
+      lastSyncedVersionRef.current = 0;
+      retryBackoffUntilRef.current = 0;
+      retryBackoffMsRef.current = 0;
       applyingExternalUpdateRef.current = true;
       suppressCollaborationUpdateRef.current = true;
       pendingChangeSetRef.current = null;
@@ -61,8 +70,11 @@ export function useEditorLifecycleReset({
   }, [
     editorType,
     lastSyncedCodeRef,
+    lastSyncedVersionRef,
     levelIdentifier,
     pendingChangeSetRef,
+    retryBackoffMsRef,
+    retryBackoffUntilRef,
     setCode,
     suppressCollaborationUpdateRef,
     syncTimeoutRef,
@@ -89,6 +101,9 @@ export function useEditorLifecycleReset({
     }
 
     lastSyncedCodeRef.current = template;
+    lastSyncedVersionRef.current = 0;
+    retryBackoffUntilRef.current = 0;
+    retryBackoffMsRef.current = 0;
     applyingExternalUpdateRef.current = true;
     suppressCollaborationUpdateRef.current = true;
     pendingChangeSetRef.current = null;
@@ -100,7 +115,10 @@ export function useEditorLifecycleReset({
   }, [
     code,
     lastSyncedCodeRef,
+    lastSyncedVersionRef,
     pendingChangeSetRef,
+    retryBackoffMsRef,
+    retryBackoffUntilRef,
     setCode,
     suppressCollaborationUpdateRef,
     syncTimeoutRef,

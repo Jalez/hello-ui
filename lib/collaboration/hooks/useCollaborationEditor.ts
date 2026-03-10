@@ -21,6 +21,7 @@ interface UseCollaborationEditorReturn {
     editorType: EditorType,
     changeSetJson: unknown,
     levelIndex: number,
+    baseVersion: number,
     selection?: { from: number; to: number }
   ) => void;
   setEditorVersion: (editorType: EditorType, levelIndex: number, version: number) => void;
@@ -68,12 +69,10 @@ export function useCollaborationEditor(
   );
 
   const applyLocalChange = useCallback(
-    (editorType: EditorType, changeSetJson: unknown, levelIndex: number, selection?: { from: number; to: number }) => {
-      const versionKey = getVersionKey(editorType, levelIndex);
-      const baseVersion = versionRef.current[versionKey] || 0;
+    (editorType: EditorType, changeSetJson: unknown, levelIndex: number, baseVersion: number, selection?: { from: number; to: number }) => {
       sendChange(editorType, levelIndex, baseVersion, changeSetJson, selection);
     },
-    [getVersionKey, sendChange]
+    [sendChange]
   );
 
   const setEditorVersion = useCallback((editorType: EditorType, levelIndex: number, version: number) => {

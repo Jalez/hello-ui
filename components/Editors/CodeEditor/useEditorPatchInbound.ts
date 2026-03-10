@@ -5,7 +5,7 @@ import type { RemoteCodeChange, RemoteCodeResync } from "@/lib/collaboration/Col
 import type { EditorType } from "@/lib/collaboration/types";
 import { logDebugClient } from "@/lib/debug-logger";
 
-import { applyChangeSetToContent, matchesActiveEditor, rebasePendingChangeSet } from "./collaborationUtils";
+import { applyChangeSetToContent, matchesActiveEditor, rebaseIntentChangeSet, rebasePendingChangeSet } from "./collaborationUtils";
 
 interface UseEditorPatchInboundOptions {
   remoteCodeChanges: RemoteCodeChange[];
@@ -13,12 +13,15 @@ interface UseEditorPatchInboundOptions {
   editorType: EditorType;
   levelIndex: number;
   setCode: Dispatch<SetStateAction<string>>;
-  title: "HTML" | "CSS" | "JS";
   pendingChangeSetRef: MutableRefObject<ChangeSetType | null>;
   inflightChangeSetRef: MutableRefObject<ChangeSetType | null>;
   syncTimeoutRef: MutableRefObject<ReturnType<typeof setTimeout> | null>;
   suppressCollaborationUpdateRef: MutableRefObject<boolean>;
+  codeRef: MutableRefObject<string>;
   lastSyncedCodeRef: MutableRefObject<string>;
+  lastSyncedVersionRef: MutableRefObject<number>;
+  retryBackoffUntilRef: MutableRefObject<number>;
+  retryBackoffMsRef: MutableRefObject<number>;
   inflightSelectionRef: MutableRefObject<{ from: number; to: number } | null>;
   scheduleDebouncedSync: () => void;
 }
@@ -29,12 +32,15 @@ export function useEditorPatchInbound({
   editorType,
   levelIndex,
   setCode,
-  title,
   pendingChangeSetRef,
   inflightChangeSetRef,
   syncTimeoutRef,
   suppressCollaborationUpdateRef,
+  codeRef,
   lastSyncedCodeRef,
+  lastSyncedVersionRef,
+  retryBackoffUntilRef,
+  retryBackoffMsRef,
   inflightSelectionRef,
   scheduleDebouncedSync,
 }: UseEditorPatchInboundOptions) {
@@ -59,6 +65,7 @@ export function useEditorPatchInbound({
         const remoteChangeSet = ChangeSet.fromJSON(change.changeSetJson);
         const nextSyncedCode = applyChangeSetToContent(lastSyncedCodeRef.current, remoteChangeSet);
         lastSyncedCodeRef.current = nextSyncedCode;
+        lastSyncedVersionRef.current = change.nextVersion;
         inflightChangeSetRef.current = rebasePendingChangeSet(inflightChangeSetRef.current, remoteChangeSet);
         pendingChangeSetRef.current = rebasePendingChangeSet(pendingChangeSetRef.current, remoteChangeSet);
 
@@ -97,6 +104,7 @@ export function useEditorPatchInbound({
     inflightChangeSetRef,
     levelIndex,
     lastSyncedCodeRef,
+    lastSyncedVersionRef,
     pendingChangeSetRef,
     remoteCodeChanges,
     setCode,
@@ -114,6 +122,8 @@ export function useEditorPatchInbound({
     }
 
     const latestResync = unseenResyncs[unseenResyncs.length - 1];
+    const previousSyncedContent = lastSyncedCodeRef.current;
+    const intendedVisibleContent = codeRef.current;
     logDebugClient("editor_patch_inbound_resync", {
       editorType,
       levelIndex,
@@ -125,42 +135,58 @@ export function useEditorPatchInbound({
     });
     lastAppliedRemoteResyncSeqRef.current = latestResync.seq;
     lastSyncedCodeRef.current = latestResync.content;
-    const rejectedInflightChange = inflightChangeSetRef.current;
-    const nextPending = rejectedInflightChange
-      ? (pendingChangeSetRef.current
-        ? rejectedInflightChange.compose(pendingChangeSetRef.current)
-        : rejectedInflightChange)
-      : pendingChangeSetRef.current;
+    lastSyncedVersionRef.current = latestResync.version;
+    retryBackoffMsRef.current = retryBackoffMsRef.current > 0
+      ? Math.min(retryBackoffMsRef.current * 2, 1200)
+      : 150;
+    retryBackoffUntilRef.current = Date.now() + retryBackoffMsRef.current;
+    const queuedRetry = rebaseIntentChangeSet(
+      previousSyncedContent,
+      latestResync.content,
+      intendedVisibleContent,
+    );
+    const droppedPending = Boolean(pendingChangeSetRef.current);
+    const droppedInflight = Boolean(inflightChangeSetRef.current);
     inflightChangeSetRef.current = null;
     inflightSelectionRef.current = null;
-    pendingChangeSetRef.current = nextPending;
+    pendingChangeSetRef.current = queuedRetry;
     if (syncTimeoutRef.current) {
       clearTimeout(syncTimeoutRef.current);
       syncTimeoutRef.current = null;
     }
     suppressCollaborationUpdateRef.current = true;
-    let nextVisibleCode = latestResync.content;
-    if (pendingChangeSetRef.current) {
-      nextVisibleCode = applyChangeSetToContent(nextVisibleCode, pendingChangeSetRef.current);
-    }
-    setCode((prev) => (prev === nextVisibleCode ? prev : nextVisibleCode));
+    setCode((prev) => (prev === latestResync.content ? prev : latestResync.content));
+    logDebugClient("editor_patch_inbound_resync_canonicalized", {
+      editorType,
+      levelIndex,
+      seq: latestResync.seq,
+      version: latestResync.version,
+      droppedPending,
+      droppedInflight,
+      retryQueued: Boolean(queuedRetry),
+      intendedVisibleLength: intendedVisibleContent.length,
+      previousSyncedLength: previousSyncedContent.length,
+    });
     if (pendingChangeSetRef.current) {
       queueMicrotask(() => {
         scheduleDebouncedSync();
       });
     }
   }, [
+    codeRef,
     editorType,
     inflightChangeSetRef,
     inflightSelectionRef,
     levelIndex,
     lastSyncedCodeRef,
+    lastSyncedVersionRef,
     pendingChangeSetRef,
     remoteCodeResyncs,
+    retryBackoffMsRef,
+    retryBackoffUntilRef,
     scheduleDebouncedSync,
     setCode,
     suppressCollaborationUpdateRef,
     syncTimeoutRef,
-    title,
   ]);
 }

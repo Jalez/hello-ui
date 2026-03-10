@@ -11,6 +11,7 @@ import { useEditorPatchInbound } from "./useEditorPatchInbound";
 import { useEditorPatchOutbound } from "./useEditorPatchOutbound";
 import { useEditorTypingPresence } from "./useEditorTypingPresence";
 import { useRemoteCarets } from "./useRemoteCarets";
+import { useYjsCodeEditorCollaboration } from "./useYjsCodeEditorCollaboration";
 import { EMPTY_EDITOR_CURSORS, titleToEditorType } from "./utils";
 
 const EMPTY_REMOTE_CODE_CHANGES: NonNullable<ReturnType<typeof useOptionalCollaboration>>["remoteCodeChanges"] = [];
@@ -26,6 +27,7 @@ interface UseCodeEditorCollaborationOptions {
   levelIdentifier: string;
   currentLevel: number;
   onLocalChange?: () => void;
+  onLocalUserInput?: () => void;
 }
 
 export function useCodeEditorCollaboration({
@@ -38,16 +40,32 @@ export function useCodeEditorCollaboration({
   levelIdentifier,
   currentLevel,
   onLocalChange,
+  onLocalUserInput,
 }: UseCodeEditorCollaborationOptions) {
   const collaboration = useOptionalCollaboration();
-  const isConnected = enabled && (collaboration?.isConnected ?? false);
+  const isYjsEnabled = enabled && (collaboration?.isYjsEnabled ?? false);
+  const yjsCollaboration = useYjsCodeEditorCollaboration({
+    title,
+    code,
+    setCode,
+    template,
+    enabled: enabled && isYjsEnabled,
+    locked,
+    levelIdentifier,
+    currentLevel,
+    onLocalChange,
+    onLocalUserInput,
+  });
+
+  const isConnected = enabled && !isYjsEnabled && (collaboration?.isConnected ?? false);
   const setTyping = collaboration?.setTyping;
   const applyEditorChange = collaboration?.applyEditorChange;
   const updateEditorSelection = collaboration?.updateEditorSelection;
-  const editorCursors = enabled ? (collaboration?.editorCursors ?? EMPTY_EDITOR_CURSORS) : EMPTY_EDITOR_CURSORS;
-  const remoteCodeChanges = enabled ? (collaboration?.remoteCodeChanges ?? EMPTY_REMOTE_CODE_CHANGES) : EMPTY_REMOTE_CODE_CHANGES;
-  const remoteCodeResyncs = enabled ? (collaboration?.remoteCodeResyncs ?? EMPTY_REMOTE_CODE_RESYNCS) : EMPTY_REMOTE_CODE_RESYNCS;
-  const localCodeAcks = enabled ? (collaboration?.localCodeAcks ?? []) : [];
+  const editorCursors = enabled && !isYjsEnabled ? (collaboration?.editorCursors ?? EMPTY_EDITOR_CURSORS) : EMPTY_EDITOR_CURSORS;
+  const remoteCodeChanges = enabled && !isYjsEnabled ? (collaboration?.remoteCodeChanges ?? EMPTY_REMOTE_CODE_CHANGES) : EMPTY_REMOTE_CODE_CHANGES;
+  const remoteCodeResyncs = enabled && !isYjsEnabled ? (collaboration?.remoteCodeResyncs ?? EMPTY_REMOTE_CODE_RESYNCS) : EMPTY_REMOTE_CODE_RESYNCS;
+  const localCodeAcks = enabled && !isYjsEnabled ? (collaboration?.localCodeAcks ?? []) : [];
+  const getEditorVersion = collaboration?.getEditorVersion;
   const editorType: EditorType = titleToEditorType(title);
   const levelIndex = currentLevel - 1;
 
@@ -61,10 +79,20 @@ export function useCodeEditorCollaboration({
   const suppressCollaborationUpdateRef = useRef(false);
   const codeRef = useRef(template);
   const lastSyncedCodeRef = useRef(template);
+  const lastSyncedVersionRef = useRef(0);
+  const retryBackoffUntilRef = useRef(0);
+  const retryBackoffMsRef = useRef(0);
 
   useEffect(() => {
     codeRef.current = code;
   }, [code]);
+
+  useEffect(() => {
+    if (!enabled || isYjsEnabled || !getEditorVersion) {
+      return;
+    }
+    lastSyncedVersionRef.current = getEditorVersion(editorType, levelIndex);
+  }, [editorType, enabled, getEditorVersion, isYjsEnabled, levelIndex, collaboration?.codeSyncReady]);
 
   const { typingTimeoutRef, handleTypingStart, handleTypingEnd } = useEditorTypingPresence({
     isConnected,
@@ -91,6 +119,9 @@ export function useCodeEditorCollaboration({
     syncTimeoutRef,
     suppressCollaborationUpdateRef,
     lastSyncedCodeRef,
+    lastSyncedVersionRef,
+    retryBackoffUntilRef,
+    retryBackoffMsRef,
     debounceMs: REMOTE_SYNC_DEBOUNCE_MS,
     localCodeAcks,
   });
@@ -101,12 +132,15 @@ export function useCodeEditorCollaboration({
     editorType,
     levelIndex,
     setCode,
-    title,
     pendingChangeSetRef,
     inflightChangeSetRef,
     syncTimeoutRef,
     suppressCollaborationUpdateRef,
+    codeRef,
     lastSyncedCodeRef,
+    lastSyncedVersionRef,
+    retryBackoffUntilRef,
+    retryBackoffMsRef,
     inflightSelectionRef,
     scheduleDebouncedSync,
   });
@@ -121,6 +155,9 @@ export function useCodeEditorCollaboration({
     pendingChangeSetRef,
     syncTimeoutRef,
     lastSyncedCodeRef,
+    lastSyncedVersionRef,
+    retryBackoffUntilRef,
+    retryBackoffMsRef,
     suppressCollaborationUpdateRef,
   });
 
@@ -159,16 +196,22 @@ export function useCodeEditorCollaboration({
     handleLocalEditorUpdate(viewUpdate);
   }, [handleLocalEditorUpdate]);
 
-  return {
+  const customCollaboration = {
     isConnected,
     remoteCarets,
     editorViewRef,
     editorViewportRef,
     applyingExternalUpdateRef,
+    isYjsManaged: false,
+    editorExtensions: [],
+    editorKey: `custom-${levelIdentifier}-${title}-${currentLevel}`,
+    editorInitialState: undefined,
     handleCodeUpdate,
     handleEditorCreate: (view: EditorView) => {
       editorViewRef.current = view;
     },
     handleEditorUpdate,
   };
+
+  return isYjsEnabled ? yjsCollaboration : customCollaboration;
 }

@@ -107,6 +107,7 @@ export interface EditorChangeApplied {
   editorType: "html" | "css" | "js";
   levelIndex: number;
   nextVersion: number;
+  content: string;
   ts: number;
 }
 
@@ -188,5 +189,24 @@ export interface TypingStatusMessage {
   editorType: EditorType;
   levelIndex: number;
   isTyping: boolean;
+  ts: number;
+}
+
+export interface YjsSyncRequestMessage {
+  roomId: string;
+  groupId?: string;
+}
+
+export interface YjsSyncMessage {
+  roomId: string;
+  groupId?: string;
+  updateBase64: string;
+  ts: number;
+}
+
+export interface YjsUpdateMessage {
+  roomId: string;
+  groupId?: string;
+  updateBase64: string;
   ts: number;
 }

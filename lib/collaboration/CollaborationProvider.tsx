@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useCallback, useMemo, useState, useEffect } from "react";
+import * as Y from "yjs";
 import {
   ActiveUser,
   CanvasCursor,
@@ -19,17 +20,20 @@ import {
   TabFocusMessage,
   TypingStatusMessage,
 } from "./types";
+import { getClientCollaborationEngine } from "./engine";
 import { useCollaborationConnection } from "./hooks/useCollaborationConnection";
 import { useCollaborationCursor } from "./hooks/useCollaborationCursor";
 import { useCollaborationPresence } from "./hooks/useCollaborationPresence";
 import { useCollaborationEditor } from "./hooks/useCollaborationEditor";
 import { extractGroupIdFromRoomId } from "./utils";
+import { decodeBase64ToUint8Array, encodeUint8ArrayToBase64 } from "./yjs-base64";
 
 export interface RemoteCodeChange {
   seq: number;
   editorType: EditorType;
   changeSetJson: unknown;
   levelIndex: number;
+  baseVersion: number;
   nextVersion: number;
   clientId: string;
   ts: number;
@@ -49,6 +53,7 @@ export interface LocalCodeAck {
   editorType: EditorType;
   levelIndex: number;
   nextVersion: number;
+  content: string;
   ts: number;
 }
 
@@ -56,7 +61,18 @@ export type RoomStateSync = RoomStateSyncMessage | null;
 export type ProgressSync = ProgressSyncMessage | null;
 export type GroupStartSync = GroupStartSyncMessage | null;
 
+function hasSharedStartTime(roomState: RoomStateSync): boolean {
+  const firstLevel = roomState?.levels?.[0];
+  const timeData =
+    firstLevel && typeof firstLevel === "object" && firstLevel.timeData && typeof firstLevel.timeData === "object"
+      ? (firstLevel.timeData as Record<string, unknown>)
+      : null;
+  return Number(timeData?.startTime ?? 0) > 0;
+}
+
 interface CollaborationContextValue {
+  collabEngine: "custom" | "yjs";
+  isYjsEnabled: boolean;
   isConnected: boolean;
   isConnecting: boolean;
   error: string | null;
@@ -75,20 +91,25 @@ interface CollaborationContextValue {
   lobbyMessages: LobbyChatEntry[];
   initialRoomState: RoomStateSync;
   codeSyncReady: boolean;
+  yjsReady: boolean;
+  yjsDocGeneration: number;
   updateCanvasCursor: (x: number, y: number) => void;
   updateEditorSelection: (editorType: EditorType, levelIndex: number, selection: { from: number; to: number }) => void;
   applyEditorChange: (
     editorType: EditorType,
     changeSetJson: unknown,
     levelIndex: number,
+    baseVersion: number,
     selection?: { from: number; to: number }
   ) => void;
+  getEditorVersion: (editorType: EditorType, levelIndex: number) => number;
   setActiveTab: (editorType: EditorType, levelIndex: number) => void;
   setTyping: (editorType: EditorType, levelIndex: number, isTyping: boolean) => void;
   resetRoomState: (scope: "level" | "game", levelIndex?: number) => void;
   syncProgressData: (progressData: Record<string, unknown>) => void;
   setGroupReady: (isReady: boolean) => void;
   sendLobbyChat: (text: string) => void;
+  getYText: (editorType: EditorType, levelIndex: number) => Y.Text | null;
   connect: () => void;
   disconnect: () => void;
 }
@@ -103,6 +124,8 @@ interface CollaborationProviderProps {
 }
 
 export function CollaborationProvider({ children, roomId, groupId, user }: CollaborationProviderProps) {
+  const collabEngine = getClientCollaborationEngine();
+  const isYjsEnabled = collabEngine === "yjs";
   const resolvedRoomId = roomId ?? groupId ?? null;
   const resolvedGroupId = extractGroupIdFromRoomId(resolvedRoomId);
   const [canvasCursors, setCanvasCursors] = useState<Map<string, CanvasCursor>>(new Map());
@@ -115,7 +138,24 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
   const [lobbyMessages, setLobbyMessages] = useState<LobbyChatEntry[]>([]);
   const [initialRoomState, setInitialRoomState] = useState<RoomStateSync>(null);
   const [codeSyncReady, setCodeSyncReady] = useState(false);
+  const [yjsReady, setYjsReady] = useState(false);
+  const [yjsDocGeneration, setYjsDocGeneration] = useState(0);
   const remoteEventSeqRef = React.useRef(0);
+  const wasConnectedRef = React.useRef(false);
+  const hasConnectedOnceRef = React.useRef(false);
+  const yDocRef = React.useRef<Y.Doc | null>(null);
+
+  const getYTextKey = useCallback((editorType: EditorType, levelIndex: number) => {
+    return `level:${levelIndex}:${editorType}`;
+  }, []);
+
+  const getYText = useCallback((editorType: EditorType, levelIndex: number) => {
+    const doc = yDocRef.current;
+    if (!doc) {
+      return null;
+    }
+    return doc.getText(getYTextKey(editorType, levelIndex));
+  }, [getYTextKey]);
 
   // Presence helpers — populated after useCollaborationPresence is called below
   const addUserRef = React.useRef<((u: ActiveUser) => void) | null>(null);
@@ -125,6 +165,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
   const updateUserTypingRef = React.useRef<((clientId: string, editorType: EditorType, levelIndex: number, isTyping: boolean) => void) | null>(null);
   const sendEditorCursorRef = React.useRef<((editorType: EditorType, levelIndex: number, selection: { from: number; to: number }) => void) | null>(null);
   const sendEditorChangeRef = React.useRef<((editorType: EditorType, levelIndex: number, baseVersion: number, changeSetJson: unknown, selection?: { from: number; to: number }) => void) | null>(null);
+  const sendYjsUpdateRef = React.useRef<((updateBase64: string) => void) | null>(null);
 
   // Queue presence events that arrive before refs are set (e.g. fast current-users after join)
   const pendingPresenceRef = React.useRef<Array<{ type: "user-joined"; user: ActiveUser } | { type: "current-users"; users: ActiveUser[] }>>([]);
@@ -206,7 +247,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
     sendEditorChangeRef.current?.(editorType, levelIndex, baseVersion, changeSetJson, selection);
   }, []);
 
-  const { updateLocalSelectionForLevel, applyLocalChange, setEditorVersion, syncEditorVersions, resetEditorVersions } = useCollaborationEditor({
+  const { updateLocalSelectionForLevel, applyLocalChange, setEditorVersion, getEditorVersion, syncEditorVersions, resetEditorVersions } = useCollaborationEditor({
     sendCursor: sendCursorThroughRef,
     sendChange: sendChangeThroughRef,
   });
@@ -220,6 +261,9 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
   }, []);
 
   const handleEditorChange = useCallback((change: EditorChange) => {
+    if (isYjsEnabled) {
+      return;
+    }
     setEditorVersion(change.editorType, change.levelIndex, change.nextVersion);
     const seq = ++remoteEventSeqRef.current;
     setRemoteCodeChanges((prev) => [
@@ -229,14 +273,18 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
         editorType: change.editorType,
         changeSetJson: change.changeSetJson,
         levelIndex: change.levelIndex,
+        baseVersion: change.baseVersion,
         nextVersion: change.nextVersion,
         clientId: change.clientId,
         ts: Date.now(),
       },
     ]);
-  }, [setEditorVersion]);
+  }, [isYjsEnabled, setEditorVersion]);
 
   const handleEditorChangeApplied = useCallback((message: EditorChangeApplied) => {
+    if (isYjsEnabled) {
+      return;
+    }
     setEditorVersion(message.editorType, message.levelIndex, message.nextVersion);
     const seq = ++remoteEventSeqRef.current;
     setLocalCodeAcks((prev) => [
@@ -246,12 +294,16 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
         editorType: message.editorType,
         levelIndex: message.levelIndex,
         nextVersion: message.nextVersion,
+        content: message.content,
         ts: Date.now(),
       },
     ]);
-  }, [setEditorVersion]);
+  }, [isYjsEnabled, setEditorVersion]);
 
   const handleEditorResync = useCallback((message: EditorResync) => {
+    if (isYjsEnabled) {
+      return;
+    }
     setEditorVersion(message.editorType, message.levelIndex, message.version);
     const seq = ++remoteEventSeqRef.current;
     setRemoteCodeResyncs((prev) => [
@@ -265,13 +317,16 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
         ts: Date.now(),
       },
     ]);
-  }, [setEditorVersion]);
+  }, [isYjsEnabled, setEditorVersion]);
 
   const handleRoomStateSync = useCallback((roomState: RoomStateSyncMessage) => {
-    syncEditorVersions(roomState);
     setInitialRoomState(roomState);
-    setCodeSyncReady(true);
-  }, [syncEditorVersions]);
+    if (!isYjsEnabled) {
+      syncEditorVersions(roomState);
+      setCodeSyncReady(true);
+      return;
+    }
+  }, [isYjsEnabled, syncEditorVersions]);
 
   const handleProgressSync = useCallback((message: ProgressSyncMessage) => {
     setLastProgressSync(message);
@@ -309,6 +364,59 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
     updateUserTypingRef.current?.(message.clientId, message.editorType, message.levelIndex, message.isTyping);
   }, []);
 
+  const handleYjsSync = useCallback((message: { updateBase64: string }) => {
+    const doc = yDocRef.current;
+    if (!doc || !message.updateBase64) {
+      return;
+    }
+    console.log("[yjs-sync:apply]", {
+      roomId: resolvedRoomId,
+      updateLength: message.updateBase64.length,
+    });
+    Y.applyUpdate(doc, decodeBase64ToUint8Array(message.updateBase64), "remote-yjs");
+    setYjsReady(true);
+  }, [resolvedRoomId]);
+
+  const handleYjsReset = useCallback((message: { updateBase64: string }) => {
+    if (!message.updateBase64) {
+      return;
+    }
+    // Destroy old Y.Doc and create a fresh one to avoid CRDT tombstone conflicts
+    const oldDoc = yDocRef.current;
+    if (oldDoc) {
+      oldDoc.destroy();
+    }
+    const freshDoc = new Y.Doc();
+    yDocRef.current = freshDoc;
+    console.log("[yjs-reset:apply]", {
+      roomId: resolvedRoomId,
+      updateLength: message.updateBase64.length,
+    });
+    Y.applyUpdate(freshDoc, decodeBase64ToUint8Array(message.updateBase64), "remote-yjs");
+    // Wire up outbound update handler on the new doc
+    freshDoc.on("update", (update: Uint8Array, origin: unknown) => {
+      if (origin === "remote-yjs" || origin === "hydrate-room-state") {
+        return;
+      }
+      sendYjsUpdateRef.current?.(encodeUint8ArrayToBase64(update));
+    });
+    setYjsReady(true);
+    setYjsDocGeneration((prev) => prev + 1);
+  }, [resolvedRoomId]);
+
+  const handleYjsUpdate = useCallback((message: { updateBase64: string }) => {
+    const doc = yDocRef.current;
+    if (!doc || !message.updateBase64) {
+      return;
+    }
+    console.log("[yjs-update:apply]", {
+      roomId: resolvedRoomId,
+      updateLength: message.updateBase64.length,
+    });
+    Y.applyUpdate(doc, decodeBase64ToUint8Array(message.updateBase64), "remote-yjs");
+    setYjsReady(true);
+  }, [resolvedRoomId]);
+
   const {
     isConnected,
     isConnecting,
@@ -321,6 +429,9 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
     sendEditorChange,
     sendTabFocus,
     sendTypingStatus,
+    requestRoomStateSync,
+    requestYjsSync,
+    sendYjsUpdate,
     sendRoomReset,
     sendProgressSync,
     sendGroupStartReady,
@@ -344,7 +455,107 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
     onGroupStartSync: handleGroupStartSync,
     onLobbyChatSync: handleLobbyChatSync,
     onLobbyChatMessage: handleLobbyChatMessage,
+    onYjsSync: handleYjsSync,
+    onYjsReset: handleYjsReset,
+    onYjsUpdate: handleYjsUpdate,
   });
+
+  useEffect(() => {
+    sendYjsUpdateRef.current = sendYjsUpdate;
+  }, [sendYjsUpdate]);
+
+  useEffect(() => {
+    if (!isYjsEnabled) {
+      return;
+    }
+
+    const doc = new Y.Doc();
+    yDocRef.current = doc;
+
+    const handleDocUpdate = (update: Uint8Array, origin: unknown) => {
+      if (origin === "remote-yjs" || origin === "hydrate-room-state") {
+        return;
+      }
+      console.log("[yjs-doc:update:emit]", {
+        roomId: resolvedRoomId,
+        origin: String(origin),
+        updateBytes: update.byteLength,
+      });
+      sendYjsUpdate(encodeUint8ArrayToBase64(update));
+    };
+
+    doc.on("update", handleDocUpdate);
+    return () => {
+      doc.off("update", handleDocUpdate);
+      doc.destroy();
+      yDocRef.current = null;
+    };
+  }, [isYjsEnabled, resolvedRoomId, sendYjsUpdate]);
+
+  useEffect(() => {
+    if (!resolvedRoomId || !isConnected) {
+      return;
+    }
+
+    if (!initialRoomState) {
+      const timer = setTimeout(() => {
+        requestRoomStateSync("startup_missing_room_state");
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+
+    if (isYjsEnabled && !yjsReady) {
+      const timer = setTimeout(() => {
+        requestYjsSync();
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+
+    if (groupStartGate?.status === "started" && !hasSharedStartTime(initialRoomState)) {
+      const timer = setTimeout(() => {
+        requestRoomStateSync("startup_missing_shared_start");
+      }, 600);
+      return () => clearTimeout(timer);
+    }
+  }, [groupStartGate?.status, initialRoomState, isConnected, isYjsEnabled, requestRoomStateSync, requestYjsSync, resolvedRoomId, yjsReady]);
+
+  useEffect(() => {
+    const wasConnected = wasConnectedRef.current;
+    wasConnectedRef.current = isConnected;
+
+    if (!resolvedRoomId || !isConnected) {
+      return;
+    }
+
+    const isReconnect = hasConnectedOnceRef.current && !wasConnected;
+    hasConnectedOnceRef.current = true;
+
+    if (!isReconnect || !initialRoomState) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      requestRoomStateSync("reconnect_recover");
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [initialRoomState, isConnected, requestRoomStateSync, resolvedRoomId]);
+
+  useEffect(() => {
+    if (isYjsEnabled) {
+      return;
+    }
+    if (!resolvedRoomId || !isConnected || remoteCodeResyncs.length === 0) {
+      return;
+    }
+
+    const latestResync = remoteCodeResyncs[remoteCodeResyncs.length - 1];
+    const timer = setTimeout(() => {
+      requestRoomStateSync(`editor_resync_recover:${latestResync.editorType}:${latestResync.levelIndex}`);
+    }, 200);
+
+    return () => clearTimeout(timer);
+  }, [isConnected, isYjsEnabled, remoteCodeResyncs, requestRoomStateSync, resolvedRoomId]);
 
   const { activeUsers, usersByTab, addUser, setUsers, removeUser, clearUsers, updateUserTab, updateUserTyping } = useCollaborationPresence({});
 
@@ -393,9 +604,13 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       setLobbyMessages([]);
       setInitialRoomState(null);
       setCodeSyncReady(false);
+      setYjsReady(false);
+      setYjsDocGeneration(0);
       setCanvasCursors(new Map());
       setEditorCursors(new Map());
     });
+    wasConnectedRef.current = false;
+    hasConnectedOnceRef.current = false;
     resetEditorVersions();
   }, [resolvedRoomId, resetEditorVersions]);
 
@@ -444,14 +659,24 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
   }, [sendGroupStartReady, sendGroupStartUnready]);
 
   const applyEditorChangeWrapper = useCallback(
-    (editorType: EditorType, changeSetJson: unknown, levelIndex: number, selection?: { from: number; to: number }) => {
-      applyLocalChange(editorType, changeSetJson, levelIndex, selection);
+    (
+      editorType: EditorType,
+      changeSetJson: unknown,
+      levelIndex: number,
+      baseVersion: number,
+      selection?: { from: number; to: number }
+    ) => {
+      applyLocalChange(editorType, changeSetJson, levelIndex, baseVersion, selection);
     },
     [applyLocalChange]
   );
 
+  const resolvedCodeSyncReady = isYjsEnabled ? Boolean(initialRoomState) && yjsReady : codeSyncReady;
+
   const value = useMemo<CollaborationContextValue>(
     () => ({
+      collabEngine,
+      isYjsEnabled,
       isConnected,
       isConnecting,
       error,
@@ -469,20 +694,26 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       groupStartGate,
       lobbyMessages,
       initialRoomState,
-      codeSyncReady,
+      codeSyncReady: resolvedCodeSyncReady,
+      yjsReady,
+      yjsDocGeneration,
       updateCanvasCursor,
       updateEditorSelection,
       applyEditorChange: applyEditorChangeWrapper,
+      getEditorVersion,
       setActiveTab,
       setTyping,
       resetRoomState,
       syncProgressData,
       setGroupReady,
       sendLobbyChat,
+      getYText,
       connect,
       disconnect,
     }),
     [
+      collabEngine,
+      isYjsEnabled,
       isConnected,
       isConnecting,
       error,
@@ -500,16 +731,20 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       groupStartGate,
       lobbyMessages,
       initialRoomState,
-      codeSyncReady,
+      resolvedCodeSyncReady,
+      yjsReady,
+      yjsDocGeneration,
       updateCanvasCursor,
       updateEditorSelection,
       applyEditorChangeWrapper,
+      getEditorVersion,
       setActiveTab,
       setTyping,
       resetRoomState,
       syncProgressData,
       setGroupReady,
       sendLobbyChat,
+      getYText,
       connect,
       disconnect,
     ]
