@@ -601,6 +601,15 @@ export function useCollaborationConnection(
 
   const sendRoomReset = useCallback((scope: "level" | "game", levelIndex?: number) => {
     if (roomId && user && clientIdRef.current) {
+      logDebugClient("ws_reset_room_emit", {
+        roomId,
+        groupId: parsedGroupId ?? null,
+        userId: user.id,
+        userEmail: user.email,
+        clientId: clientIdRef.current,
+        scope,
+        levelIndex: Number.isInteger(levelIndex) ? levelIndex : null,
+      });
       sendMessage("reset-room-state", {
         roomId,
         groupId: parsedGroupId ?? undefined,
@@ -610,7 +619,16 @@ export function useCollaborationConnection(
         levelIndex,
         ts: Date.now(),
       });
+      return;
     }
+
+    logDebugClient("ws_reset_room_skipped", {
+      roomId: roomId ?? null,
+      hasUser: Boolean(user),
+      hasClientId: Boolean(clientIdRef.current),
+      scope,
+      levelIndex: Number.isInteger(levelIndex) ? levelIndex : null,
+    });
   }, [parsedGroupId, roomId, sendMessage, user]);
 
   const sendProgressSync = useCallback((progressData: Record<string, unknown>) => {

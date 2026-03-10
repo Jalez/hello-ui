@@ -1,8 +1,11 @@
-import { useCallback, useEffect, type MutableRefObject } from "react";
+import { useCallback, useEffect, useRef, type MutableRefObject } from "react";
 import type { ChangeSet } from "@codemirror/state";
 import type { ViewUpdate } from "@codemirror/view";
 
+import type { LocalCodeAck } from "@/lib/collaboration/CollaborationProvider";
 import type { EditorType } from "@/lib/collaboration/types";
+
+import { applyChangeSetToContent } from "./collaborationUtils";
 
 interface UseEditorPatchOutboundOptions {
   isConnected: boolean;
@@ -23,11 +26,14 @@ interface UseEditorPatchOutboundOptions {
   title: "HTML" | "CSS" | "JS";
   codeRef: MutableRefObject<string>;
   pendingChangeSetRef: MutableRefObject<ChangeSet | null>;
+  inflightChangeSetRef: MutableRefObject<ChangeSet | null>;
   pendingSelectionRef: MutableRefObject<{ from: number; to: number }>;
+  inflightSelectionRef: MutableRefObject<{ from: number; to: number } | null>;
   syncTimeoutRef: MutableRefObject<ReturnType<typeof setTimeout> | null>;
   suppressCollaborationUpdateRef: MutableRefObject<boolean>;
   lastSyncedCodeRef: MutableRefObject<string>;
   debounceMs: number;
+  localCodeAcks: LocalCodeAck[];
 }
 
 export function useEditorPatchOutbound({
@@ -37,23 +43,17 @@ export function useEditorPatchOutbound({
   updateEditorSelection,
   editorType,
   levelIndex,
-  title,
-  codeRef,
   pendingChangeSetRef,
+  inflightChangeSetRef,
   pendingSelectionRef,
+  inflightSelectionRef,
   syncTimeoutRef,
   suppressCollaborationUpdateRef,
   lastSyncedCodeRef,
   debounceMs,
+  localCodeAcks,
 }: UseEditorPatchOutboundOptions) {
-  useEffect(() => {
-    const syncTimeout = syncTimeoutRef;
-    return () => {
-      if (syncTimeout.current) {
-        clearTimeout(syncTimeout.current);
-      }
-    };
-  }, [editorType, levelIndex, syncTimeoutRef, title]);
+  const lastHandledAckSeqRef = useRef(0);
 
   const scheduleDebouncedSync = useCallback(() => {
     if (!isConnected || locked || !applyEditorChange || !updateEditorSelection) {
@@ -65,30 +65,79 @@ export function useEditorPatchOutbound({
     }
 
     syncTimeoutRef.current = setTimeout(() => {
+      if (inflightChangeSetRef.current) {
+        return;
+      }
       const nextChangeSet = pendingChangeSetRef.current;
       if (nextChangeSet) {
-        lastSyncedCodeRef.current = codeRef.current;
+        inflightChangeSetRef.current = nextChangeSet;
+        inflightSelectionRef.current = pendingSelectionRef.current;
         applyEditorChange(editorType, nextChangeSet.toJSON(), levelIndex, pendingSelectionRef.current);
         pendingChangeSetRef.current = null;
       }
 
       updateEditorSelection(editorType, levelIndex, pendingSelectionRef.current);
+      syncTimeoutRef.current = null;
     }, debounceMs);
   }, [
     applyEditorChange,
-    codeRef,
     debounceMs,
     editorType,
+    inflightChangeSetRef,
+    inflightSelectionRef,
     isConnected,
-    lastSyncedCodeRef,
     levelIndex,
     locked,
     pendingChangeSetRef,
     pendingSelectionRef,
     syncTimeoutRef,
-    title,
     updateEditorSelection,
   ]);
+
+  useEffect(() => {
+    const matchingAcks = localCodeAcks.filter(
+      (ack) =>
+        ack.seq > lastHandledAckSeqRef.current &&
+        ack.editorType === editorType &&
+        ack.levelIndex === levelIndex,
+    );
+    if (matchingAcks.length === 0 || !inflightChangeSetRef.current) {
+      return;
+    }
+
+    const latestAck = matchingAcks[matchingAcks.length - 1];
+    lastHandledAckSeqRef.current = latestAck.seq;
+    lastSyncedCodeRef.current = applyChangeSetToContent(lastSyncedCodeRef.current, inflightChangeSetRef.current);
+    inflightChangeSetRef.current = null;
+    inflightSelectionRef.current = null;
+
+    if (pendingChangeSetRef.current) {
+      queueMicrotask(() => {
+        if (!syncTimeoutRef.current) {
+          scheduleDebouncedSync();
+        }
+      });
+    }
+  }, [
+    editorType,
+    inflightChangeSetRef,
+    inflightSelectionRef,
+    lastSyncedCodeRef,
+    levelIndex,
+    localCodeAcks,
+    pendingChangeSetRef,
+    scheduleDebouncedSync,
+    syncTimeoutRef,
+  ]);
+
+  useEffect(() => {
+    const syncTimeout = syncTimeoutRef;
+    return () => {
+      if (syncTimeout.current) {
+        clearTimeout(syncTimeout.current);
+      }
+    };
+  }, [editorType, levelIndex, syncTimeoutRef]);
 
   const handleLocalEditorUpdate = useCallback((viewUpdate: ViewUpdate) => {
     const selection = viewUpdate.state.selection.main;
@@ -106,18 +155,20 @@ export function useEditorPatchOutbound({
         : viewUpdate.changes;
     }
 
-    if (isConnected && (viewUpdate.selectionSet || (viewUpdate.docChanged && !shouldSuppressDocChange))) {
+    if (
+      isConnected &&
+      (viewUpdate.selectionSet || (viewUpdate.docChanged && !shouldSuppressDocChange)) &&
+      !inflightChangeSetRef.current
+    ) {
       scheduleDebouncedSync();
     }
   }, [
-    editorType,
     isConnected,
-    levelIndex,
+    inflightChangeSetRef,
     pendingChangeSetRef,
     pendingSelectionRef,
     scheduleDebouncedSync,
     suppressCollaborationUpdateRef,
-    title,
   ]);
 
   return {

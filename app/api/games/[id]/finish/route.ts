@@ -159,6 +159,31 @@ export async function POST(
     finishedAt,
   });
 
+  if (resolvedGroupId) {
+    const memberResult = await sql.query(
+      `SELECT COALESCE(NULLIF(TRIM(u.name), ''), u.email, gm.user_id::text) AS display_name
+       FROM group_members gm
+       LEFT JOIN users u ON u.id = gm.user_id
+       WHERE gm.group_id = $1
+       ORDER BY display_name ASC`,
+      [resolvedGroupId],
+    );
+    const participantResult = await sql.query(
+      `SELECT COALESCE(NULLIF(TRIM(display_name), ''), user_id::text, 'unknown') AS display_name
+       FROM game_attempt_participants
+       WHERE attempt_id = $1
+       ORDER BY display_name ASC`,
+      [statistics.attemptId],
+    );
+    console.log(
+      `[finish-membership] gameId=${gameId} groupId=${resolvedGroupId} instanceId=${resolved.instance.id} expected=${JSON.stringify(getRows(memberResult).map((row) => String(row.display_name)))} actual=${JSON.stringify(getRows(participantResult).map((row) => String(row.display_name)))}`
+    );
+  } else {
+    console.log(
+      `[finish-membership] gameId=${gameId} groupId=none instanceId=${resolved.instance.id} actorUserId=${actorUserId} attemptId=${statistics.attemptId}`
+    );
+  }
+
   return NextResponse.json({
     success: true,
     statistics,

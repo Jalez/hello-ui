@@ -37,6 +37,7 @@ import { CreatorMenu } from "./CreatorMenu";
 import { useOptionalCollaboration } from "@/lib/collaboration/CollaborationProvider";
 import { apiUrl, stripBasePath } from "@/lib/apiUrl";
 import { useGameplayTelemetry } from "@/components/General/useGameplayTelemetry";
+import { logDebugClient } from "@/lib/debug-logger";
 
 export const Navbar = () => {
   const dispatch = useAppDispatch();
@@ -84,19 +85,53 @@ export const Navbar = () => {
 
   const handleSharedReset = useCallback((scope: "level" | "game") => {
     if (!currentGame?.id) {
+      logDebugClient("shared_reset_ignored_no_game", {
+        scope,
+        currentLevel: currentLevel - 1,
+      });
       return;
     }
 
-    recordReset(scope, currentLevel - 1);
-    if (collaboration?.isConnected && collaboration.resetRoomState) {
+    if (collaboration?.resetRoomState) {
+      if (!collaboration.isConnected) {
+        logDebugClient("shared_reset_blocked_disconnected", {
+          scope,
+          currentLevel: currentLevel - 1,
+          roomId: collaboration.roomId,
+          groupId: collaboration.groupId,
+        });
+        dispatch(
+          addNotificationData({
+            type: "error",
+            message: "Shared reset is unavailable until the room connection is ready.",
+          }),
+        );
+        return;
+      }
+
+      recordReset(scope, currentLevel - 1);
+      logDebugClient("shared_reset_emit", {
+        scope,
+        currentLevel: currentLevel - 1,
+        roomId: collaboration.roomId,
+        groupId: collaboration.groupId,
+      });
       collaboration.resetRoomState(scope, currentLevel - 1);
       return;
     }
 
+    recordReset(scope, currentLevel - 1);
+    logDebugClient("shared_reset_fallback_local", {
+      scope,
+      currentLevel: currentLevel - 1,
+      isGameRoute,
+      roomId: collaboration?.roomId ?? null,
+      groupId: collaboration?.groupId ?? null,
+    });
     if (scope === "level") {
       dispatch(resetLevel(currentLevel));
     }
-  }, [collaboration, currentGame?.id, currentLevel, dispatch, recordReset]);
+  }, [collaboration, currentGame?.id, currentLevel, dispatch, isGameRoute, recordReset]);
 
   const shouldUseSharedReset = isGameRoute && Boolean(collaboration?.resetRoomState);
 

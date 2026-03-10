@@ -27,6 +27,8 @@ drawBoard/dist
 # misc
 .DS_Store
 *.pem
+exported-logs/
+css-artist-prod-logs.tar.gz
 
 # debug
 npm-debug.log*

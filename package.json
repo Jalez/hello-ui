@@ -7,6 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "pw:install": "playwright install chromium",
+    "pw:local-group": "node scripts/playwright-local-group-smoke.mjs",
+    "pw:prod-replay": "node scripts/prod-replay.mjs",
     "db:purge": "tsx scripts/db-purge.ts",
     "db:init": "tsx scripts/db-init.ts",
     "db:init-prod": "tsx scripts/db-init-prod.ts",
@@ -114,6 +117,7 @@
     "zustand": "^5.0.9"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@types/better-sqlite3": "^7.6.13",
     "@types/canvas-confetti": "^1.6.0",
     "@types/d3": "^7.4.0",

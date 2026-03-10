@@ -47,6 +47,7 @@ export function useCodeEditorCollaboration({
   const editorCursors = enabled ? (collaboration?.editorCursors ?? EMPTY_EDITOR_CURSORS) : EMPTY_EDITOR_CURSORS;
   const remoteCodeChanges = enabled ? (collaboration?.remoteCodeChanges ?? EMPTY_REMOTE_CODE_CHANGES) : EMPTY_REMOTE_CODE_CHANGES;
   const remoteCodeResyncs = enabled ? (collaboration?.remoteCodeResyncs ?? EMPTY_REMOTE_CODE_RESYNCS) : EMPTY_REMOTE_CODE_RESYNCS;
+  const localCodeAcks = enabled ? (collaboration?.localCodeAcks ?? []) : [];
   const editorType: EditorType = titleToEditorType(title);
   const levelIndex = currentLevel - 1;
 
@@ -54,7 +55,9 @@ export function useCodeEditorCollaboration({
   const editorViewportRef = useRef<HTMLDivElement | null>(null);
   const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingChangeSetRef = useRef<ChangeSet | null>(null);
+  const inflightChangeSetRef = useRef<ChangeSet | null>(null);
   const pendingSelectionRef = useRef({ from: 0, to: 0 });
+  const inflightSelectionRef = useRef<{ from: number; to: number } | null>(null);
   const suppressCollaborationUpdateRef = useRef(false);
   const codeRef = useRef(template);
   const lastSyncedCodeRef = useRef(template);
@@ -82,11 +85,14 @@ export function useCodeEditorCollaboration({
     title,
     codeRef,
     pendingChangeSetRef,
+    inflightChangeSetRef,
     pendingSelectionRef,
+    inflightSelectionRef,
     syncTimeoutRef,
     suppressCollaborationUpdateRef,
     lastSyncedCodeRef,
     debounceMs: REMOTE_SYNC_DEBOUNCE_MS,
+    localCodeAcks,
   });
 
   useEditorPatchInbound({
@@ -97,9 +103,12 @@ export function useCodeEditorCollaboration({
     setCode,
     title,
     pendingChangeSetRef,
+    inflightChangeSetRef,
     syncTimeoutRef,
     suppressCollaborationUpdateRef,
     lastSyncedCodeRef,
+    inflightSelectionRef,
+    scheduleDebouncedSync,
   });
 
   const { applyingExternalUpdateRef } = useEditorLifecycleReset({
@@ -144,7 +153,7 @@ export function useCodeEditorCollaboration({
       handleTypingEnd();
     }, TYPING_IDLE_MS);
     scheduleDebouncedSync();
-  }, [editorType, handleTypingEnd, handleTypingStart, isConnected, levelIndex, locked, onLocalChange, scheduleDebouncedSync, setCode, title, typingTimeoutRef]);
+  }, [handleTypingEnd, handleTypingStart, isConnected, locked, onLocalChange, scheduleDebouncedSync, setCode, typingTimeoutRef]);
 
   const handleEditorUpdate = useCallback((viewUpdate: ViewUpdate) => {
     handleLocalEditorUpdate(viewUpdate);

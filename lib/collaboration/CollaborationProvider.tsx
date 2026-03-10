@@ -44,6 +44,14 @@ export interface RemoteCodeResync {
   ts: number;
 }
 
+export interface LocalCodeAck {
+  seq: number;
+  editorType: EditorType;
+  levelIndex: number;
+  nextVersion: number;
+  ts: number;
+}
+
 export type RoomStateSync = RoomStateSyncMessage | null;
 export type ProgressSync = ProgressSyncMessage | null;
 export type GroupStartSync = GroupStartSyncMessage | null;
@@ -61,6 +69,7 @@ interface CollaborationContextValue {
   editorCursors: Map<string, EditorCursor>;
   remoteCodeChanges: RemoteCodeChange[];
   remoteCodeResyncs: RemoteCodeResync[];
+  localCodeAcks: LocalCodeAck[];
   lastProgressSync: ProgressSync;
   groupStartGate: GroupStartGateState | null;
   lobbyMessages: LobbyChatEntry[];
@@ -100,6 +109,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
   const [editorCursors, setEditorCursors] = useState<Map<string, EditorCursor>>(new Map());
   const [remoteCodeChanges, setRemoteCodeChanges] = useState<RemoteCodeChange[]>([]);
   const [remoteCodeResyncs, setRemoteCodeResyncs] = useState<RemoteCodeResync[]>([]);
+  const [localCodeAcks, setLocalCodeAcks] = useState<LocalCodeAck[]>([]);
   const [lastProgressSync, setLastProgressSync] = useState<ProgressSync>(null);
   const [groupStartGate, setGroupStartGate] = useState<GroupStartGateState | null>(null);
   const [lobbyMessages, setLobbyMessages] = useState<LobbyChatEntry[]>([]);
@@ -228,6 +238,17 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
 
   const handleEditorChangeApplied = useCallback((message: EditorChangeApplied) => {
     setEditorVersion(message.editorType, message.levelIndex, message.nextVersion);
+    const seq = ++remoteEventSeqRef.current;
+    setLocalCodeAcks((prev) => [
+      ...prev.slice(-49),
+      {
+        seq,
+        editorType: message.editorType,
+        levelIndex: message.levelIndex,
+        nextVersion: message.nextVersion,
+        ts: Date.now(),
+      },
+    ]);
   }, [setEditorVersion]);
 
   const handleEditorResync = useCallback((message: EditorResync) => {
@@ -443,6 +464,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       editorCursors,
       remoteCodeChanges,
       remoteCodeResyncs,
+      localCodeAcks,
       lastProgressSync,
       groupStartGate,
       lobbyMessages,
@@ -473,6 +495,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       editorCursors,
       remoteCodeChanges,
       remoteCodeResyncs,
+      localCodeAcks,
       lastProgressSync,
       groupStartGate,
       lobbyMessages,

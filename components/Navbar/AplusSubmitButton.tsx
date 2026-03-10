@@ -17,6 +17,7 @@ import { useAppSelector } from "@/store/hooks/hooks";
 import PoppingTitle from "@/components/General/PoppingTitle";
 import { useGameStore } from "@/components/default/games";
 import { useOptionalCollaboration } from "@/lib/collaboration/CollaborationProvider";
+import { logDebugClient } from "@/lib/debug-logger";
 
 interface LtiSessionInfo {
   isLtiMode: boolean;
@@ -140,6 +141,13 @@ export const AplusSubmitButton = ({
   const handleFinishGame = useCallback(async () => {
     if (!gameId) return;
 
+    logDebugClient("finish_click", {
+      gameId,
+      groupId: searchParams.get("groupId"),
+      roomId: collaboration?.roomId ?? null,
+      href: typeof window !== "undefined" ? window.location.href : null,
+      isGroupGameplay,
+    });
     setIsSubmitting(true);
     setResult(null);
 
@@ -218,8 +226,10 @@ export const AplusSubmitButton = ({
       setIsSubmitting(false);
     }
   }, [
+    collaboration?.roomId,
     gameId,
     buildFinishUrl,
+    isGroupGameplay,
     points.allPoints,
     points.allMaxPoints,
     points.levels,

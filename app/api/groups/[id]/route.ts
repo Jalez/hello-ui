@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { eq } from "drizzle-orm";
 import {
   getGroupById,
   getGroupMembers,
@@ -8,6 +9,8 @@ import {
   isGroupMember,
 } from "@/app/api/_lib/services/groupService";
 import { getOrCreateUserByEmail } from "@/app/api/_lib/services/userService";
+import { getDb } from "@/lib/db";
+import { users } from "@/lib/db/schema";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -35,8 +38,32 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }
 
     const members = await getGroupMembers(groupId);
+    const db = getDb();
+    const memberProfiles = members.length === 0
+      ? []
+      : await Promise.all(
+          members.map(async (member) => {
+            const [profile] = await db
+              .select({
+                id: users.id,
+                email: users.email,
+                name: users.name,
+                image: users.image,
+              })
+              .from(users)
+              .where(eq(users.id, member.userId))
+              .limit(1);
 
-    return NextResponse.json({ group, members });
+            return {
+              ...member,
+              userEmail: profile?.email ?? null,
+              userName: profile?.name ?? null,
+              userImage: profile?.image ?? null,
+            };
+          }),
+        );
+
+    return NextResponse.json({ group, members: memberProfiles });
   } catch (error) {
     console.error("Error fetching group:", error);
     return NextResponse.json({ error: "Failed to fetch group" }, { status: 500 });

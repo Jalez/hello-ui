@@ -9,11 +9,122 @@ import {
   extractLtiOutcomeService,
 } from "@/lib/lti/types";
 import { resolveLtiIdentity } from "@/lib/lti/identity";
-import { getOrCreateUserByEmail, updateUserProfile } from "@/app/api/_lib/services/userService";
 import { getSql } from "@/app/api/_lib/db";
 import { extractRows } from "@/app/api/_lib/db/shared";
 import { logDebug } from "@/lib/debug-logger";
 import { createOneTimeCode } from "@/lib/lti/one-time-code";
+
+function sanitizeLtiLaunchBody(body: Record<string, string>) {
+  const redactedKeys = new Set([
+    "oauth_signature",
+    "oauth_consumer_secret",
+    "custom_user_api_token",
+  ]);
+
+  return Object.fromEntries(
+    Object.entries(body).map(([key, value]) => [
+      key,
+      redactedKeys.has(key) ? "[redacted]" : value,
+    ]),
+  );
+}
+
+async function resolveAplusAppGroup(params: {
+  sql: Awaited<ReturnType<typeof getSql>>;
+  resourceLinkId: string;
+  contextTitle: string | null;
+  aplusGroup: string;
+  userId: string;
+  role: "instructor" | "member";
+}) {
+  const groupName = `A+ Group ${params.aplusGroup}`;
+  console.log("[LTI launch] app-group lookup start:", params.resourceLinkId, groupName);
+  const existingResult = await params.sql.query(
+    `SELECT id, name
+     FROM groups
+     WHERE resource_link_id = $1
+       AND name = $2
+       AND created_by IS NULL
+       AND COALESCE(lti_context_title, '') = COALESCE($3, '')
+     ORDER BY created_at ASC
+     LIMIT 1`,
+    [params.resourceLinkId, groupName, params.contextTitle],
+  );
+  const existingRows = extractRows(existingResult) as Array<{ id: string; name: string }>;
+  console.log("[LTI launch] app-group lookup done:", existingRows[0]?.id ?? null);
+
+  let resolvedGroup = existingRows[0] ?? null;
+  if (!resolvedGroup) {
+    console.log("[LTI launch] app-group create start:", groupName);
+    const createResult = await params.sql.query(
+      `INSERT INTO groups (name, join_key, lti_context_title, resource_link_id, created_by)
+       VALUES ($1, $2, $3, $4, NULL)
+       RETURNING id, name`,
+      [
+        groupName,
+        randomUUID().replace(/-/g, "").slice(0, 6).toUpperCase(),
+        params.contextTitle,
+        params.resourceLinkId,
+      ],
+    );
+    const createdRows = extractRows(createResult) as Array<{ id: string; name: string }>;
+    resolvedGroup = createdRows[0];
+    console.log("[LTI launch] app-group create done:", resolvedGroup?.id ?? null);
+  }
+
+  console.log("[LTI launch] app-group membership upsert start:", resolvedGroup.id, params.userId);
+  await params.sql.query(
+    `INSERT INTO group_members (group_id, user_id, role)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (group_id, user_id)
+     DO UPDATE SET role = EXCLUDED.role, updated_at = NOW()`,
+    [resolvedGroup.id, params.userId, params.role],
+  );
+  console.log("[LTI launch] app-group membership upsert done:", resolvedGroup.id, params.userId);
+
+  return {
+    groupId: resolvedGroup.id,
+    groupName: resolvedGroup.name,
+  };
+}
+
+async function getOrCreateLtiUser(params: {
+  sql: Awaited<ReturnType<typeof getSql>>;
+  email: string;
+  name?: string;
+}) {
+  const existingResult = await params.sql.query(
+    `SELECT id, email, name
+     FROM users
+     WHERE email = $1
+     LIMIT 1`,
+    [params.email],
+  );
+  const existingRows = extractRows(existingResult) as Array<{ id: string; email: string; name: string | null }>;
+  if (existingRows[0]) {
+    if (params.name && !existingRows[0].name) {
+      const updatedResult = await params.sql.query(
+        `UPDATE users
+         SET name = $2, updated_at = NOW()
+         WHERE id = $1
+         RETURNING id, email, name`,
+        [existingRows[0].id, params.name],
+      );
+      const updatedRows = extractRows(updatedResult) as Array<{ id: string; email: string; name: string | null }>;
+      return updatedRows[0];
+    }
+    return existingRows[0];
+  }
+
+  const createdResult = await params.sql.query(
+    `INSERT INTO users (email, name)
+     VALUES ($1, $2)
+     RETURNING id, email, name`,
+    [params.email, params.name ?? null],
+  );
+  const createdRows = extractRows(createdResult) as Array<{ id: string; email: string; name: string | null }>;
+  return createdRows[0];
+}
 
 // POST /api/lti/game/[gameId]
 // LTI 1.0 launch endpoint for a specific game ID.
@@ -68,6 +179,15 @@ export async function POST(
     // Always log LTI payload (param names + group/context) so we can confirm what the LMS sends
     console.log("[LTI launch] params:", allParamNames.join(", "), "| group/context:", JSON.stringify(groupAndContextParams));
 
+    if (process.env.NODE_ENV === "development" || process.env.DEBUG_LOGS === "true") {
+      const sanitizedBody = sanitizeLtiLaunchBody(body);
+      logDebug("lti_game_launch_payload", {
+        contentType,
+        body: sanitizedBody,
+      });
+      console.log("[LTI launch] sanitized body:", JSON.stringify(sanitizedBody));
+    }
+
     logDebug("lti_game_lti_data", {
       user_id: ltiData.user_id,
       lis_person_contact_email_primary: ltiData.lis_person_contact_email_primary,
@@ -96,6 +216,7 @@ export async function POST(
       return NextResponse.json({ error: "Consumer key not found" }, { status: 401 });
     }
     const { consumer_key, consumer_secret } = credRows[0];
+    console.log("[LTI launch] credential ok:", consumer_key);
 
     const userInfo = extractLtiUserInfo(ltiData);
     const identity = resolveLtiIdentity(ltiData, consumer_key);
@@ -132,6 +253,7 @@ export async function POST(
     const ltiUniqueEmail = browserScopedIdentity
       ? `lti-${createHash("sha256").update(`${identity.key}:browser:${browserId}`).digest("hex").slice(0, 24)}@lti.local`
       : identity.email;
+    console.log("[LTI launch] resolved email:", ltiUniqueEmail);
 
     logDebug("lti_game_resolved_email", {
       identitySource: identity.source,
@@ -141,7 +263,12 @@ export async function POST(
       ltiUniqueEmail,
     });
 
-    const user = await getOrCreateUserByEmail(ltiUniqueEmail);
+    const user = await getOrCreateLtiUser({
+      sql,
+      email: ltiUniqueEmail,
+      name: userInfo.name,
+    });
+    console.log("[LTI launch] user ok:", user.id, user.email);
 
     logDebug("lti_game_db_user", {
       dbUserId: user.id,
@@ -149,31 +276,60 @@ export async function POST(
       dbUserName: user.name,
     });
 
-    if (userInfo.name && !user.name) {
-      await updateUserProfile(user.id, { name: userInfo.name });
+    // Look up the game by ID and decide routing mode:
+    // - group: redirect to /game/[gameId] with required groupId context
+    // - individual: redirect to /game/[gameId]
+    let collaborationMode: "individual" | "group" = "individual";
+    let resolvedGameId: string | null = null;
+    console.log("[LTI launch] game lookup start:", gameId);
+    const gameResult = await sql.query(
+      "SELECT id, collaboration_mode FROM projects WHERE id = $1 LIMIT 1",
+      [gameId]
+    );
+    const gameRows = extractRows(gameResult) as Array<{ id: string; collaboration_mode: string | null }>;
+    console.log("[LTI launch] game lookup rows:", gameRows.length);
+    if (!gameRows?.length) {
+      return NextResponse.json({ error: "Game not found" }, { status: 404 });
     }
 
-    // Group-mode gameplay is app-owned. LTI launch may carry group information,
-    // but we no longer bind gameplay grouping directly to LMS/Plussa groups.
-    // The game route will use the app's own group-selection / lobby flow.
-    const groupName = userInfo.contextTitle || userInfo.contextId || `LTI Group ${Date.now()}`;
+    resolvedGameId = gameRows[0].id;
+    collaborationMode = gameRows[0].collaboration_mode === "group" ? "group" : "individual";
+    console.log("[LTI launch] game resolved:", resolvedGameId, collaborationMode);
+
     const role = getLtiRole(userInfo.roles);
+    const explicitAplusGroup = typeof ltiData._aplus_group === "string" ? ltiData._aplus_group.trim() : "";
+    const canAutoResolveGroup =
+      collaborationMode === "group" &&
+      explicitAplusGroup.length > 0;
+    console.log("[LTI launch] auto group branch:", canAutoResolveGroup, explicitAplusGroup);
+    const baseGroupName = userInfo.contextTitle || userInfo.contextId || `LTI Group ${Date.now()}`;
+    const resolvedGroup = canAutoResolveGroup
+      ? await resolveAplusAppGroup({
+          sql,
+          resourceLinkId: ltiData.resource_link_id || resolvedGameId,
+          contextTitle: ltiData.context_title || null,
+          aplusGroup: explicitAplusGroup,
+          userId: user.id,
+          role,
+        })
+      : null;
+    console.log("[LTI launch] resolved group:", resolvedGroup?.groupId ?? null, resolvedGroup?.groupName ?? null);
 
     logDebug("lti_game_group", {
-      groupId: null,
-      groupName,
+      groupId: resolvedGroup?.groupId ?? null,
+      groupName: resolvedGroup?.groupName ?? baseGroupName,
       groupContextKey: null,
-      groupScopeSource: "pending",
-      groupScopeValue: null,
+      groupScopeSource: resolvedGroup ? "_aplus_group" : "pending",
+      groupScopeValue: resolvedGroup ? explicitAplusGroup : null,
       role,
     });
     console.log(
       "[LTI launch] group scope:",
-      "pending",
+      resolvedGroup ? "_aplus_group" : "pending",
       "value:",
-      null,
+      resolvedGroup ? explicitAplusGroup : null,
       "groupId:",
-      null
+      resolvedGroup?.groupId ?? null
     );
 
     const outcomeService = extractLtiOutcomeService(ltiData, consumer_key, consumer_secret);
@@ -184,9 +340,9 @@ export async function POST(
       userId: user.id,
       userEmail: user.email,
       userName: user.name || userInfo.name || user.email,
-      groupId: null,
-      groupName: groupName,
-      groupResolution: "pending",
+      groupId: resolvedGroup?.groupId ?? null,
+      groupName: resolvedGroup?.groupName ?? baseGroupName,
+      groupResolution: resolvedGroup ? "resolved" : "pending",
       role,
       outcomeService,
       documentTarget,
@@ -207,23 +363,6 @@ export async function POST(
       },
     };
 
-    // Look up the game by ID and decide routing mode:
-    // - group: redirect to /game/[gameId] with required groupId context
-    // - individual: redirect to /game/[gameId]
-    let collaborationMode: "individual" | "group" = "individual";
-    let resolvedGameId: string | null = null;
-    const gameResult = await sql.query(
-      "SELECT id, group_id, collaboration_mode FROM projects WHERE id = $1 LIMIT 1",
-      [gameId]
-    );
-    const gameRows = extractRows(gameResult) as Array<{ id: string; group_id: string | null; collaboration_mode: string | null }>;
-    if (!gameRows?.length) {
-      return NextResponse.json({ error: "Game not found" }, { status: 404 });
-    }
-
-    resolvedGameId = gameRows[0].id;
-    collaborationMode = gameRows[0].collaboration_mode === "group" ? "group" : "individual";
-
     // App root URL for redirects. Prefer APP_ROOT_URL (server-only) so prod redirects stay correct behind a proxy.
     const appRootUrl =
       process.env.APP_ROOT_URL ||
@@ -242,11 +381,13 @@ export async function POST(
       jwtUserId: user.id,
       jwtEmail: user.email,
       jwtName: user.name || userInfo.name || user.email,
-      redirectGroupId: null,
+      redirectGroupId: resolvedGroup?.groupId ?? null,
       collaborationMode,
     });
 
-    const dest = `/game/${resolvedGameId}?mode=game`;
+    const dest = resolvedGroup?.groupId
+      ? `/game/${resolvedGameId}?mode=game&groupId=${encodeURIComponent(resolvedGroup.groupId)}`
+      : `/game/${resolvedGameId}?mode=game`;
 
     // Redirect with a one-time code instead of the JWT in the URL (code is exchanged server-side for the token).
     const code = createOneTimeCode(ltiSignInToken, dest);
@@ -258,7 +399,8 @@ export async function POST(
     loginUrl.searchParams.set("code", code);
     loginUrl.searchParams.set("dest", dest);
 
-    const response = NextResponse.redirect(loginUrl);
+    const response = NextResponse.redirect(loginUrl, { status: 303 });
+    console.log("[LTI launch] redirect:", loginUrl.toString());
 
     // Set lti_session so the play page and any outcome-service calls have the full LTI context
     response.cookies.set("lti_session", JSON.stringify(ltiSession), {

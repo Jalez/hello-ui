@@ -6,6 +6,8 @@ SCRIPT_PATH=$(realpath "${BASH_SOURCE}")
 SCRIPT_DIR=$(dirname "${SCRIPT_PATH}")
 cd "${SCRIPT_DIR}"
 
+export WS_SERVICE_TOKEN="${WS_SERVICE_TOKEN:-ws-service-secret}"
+
 # Function to clean up background processes on exit
 cleanup() {
   echo ""
