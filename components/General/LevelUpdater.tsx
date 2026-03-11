@@ -59,7 +59,8 @@ export const LevelUpdater = () => {
   useEffect(() => {
     const scenarioIds = Object.keys(solutionPixels);
     if (!level) return;
-    const hasAllPixels = level.scenarios.every((s) => scenarioIds.includes(s.scenarioId));
+    const scenarios = Array.isArray(level.scenarios) ? level.scenarios : [];
+    const hasAllPixels = scenarios.every((s) => scenarioIds.includes(s.scenarioId));
     if (!hasAllPixels) return;
     // Only dispatch if not already marked as drawn — prevents continuous cascade
     if (solutions[level.name]?.drawn) return;
@@ -85,7 +86,7 @@ export const LevelUpdater = () => {
     }));
   }, []);
   if (!level) return null;
-  const scenarios = level.scenarios;
+  const scenarios = Array.isArray(level.scenarios) ? level.scenarios : [];
   // get the points from the current level
 
   return (
@@ -143,4 +144,3 @@ class ErrorBoundary extends React.Component<
     return this.props.children;
   }
 }
-
