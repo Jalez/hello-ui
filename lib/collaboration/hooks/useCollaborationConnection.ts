@@ -20,6 +20,7 @@ import {
   YjsSyncMessage,
   YjsSyncRequestMessage,
   YjsUpdateMessage,
+  GameInstancesResetMessage,
 } from "../types";
 import { extractGroupIdFromRoomId, generateClientId, generateUserColor, getWebSocketUrl } from "../utils";
 import { RECONNECT_DELAY_MS, MAX_RECONNECT_ATTEMPTS } from "../constants";
@@ -49,6 +50,7 @@ interface UseCollaborationConnectionOptions {
   onYjsSync?: (message: YjsSyncMessage) => void;
   onYjsReset?: (message: YjsSyncMessage) => void;
   onYjsUpdate?: (message: YjsUpdateMessage) => void;
+  onGameInstancesReset?: (message: GameInstancesResetMessage) => void;
 }
 
 interface UseCollaborationConnectionReturn {
@@ -430,6 +432,9 @@ export function useCollaborationConnection(
             return;
           case "yjs-update":
             optionsRef.current.onYjsUpdate?.(payload as YjsUpdateMessage);
+            return;
+          case "game-instances-reset":
+            optionsRef.current.onGameInstancesReset?.(payload as GameInstancesResetMessage);
             return;
           default:
             return;

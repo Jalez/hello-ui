@@ -5,6 +5,20 @@ import { getSql } from "@/app/api/_lib/db";
 import { extractRows } from "@/app/api/_lib/db/shared";
 import { getGameById } from "@/app/api/_lib/services/gameService";
 
+function getWsAdminUrl(): string {
+  const explicit = process.env.WS_SERVER_HTTP_URL;
+  if (explicit) {
+    return explicit.replace(/\/$/, "");
+  }
+
+  const configuredWsUrl = process.env.NEXT_PUBLIC_WEBSOCKET_URL;
+  if (configuredWsUrl) {
+    return configuredWsUrl.replace(/^ws:\/\//, "http://").replace(/^wss:\/\//, "https://").replace(/\/$/, "");
+  }
+
+  return "http://localhost:3100";
+}
+
 export async function POST(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -39,9 +53,36 @@ export async function POST(
 
   const deletedCount = extractRows(result).length;
 
+  let wsInvalidation: Record<string, unknown> | null = null;
+  try {
+    const wsResponse = await fetch(`${getWsAdminUrl()}/admin/reset-game-instances`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-ws-service-token": process.env.WS_SERVICE_TOKEN || "",
+      },
+      body: JSON.stringify({
+        gameId: id,
+        deletedCount,
+        actorUserId: session.userId,
+        actorUserEmail: session.user.email,
+        actorUserName: session.user.name,
+        reason: "creator_reset_all_instances",
+      }),
+      cache: "no-store",
+    });
+    wsInvalidation = await wsResponse.json().catch(() => null);
+    if (!wsResponse.ok) {
+      console.error("[reset-game-instances:ws-invalidation-failed]", wsInvalidation);
+    }
+  } catch (error) {
+    console.error("[reset-game-instances:ws-invalidation-error]", error);
+  }
+
   return NextResponse.json({
     gameId: id,
     deletedCount,
+    wsInvalidation,
     message: deletedCount > 0 ? "Game instances reset." : "No game instances to reset.",
   });
 }
