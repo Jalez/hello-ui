@@ -9,6 +9,7 @@ const requestedGameId = process.env.PLAYWRIGHT_GAME_ID || null;
 const headed = process.env.PLAYWRIGHT_HEADED === "true";
 const keepOpen = process.env.PLAYWRIGHT_KEEP_OPEN === "true";
 const createWaitMs = Number.parseInt(process.env.PLAYWRIGHT_WAIT_MS || "1200", 10);
+const concurrentEditors = Math.max(2, Number.parseInt(process.env.PLAYWRIGHT_CONCURRENT_EDITORS || "2", 10));
 const dbUrl = process.env.PLAYWRIGHT_DATABASE_URL || process.env.DATABASE_URL || "postgresql://postgres:password@localhost:5432/ui_designer_dev";
 let activeGameId = requestedGameId;
 
@@ -30,6 +31,9 @@ function deriveUsernames() {
     lti_lobby: 6,
     lti_aplus_group: 4,
     classroom_churn: 12,
+    creator_group_details: 4,
+    level_tab_switch: 3,
+    instances_reset: 3,
     prototype_yjs: 12,
     game_yjs: 12,
     submit_after_churn: 12,
@@ -45,6 +49,9 @@ function defaultGroupSizeForScenario() {
   if (scenario === "baseline") return 3;
   if (scenario === "lti_aplus_group") return 2;
   if (scenario === "latency") return 4;
+  if (scenario === "creator_group_details") return 3;
+  if (scenario === "level_tab_switch") return 3;
+  if (scenario === "instances_reset") return 3;
   return 3;
 }
 
@@ -115,6 +122,27 @@ function scenarioFlags() {
   }
 
   if (scenario === "lti_aplus_group") {
+    return {
+      ...defaults,
+      submitAfterStress: false,
+    };
+  }
+
+  if (scenario === "creator_group_details") {
+    return {
+      ...defaults,
+      submitAfterStress: false,
+    };
+  }
+
+  if (scenario === "level_tab_switch") {
+    return {
+      ...defaults,
+      submitAfterStress: false,
+    };
+  }
+
+  if (scenario === "instances_reset") {
     return {
       ...defaults,
       submitAfterStress: false,
@@ -251,6 +279,19 @@ function createStarterLevel() {
     points: 0,
     maxPoints: 100,
     confettiSprinkled: false,
+  };
+}
+
+function createLevelFixture(name, htmlText, cssText, jsText = "") {
+  const level = createStarterLevel();
+  return {
+    ...level,
+    name,
+    code: {
+      html: htmlText,
+      css: cssText,
+      js: jsText,
+    },
   };
 }
 
@@ -414,6 +455,23 @@ async function createTemplateLevel(request, label) {
   return payload.identifier;
 }
 
+async function createTemplateLevelFromFixture(request, label, fixture) {
+  const response = await request.post(`${baseUrl}/api/levels`, {
+    data: {
+      ...fixture,
+      name: `${fixture.name} ${label}`,
+    },
+  });
+  if (!response.ok()) {
+    throw new Error(`Failed to create template level: ${response.status()} ${await response.text()}`);
+  }
+  const payload = await response.json();
+  if (!payload.identifier) {
+    throw new Error("Template level create response did not include an identifier.");
+  }
+  return payload.identifier;
+}
+
 async function attachLevelToMap(request, mapName, levelIdentifier) {
   const response = await request.post(`${baseUrl}/api/maps/levels/${encodeURIComponent(mapName)}`, {
     data: {
@@ -429,6 +487,42 @@ async function createPlayableGroupGame(request, creatorUsername) {
   const { gameId, mapName, title } = await createGroupModeGame(request, creatorUsername);
   const group = await createGroup(request, creatorUsername, gameId, "group-a");
   await seedGroupInstance(request, gameId, group.groupId, "group-a");
+
+  return { gameId, mapName, title, ...group };
+}
+
+async function createPlayableTwoLevelGroupGame(request, creatorUsername) {
+  const { gameId, mapName, title } = await createGroupModeGame(request, creatorUsername);
+  const levelOne = createLevelFixture(
+    "Level One",
+    "<main>\n  <h1>Level One</h1>\n  <p>HTML marker should stay here.</p>\n</main>",
+    "main { color: #14532d; }\n/* level one css */",
+  );
+  const levelTwo = createLevelFixture(
+    "Level Two",
+    "<section>\n  <h2>Level Two</h2>\n  <p>Second level html marker should stay here.</p>\n</section>",
+    "section { color: #1d4ed8; }\n/* level two css */",
+  );
+  const levelOneIdentifier = await createTemplateLevelFromFixture(request, "L1", levelOne);
+  const levelTwoIdentifier = await createTemplateLevelFromFixture(request, "L2", levelTwo);
+  await attachLevelToMap(request, mapName, levelOneIdentifier);
+  await attachLevelToMap(request, mapName, levelTwoIdentifier);
+
+  const group = await createGroup(request, creatorUsername, gameId, "group-a");
+  const seedResponse = await request.patch(
+    `${baseUrl}/api/games/${gameId}/instance?accessContext=game&groupId=${encodeURIComponent(group.groupId)}`,
+    {
+      data: {
+        progressData: {
+          levels: [levelOne, levelTwo],
+          testGroupLabel: "level-tab-switch",
+        },
+      },
+    },
+  );
+  if (!seedResponse.ok()) {
+    throw new Error(`Failed to seed multi-level instance for group ${group.groupId}: ${seedResponse.status()} ${await seedResponse.text()}`);
+  }
 
   return { gameId, mapName, title, ...group };
 }
@@ -576,22 +670,16 @@ async function trySharedEdit(pages, marker) {
 
 async function tryConcurrentSharedEdit(pages, groupName) {
   if (pages.length < 2) return false;
-  const markerA = `pw-concurrent-a-${Date.now().toString(36)}`;
-  const markerB = `pw-concurrent-b-${Date.now().toString(36)}`;
-  const editorA = pages[0].locator(".cm-content[contenteditable='true']").first();
-  const editorB = pages[1].locator(".cm-content[contenteditable='true']").first();
-  await Promise.all([
-    (async () => {
-      await editorA.click();
-      await editorA.press("End");
-      await pages[0].keyboard.type(`\n<!-- ${markerA} -->`);
-    })(),
-    (async () => {
-      await editorB.click();
-      await editorB.press("End");
-      await pages[1].keyboard.type(`\n<!-- ${markerB} -->`);
-    })(),
-  ]);
+  const activeEditors = Math.min(pages.length, concurrentEditors);
+  const markers = Array.from({ length: activeEditors }, (_, index) => `pw-concurrent-${index + 1}-${Date.now().toString(36)}`);
+  await Promise.all(
+    Array.from({ length: activeEditors }, (_, index) => (async () => {
+      const editor = pages[index].locator(".cm-content[contenteditable='true']").first();
+      await editor.click();
+      await editor.press("End");
+      await pages[index].keyboard.type(`\n<!-- ${markers[index]} -->`);
+    })()),
+  );
   await pages[0].waitForTimeout(Math.max(createWaitMs * 2, 2500));
   const pageContents = await Promise.all(
     pages.map(async (page, index) => {
@@ -603,11 +691,106 @@ async function tryConcurrentSharedEdit(pages, groupName) {
       }
     }),
   );
-  const merged = pageContents.every((content) => content.includes(markerA) && content.includes(markerB));
+  const merged = pageContents.every((content) => markers.every((marker) => content.includes(marker)));
   if (!merged) {
     console.warn(`concurrent markers failed in ${groupName}`);
   }
   return merged;
+}
+
+async function switchToEditorTab(page, label) {
+  await page.getByRole("tab", { name: label }).click();
+  await page.waitForTimeout(300);
+  await page.locator(".cm-content[contenteditable='true']").first().waitFor({ timeout: 20000 });
+}
+
+async function switchToLevel(page, levelName) {
+  const trigger = page.getByRole("combobox").first();
+  await trigger.click();
+  const option = page.getByRole("option", { name: new RegExp(levelName) }).first();
+  await option.click();
+  await page.waitForTimeout(400);
+  await page.locator(".cm-content[contenteditable='true']").first().waitFor({ timeout: 20000 });
+}
+
+async function appendMarker(page, marker, commentStyle = "html") {
+  const editor = page.locator(".cm-content[contenteditable='true']").first();
+  await editor.click();
+  await editor.press("End");
+  const wrapped =
+    commentStyle === "css"
+      ? `\n/* ${marker} */`
+      : commentStyle === "js"
+        ? `\n// ${marker}`
+        : `\n<!-- ${marker} -->`;
+  await page.keyboard.type(wrapped);
+  await page.waitForTimeout(Math.max(createWaitMs, 1200));
+}
+
+async function verifyLevelAndTabIsolation(group, contexts) {
+  const memberPages = group.memberIndexes.map((memberIndex) => contexts[memberIndex].page);
+  if (memberPages.length < 3) {
+    throw new Error("level_tab_switch scenario requires 3 members in the group");
+  }
+
+  const htmlLevelOneMarker = `pw-level1-html-${Date.now().toString(36)}`;
+  const htmlLevelTwoMarker = `pw-level2-html-${Date.now().toString(36)}`;
+  const cssLevelOneMarker = `pw-level1-css-${Date.now().toString(36)}`;
+  const levelOneName = "Level One";
+  const levelTwoName = "Level Two";
+
+  await switchToLevel(memberPages[0], levelOneName);
+  await switchToEditorTab(memberPages[0], "HTML");
+  await appendMarker(memberPages[0], htmlLevelOneMarker, "html");
+
+  await switchToLevel(memberPages[1], levelTwoName);
+  await switchToEditorTab(memberPages[1], "HTML");
+  await appendMarker(memberPages[1], htmlLevelTwoMarker, "html");
+
+  await switchToLevel(memberPages[2], levelOneName);
+  await switchToEditorTab(memberPages[2], "CSS");
+  await appendMarker(memberPages[2], cssLevelOneMarker, "css");
+
+  await Promise.all(memberPages.map((page) => page.waitForTimeout(Math.max(createWaitMs * 2, 2500))));
+
+  const checks = [
+    {
+      levelName: levelOneName,
+      tab: "HTML",
+      mustHave: [htmlLevelOneMarker],
+      mustNotHave: [htmlLevelTwoMarker, cssLevelOneMarker],
+    },
+    {
+      levelName: levelTwoName,
+      tab: "HTML",
+      mustHave: [htmlLevelTwoMarker],
+      mustNotHave: [htmlLevelOneMarker, cssLevelOneMarker],
+    },
+    {
+      levelName: levelOneName,
+      tab: "CSS",
+      mustHave: [cssLevelOneMarker],
+      mustNotHave: [htmlLevelOneMarker, htmlLevelTwoMarker],
+    },
+  ];
+
+  for (const page of memberPages) {
+    for (const check of checks) {
+      await switchToLevel(page, check.levelName);
+      await switchToEditorTab(page, check.tab);
+      const content = await getEditableContent(page);
+      const hasExpected = check.mustHave.every((marker) => content.includes(marker));
+      const hasUnexpected = check.mustNotHave.some((marker) => content.includes(marker));
+      if (!hasExpected || hasUnexpected) {
+        console.warn(
+          `[level-tab-check:fail] group=${group.groupName} level=${check.levelName} tab=${check.tab} content=${JSON.stringify(content.slice(0, 300))}`,
+        );
+        return false;
+      }
+    }
+  }
+
+  return true;
 }
 
 async function dbClient() {
@@ -691,6 +874,137 @@ async function fetchInstanceState(gameId, groupId) {
   }
 }
 
+async function fetchGameInstanceCount(gameId) {
+  const client = await dbClient();
+  try {
+    const result = await client.query(
+      `SELECT COUNT(*)::int AS count
+       FROM game_instances
+       WHERE game_id = $1`,
+      [gameId],
+    );
+    return Number(result.rows[0]?.count || 0);
+  } finally {
+    await client.end();
+  }
+}
+
+async function verifyInstancesReset(group, contexts) {
+  const owner = contexts[group.ownerIndex];
+  const response = await owner.context.request.post(`${baseUrl}/api/games/${activeGameId}/instances/reset`);
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(`Failed to reset instances: ${response.status()} ${JSON.stringify(payload)}`);
+  }
+
+  await Promise.all(
+    group.memberIndexes.map(async (memberIndex) => {
+      const participant = contexts[memberIndex];
+      await participant.page.waitForURL(
+        (url) => !url.toString().includes(`groupId=${group.groupId}`),
+        { timeout: 20000 },
+      );
+    }),
+  );
+
+  const dbCount = await fetchGameInstanceCount(activeGameId);
+  const memberResults = [];
+  for (const memberIndex of group.memberIndexes) {
+    const participant = contexts[memberIndex];
+    const url = participant.page.url();
+    const hasSelectGroup = (await participant.page.getByText("Select Group").count().catch(() => 0)) > 0;
+    const hasPublicLobby = (await participant.page.getByText("Public Group Lobby").count().catch(() => 0)) > 0;
+    const hasEditor = (await participant.page.locator(".cm-content[contenteditable='true']").count().catch(() => 0)) > 0;
+    memberResults.push({
+      username: participant.username,
+      url,
+      hasSelectGroup,
+      hasPublicLobby,
+      hasEditor,
+      removedFromGroupRoute: !url.includes(`groupId=${group.groupId}`),
+    });
+  }
+
+  const nonOwnerResults = memberResults.filter((entry) => entry.username !== owner.username);
+  const kickedOut = nonOwnerResults.every(
+    (entry) => entry.removedFromGroupRoute && !entry.hasEditor && (entry.hasSelectGroup || entry.hasPublicLobby),
+  );
+  const creatorLeftSharedRoute = memberResults
+    .filter((entry) => entry.username === owner.username)
+    .every((entry) => entry.removedFromGroupRoute);
+
+  console.log(
+    `stress:instances-reset ${group.groupName} deleted=${payload.deletedCount ?? "?"} invalidated=${payload.wsInvalidation?.invalidatedRoomCount ?? "?"} dbCount=${dbCount} kickedOut=${kickedOut} creatorLeftSharedRoute=${creatorLeftSharedRoute}`,
+  );
+
+  return {
+    ok: dbCount === 0 && kickedOut && creatorLeftSharedRoute,
+    memberResults,
+  };
+}
+
+async function verifyCreatorGroupDetails(groups, contexts) {
+  if (groups.length < 2) {
+    throw new Error("creator_group_details scenario requires at least 2 groups");
+  }
+
+  const primaryGroup = groups[0];
+  const sourceGroup = groups[1];
+  const creator = contexts[primaryGroup.ownerIndex];
+  const movedParticipant = contexts[sourceGroup.memberIndexes[0]];
+  const removedParticipant = contexts[primaryGroup.memberIndexes[primaryGroup.memberIndexes.length - 1]];
+
+  await creator.page.goto(gameUrl(activeGameId), { waitUntil: "networkidle" });
+  await creator.page.getByRole("button", { name: /creator/i }).waitFor({ timeout: 20000 });
+  await creator.page.getByRole("button", { name: /creator/i }).click();
+
+  const primaryMemberLabel = contexts[primaryGroup.memberIndexes[0]].username;
+  const groupMenuItem = creator.page.locator('[role="menuitem"]').filter({ hasText: primaryMemberLabel }).first();
+  await groupMenuItem.waitFor({ timeout: 10000 });
+  await groupMenuItem.locator("button").click();
+
+  const dialog = creator.page.getByRole("dialog");
+  await dialog.waitFor({ state: "visible", timeout: 10000 });
+  await dialog.getByPlaceholder("Enter email or exact name").waitFor({ timeout: 10000 });
+
+  const input = dialog.getByPlaceholder("Enter email or exact name");
+  await input.fill(`dev+${movedParticipant.username}@local.test`);
+  await dialog.getByRole("button", { name: /add \/ move/i }).click();
+  const movedRow = dialog.locator("div.rounded-md.border.px-3.py-2").filter({ hasText: movedParticipant.username }).first();
+  await movedRow.waitFor({ timeout: 10000 });
+
+  const removableRow = dialog.locator("div.rounded-md.border.px-3.py-2").filter({ hasText: removedParticipant.username }).first();
+  await removableRow.waitFor({ timeout: 10000 });
+  await removableRow.locator("button").click();
+  await removableRow.waitFor({ state: "detached", timeout: 10000 });
+
+  const primarySnapshot = await fetchGroupSnapshot(creator.context.request, primaryGroup);
+  const sourceSnapshot = await fetchGroupSnapshot(creator.context.request, sourceGroup);
+
+  const expectedPrimary = summarizeSet(
+    primaryGroup.memberIndexes
+      .slice(0, -1)
+      .map((memberIndex) => contexts[memberIndex].username)
+      .concat(movedParticipant.username),
+  );
+  const expectedSource = [];
+
+  const primaryOk = JSON.stringify(summarizeSet(primarySnapshot.memberNames)) === JSON.stringify(expectedPrimary);
+  const sourceOk = JSON.stringify(summarizeSet(sourceSnapshot.memberNames)) === JSON.stringify(expectedSource);
+
+  console.log(
+    `stress:creator-group-details primary=${primaryGroup.groupName} source=${sourceGroup.groupName} primaryOk=${primaryOk} sourceOk=${sourceOk}`,
+  );
+
+  return {
+    ok: primaryOk && sourceOk,
+    primarySnapshot,
+    sourceSnapshot,
+    expectedPrimary,
+    expectedSource,
+  };
+}
+
 async function submitGroupAttempt(group, contexts) {
   const owner = contexts[group.ownerIndex];
   const finishPayload = {
@@ -756,7 +1070,9 @@ async function configureConsoleLogging(page, label) {
     }
   });
   page.on("pageerror", (error) => {
-    console.warn(`[browser:${label}:pageerror] ${error?.message || error}`);
+    const message = error?.message || String(error);
+    const stack = error?.stack ? `\n${error.stack}` : "";
+    console.warn(`[browser:${label}:pageerror] ${message}${stack}`);
   });
   page.on("crash", () => {
     console.warn(`[browser:${label}:crash] page crashed`);
@@ -1064,7 +1380,9 @@ async function main() {
       activeGameId = requestedGameId;
       primaryGroup = createdGroup;
     } else {
-      const createdGame = await createPlayableGroupGame(creator.context.request, creator.username);
+      const createdGame = scenario === "level_tab_switch"
+        ? await createPlayableTwoLevelGroupGame(creator.context.request, creator.username)
+        : await createPlayableGroupGame(creator.context.request, creator.username);
       activeGameId = createdGame.gameId;
       provisionedTitle = createdGame.title;
       primaryGroup = createdGame;
@@ -1174,6 +1492,59 @@ async function main() {
       }
     }
 
+    if (scenario === "creator_group_details") {
+      const result = await verifyCreatorGroupDetails(groups, contexts);
+      summary.push({
+        name: groups[0].groupName,
+        members: result.primarySnapshot.memberCount,
+        expectedMembers: result.expectedPrimary,
+        observedJoinMembers: summarizeSet(groups[0].joinSnapshot.memberNames),
+        observedStartMembers: summarizeSet(groups[0].joinSnapshot.memberNames),
+        observedFinishMembers: summarizeSet(result.primarySnapshot.memberNames),
+        instanceId: groups[0].instanceId || "none",
+        singleEdit: result.ok,
+        concurrent: result.ok,
+        stressPasses: result.ok ? 1 : 0,
+        stressTotal: 1,
+        resetOk: result.ok,
+        submitOk: null,
+        actualSubmitParticipants: [],
+      });
+      summary.push({
+        name: groups[1].groupName,
+        members: result.sourceSnapshot.memberCount,
+        expectedMembers: result.expectedSource,
+        observedJoinMembers: summarizeSet(groups[1].joinSnapshot.memberNames),
+        observedStartMembers: summarizeSet(groups[1].joinSnapshot.memberNames),
+        observedFinishMembers: summarizeSet(result.sourceSnapshot.memberNames),
+        instanceId: groups[1].instanceId || "none",
+        singleEdit: result.ok,
+        concurrent: result.ok,
+        stressPasses: result.ok ? 1 : 0,
+        stressTotal: 1,
+        resetOk: result.ok,
+        submitOk: null,
+        actualSubmitParticipants: [],
+      });
+
+      const finalGameGroups = await fetchGameGroupsSnapshot(creator.context.request);
+      console.log(`stress:game-groups finalCount=${finalGameGroups.length}`);
+      console.log("");
+      console.log(`Playwright scenario: ${scenario}`);
+      console.log(`Game: ${activeGameId}`);
+      console.log("Summary");
+      console.log("group | members | instance | single | concurrent | stress | reset | submit");
+      for (const row of summary) {
+        console.log(
+          `${row.name} | ${row.members} | ${row.instanceId || "none"} | ${row.singleEdit ? "PASS" : "FAIL"} | ${row.concurrent ? "PASS" : "FAIL"} | ${row.stressPasses}/${row.stressTotal} | ${row.resetOk ? "PASS" : "FAIL"} | ${row.submitOk == null ? "n/a" : row.submitOk ? "PASS" : "FAIL"}`,
+        );
+        console.log(
+          `summary:${row.name} expected=${row.expectedMembers.join("|")} join=${row.observedJoinMembers.join("|")} start=${row.observedStartMembers.join("|")} finish=${row.observedFinishMembers.join("|")} submit=${row.actualSubmitParticipants.join("|")}`,
+        );
+      }
+      return;
+    }
+
     for (const group of groups) {
       const activePages = group.memberIndexes
         .filter((memberIndex) => !group.lateOpenIndexes.includes(memberIndex))
@@ -1202,6 +1573,50 @@ async function main() {
 
     for (const group of groups) {
       const pages = group.memberIndexes.map((memberIndex) => contexts[memberIndex].page);
+
+      if (scenario === "level_tab_switch") {
+        const levelTabOk = await verifyLevelAndTabIsolation(group, contexts);
+        console.log(`stress:level-tab ${group.groupName} ok=${levelTabOk}`);
+        summary.push({
+          name: group.groupName,
+          members: group.memberIndexes.length,
+          expectedMembers: summarizeSet(group.memberIndexes.map((memberIndex) => contexts[memberIndex].username)),
+          observedJoinMembers: summarizeSet(group.joinSnapshot.memberNames),
+          observedStartMembers: summarizeSet(group.startSnapshot.memberNames),
+          observedFinishMembers: summarizeSet(group.startSnapshot.memberNames),
+          instanceId: group.instanceId || "none",
+          singleEdit: levelTabOk,
+          concurrent: levelTabOk,
+          stressPasses: levelTabOk ? 1 : 0,
+          stressTotal: 1,
+          resetOk: true,
+          submitOk: null,
+          actualSubmitParticipants: [],
+        });
+        continue;
+      }
+
+      if (scenario === "instances_reset") {
+        const resetInstancesOk = await verifyInstancesReset(group, contexts);
+        summary.push({
+          name: group.groupName,
+          members: group.memberIndexes.length,
+          expectedMembers: summarizeSet(group.memberIndexes.map((memberIndex) => contexts[memberIndex].username)),
+          observedJoinMembers: summarizeSet(group.joinSnapshot.memberNames),
+          observedStartMembers: summarizeSet(group.startSnapshot.memberNames),
+          observedFinishMembers: summarizeSet(group.startSnapshot.memberNames),
+          instanceId: group.instanceId || "none",
+          singleEdit: resetInstancesOk.ok,
+          concurrent: resetInstancesOk.ok,
+          stressPasses: resetInstancesOk.ok ? 1 : 0,
+          stressTotal: 1,
+          resetOk: resetInstancesOk.ok,
+          submitOk: null,
+          actualSubmitParticipants: [],
+        });
+        continue;
+      }
+
       const marker = `pw-${group.groupName}-${Date.now().toString(36)}`;
       const replicated = await trySharedEdit(pages, marker);
       if (replicated) {
