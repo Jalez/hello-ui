@@ -9,6 +9,7 @@
     "lint": "eslint",
     "pw:install": "playwright install chromium",
     "pw:local-group": "node scripts/playwright-local-group-smoke.mjs",
+    "pw:ai-generation": "node scripts/playwright-ai-generation-smoke.mjs",
     "pw:prod-replay": "node scripts/prod-replay.mjs",
     "db:purge": "tsx scripts/db-purge.ts",
     "db:init": "tsx scripts/db-init.ts",

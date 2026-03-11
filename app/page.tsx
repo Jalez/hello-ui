@@ -51,6 +51,7 @@ export default function Home() {
                 className="text-lg px-8 py-6 gap-2"
                 onClick={handleCreateGame}
                 disabled={isCreating}
+                data-testid="create-game-button"
               >
                 {isCreating ? (
                   <Loader2 className="h-5 w-5 animate-spin" />

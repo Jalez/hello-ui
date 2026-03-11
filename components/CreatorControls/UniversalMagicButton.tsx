@@ -118,6 +118,7 @@ const MagicButton = forwardRef<MagicButtonRef, MagicButtonProps>(({ renderButton
             value={newLevel}
             onChange={handleLevelEdit}
             aria-label="AI response textarea"
+            data-testid="ai-response-textarea"
           />
           <div className="flex gap-2 mt-4">
             <Button
