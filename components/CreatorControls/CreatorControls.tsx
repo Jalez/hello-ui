@@ -50,7 +50,13 @@ const CreatorControls = ({ displayMode = "icon-label" }: CreatorControlsProps) =
         {isCreating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
         {isCreating ? "Creating..." : "Create"}
       </Button>
-      <Button variant="ghost" size="sm" className="gap-2" onClick={() => magicButtonRef.current?.triggerGenerate()}>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="gap-2"
+        onClick={() => magicButtonRef.current?.triggerGenerate()}
+        data-testid="creator-generate-level"
+      >
         <Sparkles className="h-4 w-4" />
         Generate
       </Button>
@@ -86,7 +92,12 @@ const CreatorControls = ({ displayMode = "icon-label" }: CreatorControlsProps) =
         </Button>
       </PoppingTitle>
       <PoppingTitle topTitle="Generate Level">
-        <Button variant="ghost" size="icon" onClick={() => magicButtonRef.current?.triggerGenerate()}>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => magicButtonRef.current?.triggerGenerate()}
+          data-testid="creator-generate-level"
+        >
           <Sparkles className="h-4 w-4" />
         </Button>
       </PoppingTitle>
@@ -146,7 +157,7 @@ const CreatorControls = ({ displayMode = "icon-label" }: CreatorControlsProps) =
           <Switch checked={autoSaveEnabled} className="pointer-events-none scale-75" />
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => magicButtonRef.current?.triggerGenerate()}>
+        <DropdownMenuItem onClick={() => magicButtonRef.current?.triggerGenerate()} data-testid="creator-generate-level">
           <Sparkles className="h-4 w-4 mr-2" />
           Generate Level
         </DropdownMenuItem>

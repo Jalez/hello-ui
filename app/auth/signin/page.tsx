@@ -132,12 +132,14 @@ function SignInContent() {
                   onChange={(event) => setDevUsername(event.target.value)}
                   placeholder="alice"
                   className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
+                  data-testid="dev-username-input"
                 />
                 <button
                   type="button"
                   onClick={handleDevSignIn}
                   disabled={isDevSigningIn}
                   className="rounded-md bg-secondary px-4 py-2 text-sm font-medium text-secondary-foreground hover:bg-secondary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                  data-testid="dev-signin-button"
                 >
                   {isDevSigningIn ? "Signing in..." : "Use Local User"}
                 </button>
