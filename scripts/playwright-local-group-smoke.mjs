@@ -10,8 +10,15 @@ const headed = process.env.PLAYWRIGHT_HEADED === "true";
 const keepOpen = process.env.PLAYWRIGHT_KEEP_OPEN === "true";
 const createWaitMs = Number.parseInt(process.env.PLAYWRIGHT_WAIT_MS || "1200", 10);
 const concurrentEditors = Math.max(2, Number.parseInt(process.env.PLAYWRIGHT_CONCURRENT_EDITORS || "2", 10));
+const timeoutMultiplier = Math.max(1, Number.parseFloat(process.env.PLAYWRIGHT_TIMEOUT_MULTIPLIER || "1"));
+const verboseYjsLogs = process.env.PLAYWRIGHT_VERBOSE_YJS === "true";
+const verboseBrowserLogs = process.env.PLAYWRIGHT_VERBOSE_BROWSER === "true";
 const dbUrl = process.env.PLAYWRIGHT_DATABASE_URL || process.env.DATABASE_URL || "postgresql://postgres:password@localhost:5432/ui_designer_dev";
 let activeGameId = requestedGameId;
+
+function scaledTimeout(ms) {
+  return Math.round(ms * timeoutMultiplier);
+}
 
 function generateUsernames(count) {
   return Array.from({ length: count }, (_, index) => `user${String(index + 1).padStart(2, "0")}`);
@@ -324,7 +331,7 @@ async function signInDevUser(page, username) {
   await page.goto(new URL("/auth/signin", baseUrl).toString(), { waitUntil: "networkidle" });
   await page.getByPlaceholder("alice").fill(username);
   await page.getByRole("button", { name: "Use Local User" }).click();
-  await page.waitForURL((url) => !url.pathname.endsWith("/auth/signin"), { timeout: 15000 });
+  await page.waitForURL((url) => !url.pathname.endsWith("/auth/signin"), { timeout: scaledTimeout(15000) });
 }
 
 async function enableHttpLatency(context) {
@@ -562,8 +569,8 @@ async function createGroupModeGame(request, creatorUsername) {
 }
 
 async function waitForEditorOnPages(pages) {
-  for (const page of pages) {
-    await page.locator(".cm-content[contenteditable='true']").first().waitFor({ timeout: 20000 });
+  for (const [index, page] of pages.entries()) {
+    await waitForEditorOnPage(page, `page-${index + 1}`);
   }
 }
 
@@ -575,7 +582,7 @@ async function startGroupGame(pages) {
     const waitingRoom = page.getByText("Group Waiting Room");
     if ((await waitingRoom.count()) > 0) {
       const startButton = page.getByRole("button", { name: "Start Game" });
-      await startButton.waitFor({ timeout: 10000 });
+      await startButton.waitFor({ timeout: scaledTimeout(10000) });
       if (await startButton.isEnabled()) {
         await startButton.click();
       }
@@ -610,16 +617,16 @@ async function triggerLevelReset(page) {
     await namedResetButtons.first().click();
   } else if ((await gameMenuTrigger.count()) > 0 && await gameMenuTrigger.first().isVisible().catch(() => false)) {
     await gameMenuTrigger.first().click();
-    await page.getByRole("menuitem", { name: "Reset Level" }).waitFor({ timeout: 10000 });
+    await page.getByRole("menuitem", { name: "Reset Level" }).waitFor({ timeout: scaledTimeout(10000) });
     await page.getByRole("menuitem", { name: "Reset Level" }).click();
   } else {
     throw new Error("Reset controls were not visible on the page.");
   }
 
-  await page.getByRole("dialog").waitFor({ timeout: 10000 });
-  await page.getByRole("heading", { name: "Reset Level" }).waitFor({ timeout: 10000 });
+  await page.getByRole("dialog").waitFor({ timeout: scaledTimeout(10000) });
+  await page.getByRole("heading", { name: "Reset Level" }).waitFor({ timeout: scaledTimeout(10000) });
   await page.getByRole("button", { name: "Yes" }).click();
-  await page.getByRole("dialog").waitFor({ state: "hidden", timeout: 10000 });
+  await page.getByRole("dialog").waitFor({ state: "hidden", timeout: scaledTimeout(10000) });
 }
 
 async function verifyLevelReset(group, contexts) {
@@ -663,7 +670,7 @@ async function trySharedEdit(pages, marker) {
   await pages[0].keyboard.type(`\n<!-- ${marker} -->`);
   await pages[0].waitForTimeout(createWaitMs);
   const target = pages[pages.length - 1].locator(".cm-content[contenteditable='true']").first();
-  await target.waitFor({ timeout: 10000 });
+  await target.waitFor({ timeout: scaledTimeout(10000) });
   const observed = (await target.textContent()) || "";
   return observed.includes(marker);
 }
@@ -684,7 +691,7 @@ async function tryConcurrentSharedEdit(pages, groupName) {
   const pageContents = await Promise.all(
     pages.map(async (page, index) => {
       try {
-        return ((await page.locator(".cm-content[contenteditable='true']").first().textContent({ timeout: 30000 })) || "");
+        return ((await page.locator(".cm-content[contenteditable='true']").first().textContent({ timeout: scaledTimeout(30000) })) || "");
       } catch (error) {
         await logPageEditorState(page, `${groupName}:${index}`);
         throw error;
@@ -701,7 +708,7 @@ async function tryConcurrentSharedEdit(pages, groupName) {
 async function switchToEditorTab(page, label) {
   await page.getByRole("tab", { name: label }).click();
   await page.waitForTimeout(300);
-  await page.locator(".cm-content[contenteditable='true']").first().waitFor({ timeout: 20000 });
+  await page.locator(".cm-content[contenteditable='true']").first().waitFor({ timeout: scaledTimeout(20000) });
 }
 
 async function switchToLevel(page, levelName) {
@@ -710,7 +717,7 @@ async function switchToLevel(page, levelName) {
   const option = page.getByRole("option", { name: new RegExp(levelName) }).first();
   await option.click();
   await page.waitForTimeout(400);
-  await page.locator(".cm-content[contenteditable='true']").first().waitFor({ timeout: 20000 });
+  await page.locator(".cm-content[contenteditable='true']").first().waitFor({ timeout: scaledTimeout(20000) });
 }
 
 async function appendMarker(page, marker, commentStyle = "html") {
@@ -902,7 +909,7 @@ async function verifyInstancesReset(group, contexts) {
       const participant = contexts[memberIndex];
       await participant.page.waitForURL(
         (url) => !url.toString().includes(`groupId=${group.groupId}`),
-        { timeout: 20000 },
+        { timeout: scaledTimeout(20000) },
       );
     }),
   );
@@ -954,29 +961,29 @@ async function verifyCreatorGroupDetails(groups, contexts) {
   const movedParticipant = contexts[sourceGroup.memberIndexes[0]];
   const removedParticipant = contexts[primaryGroup.memberIndexes[primaryGroup.memberIndexes.length - 1]];
 
-  await creator.page.goto(gameUrl(activeGameId), { waitUntil: "networkidle" });
-  await creator.page.getByRole("button", { name: /creator/i }).waitFor({ timeout: 20000 });
+  await gotoGamePage(creator.page, gameUrl(activeGameId), "creator-group-details");
+  await creator.page.getByRole("button", { name: /creator/i }).waitFor({ timeout: scaledTimeout(20000) });
   await creator.page.getByRole("button", { name: /creator/i }).click();
 
   const primaryMemberLabel = contexts[primaryGroup.memberIndexes[0]].username;
   const groupMenuItem = creator.page.locator('[role="menuitem"]').filter({ hasText: primaryMemberLabel }).first();
-  await groupMenuItem.waitFor({ timeout: 10000 });
+  await groupMenuItem.waitFor({ timeout: scaledTimeout(10000) });
   await groupMenuItem.locator("button").click();
 
   const dialog = creator.page.getByRole("dialog");
-  await dialog.waitFor({ state: "visible", timeout: 10000 });
-  await dialog.getByPlaceholder("Enter email or exact name").waitFor({ timeout: 10000 });
+  await dialog.waitFor({ state: "visible", timeout: scaledTimeout(10000) });
+  await dialog.getByPlaceholder("Enter email or exact name").waitFor({ timeout: scaledTimeout(10000) });
 
   const input = dialog.getByPlaceholder("Enter email or exact name");
   await input.fill(`dev+${movedParticipant.username}@local.test`);
   await dialog.getByRole("button", { name: /add \/ move/i }).click();
   const movedRow = dialog.locator("div.rounded-md.border.px-3.py-2").filter({ hasText: movedParticipant.username }).first();
-  await movedRow.waitFor({ timeout: 10000 });
+  await movedRow.waitFor({ timeout: scaledTimeout(10000) });
 
   const removableRow = dialog.locator("div.rounded-md.border.px-3.py-2").filter({ hasText: removedParticipant.username }).first();
-  await removableRow.waitFor({ timeout: 10000 });
+  await removableRow.waitFor({ timeout: scaledTimeout(10000) });
   await removableRow.locator("button").click();
-  await removableRow.waitFor({ state: "detached", timeout: 10000 });
+  await removableRow.waitFor({ state: "detached", timeout: scaledTimeout(10000) });
 
   const primarySnapshot = await fetchGroupSnapshot(creator.context.request, primaryGroup);
   const sourceSnapshot = await fetchGroupSnapshot(creator.context.request, sourceGroup);
@@ -1056,10 +1063,18 @@ async function submitGroupAttempt(group, contexts) {
 
 async function configureConsoleLogging(page, label) {
   page.on("console", (message) => {
+    if (!verboseBrowserLogs) {
+      return;
+    }
     const text = message.text();
-    if (
-      text.includes("[DEBUG-CLIENT]") ||
+    const isYjsNoise =
       text.includes("[yjs-") ||
+      text.includes("ws_yjs_update_emit") ||
+      text.includes("yjs-doc:update:emit") ||
+      text.includes("yjs-update:apply");
+    if (
+      (text.includes("[DEBUG-CLIENT]") && (!isYjsNoise || verboseYjsLogs)) ||
+      (verboseYjsLogs && text.includes("[yjs-")) ||
       text.includes("shared_reset_") ||
       text.includes("ws_reset_room_") ||
       text.includes("group_join_") ||
@@ -1080,6 +1095,30 @@ async function configureConsoleLogging(page, label) {
   page.on("close", () => {
     console.warn(`[browser:${label}:close] page closed`);
   });
+}
+
+async function gotoGamePage(page, url, label) {
+  const startedAt = Date.now();
+  console.log(`nav:start ${label} url=${url}`);
+  await page.goto(url, { waitUntil: "domcontentloaded" });
+  console.log(`nav:done ${label} ms=${Date.now() - startedAt} url=${page.url()}`);
+}
+
+async function reloadGamePage(page, label) {
+  const startedAt = Date.now();
+  console.log(`reload:start ${label} url=${page.url()}`);
+  await page.reload({ waitUntil: "domcontentloaded" });
+  console.log(`reload:done ${label} ms=${Date.now() - startedAt} url=${page.url()}`);
+}
+
+async function waitForEditorOnPage(page, label) {
+  try {
+    await page.locator(".cm-content[contenteditable='true']").first().waitFor({ timeout: scaledTimeout(20000) });
+    console.log(`editor:ready ${label}`);
+  } catch (error) {
+    await logPageEditorState(page, `${label}:editor-timeout`);
+    throw error;
+  }
 }
 
 async function applyLtiCookie(context, username, gameId) {
@@ -1160,7 +1199,7 @@ async function launchThroughLtiPost(page, gameId, payload) {
     },
   );
   await page.waitForURL((url) => url.pathname === `/game/${gameId}` && Boolean(url.searchParams.get("groupId")), {
-    timeout: 30000,
+    timeout: scaledTimeout(30000),
   });
 }
 
@@ -1170,7 +1209,7 @@ async function fetchPageGroupId(page) {
 }
 
 async function captureWaitingRoomIdentity(page, expectedLabels) {
-  await page.getByText("Group Waiting Room").waitFor({ timeout: 20000 });
+  await page.getByText("Group Waiting Room").waitFor({ timeout: scaledTimeout(20000) });
   await page.waitForFunction((labels) => {
     const bodyText = document.body.innerText || "";
     const titles = Array.from(document.querySelectorAll("[title]"))
@@ -1178,7 +1217,7 @@ async function captureWaitingRoomIdentity(page, expectedLabels) {
       .filter(Boolean)
       .map((title) => title.replace(/\s+•\s+Ready$/, ""));
     return labels.every((label) => bodyText.includes(label) && titles.includes(label));
-  }, expectedLabels, { timeout: 10000 });
+  }, expectedLabels, { timeout: scaledTimeout(10000) });
   const snapshot = await page.evaluate((labels) => {
     const bodyText = document.body.innerText || "";
     const titles = Array.from(document.querySelectorAll("[title]"))
@@ -1324,8 +1363,8 @@ async function runLtiAplusGroupScenario(browser) {
 }
 
 async function openLtiLobby(page, gameId, username) {
-  await page.goto(gameUrl(gameId, null), { waitUntil: "networkidle" });
-  await page.getByText("Public Group Lobby").waitFor({ timeout: 20000 });
+  await gotoGamePage(page, gameUrl(gameId, null), `lti-lobby:${username}`);
+  await page.getByText("Public Group Lobby").waitFor({ timeout: scaledTimeout(20000) });
   const data = await page.evaluate(async () => {
     const res = await fetch("/api/games/lti-session");
     return res.json();
@@ -1340,8 +1379,8 @@ async function closeAndReopenMember(group, contexts, memberIndex) {
   await participant.page.close().catch(() => {});
   participant.page = await participant.context.newPage();
   await configureConsoleLogging(participant.page, participant.username);
-  await participant.page.goto(gameUrl(activeGameId, group.groupId), { waitUntil: "networkidle" });
-  await participant.page.locator(".cm-content[contenteditable='true']").first().waitFor({ timeout: 20000 });
+  await gotoGamePage(participant.page, gameUrl(activeGameId, group.groupId), `rejoin:${participant.username}`);
+  await waitForEditorOnPage(participant.page, `rejoin:${participant.username}`);
   console.log(`stress:rejoin ${group.groupName} user=${participant.username}`);
 }
 
@@ -1399,8 +1438,8 @@ async function main() {
         throw new Error(`Expected one shared LTI lobby room, got ${uniqueLobbyRooms.join(", ")}`);
       }
       if (flags.refreshDuringLobby) {
-        await contexts[0].page.reload({ waitUntil: "networkidle" });
-        await contexts[0].page.getByText("Public Group Lobby").waitFor({ timeout: 20000 });
+        await reloadGamePage(contexts[0].page, `lti-lobby-reload:${contexts[0].username}`);
+        await contexts[0].page.getByText("Public Group Lobby").waitFor({ timeout: scaledTimeout(20000) });
         console.log(`stress:lobby-reload user=${contexts[0].username}`);
       }
     }
@@ -1477,7 +1516,7 @@ async function main() {
           continue;
         }
         const participant = contexts[memberIndex];
-        await participant.page.goto(gameUrl(activeGameId, group.groupId), { waitUntil: "networkidle" });
+        await gotoGamePage(participant.page, gameUrl(activeGameId, group.groupId), `group-open:${participant.username}`);
         console.log(`opened group route for ${participant.username} -> ${group.groupName}`);
       }
     }
@@ -1486,7 +1525,7 @@ async function main() {
       for (const group of groups) {
         const reloadIndex = group.memberIndexes.find((index) => !group.lateOpenIndexes.includes(index));
         if (reloadIndex != null) {
-          await contexts[reloadIndex].page.reload({ waitUntil: "networkidle" });
+          await reloadGamePage(contexts[reloadIndex].page, `waiting-reload:${contexts[reloadIndex].username}`);
           console.log(`stress:waiting-reload ${group.groupName} user=${contexts[reloadIndex].username}`);
         }
       }
@@ -1552,7 +1591,7 @@ async function main() {
       await startGroupGame(activePages);
       for (const lateIndex of group.lateOpenIndexes) {
         const participant = contexts[lateIndex];
-        await participant.page.goto(gameUrl(activeGameId, group.groupId), { waitUntil: "networkidle" });
+        await gotoGamePage(participant.page, gameUrl(activeGameId, group.groupId), `late-open:${participant.username}`);
         console.log(`stress:late-open ${group.groupName} user=${participant.username}`);
       }
       await waitForEditorOnPages(group.memberIndexes.map((memberIndex) => contexts[memberIndex].page));
@@ -1565,8 +1604,8 @@ async function main() {
       const participant = contexts[group.ownerIndex];
       const extraPage = await participant.context.newPage();
       await configureConsoleLogging(extraPage, `${participant.username}-tab2`);
-      await extraPage.goto(gameUrl(activeGameId, group.groupId), { waitUntil: "networkidle" });
-      await extraPage.locator(".cm-content[contenteditable='true']").first().waitFor({ timeout: 20000 });
+      await gotoGamePage(extraPage, gameUrl(activeGameId, group.groupId), `extra-tab:${participant.username}`);
+      await waitForEditorOnPage(extraPage, `extra-tab:${participant.username}`);
       participant.extraPages.push(extraPage);
       console.log(`stress:extra-tab ${group.groupName} user=${participant.username}`);
     }
@@ -1644,8 +1683,8 @@ async function main() {
 
         if (flags.refreshDuringEditing && memberPages.length >= 3 && round === 1) {
           const reloaderPage = memberPages[memberPages.length - 1];
-          await reloaderPage.reload({ waitUntil: "networkidle" });
-          await reloaderPage.locator(".cm-content[contenteditable='true']").first().waitFor({ timeout: 20000 });
+          await reloadGamePage(reloaderPage, `edit-reload:${memberNames[memberNames.length - 1]}`);
+          await waitForEditorOnPage(reloaderPage, `edit-reload:${memberNames[memberNames.length - 1]}`);
           console.log(`stress:reload ${group.groupName} user=${memberNames[memberNames.length - 1]}`);
         }
       }
