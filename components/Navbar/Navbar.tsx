@@ -38,6 +38,7 @@ import { useOptionalCollaboration } from "@/lib/collaboration/CollaborationProvi
 import { apiUrl, stripBasePath } from "@/lib/apiUrl";
 import { useGameplayTelemetry } from "@/components/General/useGameplayTelemetry";
 import { logDebugClient } from "@/lib/debug-logger";
+import PoppingTitle from "@/components/General/PoppingTitle";
 
 export const Navbar = () => {
   const dispatch = useAppDispatch();
@@ -320,16 +321,18 @@ export const Navbar = () => {
       {/* Sidebar Toggle Button - Only visible on small screens */}
       {shouldShowMobileSidebarToggle && (
         <div className="lg:hidden">
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            className="h-8 w-8"
-            onClick={openOverlay}
-            title="Open sidebar"
-          >
-            <PanelLeft className="h-5 w-5" />
-          </Button>
+          <PoppingTitle topTitle="Open sidebar">
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="h-8 w-8"
+              onClick={openOverlay}
+              title="Open sidebar"
+            >
+              <PanelLeft className="h-5 w-5" />
+            </Button>
+          </PoppingTitle>
         </div>
       )}
 
@@ -355,21 +358,22 @@ export const Navbar = () => {
         ) : null}
 
         {isGameRoute && !showCreatorGameMenus && (
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            className="gap-2"
-            title="Reset Level"
-            onClick={() => togglePopper("level")}
-          >
-            <RotateCcw className="h-4 w-4" />
-            <span>Reset</span>
-          </Button>
+          <PoppingTitle topTitle="Reset Level">
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="h-8 w-8"
+              title="Reset Level"
+              onClick={() => togglePopper("level")}
+            >
+              <RotateCcw className="h-4 w-4" />
+            </Button>
+          </PoppingTitle>
         )}
 
         <InfoGamePoints />
-        {!showCreatorGameMenus && <AplusSubmitButton displayMode="icon-label" />}
+        {!showCreatorGameMenus && <AplusSubmitButton displayMode="icon" />}
       </div>
 
       {/* Left section - Creator controls or Art tab switch. Hide creator tools on game route. */}

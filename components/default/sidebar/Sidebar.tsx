@@ -1,6 +1,6 @@
 "use client";
 
-import { Settings, Trash2, Users } from "lucide-react";
+import { Trash2, Users } from "lucide-react";
 import { usePathname } from "next/navigation";
 import type React from "react";
 import { useEffect, createContext, useContext } from "react";
@@ -94,14 +94,6 @@ export const Sidebar: React.FC<LeftSidebarProps> = ({ isUserAdmin, sidebarHeader
 
     // Add admin items if user is admin
     if (isUserAdmin) {
-      // Add admin-specific items
-      items.push({
-        id: "admin-providers-models",
-        label: "Providers & Models",
-        icon: <Settings className="h-5 w-5" />,
-        href: "/admin/providers-models",
-        description: "Manage AI providers and models",
-      });
       items.push({
         id: "admin-users",
         label: "User Management",
