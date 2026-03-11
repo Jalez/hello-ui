@@ -19,6 +19,7 @@ import {
   EditorType,
   TabFocusMessage,
   TypingStatusMessage,
+  GameInstancesResetMessage,
 } from "./types";
 import { getClientCollaborationEngine } from "./engine";
 import { useCollaborationConnection } from "./hooks/useCollaborationConnection";
@@ -60,6 +61,7 @@ export interface LocalCodeAck {
 export type RoomStateSync = RoomStateSyncMessage | null;
 export type ProgressSync = ProgressSyncMessage | null;
 export type GroupStartSync = GroupStartSyncMessage | null;
+export type GameInstancesResetSync = GameInstancesResetMessage | null;
 
 function hasSharedStartTime(roomState: RoomStateSync): boolean {
   const firstLevel = roomState?.levels?.[0];
@@ -87,6 +89,7 @@ interface CollaborationContextValue {
   remoteCodeResyncs: RemoteCodeResync[];
   localCodeAcks: LocalCodeAck[];
   lastProgressSync: ProgressSync;
+  lastGameInstancesReset: GameInstancesResetSync;
   groupStartGate: GroupStartGateState | null;
   lobbyMessages: LobbyChatEntry[];
   initialRoomState: RoomStateSync;
@@ -134,6 +137,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
   const [remoteCodeResyncs, setRemoteCodeResyncs] = useState<RemoteCodeResync[]>([]);
   const [localCodeAcks, setLocalCodeAcks] = useState<LocalCodeAck[]>([]);
   const [lastProgressSync, setLastProgressSync] = useState<ProgressSync>(null);
+  const [lastGameInstancesReset, setLastGameInstancesReset] = useState<GameInstancesResetSync>(null);
   const [groupStartGate, setGroupStartGate] = useState<GroupStartGateState | null>(null);
   const [lobbyMessages, setLobbyMessages] = useState<LobbyChatEntry[]>([]);
   const [initialRoomState, setInitialRoomState] = useState<RoomStateSync>(null);
@@ -332,6 +336,10 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
     setLastProgressSync(message);
   }, []);
 
+  const handleGameInstancesReset = useCallback((message: GameInstancesResetMessage) => {
+    setLastGameInstancesReset(message);
+  }, []);
+
   const handleGroupStartSync = useCallback((message: GroupStartSyncMessage) => {
     setGroupStartGate(message.gate);
   }, []);
@@ -452,6 +460,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
     onTypingStatus: handleTypingStatus,
     onRoomStateSync: handleRoomStateSync,
     onProgressSync: handleProgressSync,
+    onGameInstancesReset: handleGameInstancesReset,
     onGroupStartSync: handleGroupStartSync,
     onLobbyChatSync: handleLobbyChatSync,
     onLobbyChatMessage: handleLobbyChatMessage,
@@ -600,6 +609,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       setRemoteCodeChanges([]);
       setRemoteCodeResyncs([]);
       setLastProgressSync(null);
+      setLastGameInstancesReset(null);
       setGroupStartGate(null);
       setLobbyMessages([]);
       setInitialRoomState(null);
@@ -691,6 +701,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       remoteCodeResyncs,
       localCodeAcks,
       lastProgressSync,
+      lastGameInstancesReset,
       groupStartGate,
       lobbyMessages,
       initialRoomState,
@@ -728,6 +739,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       remoteCodeResyncs,
       localCodeAcks,
       lastProgressSync,
+      lastGameInstancesReset,
       groupStartGate,
       lobbyMessages,
       initialRoomState,

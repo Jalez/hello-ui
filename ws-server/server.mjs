@@ -201,6 +201,70 @@ function broadcastToRoom(roomId, type, payload, excludeSocket = null) {
   }
 }
 
+function clearRoomMemory(roomId) {
+  const existingBuffer = roomWriteBuffer.get(roomId);
+  if (existingBuffer?.timer) {
+    clearTimeout(existingBuffer.timer);
+  }
+  roomWriteBuffer.delete(roomId);
+  roomEditorState.delete(roomId);
+  roomLobbyState.delete(roomId);
+  roomYDocs.delete(roomId);
+}
+
+function invalidateGameInstanceRooms(gameId, payload = {}) {
+  const matchingRooms = Array.from(rooms.entries())
+    .map(([roomId, room]) => ({ roomId, room, ctx: parseRoomContext(roomId) }))
+    .filter(({ ctx }) => ctx?.kind === "instance" && ctx.gameId === gameId);
+
+  const roomIds = matchingRooms.map(({ roomId }) => roomId);
+  const socketsToClose = [];
+
+  for (const { roomId, room } of matchingRooms) {
+    const message = {
+      gameId,
+      roomIds,
+      ...payload,
+      ts: Date.now(),
+    };
+    logRoomSnapshot("instances-reset", roomId, {
+      deletedCount: payload.deletedCount ?? null,
+      actorUserId: payload.actorUserId || null,
+    });
+    for (const roomSocket of room.keys()) {
+      sendMessage(roomSocket, "game-instances-reset", message);
+      socketsToClose.push(roomSocket);
+    }
+    rooms.delete(roomId);
+    clearRoomMemory(roomId);
+  }
+
+  setTimeout(() => {
+    for (const roomSocket of socketsToClose) {
+      try {
+        if (roomSocket.readyState === WebSocket.OPEN || roomSocket.readyState === WebSocket.CONNECTING) {
+          roomSocket.close(4000, "game instances reset");
+        }
+      } catch {
+        // Ignore close errors from already-closed sockets.
+      }
+    }
+  }, 50);
+
+  return { roomIds, invalidatedRoomCount: matchingRooms.length, disconnectedSocketCount: socketsToClose.length };
+}
+
+async function readJsonBody(req) {
+  const chunks = [];
+  for await (const chunk of req) {
+    chunks.push(chunk);
+  }
+  if (chunks.length === 0) {
+    return {};
+  }
+  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+}
+
 function parseEnvelope(rawMessage) {
   try {
     const parsed = JSON.parse(rawMessage);
@@ -784,6 +848,66 @@ const httpServer = createServer((req, res) => {
   if (req.method === "GET" && req.url === "/health") {
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ status: "ok", rooms: rooms.size }));
+    return;
+  }
+  if (req.method === "GET" && req.url?.startsWith("/admin/room-members")) {
+    const serviceToken = req.headers["x-ws-service-token"];
+    if (!WS_SERVICE_TOKEN || serviceToken !== WS_SERVICE_TOKEN) {
+      res.writeHead(401, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Unauthorized" }));
+      return;
+    }
+
+    const url = new URL(req.url, `http://localhost:${PORT}`);
+    const roomId = url.searchParams.get("roomId") || "";
+    if (!roomId) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "roomId is required" }));
+      return;
+    }
+
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({
+      roomId,
+      count: getRoomUsers(roomId).size,
+      members: summarizeRoomMembers(roomId),
+    }));
+    return;
+  }
+  if (req.method === "POST" && req.url === "/admin/reset-game-instances") {
+    (async () => {
+      const serviceToken = req.headers["x-ws-service-token"];
+      if (!WS_SERVICE_TOKEN || serviceToken !== WS_SERVICE_TOKEN) {
+        res.writeHead(401, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Unauthorized" }));
+        return;
+      }
+
+      try {
+        const body = await readJsonBody(req);
+        const gameId = typeof body.gameId === "string" ? body.gameId : "";
+        if (!gameId) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "gameId is required" }));
+          return;
+        }
+
+        const result = invalidateGameInstanceRooms(gameId, {
+          deletedCount: Number.isInteger(body.deletedCount) ? body.deletedCount : undefined,
+          actorUserId: typeof body.actorUserId === "string" ? body.actorUserId : undefined,
+          actorUserEmail: typeof body.actorUserEmail === "string" ? body.actorUserEmail : undefined,
+          actorUserName: typeof body.actorUserName === "string" ? body.actorUserName : undefined,
+          reason: typeof body.reason === "string" ? body.reason : "creator_reset_all_instances",
+        });
+
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true, ...result }));
+      } catch (error) {
+        console.error("[admin-reset-game-instances:error]", error);
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Failed to reset active game instances" }));
+      }
+    })();
     return;
   }
   res.writeHead(404);

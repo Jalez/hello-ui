@@ -210,3 +210,14 @@ export interface YjsUpdateMessage {
   updateBase64: string;
   ts: number;
 }
+
+export interface GameInstancesResetMessage {
+  gameId: string;
+  deletedCount?: number;
+  roomIds?: string[];
+  actorUserId?: string;
+  actorUserEmail?: string;
+  actorUserName?: string;
+  reason?: string;
+  ts: number;
+}

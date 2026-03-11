@@ -17,6 +17,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import type { GroupStartGateState, LobbyChatEntry, UserIdentity } from "@/lib/collaboration/types";
 import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
 import { startLevelTimerAt } from "@/store/slices/levels.slice";
+import { addNotificationData } from "@/store/slices/notifications.slice";
 import { logDebugClient } from "@/lib/debug-logger";
 
 interface GamePageProps {
@@ -452,6 +453,49 @@ function GroupWaitingRoom({
       </div>
     </div>
   );
+}
+
+function GameInstancesResetWatcher({ gameId }: { gameId: string }) {
+  const collaboration = useCollaboration();
+  const dispatch = useAppDispatch();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const lastHandledResetTsRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const resetMessage = collaboration.lastGameInstancesReset;
+    if (!resetMessage || resetMessage.gameId !== gameId) {
+      return;
+    }
+
+    if (lastHandledResetTsRef.current === resetMessage.ts) {
+      return;
+    }
+    lastHandledResetTsRef.current = resetMessage.ts;
+
+    const actorLabel =
+      resetMessage.actorUserName ||
+      resetMessage.actorUserEmail ||
+      "The creator";
+
+    dispatch(
+      addNotificationData({
+        type: "info",
+        message: `${actorLabel} reset all saved game instances. Rejoining from a fresh game state.`,
+      })
+    );
+
+    collaboration.disconnect();
+
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.delete("groupId");
+    nextParams.delete("guestId");
+    nextParams.set("mode", "game");
+    router.replace(`${pathname}?${nextParams.toString()}`);
+  }, [collaboration, dispatch, gameId, pathname, router, searchParams]);
+
+  return null;
 }
 
 function PublicGroupLobby({
@@ -1066,6 +1110,7 @@ export default function GamePage({ params }: GamePageProps) {
   if (publicLobby && user) {
     return (
       <CollaborationProvider roomId={publicLobby.roomId} user={user}>
+        <GameInstancesResetWatcher gameId={gameId} />
         <PublicGroupLobby
           gameId={gameId}
           groupId={selectedGroupId}
@@ -1123,6 +1168,7 @@ export default function GamePage({ params }: GamePageProps) {
 
   return (
     <CollaborationProvider roomId={roomId} user={user}>
+      <GameInstancesResetWatcher gameId={gameId} />
       {user && currentGame?.collaborationMode === "group" && roomId?.startsWith("group:") ? (
         <GroupWaitingRoom
           gameTitle={currentGame.title}
