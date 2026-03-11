@@ -241,7 +241,12 @@ export async function POST(
       );
     }
 
-    const browserScopedIdentity = process.env.LTI_PLAY_BROWSER_SCOPED_IDENTITY === "true";
+    // Strong LMS identities should always resolve to one stable app user.
+    // Browser-scoped identity is only a fallback for weak launches where the LMS
+    // did not provide a reliable unique identifier and we explicitly allow them.
+    const browserScopedIdentity =
+      process.env.LTI_PLAY_BROWSER_SCOPED_IDENTITY === "true" &&
+      identity.confidence === "weak";
     let browserId = request.cookies.get("lti_browser_id")?.value || "";
     let shouldSetBrowserIdCookie = false;
 
@@ -298,7 +303,7 @@ export async function POST(
 
     const role = getLtiRole(userInfo.roles);
     const explicitAplusGroup = typeof ltiData._aplus_group === "string" ? ltiData._aplus_group.trim() : "";
-    let canAutoResolveGroup =
+    const canAutoResolveGroup =
       collaborationMode === "group" &&
       explicitAplusGroup.length > 0 &&
       explicitAplusGroup !== "0"; // A+ sends "0" when no real subgroup is selected
