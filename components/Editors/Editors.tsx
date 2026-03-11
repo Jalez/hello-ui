@@ -1,73 +1,135 @@
 /** @format */
 'use client';
 
-import { css } from "@codemirror/lang-css";
-import { html } from "@codemirror/lang-html";
 import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
 import {
   updateCode,
   updateSolutionCode,
 } from "@/store/slices/levels.slice";
 import { Level } from "@/types";
-import { javascript } from "@codemirror/lang-javascript";
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import EditorTabs from "./EditorTabs";
+import { useOptionalCollaboration } from "@/lib/collaboration/CollaborationProvider";
+import { store } from "@/store/store";
 
 const Editors = (): React.ReactNode => {
-  const options = useAppSelector((state) => state.options);
   const dispatch = useAppDispatch();
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
-  const levels = useAppSelector((state: any) => state.levels);
+  const levels = useAppSelector((state) => state.levels);
+  const collaboration = useOptionalCollaboration();
+  const isYjsEnabled = collaboration?.isYjsEnabled ?? false;
+  const getYText = collaboration?.getYText;
+  const yjsDocGeneration = collaboration?.yjsDocGeneration ?? 0;
 
-  const level = levels[currentLevel - 1] as Level;
-  
-  // Early return if level doesn't exist - parent handles loading state
+  const codeUpdater = useCallback(
+    (language: "html" | "css" | "js", code: string, isSolution: boolean) => {
+      if (!levels[currentLevel - 1]) return;
+
+      if (isSolution) {
+        if (levels[currentLevel - 1].solution?.[language] === code) return;
+        dispatch(
+          updateSolutionCode({
+            id: currentLevel,
+            code: { ...levels[currentLevel - 1].solution, [language]: code },
+          })
+        );
+      } else {
+        if (levels[currentLevel - 1].code?.[language] === code) return;
+        dispatch(
+          updateCode({
+            id: currentLevel,
+            code: { ...levels[currentLevel - 1].code, [language]: code },
+          })
+        );
+      }
+    },
+    [levels, currentLevel, dispatch]
+  );
+
+  useEffect(() => {
+    if (!isYjsEnabled || !getYText || levels.length === 0) {
+      return;
+    }
+
+    const editorTypes: Array<"html" | "css" | "js"> = ["html", "css", "js"];
+    const unobserveCallbacks: Array<() => void> = [];
+
+    const syncEditorToRedux = (levelIndex: number, editorType: "html" | "css" | "js") => {
+      const yText = getYText(editorType, levelIndex);
+      if (!yText) {
+        return;
+      }
+
+      const stateLevels = store.getState().levels;
+      const targetLevel = stateLevels[levelIndex];
+      if (!targetLevel) {
+        return;
+      }
+
+      const nextContent = yText.toString();
+      const currentCode = targetLevel.code || { html: "", css: "", js: "" };
+      if ((currentCode[editorType] || "") === nextContent) {
+        return;
+      }
+
+      dispatch(
+        updateCode({
+          id: levelIndex + 1,
+          code: {
+            ...currentCode,
+            [editorType]: nextContent,
+          },
+        })
+      );
+    };
+
+    for (let levelIndex = 0; levelIndex < levels.length; levelIndex += 1) {
+      for (const editorType of editorTypes) {
+        const yText = getYText(editorType, levelIndex);
+        if (!yText) {
+          continue;
+        }
+
+        syncEditorToRedux(levelIndex, editorType);
+
+        const observer = () => {
+          syncEditorToRedux(levelIndex, editorType);
+        };
+
+        yText.observe(observer);
+        unobserveCallbacks.push(() => {
+          yText.unobserve(observer);
+        });
+      }
+    }
+
+    return () => {
+      unobserveCallbacks.forEach((unobserve) => unobserve());
+    };
+  }, [dispatch, getYText, isYjsEnabled, levels.length, yjsDocGeneration]);
+
+  const level = levels[currentLevel - 1] as Level | undefined;
+
   if (!level) {
     return null;
   }
-  
+
   const identifier = level.identifier;
-
-  const codeUpdater = useCallback((
-    language: 'html' | 'css' | 'js',
-    code: string,
-    isSolution: boolean
-  ) => {
-    if (!levels[currentLevel - 1]) return;
-
-    if (isSolution) {
-      if (levels[currentLevel - 1].solution?.[language] === code) return;
-      dispatch(
-        updateSolutionCode({
-          id: currentLevel,
-          code: { ...levels[currentLevel - 1].solution, [language]: code },
-        })
-      );
-    } else {
-      if (levels[currentLevel - 1].code?.[language] === code) return;
-      dispatch(
-        updateCode({
-          id: currentLevel,
-          code: { ...levels[currentLevel - 1].code, [language]: code },
-        })
-      );
-    }
-  }, [levels, currentLevel, dispatch]);
 
   const languages = {
     html: {
-      code: level.code.html || '',
-      solution: level.solution.html || '',
+      code: level.code.html || "",
+      solution: level.solution.html || "",
       locked: level.lockHTML,
     },
     css: {
-      code: level.code.css || '',
-      solution: level.solution.css || '',
+      code: level.code.css || "",
+      solution: level.solution.css || "",
       locked: level.lockCSS,
     },
     js: {
-      code: level.code.js || '',
-      solution: level.solution.js || '',
+      code: level.code.js || "",
+      solution: level.solution.js || "",
       locked: level.lockJS,
     },
   };
