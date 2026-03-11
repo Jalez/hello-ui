@@ -1,7 +1,9 @@
 import { and, desc, eq, inArray, or, sql as drizzleSql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { projectCollaborators, projects } from "@/lib/db/schema";
-import { cloneMapWithLevels, createMap, getMapByName } from "@/app/api/_lib/services/mapService";
+import { createMap } from "@/app/api/_lib/services/mapService";
+import { deleteMap } from "@/app/api/_lib/services/mapService/delete";
+import { purgeOrphanLevels } from "@/app/api/_lib/services/levelService/purgeOrphans";
 import type { CreateGameOptions, Game, GameCollaborator, UpdateGameOptions } from "./types";
 
 export * from "./types";
@@ -259,6 +261,18 @@ export async function getPublicGames(): Promise<Game[]> {
     .map((game) => ({ ...game, progress_data: {} }));
 }
 
+export async function getGameByIdUnscoped(id: string): Promise<Game | null> {
+  const db = getDb();
+
+  const result = await db.select().from(projects).where(eq(projects.id, id)).limit(1);
+
+  if (result.length === 0) {
+    return null;
+  }
+
+  return mapGame(result[0]);
+}
+
 export async function getGameByShareToken(token: string, accessKey?: string | null): Promise<ShareTokenLookupResult> {
   const db = getDb();
 
@@ -365,15 +379,54 @@ export async function updateGame(id: string, options: UpdateGameOptions): Promis
   return mapGame(result[0]);
 }
 
-export async function deleteGame(id: string, ownerId: string): Promise<boolean> {
+export interface DeleteGameResult {
+  deleted: boolean;
+  deletedMap: boolean;
+  deletedOrphanLevels: number;
+}
+
+export async function deleteGame(id: string): Promise<DeleteGameResult> {
   const db = getDb();
+  const existing = await db.select().from(projects).where(eq(projects.id, id)).limit(1);
+
+  if (existing.length === 0) {
+    return {
+      deleted: false,
+      deletedMap: false,
+      deletedOrphanLevels: 0,
+    };
+  }
+
+  const mapName = existing[0].mapName;
 
   const result = await db
     .delete(projects)
-    .where(and(eq(projects.id, id), eq(projects.userId, ownerId)))
+    .where(eq(projects.id, id))
     .returning();
 
-  return result.length > 0;
+  if (result.length === 0) {
+    return {
+      deleted: false,
+      deletedMap: false,
+      deletedOrphanLevels: 0,
+    };
+  }
+
+  let deletedMap = false;
+  let deletedOrphanLevels = 0;
+  const remainingMapUsers = await countGamesUsingMap(mapName);
+
+  if (remainingMapUsers === 0) {
+    deletedMap = await deleteMap(mapName);
+    const purgeResult = await purgeOrphanLevels();
+    deletedOrphanLevels = purgeResult.deleted;
+  }
+
+  return {
+    deleted: true,
+    deletedMap,
+    deletedOrphanLevels,
+  };
 }
 
 export async function regenerateShareToken(id: string): Promise<string | null> {

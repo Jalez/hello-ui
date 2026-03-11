@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
-import { deleteGame, evaluateGameRouteAccess, getGameById, getGameByIdForGameplay, regenerateAccessKey, regenerateShareToken, updateGame } from '@/app/api/_lib/services/gameService';
+import { deleteGame, evaluateGameRouteAccess, getGameById, getGameByIdForGameplay, getGameByIdUnscoped, regenerateAccessKey, regenerateShareToken, updateGame } from '@/app/api/_lib/services/gameService';
 import type { Game } from '@/app/api/_lib/services/gameService';
 import {
   attachGameAccessCookie,
@@ -9,11 +9,26 @@ import {
   getRawAccessKeyFromRequest,
   resolveAccessKeyForGame,
 } from '@/app/api/_lib/services/gameService/accessCookie';
+import { isAdmin, isAdminByEmail } from '@/app/api/_lib/services/adminService/read';
 import debug from 'debug';
 
 const logger = debug('ui_designer:api:games:id');
 
 const respondWithError = (error: Error, status: number = 400) => NextResponse.json({ error: error.message }, { status });
+
+function getWsAdminUrl(): string {
+  const explicit = process.env.WS_SERVER_HTTP_URL;
+  if (explicit) {
+    return explicit.replace(/\/$/, "");
+  }
+
+  const configuredWsUrl = process.env.NEXT_PUBLIC_WEBSOCKET_URL;
+  if (configuredWsUrl) {
+    return configuredWsUrl.replace(/^ws:\/\//, "http://").replace(/^wss:\/\//, "https://").replace(/\/$/, "");
+  }
+
+  return "http://localhost:3100";
+}
 
 function accessDenied(reason: "not_started" | "expired" | "access_key_required" | "access_key_invalid", game?: Game | null) {
   if (reason === "not_started") {
@@ -216,29 +231,58 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
     const actorIdentifiers = [session.userId, session.user.email].filter(Boolean) as string[];
     const { id } = await params;
+    const admin = (await isAdminByEmail(session.user.email)) || (session.userId ? await isAdmin(session.userId) : false);
 
     if (!id || typeof id !== 'string') {
       return respondWithError(new Error('Invalid game ID'));
     }
 
-    const existingGame = await getGameById(id, actorIdentifiers);
+    const existingGame = admin
+      ? await getGameByIdUnscoped(id)
+      : await getGameById(id, actorIdentifiers);
 
     if (!existingGame) {
       return NextResponse.json({ error: 'Game not found' }, { status: 404 });
     }
 
-    if (!existingGame.is_owner) {
-      return NextResponse.json({ error: 'Only original creator can delete this game' }, { status: 403 });
+    if (!admin && !existingGame.is_owner) {
+      return NextResponse.json({ error: 'Only original creator or an admin can delete this game' }, { status: 403 });
     }
 
-    const deleted = await deleteGame(id, existingGame.user_id);
+    const deleted = await deleteGame(id);
 
-    if (!deleted) {
+    if (!deleted.deleted) {
       return NextResponse.json({ error: 'Failed to delete game' }, { status: 500 });
     }
 
-    logger('Deleted game %s for owner %s', id, existingGame.user_id);
-    return NextResponse.json({ success: true });
+    let wsInvalidation: Record<string, unknown> | null = null;
+    try {
+      const wsResponse = await fetch(`${getWsAdminUrl()}/admin/reset-game-instances`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-ws-service-token": process.env.WS_SERVICE_TOKEN || "",
+        },
+        body: JSON.stringify({
+          gameId: id,
+          deletedCount: 1,
+          actorUserId: session.userId,
+          actorUserEmail: session.user.email,
+          actorUserName: session.user.name,
+          reason: "game_deleted",
+        }),
+        cache: "no-store",
+      });
+      wsInvalidation = await wsResponse.json().catch(() => null);
+      if (!wsResponse.ok) {
+        logger('Game delete ws invalidation failed for %s: %O', id, wsInvalidation);
+      }
+    } catch (wsError) {
+      logger('Game delete ws invalidation error for %s: %O', id, wsError);
+    }
+
+    logger('Deleted game %s by actor %s (admin=%s)', id, session.user.email, admin);
+    return NextResponse.json({ success: true, ...deleted, wsInvalidation });
   } catch (error: unknown) {
     logger('Error %O', error);
     const message = error instanceof Error ? error.message : 'Unknown error';

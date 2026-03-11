@@ -1,6 +1,6 @@
 "use client";
 
-import { HelpCircle, LogOut, User } from "lucide-react";
+import { Headset, LogOut, User } from "lucide-react";
 import Link from "next/link";
 import {
     DropdownMenuContent,
@@ -9,7 +9,6 @@ import {
     DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { ThemeSwitcher } from "./ThemeSwitcher";
-import { HelpModal } from "@/components/Help/HelpModal";
 
 interface UserDropdownContentProps {
     getUserName: () => string;
@@ -32,15 +31,12 @@ export const UserDropdownContent: React.FC<UserDropdownContentProps> = ({ getUse
                     <span>Account</span>
                 </Link>
             </DropdownMenuItem>
-            <HelpModal
-                mode="creator"
-                trigger={(
-                    <DropdownMenuItem className="flex items-center cursor-pointer">
-                        <HelpCircle className="mr-2 h-4 w-4" />
-                        <span>Help & Support</span>
-                    </DropdownMenuItem>
-                )}
-            />
+            <DropdownMenuItem asChild>
+                <Link href="/support" className="flex items-center cursor-pointer">
+                    <Headset className="mr-2 h-4 w-4" />
+                    <span>Support</span>
+                </Link>
+            </DropdownMenuItem>
 
             <ThemeSwitcher />
             <DropdownMenuSeparator />
