@@ -491,10 +491,7 @@ export function useCollaborationConnection(
         if (terminalErrorRef.current) {
           setError(terminalErrorRef.current);
           optionsRef.current.onError?.(terminalErrorRef.current);
-          return;
         }
-        setError("WebSocket connection error");
-        optionsRef.current.onError?.("WebSocket connection error");
       };
 
       socket.onclose = (event) => {
@@ -518,7 +515,9 @@ export function useCollaborationConnection(
         setIsConnecting(false);
 
         if (event.code === 4008) {
-          const nextError = event.reason || "Duplicate users are blocked for this game. Turn group submission off in A+ or ask the creator to enable duplicate users in Game Settings.";
+          const nextError = terminalErrorRef.current
+            || event.reason
+            || "Duplicate users are blocked for this game. Turn group submission off in A+ or ask the creator to enable duplicate users in Game Settings.";
           terminalErrorRef.current = nextError;
           manualDisconnectRef.current = true;
           setError(nextError);

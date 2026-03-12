@@ -418,6 +418,49 @@ function parseRoomContext(roomId) {
   return null;
 }
 
+function extractGameIdFromRoomId(roomId) {
+  if (typeof roomId !== "string") {
+    return null;
+  }
+
+  const instanceContext = parseRoomContext(roomId);
+  if (instanceContext?.gameId) {
+    return instanceContext.gameId;
+  }
+
+  const lobbyMatch = roomId.match(/^lobby:.+:game:(.+)$/);
+  if (lobbyMatch) {
+    return lobbyMatch[1] || null;
+  }
+
+  return null;
+}
+
+function findDuplicateUsersInGame(gameId, baseUserData) {
+  if (!gameId) {
+    return [];
+  }
+
+  const duplicates = [];
+  for (const [candidateRoomId, roomUsers] of rooms.entries()) {
+    if (extractGameIdFromRoomId(candidateRoomId) !== gameId) {
+      continue;
+    }
+
+    for (const entry of roomUsers.values()) {
+      if (baseUserData.userId && entry.accountUserId && entry.accountUserId === baseUserData.userId) {
+        duplicates.push(entry);
+        continue;
+      }
+      if (baseUserData.userEmail && entry.accountUserEmail && entry.accountUserEmail === baseUserData.userEmail) {
+        duplicates.push(entry);
+      }
+    }
+  }
+
+  return duplicates;
+}
+
 function isGroupInstanceContext(ctx) {
   return Boolean(ctx && ctx.kind === "instance" && ctx.groupId);
 }
@@ -1040,6 +1083,7 @@ wsServer.on("connection", (socket) => {
         }
 
         const ctx = parseRoomContext(roomId);
+        const gameId = extractGameIdFromRoomId(roomId);
 
         setConnectionState(socket, { roomId });
         const baseUserData = {
@@ -1054,23 +1098,39 @@ wsServer.on("connection", (socket) => {
           activeLevelIndex: null,
           isTyping: false,
         };
-        const existingDuplicates = Array.from(getRoomUsers(roomId).values()).filter((entry) => {
-          if (baseUserData.userId && entry.accountUserId) {
-            return entry.accountUserId === baseUserData.userId;
-          }
-          if (baseUserData.userEmail && entry.accountUserEmail) {
-            return entry.accountUserEmail === baseUserData.userEmail;
-          }
-          return false;
-        });
-        if (isGroupInstanceContext(ctx) && existingDuplicates.length > 0 && !await isDuplicateGroupUserAllowed(ctx.gameId)) {
+        const existingDuplicates = findDuplicateUsersInGame(gameId, baseUserData);
+        if (gameId && existingDuplicates.length > 0 && !await isDuplicateGroupUserAllowed(gameId)) {
+          const conflictingUser = existingDuplicates[0];
+          const attemptedLabel = baseUserData.userName || baseUserData.userEmail || "this account";
+          const attemptedEmail = baseUserData.userEmail ? ` (${baseUserData.userEmail})` : "";
+          const conflictingLabel = conflictingUser.userName || conflictingUser.userEmail || "this account";
+          const conflictingEmail = conflictingUser.userEmail ? ` (${conflictingUser.userEmail})` : "";
+          const summarizeIdentity = (label, email) => {
+            const combined = `${label}${email}`;
+            return combined.length > 40 ? `${combined.slice(0, 37)}...` : combined;
+          };
+          const attemptedSummary = summarizeIdentity(attemptedLabel, attemptedEmail);
+          const conflictingSummary = summarizeIdentity(conflictingLabel, conflictingEmail);
+          const duplicateError =
+            `This browser is being identified as ${JSON.stringify(`${attemptedLabel}${attemptedEmail}`)}, ` +
+            `but ${JSON.stringify(`${conflictingLabel}${conflictingEmail}`)} is already connected in this game. ` +
+            `Turn group submission off from the A+ navbar setting, or ask the creator to enable duplicate users in Game Settings. ` +
+            `Allowing duplicates may cause instability and desyncs.`;
+          const duplicateCloseReason =
+            `Identified as ${attemptedSummary}; ${conflictingSummary} is already connected.`;
           sendMessage(socket, "error", {
-            error: "Duplicate users are blocked for this game. Turn group submission off in A+ or ask the creator to enable duplicate users in Game Settings. Allowing duplicates may cause instability and desyncs.",
+            error: duplicateError,
             code: "duplicate_users_blocked",
             roomId,
             ts: Date.now(),
           });
-          socket.close(4008, "Duplicate users blocked. Turn group submission off in A+.");
+          setTimeout(() => {
+            try {
+              socket.close(4008, duplicateCloseReason);
+            } catch {
+              // Ignore close races if the socket is already gone.
+            }
+          }, 50);
           return;
         }
         const resolvedIdentity = resolveDuplicateIdentity(roomId, baseUserData);
