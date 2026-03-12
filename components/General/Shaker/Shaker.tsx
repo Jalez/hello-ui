@@ -10,17 +10,26 @@ type ShakerProps = {
 
 const Shaker = ({ children, value }: ShakerProps) => {
   const [prevValue, setPrevValue] = useState<string | number>(value);
-  const [shouldAnimate, setShouldAnimate] = useState(true);
+  const [shouldAnimate, setShouldAnimate] = useState(false);
 
   useEffect(() => {
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
     if (value !== prevValue) {
       setShouldAnimate(true);
-      setTimeout(() => {
+      timeoutId = setTimeout(() => {
         setPrevValue(value);
+        setShouldAnimate(false);
       }, 1000);
     } else {
       setShouldAnimate(false);
     }
+
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
   }, [value, prevValue]);
 
   return (
