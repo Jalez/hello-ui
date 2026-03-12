@@ -247,9 +247,40 @@ function buildAvatarFallbacks(
 
 function CollaborationNotice({ children }: { children: ReactNode }) {
   const collaboration = useCollaboration();
+  const [latchedDuplicateError, setLatchedDuplicateError] = useState<string | null>(null);
+  const isDuplicateBlocked = collaboration.error?.toLowerCase().includes("already connected in this game")
+    || collaboration.error?.toLowerCase().includes("duplicate users are blocked")
+    || collaboration.error?.toLowerCase().includes("is already connected.");
 
-  if (!collaboration.error) {
+  useEffect(() => {
+    if (isDuplicateBlocked && collaboration.error) {
+      setLatchedDuplicateError(collaboration.error);
+    }
+  }, [collaboration.error, isDuplicateBlocked]);
+
+  if (!collaboration.error && !latchedDuplicateError) {
     return <>{children}</>;
+  }
+
+  if (latchedDuplicateError || isDuplicateBlocked) {
+    return (
+      <>
+        {children}
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-xl rounded-2xl border border-amber-400/40 bg-background p-6 shadow-2xl">
+            <div className="space-y-4">
+              <div className="space-y-1">
+                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-amber-600">Connection blocked</p>
+                <h2 className="text-2xl font-semibold text-foreground">Duplicate login detected</h2>
+              </div>
+              <p className="text-sm leading-6 text-muted-foreground">
+                {latchedDuplicateError || collaboration.error}
+              </p>
+            </div>
+          </div>
+        </div>
+      </>
+    );
   }
 
   return (
@@ -1209,15 +1240,17 @@ export default function GamePage({ params }: GamePageProps) {
   if (publicLobby && user) {
     return (
       <CollaborationProvider roomId={publicLobby.roomId} user={user}>
-        <GameInstancesResetWatcher gameId={gameId} />
-        <PublicGroupLobby
-          gameId={gameId}
-          groupId={selectedGroupId}
-          gameTitle={currentGame?.title || "Group Game"}
-          courseName={publicLobby.courseName}
-          currentUser={user}
-          onGroupSelect={handleGroupSelect}
-        />
+        <CollaborationNotice>
+          <GameInstancesResetWatcher gameId={gameId} />
+          <PublicGroupLobby
+            gameId={gameId}
+            groupId={selectedGroupId}
+            gameTitle={currentGame?.title || "Group Game"}
+            courseName={publicLobby.courseName}
+            currentUser={user}
+            onGroupSelect={handleGroupSelect}
+          />
+        </CollaborationNotice>
       </CollaborationProvider>
     );
   }
