@@ -1,8 +1,16 @@
 'use client';
 
-const InfoBox = ({ children }: { children: React.ReactNode }) => {
+import { cn } from "@/lib/utils/cn";
+
+const InfoBox = ({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) => {
   return (
-    <div className="flex flex-row items-center rounded-2xl pr-2 pl-2 border-primary">
+    <div className={cn("flex flex-row items-center rounded-2xl pr-2 pl-2 border-primary", className)}>
       {children}
     </div>
   );

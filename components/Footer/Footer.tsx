@@ -1,12 +1,11 @@
 /** @format */
 'use client';
 
-import HelpModal from "@/components/Help/Help";
 import { useAppSelector } from "@/store/hooks/hooks";
-import PoppingTitle from "@/components/General/PoppingTitle";
-import Info from "../InfoBoard/Info";
+import { HelpModal } from "@/components/Help/HelpModal";
+import Info, { LevelFooterMenu, TimeFooterMenu, footerMenuButtonClass } from "../InfoBoard/Info";
 import { useEffect, useState } from "react";
-import { Loader2, Users, KeyRound } from "lucide-react";
+import { Loader2, Users, KeyRound, HelpCircle } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useGameStore } from "@/components/default/games";
 import { Button } from "@/components/ui/button";
@@ -85,84 +84,160 @@ export const Footer = () => {
   }, [groupId, isGroupGameplay]);
 
   return (
-    <footer
-      className="flex flex-wrap md:flex-nowrap justify-between items-center gap-2 p-2 w-full h-fit shrink-0 text-sm border-t"
-    >
-      <div className="flex flex-row gap-2 pointer-events-auto">
-        <PoppingTitle topTitle="Help">
-          <HelpModal />
-        </PoppingTitle>
-      </div>
-      <div className="flex justify-center flex-1 min-w-0">
-        <Info />
-      </div>
-      <div className="flex items-center gap-4">
-        {isGroupGameplay && groupId && (
-          <Popover>
-            <PopoverTrigger asChild>
+    <footer className="w-full h-fit shrink-0 border-t p-2 text-sm">
+      <div className="flex items-center gap-2 xl:hidden">
+        <div className="flex flex-1 min-w-0">
+          <HelpModal
+            mode={options.creator ? "creator" : "game"}
+            trigger={(
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="max-w-[220px] gap-2 px-2"
-                title="Show group details"
+                className={footerMenuButtonClass}
               >
-                {isLoadingGroup ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Users className="h-4 w-4" />
-                )}
-                <span className="truncate text-xs font-medium">
-                  {groupName || "Group"}
+                <span className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground min-[520px]:hidden">
+                  Help
                 </span>
+                <HelpCircle className="h-4 w-4" />
+                <span className="hidden min-[520px]:inline text-xs font-medium">Help</span>
               </Button>
-            </PopoverTrigger>
-            <PopoverContent side="top" align="end" className="w-72 space-y-3">
-              <div className="rounded-md border bg-muted/40 p-3">
-                <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                  <Users className="h-3.5 w-3.5" />
-                  <span>Group Game</span>
-                </div>
-                <p className="mt-2 break-words text-sm font-semibold text-foreground">
-                  {groupName || "Unnamed group"}
-                </p>
-                <div className="mt-3 flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                  <KeyRound className="h-3.5 w-3.5" />
-                  <span>Join Key</span>
-                </div>
-                <p className="mt-2 rounded-sm bg-background/80 px-2 py-1 font-mono text-lg tracking-[0.2em]">
-                  {groupJoinKey || "Unavailable"}
-                </p>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Share this key with teammates if they need to join the same group.
-                </p>
-              </div>
-            </PopoverContent>
-          </Popover>
-        )}
-        {options.creator && (
-          <span className="text-xs text-muted-foreground flex items-center gap-1.5">
-            {options.isSavingLevel ? (
-              <>
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                <span>Saving changes...</span>
-              </>
-            ) : (
-              <span>{lastSavedLabel ? `Saved ${lastSavedLabel}` : "Unsaved"}</span>
             )}
-          </span>
+          />
+        </div>
+        <div className="flex flex-1 min-w-0">
+          <LevelFooterMenu />
+        </div>
+        <div className="flex flex-1 min-w-0">
+          <TimeFooterMenu />
+        </div>
+        {isGroupGameplay && groupId ? (
+          <div className="flex flex-1 min-w-0">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className={footerMenuButtonClass}
+                >
+                  <span className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground min-[520px]:hidden">
+                    Group
+                  </span>
+                  {isLoadingGroup ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Users className="h-4 w-4" />
+                  )}
+                  <span className="hidden min-[520px]:inline truncate text-xs font-medium">
+                    {groupName || "Group"}
+                  </span>
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent side="top" align="end" className="w-72 space-y-3">
+                <div className="rounded-md border bg-muted/40 p-3">
+                  <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                    <Users className="h-3.5 w-3.5" />
+                    <span>Group Game</span>
+                  </div>
+                  <p className="mt-2 break-words text-sm font-semibold text-foreground">
+                    {groupName || "Unnamed group"}
+                  </p>
+                  <div className="mt-3 flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                    <KeyRound className="h-3.5 w-3.5" />
+                    <span>Join Key</span>
+                  </div>
+                  <p className="mt-2 rounded-sm bg-background/80 px-2 py-1 font-mono text-lg tracking-[0.2em]">
+                    {groupJoinKey || "Unavailable"}
+                  </p>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Share this key with teammates if they need to join the same group.
+                  </p>
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
+        ) : (
+          <div className="flex-1" />
         )}
-        <p className="text-sm">
-          Inspired by
-          <a
-            href="https://cssbattle.dev/"
-            target="_blank"
-            rel="noreferrer"
-            className="text-primary m-2 pointer-events-auto"
-          >
-            <strong>CSS Battle</strong>
-          </a>
-        </p>
+      </div>
+
+      <div className="hidden xl:flex items-center gap-2">
+        <div className="flex flex-1 min-w-0 items-center pointer-events-auto">
+          <HelpModal
+            mode={options.creator ? "creator" : "game"}
+            trigger={(
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className={footerMenuButtonClass}
+              >
+                <HelpCircle className="h-4 w-4" />
+                <span className="text-xs font-medium">Help</span>
+              </Button>
+            )}
+          />
+        </div>
+        <div className="flex flex-[2] min-w-0 justify-center">
+          <Info />
+        </div>
+        <div className="flex flex-1 min-w-0 items-center justify-end gap-0">
+          {isGroupGameplay && groupId && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className={footerMenuButtonClass}
+                >
+                  {isLoadingGroup ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Users className="h-4 w-4" />
+                  )}
+                  <span className="truncate text-xs font-medium">
+                    {groupName || "Group"}
+                  </span>
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent side="top" align="end" className="w-72 space-y-3">
+                <div className="rounded-md border bg-muted/40 p-3">
+                  <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                    <Users className="h-3.5 w-3.5" />
+                    <span>Group Game</span>
+                  </div>
+                  <p className="mt-2 break-words text-sm font-semibold text-foreground">
+                    {groupName || "Unnamed group"}
+                  </p>
+                  <div className="mt-3 flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                    <KeyRound className="h-3.5 w-3.5" />
+                    <span>Join Key</span>
+                  </div>
+                  <p className="mt-2 rounded-sm bg-background/80 px-2 py-1 font-mono text-lg tracking-[0.2em]">
+                    {groupJoinKey || "Unavailable"}
+                  </p>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Share this key with teammates if they need to join the same group.
+                  </p>
+                </div>
+              </PopoverContent>
+            </Popover>
+          )}
+          {options.creator && (
+            <span className="text-xs text-muted-foreground flex items-center gap-1.5">
+              {options.isSavingLevel ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <span>Saving changes...</span>
+                </>
+              ) : (
+                <span>{lastSavedLabel ? `Saved ${lastSavedLabel}` : "Unsaved"}</span>
+              )}
+            </span>
+          )}
+        </div>
       </div>
     </footer>
   );

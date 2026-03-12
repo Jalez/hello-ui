@@ -4,7 +4,7 @@ import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
 import { addNotificationData } from "@/store/slices/notifications.slice";
 import { Button } from "@/components/ui/button";
 import { RotateCcw, PanelLeft, Map, Flag, Settings, Trash2, Loader2, Gamepad2, BarChart3 } from "lucide-react";
-import LevelControls from "@/components/General/LevelControls/LevelControls";
+import LevelControls, { LevelSelect } from "@/components/General/LevelControls/LevelControls";
 import { setCurrentLevel } from "@/store/slices/currentLevel.slice";
 import { resetLevel } from "@/store/slices/levels.slice";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -28,6 +28,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import InfoGamePoints from "../InfoBoard/InfoGamePoints";
 import { ModeToggleButton } from "./ModeToggleButton";
 import { AplusSubmitButton } from "./AplusSubmitButton";
@@ -38,7 +39,7 @@ import { useOptionalCollaboration } from "@/lib/collaboration/CollaborationProvi
 import { apiUrl, stripBasePath } from "@/lib/apiUrl";
 import { useGameplayTelemetry } from "@/components/General/useGameplayTelemetry";
 import { logDebugClient } from "@/lib/debug-logger";
-import PoppingTitle from "@/components/General/PoppingTitle";
+import { footerMenuButtonClass } from "../InfoBoard/Info";
 
 export const Navbar = () => {
   const dispatch = useAppDispatch();
@@ -69,6 +70,7 @@ export const Navbar = () => {
     !shouldHideSidebarForPlayers;
 
   const level = levels[currentLevel - 1];
+  const points = useAppSelector((state) => state.points);
   const mapEditorRef = useRef<MapEditorRef>(null);
   const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
   const [resetScope, setResetScope] = useState<"level" | "game">("level");
@@ -236,7 +238,7 @@ export const Navbar = () => {
   const renderGameMenu = () => (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button type="button" variant="ghost" size="sm" className="h-8">
+        <Button type="button" variant="ghost" size="sm" className="h-auto gap-1 px-2 py-1.5">
           Game
         </Button>
       </DropdownMenuTrigger>
@@ -312,32 +314,99 @@ export const Navbar = () => {
     </DropdownMenu>
   );
 
+  const renderCompactPlayerMenus = () => (
+    <>
+      <div className="flex flex-none">
+        <div className="rounded-md px-2 py-1.5">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button type="button" variant="ghost" size="sm" className={footerMenuButtonClass}>
+                  <span className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                    Game
+                  </span>
+                  <Gamepad2 className="h-4 w-4" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent side="bottom" align="start" className="w-72 space-y-3">
+                <div className="rounded-md border bg-muted/40 p-3">
+                  <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                    <Gamepad2 className="h-3.5 w-3.5" />
+                    <span>Game</span>
+                  </div>
+                  <div className="mt-3 rounded-md bg-background/80 px-3 py-2 text-center">
+                    <div className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                      Total Score
+                    </div>
+                    <div className="mt-1 text-sm font-semibold text-foreground">
+                      {points.allPoints || 0}/{points.allMaxPoints || 0}
+                    </div>
+                  </div>
+                  <div className="mt-3 rounded-md bg-background/80 px-3 py-2">
+                    <AplusSubmitButton
+                      displayMode="icon-label"
+                      renderTrigger={({ openDialog }) => (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="w-full justify-center gap-2"
+                          onClick={openDialog}
+                        >
+                          <Flag className="h-4 w-4" />
+                          <span>Finish game</span>
+                        </Button>
+                      )}
+                    />
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
+        </div>
+      </div>
+
+      <div className="flex flex-1 min-w-0">
+        <div className="w-full rounded-md px-2 py-1.5">
+          <div className="flex-1 min-w-0">
+            <LevelSelect levelHandler={levelChanger} compact compactLabel="Levels" />
+          </div>
+        </div>
+      </div>
+    </>
+  );
+
   if (!level) return null;
 
   return (
     <div
-      className="flex flex-row justify-around items-center w-full h-fit gap-2"
+      className="flex w-full flex-wrap items-center justify-around gap-2 border-b bg-background/80 px-3 py-2"
     >
-      {/* Sidebar Toggle Button - Only visible on small screens */}
-      {shouldShowMobileSidebarToggle && (
-        <div className="lg:hidden">
-          <PoppingTitle topTitle="Open sidebar">
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              className="h-8 w-8"
-              onClick={openOverlay}
-              title="Open sidebar"
-            >
-              <PanelLeft className="h-5 w-5" />
-            </Button>
-          </PoppingTitle>
+      {isGameRoute && !showCreatorGameMenus && (
+        <div className="flex w-full min-w-0 items-center gap-1 sm:hidden">
+          {shouldShowMobileSidebarToggle && (
+            <div className="flex-none rounded-md px-2 py-1.5">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className={footerMenuButtonClass}
+                  onClick={openOverlay}
+                  title="Open sidebar"
+                >
+                  <span className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                    Sidebar
+                  </span>
+                  <PanelLeft className="h-4 w-4" />
+                </Button>
+            </div>
+          )}
+          <div className="flex min-w-0 flex-1 items-center gap-1">
+            {renderCompactPlayerMenus()}
+          </div>
         </div>
       )}
 
       {/* Compact nav: text-first menus (no icon-only mode). Hide Game and Level menus on game route. */}
-      <div className="flex 2xl:hidden items-center gap-1">
+      <div className="hidden sm:flex 2xl:hidden flex-1 min-w-0 items-center gap-1">
         {isCreator && !isGameRoute && (
           <>
             <CreatorControls displayMode="menu" />
@@ -353,27 +422,18 @@ export const Navbar = () => {
             />
             {renderGameMenu()}
           </>
-        ) : !isCreatorRoute ? (
+        ) : !isCreatorRoute && !isGameRoute ? (
           <ModeToggleButton displayMode="icon-label" />
         ) : null}
 
-        {isGameRoute && !showCreatorGameMenus && (
-          <PoppingTitle topTitle="Reset Level">
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              className="h-8 w-8"
-              title="Reset Level"
-              onClick={() => togglePopper("level")}
-            >
-              <RotateCcw className="h-4 w-4" />
-            </Button>
-          </PoppingTitle>
+        {isGameRoute && !showCreatorGameMenus ? (
+          renderCompactPlayerMenus()
+        ) : (
+          <>
+            <InfoGamePoints />
+            {!showCreatorGameMenus && <AplusSubmitButton displayMode="icon-label" />}
+          </>
         )}
-
-        <InfoGamePoints />
-        {!showCreatorGameMenus && <AplusSubmitButton displayMode="icon" />}
       </div>
 
       {/* Left section - Creator controls or Art tab switch. Hide creator tools on game route. */}
@@ -384,7 +444,7 @@ export const Navbar = () => {
       </div>
 
       {/* Center section - Mode toggle, Reset, and Level controls */}
-      <div className="flex flex-row gap-2 lg:gap-3 justify-center items-center flex-1 2xl:flex-[1_0_50%]">
+      <div className="flex basis-full flex-wrap justify-center items-center gap-2 lg:gap-3 2xl:basis-auto 2xl:flex-nowrap 2xl:flex-1 2xl:flex-[1_0_50%]">
         {/* Mode switch */}
         <div className="hidden 2xl:flex gap-1 items-center">
           {showCreatorGameMenus && currentGame?.id ? (
@@ -401,28 +461,15 @@ export const Navbar = () => {
         </div>
 
         {/* Reset button */}
-        {isGameRoute && !showCreatorGameMenus && (
-          <div className="hidden 2xl:block">
-            <Button
-              size="sm"
-              variant="ghost"
-              className="gap-2"
-              title="Reset Level"
-              onClick={() => togglePopper("level")}
-            >
-              <RotateCcw className="h-5 w-5" />
-              <span>Reset</span>
-            </Button>
-          </div>
-        )}
-
         {/* Level controls - Always visible */}
-        <LevelControls
-          currentlevel={currentLevel}
-          levelHandler={levelChanger}
-          maxLevels={Object.keys(levels).length}
-          levelName={level.name}
-        />
+        {(!isGameRoute || showCreatorGameMenus || canEditCurrentGame) && (
+          <LevelControls
+            currentlevel={currentLevel}
+            levelHandler={levelChanger}
+            maxLevels={Object.keys(levels).length}
+            levelName={level.name}
+          />
+        )}
       </div>
 
       {/* Right section - Game points + A+ submit */}
