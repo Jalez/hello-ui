@@ -50,6 +50,7 @@ function mapGame(row: typeof projects.$inferSelect): Game {
     access_key_required: row.accessKeyRequired ?? false,
     access_key: row.accessKey ?? null,
     collaboration_mode: row.collaborationMode === "group" ? "group" : "individual",
+    allow_duplicate_group_users: row.allowDuplicateGroupUsers ?? false,
     created_at: row.createdAt,
     updated_at: row.updatedAt,
   };
@@ -363,6 +364,10 @@ export async function updateGame(id: string, options: UpdateGameOptions): Promis
       throw new Error("Invalid collaborationMode");
     }
     updateData.collaborationMode = options.collaborationMode;
+  }
+
+  if (options.allowDuplicateGroupUsers !== undefined) {
+    updateData.allowDuplicateGroupUsers = options.allowDuplicateGroupUsers;
   }
 
   if (Object.keys(updateData).length === 0) {

@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, use, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, ReactNode, use, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import App from "@/components/App";
 import { useGameStore } from "@/components/default/games";
@@ -19,6 +19,7 @@ import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
 import { startLevelTimerAt } from "@/store/slices/levels.slice";
 import { addNotificationData } from "@/store/slices/notifications.slice";
 import { logDebugClient } from "@/lib/debug-logger";
+import { fetchGroupDetailsCached } from "@/lib/group-details-client";
 
 interface GamePageProps {
   params: Promise<{
@@ -199,6 +200,68 @@ function getInitials(label: string): string {
     .slice(0, 2);
 }
 
+function buildAvatarFallbacks(
+  users: Array<{
+    userId?: string;
+    accountUserId?: string;
+    userEmail?: string | null;
+    accountUserEmail?: string | null;
+    userName?: string | null;
+    userImage?: string | null;
+  }>,
+): {
+  byUserId: Map<string, { userName?: string | null; userImage?: string | null }>;
+  byEmail: Map<string, { userName?: string | null; userImage?: string | null }>;
+} {
+  const fallbackByUserId = new Map<string, { userName?: string | null; userImage?: string | null }>();
+  const fallbackByEmail = new Map<string, { userName?: string | null; userImage?: string | null }>();
+  for (const user of users) {
+    for (const userIdKey of [user.accountUserId, user.userId]) {
+      if (!userIdKey) {
+        continue;
+      }
+      const existing = fallbackByUserId.get(userIdKey);
+      fallbackByUserId.set(userIdKey, {
+        userName: existing?.userName ?? user.userName,
+        userImage: existing?.userImage ?? user.userImage,
+      });
+    }
+
+    for (const emailValue of [user.accountUserEmail, user.userEmail]) {
+      const emailKey = typeof emailValue === "string" ? emailValue.toLowerCase() : "";
+      if (!emailKey) {
+        continue;
+      }
+      const existing = fallbackByEmail.get(emailKey);
+      fallbackByEmail.set(emailKey, {
+        userName: existing?.userName ?? user.userName,
+        userImage: existing?.userImage ?? user.userImage,
+      });
+    }
+  }
+  return {
+    byUserId: fallbackByUserId,
+    byEmail: fallbackByEmail,
+  };
+}
+
+function CollaborationNotice({ children }: { children: ReactNode }) {
+  const collaboration = useCollaboration();
+
+  if (!collaboration.error) {
+    return <>{children}</>;
+  }
+
+  return (
+    <>
+      <div className="border-b border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-900">
+        {collaboration.error}
+      </div>
+      {children}
+    </>
+  );
+}
+
 function PresenceStack({
   users,
   readyUserIds = [],
@@ -260,6 +323,7 @@ function GroupWaitingRoom({
   const levels = useAppSelector((state) => state.levels);
   const currentGame = useGameStore((state) => state.getCurrentGame());
   const addGameToStore = useGameStore((state) => state.addGameToStore);
+  const effectiveCurrentUser = collaboration.effectiveIdentity ?? currentUser;
   const gate = useMemo(
     () => collaboration.groupStartGate ?? normalizeGroupStartGate(currentGame?.progressData?.groupStartGate),
     [collaboration.groupStartGate, currentGame?.progressData],
@@ -271,19 +335,35 @@ function GroupWaitingRoom({
       string,
       {
         userId?: string;
+        accountUserId?: string;
         userEmail?: string;
+        accountUserEmail?: string;
         userName?: string;
         userImage?: string;
         color?: string;
       }
     >();
+    const avatarFallbacks = buildAvatarFallbacks([
+      {
+        userId: effectiveCurrentUser.id,
+        accountUserId: effectiveCurrentUser.id,
+        userEmail: effectiveCurrentUser.email,
+        accountUserEmail: effectiveCurrentUser.email,
+        userName: effectiveCurrentUser.name,
+        userImage: effectiveCurrentUser.image,
+      },
+      ...groupMembers,
+      ...collaboration.activeUsers,
+    ]);
 
     for (const entry of [
       {
-        userId: currentUser.id,
-        userEmail: currentUser.email,
-        userName: currentUser.name,
-        userImage: currentUser.image,
+        userId: effectiveCurrentUser.id,
+        accountUserId: effectiveCurrentUser.id,
+        userEmail: effectiveCurrentUser.email,
+        accountUserEmail: effectiveCurrentUser.email,
+        userName: effectiveCurrentUser.name,
+        userImage: effectiveCurrentUser.image,
         clientId: "self",
       },
       ...collaboration.activeUsers,
@@ -298,11 +378,13 @@ function GroupWaitingRoom({
     const roster = groupMembers.map((member) => {
       const key = member.userId || member.userEmail || member.id;
       const liveEntry = presenceByKey.get(key);
+      const fallback = avatarFallbacks.byUserId.get(member.userId)
+        ?? (member.userEmail ? avatarFallbacks.byEmail.get(member.userEmail.toLowerCase()) : undefined);
       return {
         userId: member.userId,
         userEmail: member.userEmail ?? liveEntry?.userEmail,
-        userName: member.userName ?? liveEntry?.userName,
-        userImage: member.userImage ?? liveEntry?.userImage,
+        userName: member.userName ?? liveEntry?.userName ?? fallback?.userName ?? undefined,
+        userImage: member.userImage ?? liveEntry?.userImage ?? fallback?.userImage ?? undefined,
         color: liveEntry?.color,
         isConnected: Boolean(liveEntry),
       };
@@ -316,19 +398,24 @@ function GroupWaitingRoom({
         const key = entry.userId || entry.userEmail;
         return Boolean(key) && !rosterKeys.has(key);
       })
-      .map((entry) => ({
-        userId: entry.userId,
-        userEmail: entry.userEmail,
-        userName: entry.userName,
-        userImage: entry.userImage,
-        color: entry.color,
-        isConnected: true,
-      }));
+      .map((entry) => {
+        const fallback = (entry.accountUserId ? avatarFallbacks.byUserId.get(entry.accountUserId) : undefined)
+          ?? (entry.accountUserEmail ? avatarFallbacks.byEmail.get(entry.accountUserEmail.toLowerCase()) : undefined)
+          ?? (entry.userEmail ? avatarFallbacks.byEmail.get(entry.userEmail.toLowerCase()) : undefined);
+        return {
+          userId: entry.userId,
+          userEmail: entry.userEmail,
+          userName: entry.userName ?? fallback?.userName ?? undefined,
+          userImage: entry.userImage ?? fallback?.userImage ?? undefined,
+          color: entry.color,
+          isConnected: true,
+        };
+      });
 
     return [...roster, ...extras];
-  }, [collaboration.activeUsers, currentUser.email, currentUser.id, currentUser.image, currentUser.name, groupMembers]);
+  }, [collaboration.activeUsers, effectiveCurrentUser.email, effectiveCurrentUser.id, effectiveCurrentUser.image, effectiveCurrentUser.name, groupMembers]);
 
-  const isReady = gate.readyUserIds.includes(currentUser.id);
+  const isReady = gate.readyUserIds.includes(effectiveCurrentUser.id);
   const isStarted = gate.status === "started";
   const startedAtMs = gate.startedAt ? Date.parse(gate.startedAt) : 0;
   const waitingForSharedStart = isStarted && !hasSharedStartTime(collaboration.initialRoomState);
@@ -515,15 +602,29 @@ function PublicGroupLobby({
 }) {
   const collaboration = useCollaboration();
   const [draftMessage, setDraftMessage] = useState("");
+  const effectiveCurrentUser = collaboration.effectiveIdentity ?? currentUser;
 
   const connectedUsers = useMemo(() => {
+    const avatarFallbacks = buildAvatarFallbacks([
+      {
+        userId: effectiveCurrentUser.id,
+        accountUserId: effectiveCurrentUser.id,
+        userEmail: effectiveCurrentUser.email,
+        accountUserEmail: effectiveCurrentUser.email,
+        userName: effectiveCurrentUser.name,
+        userImage: effectiveCurrentUser.image,
+      },
+      ...collaboration.activeUsers,
+    ]);
     const seen = new Set<string>();
     const combined = [
       {
-        userId: currentUser.id,
-        userEmail: currentUser.email,
-        userName: currentUser.name,
-        userImage: currentUser.image,
+        userId: effectiveCurrentUser.id,
+        accountUserId: effectiveCurrentUser.id,
+        userEmail: effectiveCurrentUser.email,
+        accountUserEmail: effectiveCurrentUser.email,
+        userName: effectiveCurrentUser.name,
+        userImage: effectiveCurrentUser.image,
       },
       ...collaboration.activeUsers,
     ];
@@ -532,9 +633,18 @@ function PublicGroupLobby({
       const key = entry.userId || entry.userEmail;
       if (!key || seen.has(key)) return false;
       seen.add(key);
+      const fallback = (entry.accountUserId ? avatarFallbacks.byUserId.get(entry.accountUserId) : undefined)
+        ?? (entry.accountUserEmail ? avatarFallbacks.byEmail.get(entry.accountUserEmail.toLowerCase()) : undefined)
+        ?? (entry.userEmail ? avatarFallbacks.byEmail.get(entry.userEmail.toLowerCase()) : undefined);
+      if (!entry.userName && fallback?.userName) {
+        entry.userName = fallback.userName;
+      }
+      if (!entry.userImage && fallback?.userImage) {
+        entry.userImage = fallback.userImage;
+      }
       return true;
     });
-  }, [collaboration.activeUsers, currentUser.email, currentUser.id, currentUser.image, currentUser.name]);
+  }, [collaboration.activeUsers, effectiveCurrentUser.email, effectiveCurrentUser.id, effectiveCurrentUser.image, effectiveCurrentUser.name]);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -974,26 +1084,19 @@ export default function GamePage({ params }: GamePageProps) {
     }
 
     try {
-      const response = await fetch(apiUrl(`/api/groups/${groupId}`));
-      if (response.ok) {
-        const data = await response.json();
-        setCurrentGroupName(data.group?.name ?? null);
-        setCurrentGroupJoinKey(data.group?.joinKey ?? null);
-        setCurrentGroupMembers(Array.isArray(data.members) ? data.members : []);
-        logDebugClient("group_join_success", {
-          groupId,
-          groupName: data.group?.name ?? null,
-          joinKey: data.group?.joinKey ?? null,
-          memberNames: Array.isArray(data.members)
-            ? data.members.map((member: { userName?: string; userEmail?: string; userId?: string }) => member.userName || member.userEmail || member.userId || "unknown")
-            : [],
-          href: typeof window !== "undefined" ? window.location.href : null,
-        });
-      } else {
-        setCurrentGroupName(null);
-        setCurrentGroupJoinKey(null);
-        setCurrentGroupMembers([]);
-      }
+      const data = await fetchGroupDetailsCached(groupId);
+      setCurrentGroupName(data.group?.name ?? null);
+      setCurrentGroupJoinKey(data.group?.joinKey ?? null);
+      setCurrentGroupMembers(Array.isArray(data.members) ? data.members : []);
+      logDebugClient("group_join_success", {
+        groupId,
+        groupName: data.group?.name ?? null,
+        joinKey: data.group?.joinKey ?? null,
+        memberNames: Array.isArray(data.members)
+          ? data.members.map((member: { userName?: string; userEmail?: string; userId?: string }) => member.userName || member.userEmail || member.userId || "unknown")
+          : [],
+        href: typeof window !== "undefined" ? window.location.href : null,
+      });
     } catch {
       setCurrentGroupName(null);
       setCurrentGroupJoinKey(null);
@@ -1017,11 +1120,7 @@ export default function GamePage({ params }: GamePageProps) {
     let cancelled = false;
     const loadGroupDetails = async () => {
       try {
-        const response = await fetch(apiUrl(`/api/groups/${groupId}`));
-        if (!response.ok || cancelled) {
-          return;
-        }
-        const data = await response.json();
+        const data = await fetchGroupDetailsCached(groupId);
         if (cancelled) {
           return;
         }
@@ -1168,19 +1267,21 @@ export default function GamePage({ params }: GamePageProps) {
 
   return (
     <CollaborationProvider roomId={roomId} user={user}>
-      <GameInstancesResetWatcher gameId={gameId} />
-      {user && currentGame?.collaborationMode === "group" && roomId?.startsWith("group:") ? (
-        <GroupWaitingRoom
-          gameTitle={currentGame.title}
-          groupId={searchParams.get("groupId") || roomId.split(":")[1] || ""}
-          groupName={currentGroupName}
-          joinKey={currentGroupJoinKey}
-          currentUser={user}
-          groupMembers={currentGroupMembers}
-        />
-      ) : (
-        <App />
-      )}
+      <CollaborationNotice>
+        <GameInstancesResetWatcher gameId={gameId} />
+        {user && currentGame?.collaborationMode === "group" && roomId?.startsWith("group:") ? (
+          <GroupWaitingRoom
+            gameTitle={currentGame.title}
+            groupId={searchParams.get("groupId") || roomId.split(":")[1] || ""}
+            groupName={currentGroupName}
+            joinKey={currentGroupJoinKey}
+            currentUser={user}
+            groupMembers={currentGroupMembers}
+          />
+        ) : (
+          <App />
+        )}
+      </CollaborationNotice>
     </CollaborationProvider>
   );
 }

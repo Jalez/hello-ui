@@ -28,6 +28,23 @@ interface LtiSessionInfo {
   role: string;
 }
 
+let ltiSessionRequest: Promise<LtiSessionInfo | null> | null = null;
+
+function fetchLtiSessionCached(): Promise<LtiSessionInfo | null> {
+  if (!ltiSessionRequest) {
+    ltiSessionRequest = fetch(apiUrl("/api/games/lti-session"))
+      .then(async (res) => {
+        if (!res.ok) {
+          return null;
+        }
+        return res.json() as Promise<LtiSessionInfo>;
+      })
+      .catch(() => null);
+  }
+
+  return ltiSessionRequest;
+}
+
 type NavbarActionDisplayMode = "icon-label" | "icon";
 
 function stripCodeLevelsFromProgressData(progressData: Record<string, unknown> | undefined) {
@@ -77,12 +94,15 @@ export const AplusSubmitButton = ({
   const isGroupGameplay = Boolean(searchParams.get("groupId"));
 
   useEffect(() => {
-    fetch(apiUrl("/api/games/lti-session"))
-      .then((res) => res.json())
-      .then((data) => {
+    let cancelled = false;
+    fetchLtiSessionCached().then((data) => {
+      if (!cancelled) {
         setLtiInfo(data);
-      })
-      .catch(() => {});
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const buildFinishUrl = useCallback(() => {

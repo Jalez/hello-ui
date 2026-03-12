@@ -1,4 +1,4 @@
-import { chromium } from "@playwright/test";
+import { chromium, expect } from "@playwright/test";
 import { Client } from "pg";
 import { readFileSync } from "fs";
 
@@ -33,6 +33,10 @@ function deriveUsernames() {
     return provided;
   }
 
+  if (scenario === "same_user_duplicate") {
+    return ["user01", "user02", "user02"];
+  }
+
   const defaultByScenario = {
     baseline: 5,
     lti_lobby: 6,
@@ -41,6 +45,7 @@ function deriveUsernames() {
     creator_group_details: 4,
     level_tab_switch: 3,
     instances_reset: 3,
+    same_user_duplicate: 3,
     prototype_yjs: 12,
     game_yjs: 12,
     submit_after_churn: 12,
@@ -54,6 +59,7 @@ const usernames = deriveUsernames();
 
 function defaultGroupSizeForScenario() {
   if (scenario === "baseline") return 3;
+  if (scenario === "same_user_duplicate") return 3;
   if (scenario === "lti_aplus_group") return 2;
   if (scenario === "latency") return 4;
   if (scenario === "creator_group_details") return 3;
@@ -115,6 +121,13 @@ function scenarioFlags() {
     return {
       ...defaults,
       submitAfterStress: true,
+    };
+  }
+
+  if (scenario === "same_user_duplicate") {
+    return {
+      ...defaults,
+      submitAfterStress: false,
     };
   }
 
@@ -217,6 +230,11 @@ const flags = {
   refreshDuringEditing: process.env.PLAYWRIGHT_RELOAD_DURING_EDIT === "true" ? true : scenarioFlags().refreshDuringEditing,
   submitAfterStress: process.env.PLAYWRIGHT_SUBMIT_AFTER_STRESS === "true" ? true : scenarioFlags().submitAfterStress,
 };
+
+const duplicateUsernames = usernames.filter((username, index) => usernames.indexOf(username) !== index);
+if (duplicateUsernames.length > 0) {
+  console.log(`identity:duplicate-usernames ${[...new Set(duplicateUsernames)].join("|")}`);
+}
 
 function gameUrl(gameId, groupId) {
   if (routeKind === "prototype-yjs") {
@@ -555,6 +573,7 @@ async function createGroupModeGame(request, creatorUsername) {
   const updateResponse = await request.patch(`${baseUrl}/api/games/${gameId}`, {
     data: {
       collaborationMode: "group",
+      ...(scenario === "same_user_duplicate" ? { allowDuplicateUsersInGroup: true } : {}),
       isPublic: true,
       title,
     },
@@ -580,12 +599,23 @@ async function startGroupGame(pages) {
   }
   for (const page of pages.slice(0, 2)) {
     const waitingRoom = page.getByText("Group Waiting Room");
+    await Promise.race([
+      waitingRoom.first().waitFor({ timeout: scaledTimeout(10000) }).catch(() => null),
+      page.locator(".cm-content[contenteditable='true']").first().waitFor({ timeout: scaledTimeout(10000) }).catch(() => null),
+    ]);
     if ((await waitingRoom.count()) > 0) {
       const startButton = page.getByRole("button", { name: "Start Game" });
       await startButton.waitFor({ timeout: scaledTimeout(10000) });
-      if (await startButton.isEnabled()) {
-        await startButton.click();
-      }
+      await expect.poll(async () => {
+        if (!await startButton.isVisible().catch(() => false)) {
+          return "hidden";
+        }
+        return (await startButton.isEnabled().catch(() => false)) ? "enabled" : "disabled";
+      }, {
+        timeout: scaledTimeout(10000),
+        message: "Start Game button did not become enabled after entering the waiting room",
+      }).toBe("enabled");
+      await startButton.click();
     }
   }
 }

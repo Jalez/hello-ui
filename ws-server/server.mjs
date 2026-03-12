@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { ChangeSet, Text } from "@codemirror/state";
 import { WebSocketServer, WebSocket } from "ws";
 import * as Y from "yjs";
+import pg from "pg";
 
 const PORT = parseInt(process.env.PORT || "3100", 10);
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "http://localhost:3000";
@@ -14,6 +15,9 @@ const EDITOR_TYPES = ["html", "css", "js"];
 const GROUP_START_MIN_READY_COUNT = 2;
 const WS_ARTIFICIAL_DELAY_MS = parseInt(process.env.WS_ARTIFICIAL_DELAY_MS || "0", 10);
 const WS_ARTIFICIAL_JITTER_MS = parseInt(process.env.WS_ARTIFICIAL_JITTER_MS || "0", 10);
+const GAME_DUPLICATE_SETTINGS_TTL_MS = 10000;
+const DATABASE_URL = process.env.DATABASE_URL || process.env.POSTGRES_URL || "";
+const dbPool = DATABASE_URL ? new pg.Pool({ connectionString: DATABASE_URL }) : null;
 
 // roomId -> Map<WebSocket, userData>
 const rooms = new Map();
@@ -23,6 +27,7 @@ const connectionState = new WeakMap();
 const roomEditorState = new Map();
 const roomLobbyState = new Map();
 const roomYDocs = new Map();
+const gameDuplicateSettingsCache = new Map();
 
 // roomId -> { ctx, timer }
 const roomWriteBuffer = new Map();
@@ -98,10 +103,104 @@ function getConnectionId(socket) {
 function summarizeRoomMembers(roomId) {
   return Array.from(getRoomUsers(roomId).values()).map((user) => ({
     userId: user.userId || "",
+    accountUserId: user.accountUserId || "",
+    accountUserEmail: user.accountUserEmail || "",
     userEmail: user.userEmail || "",
     userName: user.userName || "",
+    userImage: user.userImage || "",
     clientId: user.clientId || "",
   }));
+}
+
+function normalizeDuplicateBaseName(name, email, userId) {
+  return name || email || userId || "Anonymous";
+}
+
+async function isDuplicateGroupUserAllowed(gameId) {
+  if (!gameId) {
+    return false;
+  }
+
+  const now = Date.now();
+  const cached = gameDuplicateSettingsCache.get(gameId);
+  if (cached && cached.expiresAt > now) {
+    return cached.value;
+  }
+
+  if (!dbPool) {
+    return false;
+  }
+
+  try {
+    const result = await dbPool.query(
+      "SELECT allow_duplicate_group_users FROM projects WHERE id = $1 LIMIT 1",
+      [gameId],
+    );
+    const value = result.rows[0]?.allow_duplicate_group_users === true;
+    gameDuplicateSettingsCache.set(gameId, {
+      value,
+      expiresAt: now + GAME_DUPLICATE_SETTINGS_TTL_MS,
+    });
+    return value;
+  } catch (error) {
+    console.error("[duplicate-group-users:lookup-error]", error);
+    return false;
+  }
+}
+
+function parseDuplicateSessionIndex(userId, baseUserId) {
+  if (!userId || !baseUserId) {
+    return null;
+  }
+  if (userId === baseUserId) {
+    return 1;
+  }
+  const prefix = `${baseUserId}::session-`;
+  if (!userId.startsWith(prefix)) {
+    return null;
+  }
+  const suffix = Number.parseInt(userId.slice(prefix.length), 10);
+  return Number.isInteger(suffix) && suffix >= 2 ? suffix : null;
+}
+
+function resolveDuplicateIdentity(roomId, userData) {
+  const roomUsers = Array.from(getRoomUsers(roomId).values());
+  const duplicates = roomUsers.filter((entry) => {
+    if (userData.userId && entry.accountUserId) {
+      return entry.accountUserId === userData.userId;
+    }
+    if (userData.userEmail && entry.accountUserEmail) {
+      return entry.accountUserEmail === userData.userEmail;
+    }
+    return false;
+  });
+
+  if (duplicates.length === 0) {
+    return {
+      effectiveUserId: userData.userId || userData.clientId,
+      effectiveUserName: userData.userName,
+      duplicateIndex: 0,
+    };
+  }
+
+  const baseUserId = userData.userId || userData.clientId;
+  const baseName = normalizeDuplicateBaseName(userData.userName, userData.userEmail, baseUserId);
+  const usedIndexes = new Set(
+    duplicates
+      .map((entry) => parseDuplicateSessionIndex(entry.userId || "", baseUserId))
+      .filter((value) => Number.isInteger(value))
+  );
+
+  let duplicateIndex = 2;
+  while (usedIndexes.has(duplicateIndex)) {
+    duplicateIndex += 1;
+  }
+
+  return {
+    effectiveUserId: `${baseUserId}::session-${duplicateIndex}`,
+    effectiveUserName: `${baseName} (${duplicateIndex})`,
+    duplicateIndex,
+  };
 }
 
 function logRoomSnapshot(reason, roomId, extra = {}) {
@@ -940,16 +1039,46 @@ wsServer.on("connection", (socket) => {
           return;
         }
 
+        const ctx = parseRoomContext(roomId);
+
         setConnectionState(socket, { roomId });
-        const userData = {
+        const baseUserData = {
           clientId: data.clientId || socketId,
           userId: data.userId || "",
           userEmail: data.userEmail || "",
           userName: data.userName || undefined,
           userImage: data.userImage || undefined,
+          accountUserId: data.userId || "",
+          accountUserEmail: data.userEmail || "",
           activeTab: null,
           activeLevelIndex: null,
           isTyping: false,
+        };
+        const existingDuplicates = Array.from(getRoomUsers(roomId).values()).filter((entry) => {
+          if (baseUserData.userId && entry.accountUserId) {
+            return entry.accountUserId === baseUserData.userId;
+          }
+          if (baseUserData.userEmail && entry.accountUserEmail) {
+            return entry.accountUserEmail === baseUserData.userEmail;
+          }
+          return false;
+        });
+        if (isGroupInstanceContext(ctx) && existingDuplicates.length > 0 && !await isDuplicateGroupUserAllowed(ctx.gameId)) {
+          sendMessage(socket, "error", {
+            error: "Duplicate users are blocked for this game. Turn group submission off in A+ or ask the creator to enable duplicate users in Game Settings. Allowing duplicates may cause instability and desyncs.",
+            code: "duplicate_users_blocked",
+            roomId,
+            ts: Date.now(),
+          });
+          socket.close(4008, "duplicate users blocked");
+          return;
+        }
+        const resolvedIdentity = resolveDuplicateIdentity(roomId, baseUserData);
+        const userData = {
+          ...baseUserData,
+          userId: resolvedIdentity.effectiveUserId,
+          userName: resolvedIdentity.effectiveUserName,
+          duplicateIndex: resolvedIdentity.duplicateIndex,
         };
         addUserToRoom(roomId, socket, userData);
 
@@ -957,8 +1086,18 @@ wsServer.on("connection", (socket) => {
 
         const currentUsers = Array.from(getRoomUsers(roomId).values());
         sendMessage(socket, "current-users", { users: currentUsers });
+        sendMessage(socket, "identity-assigned", {
+          roomId,
+          userId: userData.userId,
+          userEmail: userData.userEmail,
+          userName: userData.userName,
+          userImage: userData.userImage,
+          accountUserId: userData.accountUserId,
+          accountUserEmail: userData.accountUserEmail,
+          duplicateIndex: userData.duplicateIndex || 0,
+          ts: Date.now(),
+        });
 
-        const ctx = parseRoomContext(roomId);
         if (ctx) {
           const state = await ensureRoomState(roomId, ctx);
           sendMessage(socket, "room-state-sync", serializeRoomStateSync(roomId, state));

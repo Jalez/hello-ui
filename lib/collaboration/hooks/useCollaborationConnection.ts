@@ -9,6 +9,7 @@ import {
   EditorCursor,
   EditorResync,
   GroupStartSyncMessage,
+  IdentityAssignedMessage,
   LobbyChatEntry,
   LobbyChatSyncMessage,
   ProgressSyncMessage,
@@ -51,6 +52,7 @@ interface UseCollaborationConnectionOptions {
   onYjsReset?: (message: YjsSyncMessage) => void;
   onYjsUpdate?: (message: YjsUpdateMessage) => void;
   onGameInstancesReset?: (message: GameInstancesResetMessage) => void;
+  onIdentityAssigned?: (message: IdentityAssignedMessage) => void;
 }
 
 interface UseCollaborationConnectionReturn {
@@ -82,6 +84,7 @@ interface UseCollaborationConnectionReturn {
   sendGroupStartReady: () => void;
   sendGroupStartUnready: () => void;
   sendLobbyChat: (text: string) => void;
+  effectiveIdentity: UserIdentity | null;
 }
 
 interface WebSocketEnvelope<T = unknown> {
@@ -122,14 +125,21 @@ export function useCollaborationConnection(
   const isConnectedRef = useRef(false);
   const reconnectFnRef = useRef<(() => void) | null>(null);
   const manualDisconnectRef = useRef(false);
+  const effectiveIdentityRef = useRef<UserIdentity | null>(user);
 
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [clientId, setClientId] = useState<string | null>(null);
   const [socketState, setSocketState] = useState<WebSocket | null>(null);
+  const [effectiveIdentity, setEffectiveIdentity] = useState<UserIdentity | null>(user);
 
   const userIdentity = user ? `${user.id}|${user.email}` : null;
+
+  useEffect(() => {
+    setEffectiveIdentity(user);
+    effectiveIdentityRef.current = user;
+  }, [userIdentity, user]);
 
   const sendMessage = useCallback((type: string, payload: Record<string, unknown>) => {
     const socket = socketRef.current;
@@ -281,15 +291,20 @@ export function useCollaborationConnection(
             const data = payload as {
               clientId?: string;
               userId: string;
+              accountUserId?: string;
               userEmail: string;
+              accountUserEmail?: string;
               userName?: string;
               userImage?: string;
               activeTab?: EditorType;
               activeLevelIndex?: number;
               isTyping?: boolean;
             };
-            const current = optionsRef.current.user;
-            if (!current || data.userEmail === current.email) {
+            const current = effectiveIdentityRef.current ?? optionsRef.current.user;
+            if (!current) {
+              return;
+            }
+            if (data.userId === current.id) {
               return;
             }
             const joinedClientId = data.clientId ?? "";
@@ -297,7 +312,9 @@ export function useCollaborationConnection(
               queueMicrotask(() => optionsRef.current.onUserJoined?.({
                 clientId: joinedClientId,
                 userId: data.userId,
+                accountUserId: data.accountUserId,
                 userEmail: data.userEmail,
+                accountUserEmail: data.accountUserEmail,
                 userName: data.userName,
                 userImage: data.userImage,
                 activeTab: data.activeTab,
@@ -317,7 +334,9 @@ export function useCollaborationConnection(
               users?: Array<{
                 clientId?: string;
                 userId?: string;
+                accountUserId?: string;
                 userEmail: string;
+                accountUserEmail?: string;
                 userName?: string;
                 userImage?: string;
                 color?: string;
@@ -328,18 +347,19 @@ export function useCollaborationConnection(
             };
             if (data.users && Array.isArray(data.users)) {
               const current = optionsRef.current.user;
+              const selfIdentity = effectiveIdentityRef.current ?? current;
               const mapped = data.users
                 .filter((entry) => entry && (entry.clientId ?? "").length > 0)
                 .filter((entry) => {
-                  if (!current) {
+                  if (!selfIdentity) {
                     return true;
                   }
 
-                  if (entry.userId && entry.userId === current.id) {
+                  if (entry.userId && entry.userId === selfIdentity.id) {
                     return false;
                   }
 
-                  if (entry.userEmail && entry.userEmail === current.email) {
+                  if (!entry.userId && entry.userEmail && entry.userEmail === selfIdentity.email) {
                     return false;
                   }
 
@@ -348,7 +368,9 @@ export function useCollaborationConnection(
                 .map((entry) => ({
                   clientId: entry.clientId ?? "",
                   userId: entry.userId || "",
+                  accountUserId: entry.accountUserId,
                   userEmail: entry.userEmail,
+                  accountUserEmail: entry.accountUserEmail,
                   userName: entry.userName,
                   userImage: entry.userImage,
                   color: entry.color || generateUserColor(entry.userEmail),
@@ -418,6 +440,20 @@ export function useCollaborationConnection(
           case "group-start-sync":
             optionsRef.current.onGroupStartSync?.(payload as GroupStartSyncMessage);
             return;
+          case "identity-assigned": {
+            const data = payload as IdentityAssignedMessage;
+            const previousIdentity = effectiveIdentityRef.current ?? optionsRef.current.user;
+            const nextIdentity: UserIdentity = {
+              id: data.userId,
+              email: data.userEmail,
+              name: data.userName ?? previousIdentity?.name,
+              image: data.userImage ?? previousIdentity?.image,
+            };
+            setEffectiveIdentity(nextIdentity);
+            effectiveIdentityRef.current = nextIdentity;
+            optionsRef.current.onIdentityAssigned?.(data);
+            return;
+          }
           case "lobby-chat-sync":
             optionsRef.current.onLobbyChatSync?.(payload as LobbyChatSyncMessage);
             return;
@@ -536,37 +572,37 @@ export function useCollaborationConnection(
   }, [disconnect, parsedGroupId, roomId, sendMessage]);
 
   const sendCanvasCursor = useCallback((x: number, y: number) => {
-    if (roomId && user && clientIdRef.current) {
+    if (roomId && effectiveIdentity && clientIdRef.current) {
       sendMessage("canvas-cursor", {
         roomId,
         groupId: parsedGroupId ?? undefined,
         clientId: clientIdRef.current,
-        userId: user.id,
-        userName: user.name,
+        userId: effectiveIdentity.id,
+        userName: effectiveIdentity.name,
         color: userColorRef.current,
         x,
         y,
         ts: Date.now(),
       });
     }
-  }, [parsedGroupId, roomId, sendMessage, user]);
+  }, [effectiveIdentity, parsedGroupId, roomId, sendMessage]);
 
   const sendEditorCursor = useCallback((editorType: "html" | "css" | "js", levelIndex: number, selection: { from: number; to: number }) => {
-    if (roomId && user && clientIdRef.current) {
+    if (roomId && effectiveIdentity && clientIdRef.current) {
       sendMessage("editor-cursor", {
         roomId,
         groupId: parsedGroupId ?? undefined,
         editorType,
         levelIndex,
         clientId: clientIdRef.current,
-        userId: user.id,
-        userName: user.name,
+        userId: effectiveIdentity.id,
+        userName: effectiveIdentity.name,
         color: userColorRef.current,
         selection,
         ts: Date.now(),
       });
     }
-  }, [parsedGroupId, roomId, sendMessage, user]);
+  }, [effectiveIdentity, parsedGroupId, roomId, sendMessage]);
 
   const sendEditorChange = useCallback((
     editorType: EditorType,
@@ -575,13 +611,13 @@ export function useCollaborationConnection(
     changeSetJson: unknown,
     selection?: { from: number; to: number }
   ) => {
-    if (roomId && user && clientIdRef.current) {
+    if (roomId && effectiveIdentity && clientIdRef.current) {
       sendMessage("editor-change", {
         roomId,
         groupId: parsedGroupId ?? undefined,
         editorType,
         clientId: clientIdRef.current,
-        userId: user.id,
+        userId: effectiveIdentity.id,
         baseVersion,
         changeSetJson,
         levelIndex,
@@ -589,25 +625,25 @@ export function useCollaborationConnection(
         ts: Date.now(),
       });
     }
-  }, [parsedGroupId, roomId, sendMessage, user]);
+  }, [effectiveIdentity, parsedGroupId, roomId, sendMessage]);
 
   const sendTabFocus = useCallback((editorType: EditorType, levelIndex: number) => {
-    if (roomId && user && clientIdRef.current) {
+    if (roomId && effectiveIdentity && clientIdRef.current) {
       sendMessage("tab-focus", {
         roomId,
         groupId: parsedGroupId ?? undefined,
         editorType,
         levelIndex,
         clientId: clientIdRef.current,
-        userId: user.id,
-        userName: user.name,
+        userId: effectiveIdentity.id,
+        userName: effectiveIdentity.name,
         ts: Date.now(),
       });
     }
-  }, [parsedGroupId, roomId, sendMessage, user]);
+  }, [effectiveIdentity, parsedGroupId, roomId, sendMessage]);
 
   const sendTypingStatus = useCallback((editorType: EditorType, levelIndex: number, isTyping: boolean) => {
-    if (roomId && user && clientIdRef.current) {
+    if (roomId && effectiveIdentity && clientIdRef.current) {
       const nextIsTyping = Boolean(isTyping);
       const typingKey = `${levelIndex}:${editorType}`;
       if (typingStatusRef.current[typingKey] === nextIsTyping) {
@@ -621,13 +657,13 @@ export function useCollaborationConnection(
         editorType,
         levelIndex,
         clientId: clientIdRef.current,
-        userId: user.id,
-        userName: user.name,
+        userId: effectiveIdentity.id,
+        userName: effectiveIdentity.name,
         isTyping: nextIsTyping,
         ts: Date.now(),
       });
     }
-  }, [parsedGroupId, roomId, sendMessage, user]);
+  }, [effectiveIdentity, parsedGroupId, roomId, sendMessage]);
 
   const requestRoomStateSync = useCallback((reason = "client_request") => {
     if (!roomId) {
@@ -679,12 +715,12 @@ export function useCollaborationConnection(
   }, [parsedGroupId, roomId, sendMessage]);
 
   const sendRoomReset = useCallback((scope: "level" | "game", levelIndex?: number) => {
-    if (roomId && user && clientIdRef.current) {
+    if (roomId && effectiveIdentity && clientIdRef.current) {
       logDebugClient("ws_reset_room_emit", {
         roomId,
         groupId: parsedGroupId ?? null,
-        userId: user.id,
-        userEmail: user.email,
+        userId: effectiveIdentity.id,
+        userEmail: effectiveIdentity.email,
         clientId: clientIdRef.current,
         scope,
         levelIndex: Number.isInteger(levelIndex) ? levelIndex : null,
@@ -693,7 +729,7 @@ export function useCollaborationConnection(
         roomId,
         groupId: parsedGroupId ?? undefined,
         clientId: clientIdRef.current,
-        userId: user.id,
+        userId: effectiveIdentity.id,
         scope,
         levelIndex,
         ts: Date.now(),
@@ -703,72 +739,72 @@ export function useCollaborationConnection(
 
     logDebugClient("ws_reset_room_skipped", {
       roomId: roomId ?? null,
-      hasUser: Boolean(user),
+      hasUser: Boolean(effectiveIdentity),
       hasClientId: Boolean(clientIdRef.current),
       scope,
       levelIndex: Number.isInteger(levelIndex) ? levelIndex : null,
     });
-  }, [parsedGroupId, roomId, sendMessage, user]);
+  }, [effectiveIdentity, parsedGroupId, roomId, sendMessage]);
 
   const sendProgressSync = useCallback((progressData: Record<string, unknown>) => {
-    if (roomId && user && clientIdRef.current) {
+    if (roomId && effectiveIdentity && clientIdRef.current) {
       sendMessage("progress-sync", {
         roomId,
         groupId: parsedGroupId ?? undefined,
         clientId: clientIdRef.current,
-        userId: user.id,
+        userId: effectiveIdentity.id,
         progressData,
         ts: Date.now(),
       });
     }
-  }, [parsedGroupId, roomId, sendMessage, user]);
+  }, [effectiveIdentity, parsedGroupId, roomId, sendMessage]);
 
   const sendGroupStartReady = useCallback(() => {
-    if (roomId && user && clientIdRef.current) {
+    if (roomId && effectiveIdentity && clientIdRef.current) {
       sendMessage("group-start-ready", {
         roomId,
         groupId: parsedGroupId ?? undefined,
         clientId: clientIdRef.current,
-        userId: user.id,
-        userEmail: user.email,
-        userName: user.name,
-        userImage: user.image,
+        userId: effectiveIdentity.id,
+        userEmail: effectiveIdentity.email,
+        userName: effectiveIdentity.name,
+        userImage: effectiveIdentity.image,
         ts: Date.now(),
       });
     }
-  }, [parsedGroupId, roomId, sendMessage, user]);
+  }, [effectiveIdentity, parsedGroupId, roomId, sendMessage]);
 
   const sendGroupStartUnready = useCallback(() => {
-    if (roomId && user && clientIdRef.current) {
+    if (roomId && effectiveIdentity && clientIdRef.current) {
       sendMessage("group-start-unready", {
         roomId,
         groupId: parsedGroupId ?? undefined,
         clientId: clientIdRef.current,
-        userId: user.id,
-        userEmail: user.email,
-        userName: user.name,
-        userImage: user.image,
+        userId: effectiveIdentity.id,
+        userEmail: effectiveIdentity.email,
+        userName: effectiveIdentity.name,
+        userImage: effectiveIdentity.image,
         ts: Date.now(),
       });
     }
-  }, [parsedGroupId, roomId, sendMessage, user]);
+  }, [effectiveIdentity, parsedGroupId, roomId, sendMessage]);
 
   const sendLobbyChat = useCallback((text: string) => {
     const trimmed = text.trim();
-    if (!trimmed || !roomId || !user || !clientIdRef.current) {
+    if (!trimmed || !roomId || !effectiveIdentity || !clientIdRef.current) {
       return;
     }
     sendMessage("lobby-chat-send", {
       roomId,
       clientId: clientIdRef.current,
-      userId: user.id,
-      userEmail: user.email,
-      userName: user.name,
-      userImage: user.image,
+      userId: effectiveIdentity.id,
+      userEmail: effectiveIdentity.email,
+      userName: effectiveIdentity.name,
+      userImage: effectiveIdentity.image,
       text: trimmed,
       ts: Date.now(),
     });
-  }, [roomId, sendMessage, user]);
+  }, [effectiveIdentity, roomId, sendMessage]);
 
   const connect = useCallback(() => {
     manualDisconnectRef.current = false;
@@ -800,5 +836,6 @@ export function useCollaborationConnection(
     sendGroupStartReady,
     sendGroupStartUnready,
     sendLobbyChat,
+    effectiveIdentity,
   };
 }

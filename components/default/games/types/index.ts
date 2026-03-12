@@ -13,6 +13,7 @@ export interface Game {
   accessEndsAt: string | null;
   accessKeyRequired: boolean;
   collaborationMode: "individual" | "group";
+  allowDuplicateUsersInGroup: boolean;
   accessKey?: string | null;
   regenerateAccessKey?: boolean;
   regenerateShareToken?: boolean;
