@@ -10,7 +10,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import LevelOpinion from "./LevelOpinion";
 import { updateLevelName } from "@/store/slices/levels.slice";
 import { renameLevelKey } from "@/store/slices/points.slice";
-import Difficulty from "@/components/InfoBoard/Difficulty";
 import { LevelData } from "@/components/InfoBoard/LevelData";
 import { InfoText } from "@/components/InfoBoard/InfoText";
 import {
@@ -30,6 +29,12 @@ interface LevelControlsProps {
   levelHandler: (level: number) => void;
   currentlevel: number;
   levelName?: string;
+}
+
+interface LevelSelectProps {
+  levelHandler: (level: number) => void;
+  compact?: boolean;
+  compactLabel?: string;
 }
 
 const EMPTY_ACTIVE_USERS: ActiveUser[] = [];
@@ -135,7 +140,6 @@ const LevelControls = ({
         >
           <ChevronRight className="h-5 w-5" />
         </Button>
-        <Difficulty />
       </div>
     </>
   );
@@ -236,7 +240,7 @@ const LevelPresence = ({ users }: { users: ActiveUser[] }) => {
   );
 };
 
-const LevelSelect = ({ levelHandler }: { levelHandler: (level: number) => void }) => {
+export const LevelSelect = ({ levelHandler, compact = false, compactLabel }: LevelSelectProps) => {
   const levels = useAppSelector((state) => state.levels);
   const points = useAppSelector((state) => state.points);
   const currentLevel = useAppSelector(
@@ -299,7 +303,7 @@ const LevelSelect = ({ levelHandler }: { levelHandler: (level: number) => void }
 
   return (
     <div
-      className="min-w-[120px] text-primary"
+      className={compact ? "w-full min-w-0 text-primary" : "min-w-[120px] text-primary"}
       onMouseEnter={() => setShowEdit(true)}
       onMouseLeave={() => setShowEdit(false)}
     >
@@ -325,26 +329,39 @@ const LevelSelect = ({ levelHandler }: { levelHandler: (level: number) => void }
         </form>
       )}
       {!openEditor && (
-        <div className="flex flex-row items-center gap-2">
+        <div className={`flex items-center gap-2 ${compact ? "w-full justify-center" : "flex-row"}`}>
           <Select value={currentLevelData?.name || ""} onValueChange={levelSelectHandler}>
-            <SelectTrigger className="text-primary border-b-2 border-secondary hover:border-secondary focus:border-primary focus:outline-none px-2 py-1 h-auto font-normal min-w-[200px]">
-              <SelectValue placeholder="Select level">
+            <SelectTrigger
+              className={
+                compact
+                  ? "mx-auto w-[min(18rem,100%)] min-w-0 max-w-full justify-center text-center text-primary border-0 shadow-none hover:bg-muted/70 focus-visible:ring-0 focus-visible:ring-offset-0 px-2 py-1 h-auto font-normal"
+                  : "text-primary border-b-2 border-secondary hover:border-secondary focus:border-primary focus:outline-none px-2 py-1 h-auto font-normal min-w-[200px]"
+              }
+            >
+              {compactLabel && (
+                <span className="block text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                  {compactLabel}
+                </span>
+              )}
+              <SelectValue placeholder="Select level" className="truncate">
                 {currentLevelData
-                  ? `The ${currentLevelData.name}${isCreator ? "" : ` - ${getLevelAccuracy(currentLevelData.name)}`}`
+                  ? compact
+                    ? `${currentLevelData.name}${isCreator ? "" : ` - ${getLevelAccuracy(currentLevelData.name)}`}`
+                    : `The ${currentLevelData.name}${isCreator ? "" : ` - ${getLevelAccuracy(currentLevelData.name)}`}`
                   : "Select level"}
               </SelectValue>
             </SelectTrigger>
-            <SelectContent className="bg-popover border border-border shadow-lg min-w-[300px]">
+            <SelectContent className={`bg-popover border border-border shadow-lg ${compact ? "min-w-[220px]" : "min-w-[300px]"}`}>
               {levels.map((level, index) => (
                 <SelectItem
                   key={index}
                   value={level.name}
-                  textValue={`The ${level.name}${isCreator ? "" : ` - ${getLevelAccuracy(level.name)}`}`}
+                  textValue={`${compact ? "" : "The "}${level.name}${isCreator ? "" : ` - ${getLevelAccuracy(level.name)}`}`}
                 >
                   <div className="flex w-full items-center justify-between gap-2">
                     <div className="flex min-w-0 flex-1 items-center gap-2">
                       <SelectItemText>
-                        {`The ${level.name}${isCreator ? "" : ` - ${getLevelAccuracy(level.name)}`}`}
+                        {`${compact ? "" : "The "}${level.name}${isCreator ? "" : ` - ${getLevelAccuracy(level.name)}`}`}
                       </SelectItemText>
                       <LevelPresence users={usersByLevel.get(index) ?? []} />
                     </div>
