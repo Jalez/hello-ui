@@ -9,9 +9,9 @@ import { useEffect, useState } from "react";
 import { Loader2, Users, KeyRound } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useGameStore } from "@/components/default/games";
-import { apiUrl } from "@/lib/apiUrl";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { fetchGroupDetailsCached } from "@/lib/group-details-client";
 
 function useRelativeTime(timestamp: number | null): string | null {
   const [label, setLabel] = useState<string | null>(null);
@@ -60,11 +60,7 @@ export const Footer = () => {
     const loadGroupDetails = async () => {
       try {
         setIsLoadingGroup(true);
-        const response = await fetch(apiUrl(`/api/groups/${groupId}`));
-        if (!response.ok || cancelled) {
-          return;
-        }
-        const data = await response.json();
+        const data = await fetchGroupDetailsCached(groupId);
         if (cancelled) {
           return;
         }

@@ -14,6 +14,7 @@ export interface UpdateGameOptions {
   accessKeyRequired?: boolean;
   accessKey?: string | null;
   collaborationMode?: "individual" | "group";
+  allowDuplicateUsersInGroup?: boolean;
   regenerateAccessKey?: boolean;
   regenerateShareToken?: boolean;
 }

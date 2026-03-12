@@ -74,6 +74,7 @@ function buildGamePayload(game: Game | null) {
     accessKey: game.access_key,
     hasAccessKey: Boolean(game.access_key),
     collaborationMode: game.collaboration_mode,
+    allowDuplicateUsersInGroup: game.allow_duplicate_group_users,
     isOwner: Boolean(game.is_owner),
     isCollaborator: Boolean(game.is_collaborator),
     canEdit: Boolean(game.can_edit),
@@ -200,6 +201,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       accessKeyRequired: body.accessKeyRequired,
       accessKey,
       collaborationMode: body.collaborationMode,
+      allowDuplicateGroupUsers: body.allowDuplicateUsersInGroup,
     });
 
     if (!game) {

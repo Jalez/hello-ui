@@ -124,7 +124,9 @@ export interface EditorResync {
 export interface ActiveUser {
   clientId: string;
   userId: string;
+  accountUserId?: string;
   userEmail: string;
+  accountUserEmail?: string;
   userName?: string;
   userImage?: string;
   color?: string;
@@ -166,6 +168,18 @@ export interface UserIdentity {
   email: string;
   name?: string;
   image?: string;
+}
+
+export interface IdentityAssignedMessage {
+  roomId: string;
+  userId: string;
+  userEmail: string;
+  userName?: string;
+  userImage?: string;
+  accountUserId?: string;
+  accountUserEmail?: string;
+  duplicateIndex?: number;
+  ts: number;
 }
 
 export interface TabFocusMessage {

@@ -126,6 +126,18 @@ export async function updateUserProfile(userId: string, updates: UpdateUserOptio
   return mapUser(result[0]);
 }
 
+export async function updateUserEmail(userId: string, email: string): Promise<User> {
+  const db = getDb();
+
+  const result = await db.update(users).set({ email }).where(eq(users.id, userId)).returning();
+
+  if (result.length === 0) {
+    throw new Error("User not found");
+  }
+
+  return mapUser(result[0]);
+}
+
 export async function updateUserStripeCustomerId(userEmail: string, stripeCustomerId: string): Promise<void> {
   const db = getDb();
   

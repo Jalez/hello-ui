@@ -12,6 +12,7 @@ export const UserService = {
   getUserEmail: drizzle.getUserEmail,
   getAllUsers: drizzle.getAllUsers,
   updateUserProfile: drizzle.updateUserProfile,
+  updateUserEmail: drizzle.updateUserEmail,
   updateUserStripeCustomerId: drizzle.updateUserStripeCustomerId,
   promoteUserToAdmin: drizzle.promoteUserToAdmin,
   demoteUserFromAdmin: drizzle.demoteUserFromAdmin,

@@ -81,6 +81,7 @@ interface CollaborationContextValue {
   roomId: string | null;
   groupId: string | null;
   clientId: string | null;
+  effectiveIdentity: UserIdentity | null;
   activeUsers: ActiveUser[];
   usersByTab: Record<EditorType, ActiveUser[]>;
   remoteCursors: Map<string, CanvasCursor>;
@@ -445,6 +446,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
     sendGroupStartReady,
     sendGroupStartUnready,
     sendLobbyChat,
+    effectiveIdentity,
   } = useCollaborationConnection({
     roomId: resolvedRoomId,
     user,
@@ -693,6 +695,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       roomId: resolvedRoomId,
       groupId: resolvedGroupId,
       clientId,
+      effectiveIdentity,
       activeUsers,
       usersByTab,
       remoteCursors: canvasCursors,
@@ -731,6 +734,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       resolvedRoomId,
       resolvedGroupId,
       clientId,
+      effectiveIdentity,
       activeUsers,
       usersByTab,
       canvasCursors,

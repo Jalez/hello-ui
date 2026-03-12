@@ -46,6 +46,7 @@ interface CreatorSettingsPageProps {
 type SettingsDraft = {
   isPublic: boolean;
   collaborationMode: "individual" | "group";
+  allowDuplicateUsersInGroup: boolean;
   thumbnailUrl: string;
   hideSidebar: boolean;
   accessWindowEnabled: boolean;
@@ -82,6 +83,7 @@ function toIsoOrNull(value: string): string | null {
 function createDraft(game: {
   isPublic: boolean;
   collaborationMode: "individual" | "group";
+  allowDuplicateUsersInGroup?: boolean;
   thumbnailUrl: string | null;
   hideSidebar: boolean;
   accessWindowEnabled: boolean;
@@ -93,6 +95,7 @@ function createDraft(game: {
   return {
     isPublic: game.isPublic,
     collaborationMode: game.collaborationMode,
+    allowDuplicateUsersInGroup: game.allowDuplicateUsersInGroup === true,
     thumbnailUrl: game.thumbnailUrl ?? "",
     hideSidebar: game.hideSidebar,
     accessWindowEnabled: game.accessWindowEnabled,
@@ -234,6 +237,7 @@ export default function CreatorSettingsPage({ params }: CreatorSettingsPageProps
       await updateGame(game.id, {
         isPublic: draft.isPublic,
         collaborationMode: draft.collaborationMode,
+        allowDuplicateUsersInGroup: draft.allowDuplicateUsersInGroup,
         thumbnailUrl: draft.thumbnailUrl.trim() || null,
         hideSidebar: draft.hideSidebar,
         accessWindowEnabled: draft.accessWindowEnabled,
@@ -440,25 +444,50 @@ export default function CreatorSettingsPage({ params }: CreatorSettingsPageProps
               </CardTitle>
               <CardDescription>Group mode routes users to shared workspace. Individual mode isolates players.</CardDescription>
             </CardHeader>
-            <CardContent className="grid grid-cols-2 gap-2">
-              <Button
-                variant={draft.collaborationMode === "individual" ? "default" : "outline"}
-                onClick={() => {
-                  setDraft((current) => (current ? { ...current, collaborationMode: "individual" } : current));
-                  setSaveSuccess(null);
-                }}
-              >
-                Individual
-              </Button>
-              <Button
-                variant={draft.collaborationMode === "group" ? "default" : "outline"}
-                onClick={() => {
-                  setDraft((current) => (current ? { ...current, collaborationMode: "group" } : current));
-                  setSaveSuccess(null);
-                }}
-              >
-                Group
-              </Button>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  variant={draft.collaborationMode === "individual" ? "default" : "outline"}
+                  onClick={() => {
+                    setDraft((current) => (current ? { ...current, collaborationMode: "individual" } : current));
+                    setSaveSuccess(null);
+                  }}
+                >
+                  Individual
+                </Button>
+                <Button
+                  variant={draft.collaborationMode === "group" ? "default" : "outline"}
+                  onClick={() => {
+                    setDraft((current) => (current ? { ...current, collaborationMode: "group" } : current));
+                    setSaveSuccess(null);
+                  }}
+                >
+                  Group
+                </Button>
+              </div>
+              {draft.collaborationMode === "group" && (
+                <div className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium">Allow duplicate users in group mode</p>
+                      <p className="text-xs text-muted-foreground">
+                        Off by default. Keep this off unless you explicitly need multiple sessions for the same account.
+                      </p>
+                    </div>
+                    <Switch
+                      checked={draft.allowDuplicateUsersInGroup}
+                      onCheckedChange={(checked) => {
+                        setDraft((current) => (current ? { ...current, allowDuplicateUsersInGroup: checked } : current));
+                        setSaveSuccess(null);
+                      }}
+                    />
+                  </div>
+                  <p className="text-xs text-amber-700">
+                    Warning: enabling duplicate users can cause unstable collaboration behavior and desyncs. If duplicates are blocked,
+                    players should turn group submission off in A+ and launch individually.
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
 

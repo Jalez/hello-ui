@@ -91,6 +91,7 @@ async function resolveAplusAppGroup(params: {
 async function getOrCreateLtiUser(params: {
   sql: Awaited<ReturnType<typeof getSql>>;
   email: string;
+  fallbackEmail?: string;
   name?: string;
 }) {
   const existingResult = await params.sql.query(
@@ -114,6 +115,28 @@ async function getOrCreateLtiUser(params: {
       return updatedRows[0];
     }
     return existingRows[0];
+  }
+
+  if (params.fallbackEmail && params.fallbackEmail !== params.email) {
+    const fallbackResult = await params.sql.query(
+      `SELECT id, email, name
+       FROM users
+       WHERE email = $1
+       LIMIT 1`,
+      [params.fallbackEmail],
+    );
+    const fallbackRows = extractRows(fallbackResult) as Array<{ id: string; email: string; name: string | null }>;
+    if (fallbackRows[0]) {
+      const migratedResult = await params.sql.query(
+        `UPDATE users
+         SET email = $2, name = COALESCE(name, $3), updated_at = NOW()
+         WHERE id = $1
+         RETURNING id, email, name`,
+        [fallbackRows[0].id, params.email, params.name ?? null],
+      );
+      const migratedRows = extractRows(migratedResult) as Array<{ id: string; email: string; name: string | null }>;
+      return migratedRows[0];
+    }
   }
 
   const createdResult = await params.sql.query(
@@ -255,22 +278,25 @@ export async function POST(
       shouldSetBrowserIdCookie = true;
     }
 
-    const ltiUniqueEmail = browserScopedIdentity
+    const syntheticEmail = browserScopedIdentity
       ? `lti-${createHash("sha256").update(`${identity.key}:browser:${browserId}`).digest("hex").slice(0, 24)}@lti.local`
       : identity.email;
-    console.log("[LTI launch] resolved email:", ltiUniqueEmail);
+    const preferredEmail = userInfo.email?.trim() || syntheticEmail;
+    console.log("[LTI launch] resolved email:", preferredEmail);
 
     logDebug("lti_game_resolved_email", {
       identitySource: identity.source,
       identityConfidence: identity.confidence,
       browserScopedIdentity,
       userInfoEmail: userInfo.email,
-      ltiUniqueEmail,
+      preferredEmail,
+      syntheticEmail,
     });
 
     const user = await getOrCreateLtiUser({
       sql,
-      email: ltiUniqueEmail,
+      email: preferredEmail,
+      fallbackEmail: syntheticEmail,
       name: userInfo.name,
     });
     console.log("[LTI launch] user ok:", user.id, user.email);

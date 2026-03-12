@@ -66,7 +66,15 @@ export async function GET(
         }),
       );
 
-  let liveUsers: Array<{ userId?: string; userEmail?: string; userName?: string; clientId?: string }> = [];
+  let liveUsers: Array<{
+    userId?: string;
+    accountUserId?: string;
+    userEmail?: string;
+    accountUserEmail?: string;
+    userName?: string;
+    userImage?: string;
+    clientId?: string;
+  }> = [];
   try {
     const wsResponse = await fetch(
       `${getWsAdminUrl()}/admin/room-members?roomId=${encodeURIComponent(getRoomId(gameId, groupId))}`,
@@ -85,30 +93,45 @@ export async function GET(
     console.error("[group-details:live-users-error]", error);
   }
 
-  const liveUserIds = new Set(liveUsers.map((entry) => String(entry.userId || "")).filter(Boolean));
-  const liveUserEmails = new Set(liveUsers.map((entry) => String(entry.userEmail || "").toLowerCase()).filter(Boolean));
+  const memberHasLiveSession = (member: typeof memberProfiles[number]) =>
+    liveUsers.some((entry) => {
+      const liveUserId = String(entry.userId || "");
+      const liveAccountUserId = String(entry.accountUserId || "");
+      const liveEmail = String(entry.userEmail || "").toLowerCase();
+      const liveAccountEmail = String(entry.accountUserEmail || "").toLowerCase();
+      const memberEmail = String(member.userEmail || "").toLowerCase();
+
+      if (member.userId && (liveUserId === member.userId || liveAccountUserId === member.userId)) {
+        return true;
+      }
+
+      if (!memberEmail) {
+        return false;
+      }
+
+      return liveEmail === memberEmail || liveAccountEmail === memberEmail;
+    });
 
   const mergedMembers = memberProfiles.map((member) => ({
     ...member,
-    isConnected:
-      liveUserIds.has(member.userId) ||
-      (member.userEmail ? liveUserEmails.has(member.userEmail.toLowerCase()) : false),
+    isConnected: memberHasLiveSession(member),
   }));
 
   const extraLiveUsers = liveUsers
     .filter((entry) => {
       const userId = String(entry.userId || "");
-      const userEmail = String(entry.userEmail || "").toLowerCase();
+      const accountUserId = String(entry.accountUserId || "");
       return !mergedMembers.some(
-        (member) =>
-          member.userId === userId ||
-          (member.userEmail ? member.userEmail.toLowerCase() === userEmail : false),
+        (member) => member.userId === userId || (!userId && accountUserId && member.userId === accountUserId),
       );
     })
     .map((entry) => ({
       userId: entry.userId || "",
+      accountUserId: entry.accountUserId || "",
       userEmail: entry.userEmail || null,
+      accountUserEmail: entry.accountUserEmail || null,
       userName: entry.userName || null,
+      userImage: entry.userImage || null,
       clientId: entry.clientId || "",
       isConnected: true,
     }));

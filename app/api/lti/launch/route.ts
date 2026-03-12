@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import jwt from "jsonwebtoken";
 import { isLti10Launch, extractLtiUserInfo, getLtiRole, Lti10Data, extractLtiOutcomeService } from "@/lib/lti/types";
 import { resolveLtiIdentity } from "@/lib/lti/identity";
-import { getOrCreateUserByEmail, updateUserProfile } from "@/app/api/_lib/services/userService";
+import { getOrCreateUserByEmail, getUserByEmail, updateUserEmail, updateUserProfile } from "@/app/api/_lib/services/userService";
 import { getSql } from "@/app/api/_lib/db";
 import { logDebug } from "@/lib/debug-logger";
 import { createOneTimeCode } from "@/lib/lti/one-time-code";
@@ -86,16 +86,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const ltiUniqueEmail = identity.email;
+    const syntheticEmail = identity.email;
+    const preferredEmail = userInfo.email?.trim() || syntheticEmail;
 
     logDebug("lti_launch_resolved_email", {
       identitySource: identity.source,
       identityConfidence: identity.confidence,
       userInfoEmail: userInfo.email,
-      ltiUniqueEmail,
+      preferredEmail,
+      syntheticEmail,
     });
 
-    const user = await getOrCreateUserByEmail(ltiUniqueEmail);
+    let user = await getUserByEmail(preferredEmail);
+    if (!user && preferredEmail !== syntheticEmail) {
+      const syntheticUser = await getUserByEmail(syntheticEmail);
+      if (syntheticUser) {
+        user = await updateUserEmail(syntheticUser.id, preferredEmail);
+      }
+    }
+    if (!user) {
+      user = await getOrCreateUserByEmail(preferredEmail);
+    }
 
     logDebug("lti_launch_db_user", {
       dbUserId: user.id,
