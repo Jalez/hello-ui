@@ -21,9 +21,8 @@ import { BarChart3, Clock3, RotateCcw, Skull } from "lucide-react";
 import { numberTimeToMinutesAndSeconds } from "@/lib/utils/numberTimeToMinutesAndSeconds";
 import { resetLevel } from "@/store/slices/levels.slice";
 import { useOptionalCollaboration } from "@/lib/collaboration/CollaborationProvider";
-
-export const footerMenuButtonClass =
-  "h-auto w-full min-w-0 justify-center gap-1 px-2 py-1.5 max-[519px]:flex-col";
+import Shaker from "@/components/General/Shaker/Shaker";
+import { CompactMenuButton, compactMenuLabelClass } from "@/components/General/CompactMenuButton";
 
 function CompactMenuItem({
   label,
@@ -62,6 +61,7 @@ export function LevelFooterMenu() {
   const levelAccuracy = points.levels[level.name]?.accuracy ?? 0;
   const difficultyValue = level.difficulty === "hard" ? 3 : level.difficulty === "medium" ? 2 : 1;
   const sortedThresholds = [...(level.pointsThresholds ?? [])].sort((a, b) => a.accuracy - b.accuracy);
+  const reachedThresholdCount = sortedThresholds.filter((threshold) => levelAccuracy >= threshold.accuracy).length;
   const nextThreshold = sortedThresholds.find((threshold) => levelAccuracy < threshold.accuracy) ?? null;
   const nextThresholdLabel = nextThreshold
     ? `${nextThreshold.accuracy}% -> ${Math.ceil((nextThreshold.pointsPercent / 100) * level.maxPoints)} pts`
@@ -87,13 +87,15 @@ export function LevelFooterMenu() {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button type="button" variant="ghost" size="sm" className={footerMenuButtonClass}>
-          <span className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground min-[520px]:hidden">
-            Level
-          </span>
-          <BarChart3 className="h-4 w-4" />
-          <span className="hidden min-[520px]:inline text-xs font-medium">Level</span>
-        </Button>
+        <CompactMenuButton icon={BarChart3} label="Level" text="Level">
+          <Shaker value={reachedThresholdCount}>
+            <span className={`${compactMenuLabelClass} min-[520px]:hidden`}>
+              Level
+            </span>
+            <BarChart3 className="h-4 w-4" />
+            <span className="hidden min-[520px]:inline text-xs font-medium">Level</span>
+          </Shaker>
+        </CompactMenuButton>
       </PopoverTrigger>
       <PopoverContent side="top" align="center" className="w-72 space-y-3">
         <div className="rounded-md border bg-muted/40 p-3">
@@ -196,13 +198,7 @@ export function TimeFooterMenu() {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button type="button" variant="ghost" size="sm" className={footerMenuButtonClass}>
-          <span className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground min-[520px]:hidden">
-            Time
-          </span>
-          <Clock3 className="h-4 w-4" />
-          <span className="hidden min-[520px]:inline text-xs font-medium">Time</span>
-        </Button>
+        <CompactMenuButton icon={Clock3} label="Time" text="Time" />
       </PopoverTrigger>
       <PopoverContent side="top" align="center" className="w-64 space-y-3">
         <div className="rounded-md border bg-muted/40 p-3">

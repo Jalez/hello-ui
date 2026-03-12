@@ -39,11 +39,13 @@ import { useOptionalCollaboration } from "@/lib/collaboration/CollaborationProvi
 import { apiUrl, stripBasePath } from "@/lib/apiUrl";
 import { useGameplayTelemetry } from "@/components/General/useGameplayTelemetry";
 import { logDebugClient } from "@/lib/debug-logger";
-import { footerMenuButtonClass } from "../InfoBoard/Info";
+import Shaker from "@/components/General/Shaker/Shaker";
+import { cn } from "@/lib/utils/cn";
+import { CompactMenuButton, compactMenuButtonClass, compactMenuLabelClass } from "@/components/General/CompactMenuButton";
 
 export const Navbar = () => {
   const dispatch = useAppDispatch();
-  const { openOverlay, isMobile, isOverlayOpen, isVisible } = useSidebarCollapse();
+  const { openOverlay, toggleCollapsed, isMobile, isOverlayOpen, isVisible } = useSidebarCollapse();
   const pathname = usePathname();
   const normalizedPathname = stripBasePath(pathname);
   const isCreatorRoute = normalizedPathname.startsWith("/creator/");
@@ -68,6 +70,10 @@ export const Navbar = () => {
     isMobile &&
     !isOverlayOpen &&
     !shouldHideSidebarForPlayers;
+  const shouldShowCreatorSidebarToggle =
+    isCreator &&
+    isVisible &&
+    (!isMobile || !isOverlayOpen);
 
   const level = levels[currentLevel - 1];
   const points = useAppSelector((state) => state.points);
@@ -238,9 +244,7 @@ export const Navbar = () => {
   const renderGameMenu = () => (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button type="button" variant="ghost" size="sm" className="h-auto gap-1 px-2 py-1.5">
-          Game
-        </Button>
+        <CompactMenuButton icon={Gamepad2} label="Game" text="Game" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-72 border-0 shadow-lg">
         <DropdownMenuLabel>Game Tools</DropdownMenuLabel>
@@ -320,12 +324,15 @@ export const Navbar = () => {
         <div className="rounded-md px-2 py-1.5">
             <Popover>
               <PopoverTrigger asChild>
-                <Button type="button" variant="ghost" size="sm" className={footerMenuButtonClass}>
-                  <span className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                    Game
-                  </span>
-                  <Gamepad2 className="h-4 w-4" />
-                </Button>
+                  <Button type="button" variant="ghost" size="sm" className={compactMenuButtonClass}>
+                    <Shaker value={points.allPoints >= points.allMaxPoints && points.allMaxPoints > 0 ? 1 : 0}>
+                    <span className={compactMenuLabelClass}>
+                      Game
+                    </span>
+                    <Gamepad2 className="h-4 w-4" />
+                    <span className="hidden min-[520px]:inline text-xs font-medium">Game</span>
+                    </Shaker>
+                  </Button>
               </PopoverTrigger>
               <PopoverContent side="bottom" align="start" className="w-72 space-y-3">
                 <div className="rounded-md border bg-muted/40 p-3">
@@ -374,66 +381,128 @@ export const Navbar = () => {
     </>
   );
 
+  const renderCompactCreatorLevelMenu = () => (
+    <div className="flex flex-1 min-w-0">
+      <div className="w-full rounded-md px-2 py-1.5">
+        <div className="flex-1 min-w-0">
+          <LevelSelect levelHandler={levelChanger} compact compactLabel="Levels" />
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderCompactCreatorMenus = () => (
+    <>
+      {shouldShowCreatorSidebarToggle ? (
+        <div className="flex flex-none">
+          <div className="rounded-md px-2 py-1.5">
+            <CompactMenuButton
+              icon={PanelLeft}
+              label="Sidebar"
+              text="Sidebar"
+              onClick={isMobile ? openOverlay : toggleCollapsed}
+              title="Toggle sidebar"
+            />
+          </div>
+        </div>
+      ) : null}
+      <div className="flex flex-none">
+        <div className="rounded-md px-2 py-1.5">
+          <CreatorMenu
+            gameId={currentGame!.id}
+            collaborationMode={currentGame!.collaborationMode}
+          />
+        </div>
+      </div>
+      <div className="flex flex-none">
+        <div className="rounded-md px-2 py-1.5">
+          {renderGameMenu()}
+        </div>
+      </div>
+      {renderCompactCreatorLevelMenu()}
+    </>
+  );
+
+  const renderCompactCreatorWorkbenchMenus = () => (
+    <>
+      {shouldShowCreatorSidebarToggle ? (
+        <div className="flex flex-none">
+          <div className="rounded-md px-2 py-1.5">
+            <CompactMenuButton
+              icon={PanelLeft}
+              label="Sidebar"
+              text="Sidebar"
+              onClick={isMobile ? openOverlay : toggleCollapsed}
+              title="Toggle sidebar"
+            />
+          </div>
+        </div>
+      ) : null}
+      <div className="flex flex-none">
+        <CreatorControls displayMode="menu" />
+      </div>
+      <div className="flex flex-none">
+        <div className="rounded-md px-2 py-1.5">
+          {renderGameMenu()}
+        </div>
+      </div>
+      <div className="flex flex-1 min-w-0">
+        <div className="w-full rounded-md px-2 py-1.5">
+          <div className="flex-1 min-w-0">
+            <LevelSelect levelHandler={levelChanger} compact compactLabel="Levels" />
+          </div>
+        </div>
+      </div>
+    </>
+  );
+
   if (!level) return null;
 
   return (
     <div
       className="flex w-full flex-wrap items-center justify-around gap-2 border-b bg-background/80 px-3 py-2"
     >
-      {isGameRoute && !showCreatorGameMenus && (
+      {(isGameRoute || (isCreator && !isGameRoute)) && (
         <div className="flex w-full min-w-0 items-center gap-1 sm:hidden">
-          {shouldShowMobileSidebarToggle && (
+          {!showCreatorGameMenus && shouldShowMobileSidebarToggle && (
             <div className="flex-none rounded-md px-2 py-1.5">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className={footerMenuButtonClass}
+                <CompactMenuButton
+                  icon={PanelLeft}
+                  label="Sidebar"
+                  text="Sidebar"
                   onClick={openOverlay}
                   title="Open sidebar"
-                >
-                  <span className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                    Sidebar
-                  </span>
-                  <PanelLeft className="h-4 w-4" />
-                </Button>
+                />
             </div>
           )}
           <div className="flex min-w-0 flex-1 items-center gap-1">
-            {renderCompactPlayerMenus()}
+            {showCreatorGameMenus
+              ? renderCompactCreatorMenus()
+              : isCreator && !isGameRoute
+                ? renderCompactCreatorWorkbenchMenus()
+                : renderCompactPlayerMenus()}
           </div>
         </div>
       )}
 
       {/* Compact nav: text-first menus (no icon-only mode). Hide Game and Level menus on game route. */}
       <div className="hidden sm:flex 2xl:hidden flex-1 min-w-0 items-center gap-1">
-        {isCreator && !isGameRoute && (
-          <>
-            <CreatorControls displayMode="menu" />
-            {renderGameMenu()}
-          </>
-        )}
-
         {showCreatorGameMenus && currentGame?.id ? (
-          <>
-            <CreatorMenu
-              gameId={currentGame.id}
-              collaborationMode={currentGame.collaborationMode}
-            />
-            {renderGameMenu()}
-          </>
+          renderCompactCreatorMenus()
+        ) : isCreator && !isGameRoute ? (
+          renderCompactCreatorWorkbenchMenus()
         ) : !isCreatorRoute && !isGameRoute ? (
           <ModeToggleButton displayMode="icon-label" />
         ) : null}
 
         {isGameRoute && !showCreatorGameMenus ? (
           renderCompactPlayerMenus()
-        ) : (
+        ) : !showCreatorGameMenus ? (
           <>
             <InfoGamePoints />
             {!showCreatorGameMenus && <AplusSubmitButton displayMode="icon-label" />}
           </>
-        )}
+        ) : null}
       </div>
 
       {/* Left section - Creator controls or Art tab switch. Hide creator tools on game route. */}
@@ -444,7 +513,13 @@ export const Navbar = () => {
       </div>
 
       {/* Center section - Mode toggle, Reset, and Level controls */}
-      <div className="flex basis-full flex-wrap justify-center items-center gap-2 lg:gap-3 2xl:basis-auto 2xl:flex-nowrap 2xl:flex-1 2xl:flex-[1_0_50%]">
+      <div
+        className={cn(
+          "flex basis-full flex-wrap justify-center items-center gap-2 lg:gap-3 2xl:basis-auto 2xl:flex-nowrap 2xl:flex-1 2xl:flex-[1_0_50%]",
+          showCreatorGameMenus && "hidden 2xl:flex",
+          isCreator && !isGameRoute && "hidden 2xl:flex",
+        )}
+      >
         {/* Mode switch */}
         <div className="hidden 2xl:flex gap-1 items-center">
           {showCreatorGameMenus && currentGame?.id ? (
@@ -462,7 +537,7 @@ export const Navbar = () => {
 
         {/* Reset button */}
         {/* Level controls - Always visible */}
-        {(!isGameRoute || showCreatorGameMenus || canEditCurrentGame) && (
+        {(!isGameRoute || canEditCurrentGame) && !(isGameRoute && showCreatorGameMenus) && !(isCreator && !isGameRoute) && (
           <LevelControls
             currentlevel={currentLevel}
             levelHandler={levelChanger}

@@ -21,6 +21,7 @@ import MagicButton, { MagicButtonRef } from "./UniversalMagicButton";
 import MapEditor, { MapEditorRef } from "./MapEditor";
 import { useRouter } from "next/navigation";
 import { apiUrl } from "@/lib/apiUrl";
+import { CompactMenuButton } from "@/components/General/CompactMenuButton";
 
 type CreatorControlsDisplayMode = "icon-label" | "icon" | "menu";
 
@@ -127,9 +128,7 @@ const CreatorControls = ({ displayMode = "icon-label" }: CreatorControlsProps) =
   const menu = (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="sm" title="Level tools">
-          Level
-        </Button>
+        <CompactMenuButton icon={SlidersHorizontal} label="Level" text="Level" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="border-0 shadow-lg">
         <DropdownMenuLabel>Level Tools</DropdownMenuLabel>
