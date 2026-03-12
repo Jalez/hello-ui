@@ -1070,7 +1070,7 @@ wsServer.on("connection", (socket) => {
             roomId,
             ts: Date.now(),
           });
-          socket.close(4008, "duplicate users blocked");
+          socket.close(4008, "Duplicate users blocked. Turn group submission off in A+.");
           return;
         }
         const resolvedIdentity = resolveDuplicateIdentity(roomId, baseUserData);
