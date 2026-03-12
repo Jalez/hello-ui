@@ -126,6 +126,7 @@ export function useCollaborationConnection(
   const reconnectFnRef = useRef<(() => void) | null>(null);
   const manualDisconnectRef = useRef(false);
   const effectiveIdentityRef = useRef<UserIdentity | null>(user);
+  const terminalErrorRef = useRef<string | null>(null);
 
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
@@ -139,6 +140,7 @@ export function useCollaborationConnection(
   useEffect(() => {
     setEffectiveIdentity(user);
     effectiveIdentityRef.current = user;
+    terminalErrorRef.current = null;
   }, [userIdentity, user]);
 
   const sendMessage = useCallback((type: string, payload: Record<string, unknown>) => {
@@ -229,6 +231,7 @@ export function useCollaborationConnection(
         setIsConnected(true);
         setIsConnecting(false);
         setError(null);
+        terminalErrorRef.current = null;
         setClientId(newClientId);
         reconnectAttemptsRef.current = 0;
 
@@ -279,10 +282,15 @@ export function useCollaborationConnection(
 
         switch (envelope.type) {
           case "error": {
+            const errorPayload = payload as { error?: unknown; code?: unknown } | null;
             const nextError =
-              payload && typeof payload === "object" && typeof (payload as { error?: unknown }).error === "string"
-                ? (payload as { error: string }).error
+              errorPayload && typeof errorPayload === "object" && typeof errorPayload.error === "string"
+                ? errorPayload.error
                 : "Unknown error";
+            if (errorPayload && typeof errorPayload.code === "string" && errorPayload.code === "duplicate_users_blocked") {
+              terminalErrorRef.current = nextError;
+              manualDisconnectRef.current = true;
+            }
             setError(nextError);
             optionsRef.current.onError?.(nextError);
             return;
@@ -480,17 +488,24 @@ export function useCollaborationConnection(
       socket.onerror = () => {
         setIsConnected(false);
         setIsConnecting(false);
+        if (terminalErrorRef.current) {
+          setError(terminalErrorRef.current);
+          optionsRef.current.onError?.(terminalErrorRef.current);
+          return;
+        }
         setError("WebSocket connection error");
         optionsRef.current.onError?.("WebSocket connection error");
       };
 
-      socket.onclose = () => {
+      socket.onclose = (event) => {
         const wasConnected = isConnectedRef.current;
         logDebugClient("ws_socket_close", {
           roomId,
           clientId: clientIdRef.current,
           userId: currentUser.id,
           userEmail: currentUser.email,
+          code: event.code,
+          reason: event.reason,
           readyState: socket.readyState,
         });
         if (socketRef.current === socket) {
@@ -502,12 +517,31 @@ export function useCollaborationConnection(
         setIsConnected(false);
         setIsConnecting(false);
 
+        if (event.code === 4008) {
+          const nextError = event.reason || "Duplicate users are blocked for this game. Turn group submission off in A+ or ask the creator to enable duplicate users in Game Settings.";
+          terminalErrorRef.current = nextError;
+          manualDisconnectRef.current = true;
+          setError(nextError);
+          optionsRef.current.onError?.(nextError);
+          return;
+        }
+
         if (disposed || manualDisconnectRef.current) {
+          if (terminalErrorRef.current) {
+            setError(terminalErrorRef.current);
+            optionsRef.current.onError?.(terminalErrorRef.current);
+          }
           return;
         }
 
         if (wasConnected) {
           optionsRef.current.onDisconnected?.();
+        }
+
+        if (terminalErrorRef.current) {
+          setError(terminalErrorRef.current);
+          optionsRef.current.onError?.(terminalErrorRef.current);
+          return;
         }
 
         if (reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
