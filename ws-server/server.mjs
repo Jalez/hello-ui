@@ -1,9 +1,17 @@
 import { createServer } from "http";
 import { randomUUID } from "crypto";
+import path from "path";
+import { fileURLToPath } from "url";
 import { ChangeSet, Text } from "@codemirror/state";
 import { WebSocketServer, WebSocket } from "ws";
 import * as Y from "yjs";
 import pg from "pg";
+import dotenv from "dotenv";
+
+const serverDir = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(serverDir, "..");
+dotenv.config({ path: path.join(repoRoot, ".env.local") });
+dotenv.config({ path: path.join(repoRoot, ".env") });
 
 const PORT = parseInt(process.env.PORT || "3100", 10);
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "http://localhost:3000";
