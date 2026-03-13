@@ -2,12 +2,21 @@
 
 import { apiUrl } from "@/lib/apiUrl";
 
+export interface ClientGroupMember {
+  id: string;
+  userId: string;
+  userEmail?: string | null;
+  userName?: string | null;
+  userImage?: string | null;
+  role?: "instructor" | "member";
+}
+
 export interface ClientGroupDetails {
   group?: {
     name?: string | null;
     joinKey?: string | null;
   } | null;
-  members?: Array<unknown>;
+  members?: ClientGroupMember[];
 }
 
 const GROUP_DETAILS_TTL_MS = 5000;
