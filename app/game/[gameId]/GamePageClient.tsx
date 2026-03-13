@@ -20,6 +20,7 @@ import { startLevelTimerAt } from "@/store/slices/levels.slice";
 import { addNotificationData } from "@/store/slices/notifications.slice";
 import { logDebugClient } from "@/lib/debug-logger";
 import { fetchGroupDetailsCached } from "@/lib/group-details-client";
+import type { ClientGroupMember } from "@/lib/group-details-client";
 
 interface GamePageProps {
   params: Promise<{
@@ -34,14 +35,7 @@ interface LtiSessionInfo {
   role?: "instructor" | "member";
 }
 
-interface PersistedGroupMember {
-  id: string;
-  userId: string;
-  userEmail?: string | null;
-  userName?: string | null;
-  userImage?: string | null;
-  role?: "instructor" | "member";
-}
+type PersistedGroupMember = ClientGroupMember;
 
 const ACCESS_KEY_STORAGE_PREFIX = "ui-designer-game-access-key:";
 const GROUP_START_MIN_READY_COUNT = 2;
