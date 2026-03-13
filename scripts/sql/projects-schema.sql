@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS projects (
   access_key_required BOOLEAN NOT NULL DEFAULT false,
   access_key TEXT,
   collaboration_mode TEXT NOT NULL DEFAULT 'individual' CHECK (collaboration_mode IN ('individual', 'group')),
+  allow_duplicate_group_users BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -44,7 +45,8 @@ ALTER TABLE projects
   ADD COLUMN IF NOT EXISTS access_ends_at TIMESTAMP WITH TIME ZONE,
   ADD COLUMN IF NOT EXISTS access_key_required BOOLEAN NOT NULL DEFAULT false,
   ADD COLUMN IF NOT EXISTS access_key TEXT,
-  ADD COLUMN IF NOT EXISTS collaboration_mode TEXT NOT NULL DEFAULT 'individual';
+  ADD COLUMN IF NOT EXISTS collaboration_mode TEXT NOT NULL DEFAULT 'individual',
+  ADD COLUMN IF NOT EXISTS allow_duplicate_group_users BOOLEAN NOT NULL DEFAULT false;
 
 -- Create indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_projects_user_id ON projects(user_id);
@@ -90,6 +92,7 @@ END$$;
 -- Comments for documentation
 COMMENT ON TABLE projects IS 'User projects - saved progress on game maps';
 COMMENT ON TABLE project_collaborators IS 'Additional users with creator access to a project';
+COMMENT ON COLUMN projects.allow_duplicate_group_users IS 'Whether simultaneous duplicate account sessions are allowed in group games';
 
 -- Runtime gameplay instances (individual/group scoped progress)
 CREATE TABLE IF NOT EXISTS game_instances (
