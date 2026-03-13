@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils/cn";
 import type { LucideIcon } from "lucide-react";
 
 export const compactMenuButtonClass =
-  "h-auto w-full min-w-0 justify-center gap-1 px-2 py-1.5 max-[519px]:flex-col";
+  "h-auto w-full min-w-0 items-center justify-center gap-1 px-2 py-1.5 max-[519px]:flex-col";
 
 export const compactMenuLabelClass =
   "text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground";

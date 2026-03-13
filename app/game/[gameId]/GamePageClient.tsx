@@ -449,7 +449,6 @@ function GroupWaitingRoom({
   const isReady = gate.readyUserIds.includes(effectiveCurrentUser.id);
   const isStarted = gate.status === "started";
   const startedAtMs = gate.startedAt ? Date.parse(gate.startedAt) : 0;
-  const waitingForSharedStart = isStarted && !hasSharedStartTime(collaboration.initialRoomState);
 
   useEffect(() => {
     if (!currentGame) {
@@ -483,7 +482,7 @@ function GroupWaitingRoom({
     dispatch(startLevelTimerAt({ levelId: 1, startTime: startedAtMs }));
   }, [dispatch, levels, startedAtMs]);
 
-  if (isStarted && !waitingForSharedStart) {
+  if (isStarted) {
     return <App />;
   }
 

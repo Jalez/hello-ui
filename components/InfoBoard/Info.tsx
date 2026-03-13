@@ -88,7 +88,10 @@ export function LevelFooterMenu() {
     <Popover>
       <PopoverTrigger asChild>
         <CompactMenuButton icon={BarChart3} label="Level" text="Level">
-          <Shaker value={reachedThresholdCount}>
+          <Shaker
+            value={reachedThresholdCount}
+            className="inline-flex items-center justify-center gap-1 max-[519px]:flex-col"
+          >
             <span className={`${compactMenuLabelClass} min-[520px]:hidden`}>
               Level
             </span>
@@ -172,12 +175,14 @@ export function TimeFooterMenu() {
   const points = useAppSelector((state) => state.points);
   const level = levels[currentLevel - 1];
   const [compactTimeSpent, setCompactTimeSpent] = useState("00:00");
-
-  if (!level || options.creator || !points.levels[level.name]) {
-    return null;
-  }
+  const levelPoints = level ? points.levels[level.name] : null;
 
   useEffect(() => {
+    if (!level || options.creator || !levelPoints) {
+      setCompactTimeSpent("00:00");
+      return undefined;
+    }
+
     const startTime = level.timeData.startTime;
     if (!startTime) {
       setCompactTimeSpent("00:00");
@@ -191,9 +196,13 @@ export function TimeFooterMenu() {
     update();
     const id = setInterval(update, 1000);
     return () => clearInterval(id);
-  }, [level.timeData.startTime]);
+  }, [level, levelPoints, options.creator]);
 
-  const bestTime = points.levels[level.name]?.bestTime ?? "No time yet";
+  if (!level || options.creator || !levelPoints) {
+    return null;
+  }
+
+  const bestTime = levelPoints.bestTime ?? "No time yet";
 
   return (
     <Popover>

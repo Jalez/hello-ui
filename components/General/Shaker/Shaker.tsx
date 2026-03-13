@@ -6,9 +6,10 @@ import { cn } from "@/lib/utils/cn";
 type ShakerProps = {
   children: ReactNode;
   value: string | number;
+  className?: string;
 };
 
-const Shaker = ({ children, value }: ShakerProps) => {
+const Shaker = ({ children, value, className }: ShakerProps) => {
   const [prevValue, setPrevValue] = useState<string | number>(value);
   const [shouldAnimate, setShouldAnimate] = useState(false);
 
@@ -36,6 +37,7 @@ const Shaker = ({ children, value }: ShakerProps) => {
     <span
       className={cn(
         "relative inline-block",
+        className,
         shouldAnimate && "animate-shake"
       )}
     >
