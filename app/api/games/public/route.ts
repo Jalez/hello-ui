@@ -37,13 +37,28 @@ export async function GET() {
     const games = await getPublicGames();
     const gamesWithLanguages = await Promise.all(
       games.map(async (game) => {
-        const levels = await getLevelsForMap(game.map_name);
-        return {
-          game,
-          languages: summarizeLanguages(levels),
-          levelsCount: levels.length,
-          difficulties: summarizeDifficulties(levels),
-        };
+        try {
+          const levels = await getLevelsForMap(game.map_name);
+          return {
+            game,
+            languages: summarizeLanguages(levels),
+            levelsCount: levels.length,
+            difficulties: summarizeDifficulties(levels),
+          };
+        } catch (error: unknown) {
+          console.error("[api/games/public:enrich-failed]", {
+            gameId: game.id,
+            mapName: game.map_name,
+            error,
+          });
+
+          return {
+            game,
+            languages: { html: false, css: false, js: false },
+            levelsCount: 0,
+            difficulties: [],
+          };
+        }
       })
     );
 
@@ -67,6 +82,7 @@ export async function GET() {
       })),
     );
   } catch (error: unknown) {
+    console.error("[api/games/public:failed]", error);
     logger("Error: %O", error);
     return NextResponse.json({ message: "Failed to fetch public games" }, { status: 500 });
   }
