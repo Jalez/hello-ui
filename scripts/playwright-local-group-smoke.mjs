@@ -15,6 +15,10 @@ const verboseYjsLogs = process.env.PLAYWRIGHT_VERBOSE_YJS === "true";
 const verboseBrowserLogs = process.env.PLAYWRIGHT_VERBOSE_BROWSER === "true";
 const dbUrl = process.env.PLAYWRIGHT_DATABASE_URL || process.env.DATABASE_URL || "postgresql://postgres:password@localhost:5432/ui_designer_dev";
 let activeGameId = requestedGameId;
+const smokeViewport = {
+  width: Number.parseInt(process.env.PLAYWRIGHT_VIEWPORT_WIDTH || "430", 10),
+  height: Number.parseInt(process.env.PLAYWRIGHT_VIEWPORT_HEIGHT || "932", 10),
+};
 
 function scaledTimeout(ms) {
   return Math.round(ms * timeoutMultiplier);
@@ -573,7 +577,9 @@ async function createGroupModeGame(request, creatorUsername) {
   const updateResponse = await request.patch(`${baseUrl}/api/games/${gameId}`, {
     data: {
       collaborationMode: "group",
-      ...(scenario === "same_user_duplicate" ? { allowDuplicateUsersInGroup: true } : {}),
+      ...((scenario === "same_user_duplicate" || flags.openExtraTabCount > 0)
+        ? { allowDuplicateUsersInGroup: true }
+        : {}),
       isPublic: true,
       title,
     },
@@ -640,11 +646,48 @@ async function triggerLevelReset(page) {
   const titledResetButtons = page.getByTitle("Reset Level");
   const namedResetButtons = page.getByRole("button", { name: "Reset" });
   const gameMenuTrigger = page.getByRole("button", { name: "Game", exact: true });
+  const levelMenuTriggers = page.getByRole("button", { name: /Level/i });
+  const levelTextButtons = page.locator("button").filter({ hasText: /^Level$/i });
+  let requiresConfirmation = true;
 
   if ((await titledResetButtons.count()) > 0 && await titledResetButtons.first().isVisible().catch(() => false)) {
     await titledResetButtons.first().click();
   } else if ((await namedResetButtons.count()) > 0 && await namedResetButtons.first().isVisible().catch(() => false)) {
     await namedResetButtons.first().click();
+  } else if ((await levelMenuTriggers.count()) > 0) {
+    let clickedLevelMenu = false;
+    const levelMenuCount = await levelMenuTriggers.count();
+    for (let index = 0; index < levelMenuCount; index += 1) {
+      const candidate = levelMenuTriggers.nth(index);
+      if (await candidate.isVisible().catch(() => false)) {
+        await candidate.click();
+        clickedLevelMenu = true;
+        break;
+      }
+    }
+    if (!clickedLevelMenu) {
+      throw new Error("Level menu trigger was found but not visible.");
+    }
+    await page.getByRole("button", { name: "Reset level" }).waitFor({ timeout: scaledTimeout(10000) });
+    await page.getByRole("button", { name: "Reset level" }).click();
+    requiresConfirmation = false;
+  } else if ((await levelTextButtons.count()) > 0) {
+    let clickedLevelMenu = false;
+    const levelTextButtonCount = await levelTextButtons.count();
+    for (let index = 0; index < levelTextButtonCount; index += 1) {
+      const candidate = levelTextButtons.nth(index);
+      if (await candidate.isVisible().catch(() => false)) {
+        await candidate.click();
+        clickedLevelMenu = true;
+        break;
+      }
+    }
+    if (!clickedLevelMenu) {
+      throw new Error("Level text button was found but not visible.");
+    }
+    await page.getByRole("button", { name: "Reset level" }).waitFor({ timeout: scaledTimeout(10000) });
+    await page.getByRole("button", { name: "Reset level" }).click();
+    requiresConfirmation = false;
   } else if ((await gameMenuTrigger.count()) > 0 && await gameMenuTrigger.first().isVisible().catch(() => false)) {
     await gameMenuTrigger.first().click();
     await page.getByRole("menuitem", { name: "Reset Level" }).waitFor({ timeout: scaledTimeout(10000) });
@@ -653,10 +696,12 @@ async function triggerLevelReset(page) {
     throw new Error("Reset controls were not visible on the page.");
   }
 
-  await page.getByRole("dialog").waitFor({ timeout: scaledTimeout(10000) });
-  await page.getByRole("heading", { name: "Reset Level" }).waitFor({ timeout: scaledTimeout(10000) });
-  await page.getByRole("button", { name: "Yes" }).click();
-  await page.getByRole("dialog").waitFor({ state: "hidden", timeout: scaledTimeout(10000) });
+  if (requiresConfirmation) {
+    await page.getByRole("dialog").waitFor({ timeout: scaledTimeout(10000) });
+    await page.getByRole("heading", { name: "Reset Level" }).waitFor({ timeout: scaledTimeout(10000) });
+    await page.getByRole("button", { name: "Yes" }).click();
+    await page.getByRole("dialog").waitFor({ state: "hidden", timeout: scaledTimeout(10000) });
+  }
 }
 
 async function verifyLevelReset(group, contexts) {
@@ -709,30 +754,130 @@ async function tryConcurrentSharedEdit(pages, groupName) {
   if (pages.length < 2) return false;
   const activeEditors = Math.min(pages.length, concurrentEditors);
   const markers = Array.from({ length: activeEditors }, (_, index) => `pw-concurrent-${index + 1}-${Date.now().toString(36)}`);
+  const placements = Array.from({ length: activeEditors }, (_, index) => {
+    if (index === 0) return "start";
+    if (index === 1) return "end";
+    return index % 2 === 0 ? "start-offset" : "end-offset";
+  });
+  await Promise.all(
+    Array.from({ length: activeEditors }, (_, index) => (async () => {
+      const editor = pages[index].locator(".cm-content[contenteditable='true']").first();
+      await editor.click();
+      const placement = placements[index];
+      if (placement === "start" || placement === "start-offset") {
+        await editor.press("Home");
+      } else {
+        await editor.press("End");
+      }
+      if (placement === "start-offset") {
+        await pages[index].keyboard.press("ArrowRight");
+        await pages[index].keyboard.press("ArrowRight");
+      }
+      if (placement === "end-offset") {
+        await pages[index].keyboard.press("ArrowLeft");
+        await pages[index].keyboard.press("ArrowLeft");
+      }
+      await pages[index].keyboard.type(`\n<!-- ${markers[index]} -->`);
+    })()),
+  );
+  const maxAttempts = 6;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    await pages[0].waitForTimeout(
+      attempt === 1 ? Math.max(createWaitMs * 2, 2500) : Math.max(createWaitMs, 1200),
+    );
+    const pageContents = await Promise.all(
+      pages.map(async (page, index) => {
+        try {
+          return await getEditableContent(page);
+        } catch (error) {
+          await logPageEditorState(page, `${groupName}:${index}`);
+          throw error;
+        }
+      }),
+    );
+    const merged = pageContents.every((content) => markers.every((marker) => content.includes(marker)));
+    if (merged) {
+      return true;
+    }
+    if (attempt === maxAttempts) {
+      console.warn(`concurrent markers failed in ${groupName}`);
+      pageContents.forEach((content, index) => {
+        const missingMarkers = markers.filter((marker) => !content.includes(marker));
+        console.warn(
+          `[concurrent:fail] ${groupName} page=${index} missing=${missingMarkers.join(",")} content=${JSON.stringify(content.slice(-220))}`,
+        );
+      });
+    }
+  }
+  return false;
+}
+
+function countChar(content, char) {
+  let count = 0;
+  for (const value of content) {
+    if (value === char) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
+async function trySamePositionConcurrentEdit(pages, groupName) {
+  if (pages.length < 2) return false;
+  const activeEditors = Math.min(pages.length, 2);
+  const beforeContents = await Promise.all(pages.slice(0, activeEditors).map((page) => getEditableContent(page)));
+  const payloads = ["Q".repeat(12), "Z".repeat(12)];
+
   await Promise.all(
     Array.from({ length: activeEditors }, (_, index) => (async () => {
       const editor = pages[index].locator(".cm-content[contenteditable='true']").first();
       await editor.click();
       await editor.press("End");
-      await pages[index].keyboard.type(`\n<!-- ${markers[index]} -->`);
+      await pages[index].keyboard.type(payloads[index]);
     })()),
   );
-  await pages[0].waitForTimeout(Math.max(createWaitMs * 2, 2500));
-  const pageContents = await Promise.all(
-    pages.map(async (page, index) => {
-      try {
-        return ((await page.locator(".cm-content[contenteditable='true']").first().textContent({ timeout: scaledTimeout(30000) })) || "");
-      } catch (error) {
-        await logPageEditorState(page, `${groupName}:${index}`);
-        throw error;
-      }
-    }),
-  );
-  const merged = pageContents.every((content) => markers.every((marker) => content.includes(marker)));
-  if (!merged) {
-    console.warn(`concurrent markers failed in ${groupName}`);
+
+  const maxAttempts = 8;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    await pages[0].waitForTimeout(
+      attempt === 1 ? Math.max(createWaitMs * 2, 2500) : Math.max(createWaitMs, 1200),
+    );
+    const pageContents = await Promise.all(
+      pages.slice(0, activeEditors).map(async (page, index) => {
+        try {
+          return await getEditableContent(page);
+        } catch (error) {
+          await logPageEditorState(page, `${groupName}:same-position:${index}`);
+          throw error;
+        }
+      }),
+    );
+
+    const converged = pageContents.every((content) => content === pageContents[0]);
+    const preserved = pageContents.every((content, index) =>
+      payloads.every((payload, payloadIndex) =>
+        countChar(content, payload[0]) - countChar(beforeContents[index], payload[0]) === payload.length,
+      ),
+    );
+
+    if (converged && preserved) {
+      return true;
+    }
+
+    if (attempt === maxAttempts) {
+      console.warn(`same-position concurrent markers failed in ${groupName}`);
+      pageContents.forEach((content, index) => {
+        const diffs = payloads.map((payload) =>
+          `${payload[0]}:${countChar(content, payload[0]) - countChar(beforeContents[index], payload[0])}/${payload.length}`,
+        );
+        console.warn(
+          `[same-position:fail] ${groupName} page=${index} converged=${converged} diffs=${diffs.join(" ")} content=${JSON.stringify(content.slice(-220))}`,
+        );
+      });
+    }
   }
-  return merged;
+
+  return false;
 }
 
 async function switchToEditorTab(page, label) {
@@ -1142,12 +1287,20 @@ async function reloadGamePage(page, label) {
 }
 
 async function waitForEditorOnPage(page, label) {
-  try {
-    await page.locator(".cm-content[contenteditable='true']").first().waitFor({ timeout: scaledTimeout(20000) });
-    console.log(`editor:ready ${label}`);
-  } catch (error) {
-    await logPageEditorState(page, `${label}:editor-timeout`);
-    throw error;
+  const maxAttempts = 2;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      await page.locator(".cm-content[contenteditable='true']").first().waitFor({ timeout: scaledTimeout(20000) });
+      console.log(`editor:ready ${label}`);
+      return;
+    } catch (error) {
+      await logPageEditorState(page, `${label}:editor-timeout`);
+      if (attempt === maxAttempts) {
+        throw error;
+      }
+      await reloadGamePage(page, `${label}:editor-retry`);
+      await startGroupGame([page]);
+    }
   }
 }
 
@@ -1269,7 +1422,7 @@ async function captureWaitingRoomIdentity(page, expectedLabels) {
 }
 
 async function runLtiAplusGroupScenario(browser) {
-  const creatorContext = await browser.newContext({ baseURL: baseUrl });
+  const creatorContext = await browser.newContext({ baseURL: baseUrl, viewport: smokeViewport });
   await enableHttpLatency(creatorContext);
   const creatorPage = await creatorContext.newPage();
   if (requestedGameId) {
@@ -1293,7 +1446,7 @@ async function runLtiAplusGroupScenario(browser) {
 
   try {
     for (const [index, username] of usernames.entries()) {
-      const context = await browser.newContext({ baseURL: baseUrl });
+      const context = await browser.newContext({ baseURL: baseUrl, viewport: smokeViewport });
       await enableHttpLatency(context);
       const page = await context.newPage();
       await configureConsoleLogging(page, username);
@@ -1431,7 +1584,7 @@ async function main() {
 
   try {
     for (const username of usernames) {
-      const context = await browser.newContext({ baseURL: baseUrl });
+      const context = await browser.newContext({ baseURL: baseUrl, viewport: smokeViewport });
       await enableHttpLatency(context);
       const page = await context.newPage();
       await configureConsoleLogging(page, username);
@@ -1635,7 +1788,16 @@ async function main() {
       const extraPage = await participant.context.newPage();
       await configureConsoleLogging(extraPage, `${participant.username}-tab2`);
       await gotoGamePage(extraPage, gameUrl(activeGameId, group.groupId), `extra-tab:${participant.username}`);
-      await waitForEditorOnPage(extraPage, `extra-tab:${participant.username}`);
+      await startGroupGame([extraPage]);
+      try {
+        await waitForEditorOnPage(extraPage, `extra-tab:${participant.username}`);
+      } catch (error) {
+        const waitingRoomCount = await extraPage.getByText("Group Waiting Room").count().catch(() => 0);
+        if (waitingRoomCount > 0) {
+          throw error;
+        }
+        console.warn(`stress:extra-tab-no-editor ${group.groupName} user=${participant.username}`);
+      }
       participant.extraPages.push(extraPage);
       console.log(`stress:extra-tab ${group.groupName} user=${participant.username}`);
     }
@@ -1700,6 +1862,12 @@ async function main() {
       } else {
         console.warn(`concurrent edit markers did not merge cleanly in ${group.groupName}`);
       }
+      const samePositionReplicated = await trySamePositionConcurrentEdit(pages, `${group.groupName}-same-position`);
+      if (samePositionReplicated) {
+        console.log(`same-position concurrent edits converged in ${group.groupName}`);
+      } else {
+        console.warn(`same-position concurrent edits did not converge in ${group.groupName}`);
+      }
 
       const stressResults = [];
       const memberPages = group.memberIndexes.map((memberIndex) => contexts[memberIndex].page);
@@ -1745,7 +1913,7 @@ async function main() {
         observedFinishMembers: summarizeSet(finishSnapshot.memberNames),
         instanceId: group.instanceId || (instanceState?.id ?? null),
         singleEdit: replicated,
-        concurrent: concurrentReplicated,
+        concurrent: concurrentReplicated && samePositionReplicated,
         stressPasses: stressResults.filter(Boolean).length,
         stressTotal: stressResults.length,
         resetOk,

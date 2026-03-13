@@ -325,8 +325,11 @@ export const Navbar = () => {
             <Popover>
               <PopoverTrigger asChild>
                   <Button type="button" variant="ghost" size="sm" className={compactMenuButtonClass}>
-                    <Shaker value={points.allPoints >= points.allMaxPoints && points.allMaxPoints > 0 ? 1 : 0}>
-                    <span className={compactMenuLabelClass}>
+                    <Shaker
+                      value={points.allPoints >= points.allMaxPoints && points.allMaxPoints > 0 ? 1 : 0}
+                      className="inline-flex items-center justify-center gap-1 max-[519px]:flex-col"
+                    >
+                    <span className={`${compactMenuLabelClass} min-[520px]:hidden`}>
                       Game
                     </span>
                     <Gamepad2 className="h-4 w-4" />
