@@ -37,7 +37,7 @@ function deriveUsernames() {
     return provided;
   }
 
-  if (scenario === "same_user_duplicate") {
+  if (scenario === "same_user_duplicate" || scenario === "same_user_blocked") {
     return ["user01", "user02", "user02"];
   }
 
@@ -50,6 +50,7 @@ function deriveUsernames() {
     level_tab_switch: 3,
     instances_reset: 3,
     same_user_duplicate: 3,
+    same_user_blocked: 3,
     prototype_yjs: 12,
     game_yjs: 12,
     submit_after_churn: 12,
@@ -64,6 +65,7 @@ const usernames = deriveUsernames();
 function defaultGroupSizeForScenario() {
   if (scenario === "baseline") return 3;
   if (scenario === "same_user_duplicate") return 3;
+  if (scenario === "same_user_blocked") return 3;
   if (scenario === "lti_aplus_group") return 2;
   if (scenario === "latency") return 4;
   if (scenario === "creator_group_details") return 3;
@@ -131,6 +133,18 @@ function scenarioFlags() {
   if (scenario === "same_user_duplicate") {
     return {
       ...defaults,
+      stressRounds: 2,
+      refreshDuringEditing: true,
+      closeReopenCount: 1,
+      lateOpenCount: 1,
+      submitAfterStress: true,
+    };
+  }
+
+  if (scenario === "same_user_blocked") {
+    return {
+      ...defaults,
+      lateOpenCount: 1,
       submitAfterStress: false,
     };
   }
@@ -597,6 +611,26 @@ async function waitForEditorOnPages(pages) {
   for (const [index, page] of pages.entries()) {
     await waitForEditorOnPage(page, `page-${index + 1}`);
   }
+}
+
+async function verifyDuplicateBlockedModal(page, label) {
+  const heading = page.getByRole("heading", { name: "Duplicate login detected" });
+  await heading.waitFor({ timeout: scaledTimeout(20000) });
+  await page.getByText("Connection blocked").waitFor({ timeout: scaledTimeout(10000) });
+  await expect.poll(async () => {
+    const bodyText = ((await page.locator("body").textContent().catch(() => "")) || "").toLowerCase();
+    return bodyText.includes("already connected")
+      || bodyText.includes("duplicate users are blocked")
+      || bodyText.includes("identified as");
+  }, {
+    timeout: scaledTimeout(10000),
+    message: "Duplicate-blocked modal did not show an identity/conflict message",
+  }).toBe(true);
+  await page.keyboard.press("Escape");
+  await expect(heading).toBeVisible();
+  await page.mouse.click(8, 8);
+  await expect(heading).toBeVisible();
+  console.log(`duplicate-blocked-modal ${label}`);
 }
 
 async function startGroupGame(pages) {
@@ -1772,12 +1806,22 @@ async function main() {
         .filter((memberIndex) => !group.lateOpenIndexes.includes(memberIndex))
         .map((memberIndex) => contexts[memberIndex].page);
       await startGroupGame(activePages);
+      if ((scenario === "same_user_duplicate" || scenario === "same_user_blocked") && group.lateOpenIndexes.length > 0) {
+        await waitForEditorOnPages(activePages);
+      }
+      group.blockedLateIndexes = [];
+      group.duplicateBlockedModalOk = true;
       for (const lateIndex of group.lateOpenIndexes) {
         const participant = contexts[lateIndex];
         await gotoGamePage(participant.page, gameUrl(activeGameId, group.groupId), `late-open:${participant.username}`);
         console.log(`stress:late-open ${group.groupName} user=${participant.username}`);
+        if (scenario === "same_user_blocked") {
+          await verifyDuplicateBlockedModal(participant.page, `${group.groupName}:${participant.username}`);
+          group.blockedLateIndexes.push(lateIndex);
+        }
       }
-      await waitForEditorOnPages(group.memberIndexes.map((memberIndex) => contexts[memberIndex].page));
+      group.activeMemberIndexes = group.memberIndexes.filter((memberIndex) => !group.blockedLateIndexes.includes(memberIndex));
+      await waitForEditorOnPages(group.activeMemberIndexes.map((memberIndex) => contexts[memberIndex].page));
       group.startSnapshot = await fetchGroupSnapshot(contexts[group.ownerIndex].context.request, group);
       console.log(`stress:start-snapshot ${group.groupName} memberCount=${group.startSnapshot.memberCount} members=${group.startSnapshot.memberNames.join("|")}`);
     }
@@ -1803,7 +1847,8 @@ async function main() {
     }
 
     for (const group of groups) {
-      const pages = group.memberIndexes.map((memberIndex) => contexts[memberIndex].page);
+      const participantIndexes = group.activeMemberIndexes ?? group.memberIndexes;
+      const pages = participantIndexes.map((memberIndex) => contexts[memberIndex].page);
 
       if (scenario === "level_tab_switch") {
         const levelTabOk = await verifyLevelAndTabIsolation(group, contexts);
@@ -1848,6 +1893,31 @@ async function main() {
         continue;
       }
 
+      if (scenario === "same_user_blocked") {
+        const marker = `pw-${group.groupName}-${Date.now().toString(36)}`;
+        const replicated = await trySharedEdit(pages, marker);
+        const concurrentReplicated = await tryConcurrentSharedEdit(pages, group.groupName);
+        const samePositionReplicated = await trySamePositionConcurrentEdit(pages, `${group.groupName}-same-position`);
+        console.log(`stress:duplicate-blocked ${group.groupName} ok=${group.duplicateBlockedModalOk}`);
+        summary.push({
+          name: group.groupName,
+          members: group.startSnapshot.memberCount,
+          expectedMembers: summarizeSet(group.memberIndexes.map((memberIndex) => contexts[memberIndex].username)),
+          observedJoinMembers: summarizeSet(group.joinSnapshot.memberNames),
+          observedStartMembers: summarizeSet(group.startSnapshot.memberNames),
+          observedFinishMembers: summarizeSet(group.startSnapshot.memberNames),
+          instanceId: group.instanceId || "none",
+          singleEdit: replicated && group.duplicateBlockedModalOk,
+          concurrent: concurrentReplicated && samePositionReplicated && group.duplicateBlockedModalOk,
+          stressPasses: group.duplicateBlockedModalOk ? 1 : 0,
+          stressTotal: 1,
+          resetOk: group.duplicateBlockedModalOk,
+          submitOk: null,
+          actualSubmitParticipants: [],
+        });
+        continue;
+      }
+
       const marker = `pw-${group.groupName}-${Date.now().toString(36)}`;
       const replicated = await trySharedEdit(pages, marker);
       if (replicated) {
@@ -1870,8 +1940,8 @@ async function main() {
       }
 
       const stressResults = [];
-      const memberPages = group.memberIndexes.map((memberIndex) => contexts[memberIndex].page);
-      const memberNames = group.memberIndexes.map((memberIndex) => contexts[memberIndex].username);
+      const memberPages = participantIndexes.map((memberIndex) => contexts[memberIndex].page);
+      const memberNames = participantIndexes.map((memberIndex) => contexts[memberIndex].username);
       console.log(`stress:start ${group.groupName} members=${memberNames.join(",")}`);
 
       for (let round = 1; round <= flags.stressRounds; round += 1) {
@@ -1887,8 +1957,8 @@ async function main() {
         }
       }
 
-      if (flags.closeReopenCount > 0 && group.memberIndexes.length > 1) {
-        const memberIndex = group.memberIndexes[group.memberIndexes.length - 1];
+      if (flags.closeReopenCount > 0 && participantIndexes.length > 1) {
+        const memberIndex = participantIndexes[participantIndexes.length - 1];
         await closeAndReopenMember(group, contexts, memberIndex);
       }
 

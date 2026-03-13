@@ -10,6 +10,7 @@
     "pw:install": "playwright install chromium",
     "pw:local-group": "node scripts/playwright-local-group-smoke.mjs",
     "pw:same-user": "PLAYWRIGHT_SCENARIO=same_user_duplicate node scripts/playwright-local-group-smoke.mjs",
+    "pw:same-user-blocked": "PLAYWRIGHT_SCENARIO=same_user_blocked node scripts/playwright-local-group-smoke.mjs",
     "pw:ai-generation": "node scripts/playwright-ai-generation-smoke.mjs",
     "pw:prod-replay": "node scripts/prod-replay.mjs",
     "db:purge": "tsx scripts/db-purge.ts",
