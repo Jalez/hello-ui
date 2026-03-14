@@ -24,6 +24,10 @@ const GROUP_START_MIN_READY_COUNT = 2;
 const WS_ARTIFICIAL_DELAY_MS = parseInt(process.env.WS_ARTIFICIAL_DELAY_MS || "0", 10);
 const WS_ARTIFICIAL_JITTER_MS = parseInt(process.env.WS_ARTIFICIAL_JITTER_MS || "0", 10);
 const GAME_DUPLICATE_SETTINGS_TTL_MS = 10000;
+const CLIENT_HASH_TTL_MS = 10000;
+const DIVERGENCE_PERSIST_MS = 2000;
+const DIVERGENCE_REPEAT_THRESHOLD = 2;
+const DIVERGENCE_RESYNC_COOLDOWN_MS = 5000;
 const DATABASE_URL = process.env.DATABASE_URL || process.env.POSTGRES_URL || "";
 const dbPool = DATABASE_URL ? new pg.Pool({ connectionString: DATABASE_URL }) : null;
 
@@ -39,6 +43,8 @@ const gameDuplicateSettingsCache = new Map();
 
 // roomId -> { ctx, timer }
 const roomWriteBuffer = new Map();
+const roomClientStateHashes = new Map();
+const roomDivergenceState = new Map();
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -77,6 +83,7 @@ function removeUserFromRoom(roomId, socket) {
         roomEditorState.delete(roomId);
         roomLobbyState.delete(roomId);
         roomYDocs.delete(roomId);
+        roomClientStateHashes.delete(roomId);
       }
     });
   }
@@ -294,6 +301,197 @@ function syncStateFromYDoc(roomId, state) {
   });
 }
 
+function getRoomClientHashes(roomId) {
+  if (!roomClientStateHashes.has(roomId)) {
+    roomClientStateHashes.set(roomId, new Map());
+  }
+  return roomClientStateHashes.get(roomId);
+}
+
+function pruneRoomClientHashes(roomId, now = Date.now()) {
+  const reports = roomClientStateHashes.get(roomId);
+  if (!reports) {
+    return;
+  }
+  for (const [clientId, report] of reports.entries()) {
+    if (now - report.receivedAt > CLIENT_HASH_TTL_MS) {
+      reports.delete(clientId);
+    }
+  }
+  if (reports.size === 0) {
+    roomClientStateHashes.delete(roomId);
+  }
+}
+
+function removeClientStateHash(roomId, clientId) {
+  if (!roomId || !clientId) {
+    return;
+  }
+  const reports = roomClientStateHashes.get(roomId);
+  if (!reports) {
+    return;
+  }
+  reports.delete(clientId);
+  if (reports.size === 0) {
+    roomClientStateHashes.delete(roomId);
+  }
+}
+
+function buildDivergenceKey(roomId, editorType, levelIndex) {
+  return `${roomId}:${levelIndex}:${editorType}`;
+}
+
+function summarizeHashReports(reports) {
+  return reports.map((report) => ({
+    clientId: report.clientId,
+    userId: report.userId,
+    userEmail: report.userEmail,
+    engine: report.engine,
+    contentHash: report.contentHash,
+    contentLength: report.contentLength,
+    version: report.version ?? null,
+    isFocused: Boolean(report.isFocused),
+    isEditable: Boolean(report.isEditable),
+    isTyping: Boolean(report.isTyping),
+    ageMs: Date.now() - report.receivedAt,
+  }));
+}
+
+function createCollaborationHealthMessage(roomId, eventType, severity, details = {}, scope = {}) {
+  return {
+    roomId,
+    groupId: extractGroupIdFromRoomId(roomId),
+    eventType,
+    severity,
+    editorType: scope.editorType,
+    levelIndex: scope.levelIndex,
+    details,
+    ts: Date.now(),
+  };
+}
+
+function broadcastEditorResync(roomId, state, levelIndex) {
+  const levelState = state.levels?.[levelIndex];
+  if (!levelState) {
+    return;
+  }
+  for (const editorType of EDITOR_TYPES) {
+    broadcastToRoom(roomId, "editor-resync", {
+      roomId,
+      groupId: extractGroupIdFromRoomId(roomId),
+      editorType,
+      levelIndex,
+      content: levelState.code?.[editorType] || "",
+      version: levelState.versions?.[editorType] || 0,
+      ts: Date.now(),
+    });
+  }
+}
+
+async function forceRoomResync(roomId, editorType, levelIndex, reason) {
+  const ctx = parseRoomContext(roomId);
+  if (!ctx) {
+    return;
+  }
+  const state = await ensureRoomState(roomId, ctx);
+  broadcastToRoom(roomId, "room-state-sync", serializeRoomStateSync(roomId, state));
+  if (isYjsEnabled()) {
+    const doc = getOrCreateYDoc(roomId, state);
+    if (doc) {
+      broadcastToRoom(roomId, "yjs-sync", {
+        roomId,
+        groupId: extractGroupIdFromRoomId(roomId),
+        updateBase64: encodeUpdateToBase64(Y.encodeStateAsUpdate(doc)),
+        ts: Date.now(),
+      });
+    }
+  } else if (Number.isInteger(levelIndex)) {
+    broadcastEditorResync(roomId, state, levelIndex);
+  }
+  console.warn(
+    `[divergence:resync] room=${roomId} editorType=${editorType} levelIndex=${levelIndex} reason=${reason}`
+  );
+}
+
+async function evaluateClientStateHashes(roomId, report) {
+  const now = Date.now();
+  pruneRoomClientHashes(roomId, now);
+  const reports = Array.from(getRoomClientHashes(roomId).values()).filter((candidate) =>
+    candidate.editorType === report.editorType
+    && candidate.levelIndex === report.levelIndex
+    && now - candidate.receivedAt <= CLIENT_HASH_TTL_MS
+  );
+
+  const divergenceKey = buildDivergenceKey(roomId, report.editorType, report.levelIndex);
+  if (reports.length < 2) {
+    roomDivergenceState.delete(divergenceKey);
+    return;
+  }
+
+  const uniqueHashes = [...new Set(reports.map((candidate) => candidate.contentHash))];
+  if (uniqueHashes.length <= 1) {
+    roomDivergenceState.delete(divergenceKey);
+    return;
+  }
+
+  const signature = uniqueHashes.sort().join("|");
+  const previous = roomDivergenceState.get(divergenceKey) || {
+    firstDetectedAt: now,
+    lastDetectedAt: now,
+    lastSignature: signature,
+    repeatCount: 0,
+    lastResyncAt: 0,
+  };
+
+  const nextState =
+    previous.lastSignature === signature
+      ? {
+          ...previous,
+          lastDetectedAt: now,
+          repeatCount: previous.repeatCount + 1,
+        }
+      : {
+          ...previous,
+          firstDetectedAt: now,
+          lastDetectedAt: now,
+          lastSignature: signature,
+          repeatCount: 1,
+        };
+
+  roomDivergenceState.set(divergenceKey, nextState);
+
+  if (
+    nextState.repeatCount < DIVERGENCE_REPEAT_THRESHOLD
+    && now - nextState.firstDetectedAt < DIVERGENCE_PERSIST_MS
+  ) {
+    return;
+  }
+
+  const summary = summarizeHashReports(reports);
+  console.warn(
+    `[divergence:detected] room=${roomId} editorType=${report.editorType} levelIndex=${report.levelIndex} hashes=${JSON.stringify(summary)}`
+  );
+  broadcastToRoom(roomId, "collaboration-health", createCollaborationHealthMessage(
+    roomId,
+    "divergence_detected",
+    "error",
+    {
+      participants: summary,
+      hashCount: uniqueHashes.length,
+    },
+    {
+      editorType: report.editorType,
+      levelIndex: report.levelIndex,
+    },
+  ));
+
+  if (now - nextState.lastResyncAt >= DIVERGENCE_RESYNC_COOLDOWN_MS) {
+    nextState.lastResyncAt = now;
+    roomDivergenceState.set(divergenceKey, nextState);
+    await forceRoomResync(roomId, report.editorType, report.levelIndex, "client_hash_mismatch");
+  }
+}
+
 function broadcastToRoom(roomId, type, payload, excludeSocket = null) {
   const room = rooms.get(roomId);
   if (!room) {
@@ -317,6 +515,12 @@ function clearRoomMemory(roomId) {
   roomEditorState.delete(roomId);
   roomLobbyState.delete(roomId);
   roomYDocs.delete(roomId);
+  roomClientStateHashes.delete(roomId);
+  for (const key of Array.from(roomDivergenceState.keys())) {
+    if (key.startsWith(`${roomId}:`)) {
+      roomDivergenceState.delete(key);
+    }
+  }
 }
 
 function invalidateGameInstanceRooms(gameId, payload = {}) {
@@ -825,13 +1029,18 @@ function ensureLevelState(state, levelIndex) {
 
 function serializeRoomStateSync(roomId, state) {
   syncStateFromYDoc(roomId, state);
-  return {
+  const payload = {
     levels: state.levels.map((level) => ({
       ...serializeLevelState(level),
       versions: { ...level.versions },
     })),
     ts: Date.now(),
   };
+  const gate = ensureGroupStartGate(state);
+  if (gate) {
+    payload.groupStartGate = gate;
+  }
+  return payload;
 }
 
 function serializeProgressData(state) {
@@ -1066,9 +1275,31 @@ const httpServer = createServer((req, res) => {
 
 const wsServer = new WebSocketServer({ server: httpServer });
 
-wsServer.on("connection", (socket) => {
+wsServer.on("error", (error) => {
+  console.error("[ws-server:error]", error);
+});
+
+wsServer.on("connection", (socket, request) => {
   setConnectionState(socket, { id: randomUUID(), roomId: null });
-  console.log(`[connect] socket=${getConnectionId(socket)}`);
+  const remoteAddress = request?.socket?.remoteAddress || "unknown";
+  const userAgent = request?.headers?.["user-agent"] || "unknown";
+  console.log(`[connect] socket=${getConnectionId(socket)} remote=${remoteAddress} ua=${JSON.stringify(userAgent)}`);
+
+  socket.on("error", (error) => {
+    const socketId = getConnectionId(socket);
+    const roomId = getConnectionState(socket)?.roomId || "none";
+    console.error(
+      `[socket:error] socket=${socketId} room=${roomId} remote=${remoteAddress} ua=${JSON.stringify(userAgent)} code=${error?.code || "unknown"} message=${error?.message || String(error)}`
+    );
+
+    if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
+      try {
+        socket.close(1002, "Protocol error");
+      } catch {
+        // Ignore close races if the socket is already gone.
+      }
+    }
+  });
 
   const resolveRoomId = (data) => data?.roomId || data?.groupId || getConnectionState(socket)?.roomId || null;
 
@@ -1286,6 +1517,61 @@ wsServer.on("connection", (socket) => {
           updateBase64: data.updateBase64,
           ts: Date.now(),
         }, socket);
+        return;
+      }
+      case "client-state-hash": {
+        const roomId = resolveRoomId(data);
+        if (
+          !roomId
+          || !data.clientId
+          || !data.userId
+          || !EDITOR_TYPES.includes(data.editorType)
+          || !Number.isInteger(data.levelIndex)
+          || typeof data.contentHash !== "string"
+        ) {
+          return;
+        }
+
+        const report = {
+          roomId,
+          groupId: extractGroupIdFromRoomId(roomId),
+          clientId: data.clientId,
+          userId: data.userId,
+          userEmail: typeof data.userEmail === "string" ? data.userEmail : "",
+          engine: data.engine === "yjs" ? "yjs" : "custom",
+          editorType: data.editorType,
+          levelIndex: data.levelIndex,
+          contentHash: data.contentHash,
+          contentLength: Number.isInteger(data.contentLength) ? data.contentLength : 0,
+          version: Number.isInteger(data.version) ? data.version : null,
+          isFocused: data.isFocused === true,
+          isEditable: data.isEditable !== false,
+          isTyping: data.isTyping === true,
+          localInputAgeMs: Number.isInteger(data.localInputAgeMs) ? data.localInputAgeMs : null,
+          remoteApplyAgeMs: Number.isInteger(data.remoteApplyAgeMs) ? data.remoteApplyAgeMs : null,
+          receivedAt: Date.now(),
+        };
+        getRoomClientHashes(roomId).set(report.clientId, report);
+        await evaluateClientStateHashes(roomId, report);
+        return;
+      }
+      case "client-health-event": {
+        const roomId = resolveRoomId(data);
+        if (!roomId || typeof data.eventType !== "string" || !data.clientId || !data.userId) {
+          return;
+        }
+        const severity = data.severity === "error" ? "error" : data.severity === "warn" ? "warn" : "info";
+        const logLine =
+          `[client-health:${severity}] room=${roomId} clientId=${data.clientId} userId=${data.userId} ` +
+          `editorType=${data.editorType || "none"} levelIndex=${Number.isInteger(data.levelIndex) ? data.levelIndex : "none"} ` +
+          `event=${data.eventType} details=${JSON.stringify(data.details || {})}`;
+        if (severity === "error") {
+          console.error(logLine);
+        } else if (severity === "warn") {
+          console.warn(logLine);
+        } else {
+          console.log(logLine);
+        }
         return;
       }
       case "leave-game": {
@@ -1820,6 +2106,7 @@ wsServer.on("connection", (socket) => {
       if (userMap.has(socket)) {
         const userData = removeUserFromRoom(roomId, socket);
         if (userData) {
+          removeClientStateHash(roomId, userData.clientId);
           broadcastToRoom(roomId, "user-left", {
             userId: userData.userId,
             userEmail: userData.userEmail,

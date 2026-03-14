@@ -66,6 +66,7 @@ export function useCodeEditorCollaboration({
   const remoteCodeResyncs = enabled && !isYjsEnabled ? (collaboration?.remoteCodeResyncs ?? EMPTY_REMOTE_CODE_RESYNCS) : EMPTY_REMOTE_CODE_RESYNCS;
   const localCodeAcks = enabled && !isYjsEnabled ? (collaboration?.localCodeAcks ?? []) : [];
   const getEditorVersion = collaboration?.getEditorVersion;
+  const reportEditorWatchState = collaboration?.reportEditorWatchState;
   const editorType: EditorType = titleToEditorType(title);
   const levelIndex = currentLevel - 1;
 
@@ -146,6 +147,7 @@ export function useCodeEditorCollaboration({
   });
 
   const { applyingExternalUpdateRef } = useEditorLifecycleReset({
+    enabled: enabled && !isYjsEnabled,
     levelIdentifier,
     template,
     code,
@@ -177,6 +179,16 @@ export function useCodeEditorCollaboration({
     }
     onLocalChange?.();
     setCode(value);
+    reportEditorWatchState?.({
+      editorType,
+      levelIndex,
+      content: value,
+      version: getEditorVersion?.(editorType, levelIndex) ?? null,
+      isEditable: !locked,
+      isFocused: editorViewRef.current?.hasFocus ?? false,
+      isTyping: true,
+      source: "local_input",
+    });
 
     if (!isConnected) {
       return;
@@ -190,7 +202,7 @@ export function useCodeEditorCollaboration({
       handleTypingEnd();
     }, TYPING_IDLE_MS);
     scheduleDebouncedSync();
-  }, [handleTypingEnd, handleTypingStart, isConnected, locked, onLocalChange, scheduleDebouncedSync, setCode, typingTimeoutRef]);
+  }, [editorType, getEditorVersion, handleTypingEnd, handleTypingStart, isConnected, levelIndex, locked, onLocalChange, reportEditorWatchState, scheduleDebouncedSync, setCode, typingTimeoutRef]);
 
   const handleEditorUpdate = useCallback((viewUpdate: ViewUpdate) => {
     handleLocalEditorUpdate(viewUpdate);
@@ -209,6 +221,16 @@ export function useCodeEditorCollaboration({
     handleCodeUpdate,
     handleEditorCreate: (view: EditorView) => {
       editorViewRef.current = view;
+      reportEditorWatchState?.({
+        editorType,
+        levelIndex,
+        content: codeRef.current,
+        version: getEditorVersion?.(editorType, levelIndex) ?? null,
+        isEditable: !locked,
+        isFocused: view.hasFocus,
+        isTyping: false,
+        source: "focus",
+      });
     },
     handleEditorUpdate,
   };

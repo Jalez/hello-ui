@@ -42,6 +42,7 @@ export function useYjsCodeEditorCollaboration({
   const updateEditorSelection = collaboration?.updateEditorSelection;
   const editorCursors = enabled ? (collaboration?.editorCursors ?? EMPTY_EDITOR_CURSORS) : EMPTY_EDITOR_CURSORS;
   const getYText = collaboration?.getYText;
+  const reportEditorWatchState = collaboration?.reportEditorWatchState;
   const editorType: EditorType = titleToEditorType(title);
   const levelIndex = currentLevel - 1;
   const yjsDocGeneration = collaboration?.yjsDocGeneration ?? 0;
@@ -100,10 +101,6 @@ export function useYjsCodeEditorCollaboration({
     }
 
     if (!isConnected || !yText) {
-      if (codeRef.current !== template) {
-        codeRef.current = template;
-        setCode(template);
-      }
       return;
     }
 
@@ -119,6 +116,16 @@ export function useYjsCodeEditorCollaboration({
         viewLen: editorViewRef.current?.state.doc.length ?? null,
       });
       setCode((prev) => (prev === nextValue ? prev : nextValue));
+      reportEditorWatchState?.({
+        editorType,
+        levelIndex,
+        content: nextValue,
+        version: null,
+        isEditable: !locked,
+        isFocused: editorViewRef.current?.hasFocus ?? false,
+        isTyping: false,
+        source: origin === "initial" ? "room_sync" : "remote_apply",
+      });
       if (markExternal) {
         applyingExternalUpdateRef.current = true;
         queueMicrotask(() => {
@@ -150,7 +157,7 @@ export function useYjsCodeEditorCollaboration({
     return () => {
       yText.unobserve(observer);
     };
-  }, [editorType, enabled, isConnected, levelIdentifier, levelIndex, setCode, template, yText]);
+  }, [editorType, enabled, isConnected, levelIdentifier, levelIndex, locked, reportEditorWatchState, setCode, template, yText]);
 
   useEffect(() => {
     codeRef.current = code;
@@ -209,6 +216,16 @@ export function useYjsCodeEditorCollaboration({
     codeRef.current = nextValue;
     codeUpdateOriginRef.current = "editor";
     setCode((prev) => (prev === nextValue ? prev : nextValue));
+    reportEditorWatchState?.({
+      editorType,
+      levelIndex,
+      content: nextValue,
+      version: null,
+      isEditable: !locked,
+      isFocused: viewUpdate.view.hasFocus,
+      isTyping: isLocalUserInput,
+      source: isLocalUserInput ? "local_input" : "remote_apply",
+    });
 
     if (!isLocalUserInput || applyingExternalUpdateRef.current || locked) {
       return;
@@ -237,6 +254,7 @@ export function useYjsCodeEditorCollaboration({
     locked,
     onLocalChange,
     onLocalUserInput,
+    reportEditorWatchState,
     setCode,
     typingPresenceTimeoutRef,
     updateEditorSelection,
@@ -256,6 +274,16 @@ export function useYjsCodeEditorCollaboration({
     handleCodeUpdate,
     handleEditorCreate: (view: EditorView) => {
       editorViewRef.current = view;
+      reportEditorWatchState?.({
+        editorType,
+        levelIndex,
+        content: codeRef.current,
+        version: null,
+        isEditable: !locked,
+        isFocused: view.hasFocus,
+        isTyping: false,
+        source: "focus",
+      });
     },
     handleEditorUpdate,
   };

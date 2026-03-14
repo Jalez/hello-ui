@@ -1,9 +1,17 @@
-import { chromium, expect } from "@playwright/test";
+import { chromium, expect, firefox, webkit } from "@playwright/test";
 import { Client } from "pg";
 import { readFileSync } from "fs";
+import net from "net";
+import tls from "tls";
+import { randomBytes } from "crypto";
+import { execFile, spawn } from "child_process";
+import { promisify } from "util";
+
+const execFileAsync = promisify(execFile);
 
 const baseUrl = process.env.PLAYWRIGHT_BASE_URL || "http://127.0.0.1:3000";
 const scenario = process.env.PLAYWRIGHT_SCENARIO || "baseline";
+const browserName = process.env.PLAYWRIGHT_BROWSER || "chromium";
 const routeKind = process.env.PLAYWRIGHT_ROUTE_KIND || (scenario === "prototype_yjs" ? "prototype-yjs" : "game");
 const requestedGameId = process.env.PLAYWRIGHT_GAME_ID || null;
 const headed = process.env.PLAYWRIGHT_HEADED === "true";
@@ -41,6 +49,14 @@ function deriveUsernames() {
     return ["user01", "user02", "user02"];
   }
 
+  if (scenario === "duplicate_churn") {
+    return ["user01", "user02", "user02", "user03"];
+  }
+
+  if (scenario === "in_game_duplicate") {
+    return ["user01", "user02", "user02", "user03"];
+  }
+
   const defaultByScenario = {
     baseline: 5,
     lti_lobby: 6,
@@ -51,6 +67,11 @@ function deriveUsernames() {
     instances_reset: 3,
     same_user_duplicate: 3,
     same_user_blocked: 3,
+    duplicate_churn: 4,
+    in_game_churn: 4,
+    in_game_duplicate: 4,
+    ws_invalid_rsv1: 1,
+    ws_recovery: 3,
     prototype_yjs: 12,
     game_yjs: 12,
     submit_after_churn: 12,
@@ -65,6 +86,9 @@ const usernames = deriveUsernames();
 function defaultGroupSizeForScenario() {
   if (scenario === "baseline") return 3;
   if (scenario === "same_user_duplicate") return 3;
+  if (scenario === "duplicate_churn") return 4;
+  if (scenario === "in_game_churn") return 4;
+  if (scenario === "in_game_duplicate") return 4;
   if (scenario === "same_user_blocked") return 3;
   if (scenario === "lti_aplus_group") return 2;
   if (scenario === "latency") return 4;
@@ -187,6 +211,80 @@ function scenarioFlags() {
     };
   }
 
+  if (scenario === "ws_invalid_rsv1") {
+    return {
+      ...defaults,
+      submitAfterStress: false,
+    };
+  }
+
+  if (scenario === "ws_recovery") {
+    return {
+      ...defaults,
+      stressRounds: 1,
+      submitAfterStress: false,
+    };
+  }
+
+  if (scenario === "classroom_churn") {
+    return {
+      ...defaults,
+      delayedJoinMs: 600,
+      stressRounds: 4,
+      refreshDuringWaiting: true,
+      refreshDuringEditing: true,
+      openExtraTabCount: 2,
+      closeReopenCount: 2,
+      lateOpenCount: 1,
+      submitAfterStress: true,
+      httpDelayMs: 100,
+      httpJitterMs: 250,
+    };
+  }
+
+  if (scenario === "duplicate_churn") {
+    return {
+      ...defaults,
+      stressRounds: 4,
+      refreshDuringWaiting: true,
+      refreshDuringEditing: true,
+      openExtraTabCount: 1,
+      closeReopenCount: 2,
+      lateOpenCount: 1,
+      submitAfterStress: true,
+      httpDelayMs: 75,
+      httpJitterMs: 150,
+    };
+  }
+
+  if (scenario === "in_game_churn") {
+    return {
+      ...defaults,
+      stressRounds: 6,
+      refreshDuringEditing: true,
+      openExtraTabCount: 2,
+      closeReopenCount: 3,
+      lateOpenCount: 0,
+      submitAfterStress: true,
+      httpDelayMs: 100,
+      httpJitterMs: 250,
+    };
+  }
+
+  if (scenario === "in_game_duplicate") {
+    return {
+      ...defaults,
+      stressRounds: 6,
+      refreshDuringEditing: true,
+      openExtraTabCount: 1,
+      closeReopenCount: 3,
+      lateOpenCount: 0,
+      submitAfterStress: true,
+      httpDelayMs: 75,
+      httpJitterMs: 200,
+    };
+  }
+
   if (scenario === "latency") {
     return {
       ...defaults,
@@ -270,6 +368,409 @@ function gameUrl(gameId, groupId) {
   return url.toString();
 }
 
+function getPlaywrightWebSocketUrl() {
+  const configuredUrl =
+    process.env.PLAYWRIGHT_WEBSOCKET_URL ||
+    process.env.PLAYWRIGHT_WS_URL ||
+    process.env.NEXT_PUBLIC_WEBSOCKET_URL;
+  if (configuredUrl) {
+    return configuredUrl.replace("http://", "ws://").replace("https://", "wss://");
+  }
+
+  const resolvedBaseUrl = new URL(baseUrl);
+  const isLocalhost =
+    resolvedBaseUrl.hostname === "localhost" ||
+    resolvedBaseUrl.hostname === "127.0.0.1" ||
+    resolvedBaseUrl.hostname === "::1";
+
+  if (isLocalhost) {
+    return `ws://${resolvedBaseUrl.hostname}:3100`;
+  }
+
+  return `${resolvedBaseUrl.protocol === "https:" ? "wss:" : "ws:"}//${resolvedBaseUrl.host}/css-artist-ws`;
+}
+
+function getHealthUrlForWebSocket(wsUrl) {
+  const resolvedWsUrl = new URL(wsUrl);
+  resolvedWsUrl.protocol = resolvedWsUrl.protocol === "wss:" ? "https:" : "http:";
+  resolvedWsUrl.pathname = "/health";
+  resolvedWsUrl.search = "";
+  resolvedWsUrl.hash = "";
+  return resolvedWsUrl.toString();
+}
+
+async function fetchHealthOk(url) {
+  try {
+    const response = await fetch(url);
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function waitForHealthState(url, expectedOk, timeoutMs) {
+  const startedAt = Date.now();
+  let lastValue = false;
+  while (Date.now() - startedAt < timeoutMs) {
+    lastValue = await fetchHealthOk(url);
+    if (lastValue === expectedOk) {
+      return lastValue;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  return lastValue;
+}
+
+function buildMaskedTextFrame(payload, { rsv1 = false } = {}) {
+  const payloadBuffer = Buffer.from(payload, "utf8");
+  if (payloadBuffer.length > 125) {
+    throw new Error("Malformed frame helper only supports small payloads.");
+  }
+
+  const mask = randomBytes(4);
+  const frame = Buffer.alloc(2 + 4 + payloadBuffer.length);
+  frame[0] = 0x80 | (rsv1 ? 0x40 : 0x00) | 0x01;
+  frame[1] = 0x80 | payloadBuffer.length;
+  mask.copy(frame, 2);
+  for (let index = 0; index < payloadBuffer.length; index += 1) {
+    frame[6 + index] = payloadBuffer[index] ^ mask[index % 4];
+  }
+  return frame;
+}
+
+// Browsers cannot craft invalid RSV bits, so this diagnostic path performs a valid
+// upgrade and then injects one malformed client frame to reproduce the prod crash.
+async function sendMalformedRsv1Frame(targetWsUrl) {
+  const resolvedUrl = new URL(targetWsUrl);
+  const port =
+    resolvedUrl.port
+      ? Number.parseInt(resolvedUrl.port, 10)
+      : resolvedUrl.protocol === "wss:"
+        ? 443
+        : 80;
+  const pathWithQuery = `${resolvedUrl.pathname || "/"}${resolvedUrl.search || ""}`;
+  const upgradeKey = randomBytes(16).toString("base64");
+  const originProtocol = resolvedUrl.protocol === "wss:" ? "https:" : "http:";
+
+  return await new Promise((resolve, reject) => {
+    const client = resolvedUrl.protocol === "wss:"
+      ? tls.connect({ host: resolvedUrl.hostname, port, servername: resolvedUrl.hostname })
+      : net.createConnection({ host: resolvedUrl.hostname, port });
+    let handshakeComplete = false;
+    let responseBuffer = "";
+    let settled = false;
+    let lastError = null;
+
+    const settle = (value) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timeoutId);
+      resolve(value);
+    };
+
+    const fail = (error) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timeoutId);
+      reject(error);
+    };
+
+    const timeoutId = setTimeout(() => {
+      fail(new Error(`Timed out while sending malformed RSV1 frame to ${targetWsUrl}`));
+    }, scaledTimeout(10000));
+
+    client.on("connect", () => {
+      client.write(
+        [
+          `GET ${pathWithQuery || "/"} HTTP/1.1`,
+          `Host: ${resolvedUrl.host}`,
+          "Upgrade: websocket",
+          "Connection: Upgrade",
+          `Origin: ${originProtocol}//${resolvedUrl.host}`,
+          `Sec-WebSocket-Key: ${upgradeKey}`,
+          "Sec-WebSocket-Version: 13",
+          "\r\n",
+        ].join("\r\n"),
+      );
+    });
+
+    client.on("data", (chunk) => {
+      if (handshakeComplete) {
+        return;
+      }
+
+      responseBuffer += chunk.toString("latin1");
+      if (!responseBuffer.includes("\r\n\r\n")) {
+        return;
+      }
+
+      const firstLine = responseBuffer.split("\r\n", 1)[0] || "";
+      if (!firstLine.includes("101")) {
+        fail(new Error(`WebSocket upgrade failed: ${firstLine}`));
+        return;
+      }
+
+      handshakeComplete = true;
+      client.write(buildMaskedTextFrame("pw-invalid-rsv1", { rsv1: true }));
+      setTimeout(() => {
+        settle({
+          handshakeComplete,
+          lastError: lastError?.message || null,
+        });
+        client.destroy();
+      }, 500);
+    });
+
+    client.on("error", (error) => {
+      lastError = error;
+      if (!handshakeComplete) {
+        fail(error);
+      }
+    });
+
+    client.on("close", (hadError) => {
+      settle({
+        handshakeComplete,
+        lastError: lastError?.message || null,
+        hadError,
+      });
+    });
+  });
+}
+
+async function runInvalidRsv1Scenario() {
+  if (process.env.PLAYWRIGHT_ALLOW_WS_CRASH !== "true") {
+    throw new Error(
+      "ws_invalid_rsv1 intentionally crashes the current WS server build. Re-run with PLAYWRIGHT_ALLOW_WS_CRASH=true.",
+    );
+  }
+
+  const wsUrl = getPlaywrightWebSocketUrl();
+  const healthUrl = getHealthUrlForWebSocket(wsUrl);
+  const expectCrash = process.env.PLAYWRIGHT_EXPECT_WS_CRASH !== "false";
+
+  const healthyBefore = await waitForHealthState(healthUrl, true, scaledTimeout(5000));
+  expect(healthyBefore).toBe(true);
+
+  console.log(`ws-invalid-frame target=${wsUrl}`);
+  console.log(`ws-invalid-frame health=${healthUrl}`);
+
+  const result = await sendMalformedRsv1Frame(wsUrl);
+  expect(result.handshakeComplete).toBe(true);
+
+  const healthAfter = await waitForHealthState(
+    healthUrl,
+    expectCrash ? false : true,
+    scaledTimeout(5000),
+  );
+
+  console.log(
+    `ws-invalid-frame handshake=${result.handshakeComplete} error=${result.lastError || "none"} crashed=${!healthAfter}`,
+  );
+
+  if (expectCrash) {
+    expect(healthAfter).toBe(false);
+  } else {
+    expect(healthAfter).toBe(true);
+  }
+
+  console.log("");
+  console.log(`Playwright scenario: ${scenario}`);
+  console.log(`Summary`);
+  console.log(`ws-invalid-frame | ${expectCrash ? "EXPECT_CRASH" : "EXPECT_SURVIVE"} | ${healthAfter ? "HEALTHY" : "DOWN"}`);
+}
+
+async function startManagedWsServer() {
+  const child = spawn(process.execPath, ["ws-server/server.mjs"], {
+    cwd: process.cwd(),
+    env: process.env,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  child.stdout.on("data", (chunk) => {
+    const lines = chunk.toString("utf8").trim().split("\n").filter(Boolean);
+    for (const line of lines) {
+      console.log(`[managed-ws] ${line}`);
+    }
+  });
+  child.stderr.on("data", (chunk) => {
+    const lines = chunk.toString("utf8").trim().split("\n").filter(Boolean);
+    for (const line of lines) {
+      console.warn(`[managed-ws:stderr] ${line}`);
+    }
+  });
+
+  return child;
+}
+
+async function stopManagedWsServer(child) {
+  if (!child || child.exitCode != null) {
+    return;
+  }
+
+  await new Promise((resolve) => {
+    const timeoutId = setTimeout(() => {
+      child.kill("SIGKILL");
+      resolve();
+    }, scaledTimeout(3000));
+
+    child.once("exit", () => {
+      clearTimeout(timeoutId);
+      resolve();
+    });
+
+    child.kill("SIGTERM");
+  });
+}
+
+async function findListeningPids(port) {
+  try {
+    const { stdout } = await execFileAsync("lsof", ["-nP", `-iTCP:${port}`, "-sTCP:LISTEN", "-t"], {
+      cwd: process.cwd(),
+    });
+    return stdout
+      .split("\n")
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .map((value) => Number.parseInt(value, 10))
+      .filter((value) => Number.isInteger(value) && value > 0);
+  } catch (error) {
+    if (typeof error?.code === "number" && error.code === 1) {
+      return [];
+    }
+    throw error;
+  }
+}
+
+async function terminatePids(pids) {
+  for (const pid of pids) {
+    if (pid === process.pid) {
+      continue;
+    }
+    try {
+      process.kill(pid, "SIGTERM");
+    } catch {
+      // Ignore already-exited processes.
+    }
+  }
+}
+
+async function waitForReconnectRecovery(pages, marker, timeoutMs) {
+  const startedAt = Date.now();
+  let lastError = null;
+  while (Date.now() - startedAt < timeoutMs) {
+    try {
+      const replicated = await trySharedEdit(pages, marker);
+      if (replicated) {
+        return true;
+      }
+    } catch (error) {
+      lastError = error;
+    }
+    await pages[0].waitForTimeout(1000);
+  }
+
+  if (lastError) {
+    throw lastError;
+  }
+  return false;
+}
+
+async function runWsRecoveryScenario(browser) {
+  if (process.env.PLAYWRIGHT_ALLOW_WS_CRASH !== "true") {
+    throw new Error(
+      "ws_recovery intentionally restarts the current WS server. Re-run with PLAYWRIGHT_ALLOW_WS_CRASH=true.",
+    );
+  }
+
+  const restartDelayMs = Number.parseInt(process.env.PLAYWRIGHT_WS_RESTART_DELAY_MS || "1000", 10);
+  const reconnectWindowMs = Number.parseInt(process.env.PLAYWRIGHT_WS_RECONNECT_WINDOW_MS || "12000", 10);
+  const wsUrl = getPlaywrightWebSocketUrl();
+  const healthUrl = getHealthUrlForWebSocket(wsUrl);
+  const wsPort = Number.parseInt(new URL(wsUrl).port || "3100", 10);
+  let managedWsChild = null;
+
+  const contexts = [];
+
+  try {
+    for (const username of usernames) {
+      const context = await browser.newContext({ baseURL: baseUrl, viewport: smokeViewport });
+      await enableHttpLatency(context);
+      const page = await context.newPage();
+      await configureConsoleLogging(page, username);
+      contexts.push({ username, context, page, extraPages: [] });
+      await signInDevUser(page, username);
+      console.log(`signed in ${username}`);
+    }
+
+    const creator = contexts[0];
+    const createdGame = await createPlayableGroupGame(creator.context.request, creator.username);
+    activeGameId = createdGame.gameId;
+    const group = {
+      groupId: createdGame.groupId,
+      groupName: createdGame.groupName,
+      joinKey: createdGame.joinKey,
+      memberIndexes: groupLayouts[0],
+      ownerIndex: groupLayouts[0][0],
+    };
+
+    for (const memberIndex of group.memberIndexes.slice(1)) {
+      const participant = contexts[memberIndex];
+      await joinGroup(participant.context.request, group.groupId, group.joinKey, participant.username);
+      console.log(`joined ${participant.username} -> ${group.groupId}`);
+    }
+
+    for (const memberIndex of group.memberIndexes) {
+      const participant = contexts[memberIndex];
+      await gotoGamePage(participant.page, gameUrl(activeGameId, group.groupId), `group-open:${participant.username}`);
+    }
+
+    const pages = group.memberIndexes.map((memberIndex) => contexts[memberIndex].page);
+    await startGroupGame(pages);
+    await waitForEditorOnPages(pages);
+
+    const beforeMarker = `pw-before-crash-${Date.now().toString(36)}`;
+    const beforeCrashOk = await trySharedEdit(pages, beforeMarker);
+    console.log(`ws-recovery beforeCrashOk=${beforeCrashOk}`);
+    expect(beforeCrashOk).toBe(true);
+
+    const healthyBefore = await waitForHealthState(healthUrl, true, scaledTimeout(5000));
+    expect(healthyBefore).toBe(true);
+
+    const listeningPids = await findListeningPids(wsPort);
+    expect(listeningPids.length > 0).toBe(true);
+    console.log(`ws-recovery stopping pids=${listeningPids.join(",")}`);
+    await terminatePids(listeningPids);
+    const crashed = await waitForHealthState(healthUrl, false, scaledTimeout(5000));
+    expect(crashed).toBe(false);
+    console.log(`ws-recovery crashed=true restartDelayMs=${restartDelayMs}`);
+
+    await new Promise((resolve) => setTimeout(resolve, restartDelayMs));
+    managedWsChild = await startManagedWsServer();
+
+    const healthyAfterRestart = await waitForHealthState(healthUrl, true, scaledTimeout(5000));
+    expect(healthyAfterRestart).toBe(true);
+    console.log("ws-recovery restarted=true");
+
+    const afterMarker = `pw-after-restart-${Date.now().toString(36)}`;
+    const recovered = await waitForReconnectRecovery(pages, afterMarker, reconnectWindowMs);
+    console.log(`ws-recovery recovered=${recovered} reconnectWindowMs=${reconnectWindowMs}`);
+
+    console.log("");
+    console.log(`Playwright scenario: ${scenario}`);
+    console.log("Summary");
+    console.log(`ws-recovery | ${recovered ? "RECOVERED" : "FAILED"} | restartDelayMs=${restartDelayMs}`);
+  } finally {
+    await stopManagedWsServer(managedWsChild);
+    await Promise.all(contexts.flatMap(({ extraPages = [] }) => extraPages).map(async (page) => page.close().catch(() => {})));
+    await Promise.all(contexts.map(async ({ context }) => context.close().catch(() => {})));
+  }
+}
+
 function normalizeName(value) {
   const normalized = String(value || "").trim().toLowerCase();
   const localEmailMatch = normalized.match(/^dev\+([a-z0-9_-]+)@local\.test$/);
@@ -281,6 +782,16 @@ function normalizeName(value) {
     return `user${localDisplayMatch[1].padStart(2, "0")}`;
   }
   return normalized;
+}
+
+function resolveBrowserType(name) {
+  if (name === "firefox") {
+    return firefox;
+  }
+  if (name === "webkit") {
+    return webkit;
+  }
+  return chromium;
 }
 
 function expectedLtiDisplayName(username, index) {
@@ -658,6 +1169,10 @@ async function startGroupGame(pages) {
       await startButton.click();
     }
   }
+}
+
+function isInGameFocusedScenario() {
+  return scenario === "in_game_churn" || scenario === "in_game_duplicate";
 }
 
 async function getEditableContent(page) {
@@ -1602,7 +2117,23 @@ async function closeAndReopenMember(group, contexts, memberIndex) {
 }
 
 async function main() {
-  const browser = await chromium.launch({ headless: !headed, slowMo: headed ? 120 : 0 });
+  if (scenario === "ws_invalid_rsv1") {
+    await runInvalidRsv1Scenario();
+    return;
+  }
+
+  const browserType = resolveBrowserType(browserName);
+  console.log(`browser:type ${browserName}`);
+  const browser = await browserType.launch({ headless: !headed, slowMo: headed ? 120 : 0 });
+
+  if (scenario === "ws_recovery") {
+    try {
+      await runWsRecoveryScenario(browser);
+    } finally {
+      await browser.close().catch(() => {});
+    }
+    return;
+  }
 
   if (scenario === "lti_aplus_group") {
     try {
@@ -1832,7 +2363,9 @@ async function main() {
       const extraPage = await participant.context.newPage();
       await configureConsoleLogging(extraPage, `${participant.username}-tab2`);
       await gotoGamePage(extraPage, gameUrl(activeGameId, group.groupId), `extra-tab:${participant.username}`);
-      await startGroupGame([extraPage]);
+      if (!isInGameFocusedScenario()) {
+        await startGroupGame([extraPage]);
+      }
       try {
         await waitForEditorOnPage(extraPage, `extra-tab:${participant.username}`);
       } catch (error) {
