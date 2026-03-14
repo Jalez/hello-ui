@@ -5,8 +5,29 @@ import { fileURLToPath } from "url";
 import { ChangeSet, Text } from "@codemirror/state";
 import { WebSocketServer, WebSocket } from "ws";
 import * as Y from "yjs";
+import * as decoding from "lib0/decoding";
+import * as encoding from "lib0/encoding";
+import * as syncProtocol from "y-protocols/sync";
 import pg from "pg";
 import dotenv from "dotenv";
+import { createWsApiClient } from "./api-client.mjs";
+import {
+  createLevelState,
+  createRoomState,
+  createStarterLevel,
+  createVersionMap,
+  ensureLevelState,
+  mergeTemplateAndProgressLevels,
+  serializeLevelState,
+  serializeProgressData,
+} from "./level-state.mjs";
+import {
+  extractGameIdFromRoomId,
+  extractGroupIdFromRoomId,
+  isLobbyRoom,
+  parseRoomContext,
+} from "./room-context.mjs";
+import { parseEnvelope, readJsonBody } from "./ws-envelope.mjs";
 
 const serverDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(serverDir, "..");
@@ -25,11 +46,20 @@ const WS_ARTIFICIAL_DELAY_MS = parseInt(process.env.WS_ARTIFICIAL_DELAY_MS || "0
 const WS_ARTIFICIAL_JITTER_MS = parseInt(process.env.WS_ARTIFICIAL_JITTER_MS || "0", 10);
 const GAME_DUPLICATE_SETTINGS_TTL_MS = 10000;
 const CLIENT_HASH_TTL_MS = 10000;
-const DIVERGENCE_PERSIST_MS = 2000;
+const DIVERGENCE_PERSIST_MS = 1500;
 const DIVERGENCE_REPEAT_THRESHOLD = 2;
 const DIVERGENCE_RESYNC_COOLDOWN_MS = 5000;
 const DATABASE_URL = process.env.DATABASE_URL || process.env.POSTGRES_URL || "";
 const dbPool = DATABASE_URL ? new pg.Pool({ connectionString: DATABASE_URL }) : null;
+const {
+  fetchInstanceSnapshotFromDB,
+  fetchCreatorLevels,
+  fetchLevelsForMapName,
+  saveProgressToDB,
+} = createWsApiClient({
+  apiBaseUrl: API_BASE_URL,
+  wsServiceToken: WS_SERVICE_TOKEN,
+});
 
 // roomId -> Map<WebSocket, userData>
 const rooms = new Map();
@@ -39,6 +69,7 @@ const connectionState = new WeakMap();
 const roomEditorState = new Map();
 const roomLobbyState = new Map();
 const roomYDocs = new Map();
+const roomYDocGenerations = new Map();
 const gameDuplicateSettingsCache = new Map();
 
 // roomId -> { ctx, timer }
@@ -82,17 +113,15 @@ function removeUserFromRoom(roomId, socket) {
       if (!rooms.has(roomId) && !roomWriteBuffer.has(roomId)) {
         roomEditorState.delete(roomId);
         roomLobbyState.delete(roomId);
+        roomYDocs.get(roomId)?.destroy();
         roomYDocs.delete(roomId);
+        roomYDocGenerations.delete(roomId);
         roomClientStateHashes.delete(roomId);
       }
     });
   }
 
   return userData;
-}
-
-function isLobbyRoom(roomId) {
-  return typeof roomId === "string" && roomId.startsWith("lobby:");
 }
 
 function ensureLobbyState(roomId) {
@@ -252,6 +281,40 @@ function decodeBase64Update(value) {
   return new Uint8Array(Buffer.from(value, "base64"));
 }
 
+function encodeYjsProtocolPayload(encoder) {
+  return Buffer.from(encoding.toUint8Array(encoder)).toString("base64");
+}
+
+function getRoomYDocGeneration(roomId) {
+  return roomYDocGenerations.get(roomId) || 0;
+}
+
+function sendYjsProtocol(socket, roomId, channel, encoder) {
+  if (encoding.length(encoder) === 0) {
+    return;
+  }
+  sendMessage(socket, "yjs-protocol", {
+    roomId,
+    groupId: extractGroupIdFromRoomId(roomId),
+    channel,
+    payloadBase64: encodeYjsProtocolPayload(encoder),
+    ts: Date.now(),
+  });
+}
+
+function broadcastYjsProtocol(roomId, channel, encoder, excludeSocket = null) {
+  if (encoding.length(encoder) === 0) {
+    return;
+  }
+  broadcastToRoom(roomId, "yjs-protocol", {
+    roomId,
+    groupId: extractGroupIdFromRoomId(roomId),
+    channel,
+    payloadBase64: encodeYjsProtocolPayload(encoder),
+    ts: Date.now(),
+  }, excludeSocket);
+}
+
 function getYTextKey(editorType, levelIndex) {
   return `level:${levelIndex}:${editorType}`;
 }
@@ -272,6 +335,31 @@ function hydrateYDocFromState(doc, state) {
   }, "hydrate-room-state");
 }
 
+function createRoomYDoc(roomId, state, generation = Math.max(getRoomYDocGeneration(roomId), 1)) {
+  const existing = roomYDocs.get(roomId);
+  if (existing) {
+    existing.destroy();
+  }
+
+  const doc = new Y.Doc();
+  hydrateYDocFromState(doc, state);
+  roomYDocs.set(roomId, doc);
+  roomYDocGenerations.set(roomId, generation);
+
+  doc.on("update", (update, origin) => {
+    const roomState = roomEditorState.get(roomId);
+    if (!roomState?.ctx) {
+      return;
+    }
+    markRoomDirty(roomId, roomState.ctx);
+    const encoder = encoding.createEncoder();
+    syncProtocol.writeUpdate(encoder, update);
+    broadcastYjsProtocol(roomId, "sync", encoder, origin instanceof WebSocket ? origin : null);
+  });
+
+  return doc;
+}
+
 function getOrCreateYDoc(roomId, state) {
   if (!isYjsEnabled()) {
     return null;
@@ -280,10 +368,7 @@ function getOrCreateYDoc(roomId, state) {
   if (existing) {
     return existing;
   }
-  const doc = new Y.Doc();
-  hydrateYDocFromState(doc, state);
-  roomYDocs.set(roomId, doc);
-  return doc;
+  return createRoomYDoc(roomId, state);
 }
 
 function syncStateFromYDoc(roomId, state) {
@@ -398,12 +483,9 @@ async function forceRoomResync(roomId, editorType, levelIndex, reason) {
   if (isYjsEnabled()) {
     const doc = getOrCreateYDoc(roomId, state);
     if (doc) {
-      broadcastToRoom(roomId, "yjs-sync", {
-        roomId,
-        groupId: extractGroupIdFromRoomId(roomId),
-        updateBase64: encodeUpdateToBase64(Y.encodeStateAsUpdate(doc)),
-        ts: Date.now(),
-      });
+      const encoder = encoding.createEncoder();
+      syncProtocol.writeSyncStep2(encoder, doc);
+      broadcastYjsProtocol(roomId, "sync", encoder);
     }
   } else if (Number.isInteger(levelIndex)) {
     broadcastEditorResync(roomId, state, levelIndex);
@@ -434,6 +516,15 @@ async function evaluateClientStateHashes(roomId, report) {
     return;
   }
 
+  const quietWindowSatisfied = reports.every((candidate) => {
+    const localInputAgeMs = Number.isFinite(candidate.localInputAgeMs) ? candidate.localInputAgeMs : null;
+    const remoteApplyAgeMs = Number.isFinite(candidate.remoteApplyAgeMs) ? candidate.remoteApplyAgeMs : null;
+    return (
+      (localInputAgeMs == null || localInputAgeMs >= DIVERGENCE_PERSIST_MS)
+      && (remoteApplyAgeMs == null || remoteApplyAgeMs >= DIVERGENCE_PERSIST_MS)
+    );
+  });
+
   const signature = uniqueHashes.sort().join("|");
   const previous = roomDivergenceState.get(divergenceKey) || {
     firstDetectedAt: now,
@@ -460,6 +551,13 @@ async function evaluateClientStateHashes(roomId, report) {
 
   roomDivergenceState.set(divergenceKey, nextState);
 
+  if (!quietWindowSatisfied) {
+    console.info(
+      `[divergence:transient] room=${roomId} editorType=${report.editorType} levelIndex=${report.levelIndex} signature=${signature}`
+    );
+    return;
+  }
+
   if (
     nextState.repeatCount < DIVERGENCE_REPEAT_THRESHOLD
     && now - nextState.firstDetectedAt < DIVERGENCE_PERSIST_MS
@@ -478,6 +576,7 @@ async function evaluateClientStateHashes(roomId, report) {
     {
       participants: summary,
       hashCount: uniqueHashes.length,
+      quietWindowSatisfied,
     },
     {
       editorType: report.editorType,
@@ -514,7 +613,9 @@ function clearRoomMemory(roomId) {
   roomWriteBuffer.delete(roomId);
   roomEditorState.delete(roomId);
   roomLobbyState.delete(roomId);
+  roomYDocs.get(roomId)?.destroy();
   roomYDocs.delete(roomId);
+  roomYDocGenerations.delete(roomId);
   roomClientStateHashes.delete(roomId);
   for (const key of Array.from(roomDivergenceState.keys())) {
     if (key.startsWith(`${roomId}:`)) {
@@ -563,89 +664,6 @@ function invalidateGameInstanceRooms(gameId, payload = {}) {
   }, 50);
 
   return { roomIds, invalidatedRoomCount: matchingRooms.length, disconnectedSocketCount: socketsToClose.length };
-}
-
-async function readJsonBody(req) {
-  const chunks = [];
-  for await (const chunk of req) {
-    chunks.push(chunk);
-  }
-  if (chunks.length === 0) {
-    return {};
-  }
-  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
-}
-
-function parseEnvelope(rawMessage) {
-  try {
-    const parsed = JSON.parse(rawMessage);
-    if (!parsed || typeof parsed !== "object" || typeof parsed.type !== "string") {
-      return null;
-    }
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-function extractGroupIdFromRoomId(roomId) {
-  if (typeof roomId !== "string" || !roomId.startsWith("group:")) {
-    return undefined;
-  }
-
-  const afterPrefix = roomId.slice("group:".length);
-  const gameSeparatorIndex = afterPrefix.indexOf(":game:");
-  if (gameSeparatorIndex === -1) {
-    return afterPrefix || undefined;
-  }
-
-  const parsedGroupId = afterPrefix.slice(0, gameSeparatorIndex);
-  return parsedGroupId || undefined;
-}
-
-function parseRoomContext(roomId) {
-  if (typeof roomId !== "string") return null;
-
-  const groupMatch = roomId.match(/^group:(.+?):game:(.+)$/);
-  if (groupMatch) {
-    return { kind: "instance", gameId: groupMatch[2], groupId: groupMatch[1], userId: null };
-  }
-
-  const individualMatch = roomId.match(/^individual:(.+?):game:(.+)$/);
-  if (individualMatch) {
-    return { kind: "instance", gameId: individualMatch[2], groupId: null, userId: individualMatch[1] };
-  }
-
-  const creatorMatch = roomId.match(/^creator:(.+?):map:(.+)$/);
-  if (creatorMatch) {
-    return {
-      kind: "creator",
-      gameId: creatorMatch[1],
-      mapName: decodeURIComponent(creatorMatch[2]),
-      groupId: null,
-      userId: null,
-    };
-  }
-
-  return null;
-}
-
-function extractGameIdFromRoomId(roomId) {
-  if (typeof roomId !== "string") {
-    return null;
-  }
-
-  const instanceContext = parseRoomContext(roomId);
-  if (instanceContext?.gameId) {
-    return instanceContext.gameId;
-  }
-
-  const lobbyMatch = roomId.match(/^lobby:.+:game:(.+)$/);
-  if (lobbyMatch) {
-    return lobbyMatch[1] || null;
-  }
-
-  return null;
 }
 
 function findDuplicateUsersInGame(gameId, baseUserData) {
@@ -774,280 +792,32 @@ function serializeGroupStartSync(roomId, state) {
   };
 }
 
-function buildInstanceQueryParams(ctx) {
-  if (ctx.kind !== "instance") {
-    return "";
-  }
-  const params = new URLSearchParams();
-  params.set("accessContext", "game");
-  if (ctx.groupId) params.set("groupId", ctx.groupId);
-  if (ctx.userId) params.set("userId", ctx.userId);
-  return params.toString();
-}
-
-async function fetchInstanceSnapshotFromDB(ctx) {
-  const qs = buildInstanceQueryParams(ctx);
-  const url = `${API_BASE_URL}/api/games/${ctx.gameId}/instance${qs ? `?${qs}` : ""}`;
-
-  try {
-    const response = await fetch(url, {
-      headers: {
-        "x-ws-service-token": WS_SERVICE_TOKEN,
-      },
-    });
-    if (!response.ok) {
-      console.error(`[db-fetch:error] status=${response.status} url=${url}`);
-      return null;
-    }
-    const data = await response.json();
-    return {
-      instanceId: data?.instance?.id ?? null,
-      progressData: data?.instance?.progressData ?? null,
-      mapName: typeof data?.mapName === "string" ? data.mapName : "",
-    };
-  } catch (err) {
-    console.error(`[db-fetch:error] url=${url}`, err.message);
-    return null;
-  }
-}
-
-async function saveProgressToDB(ctx, progressData) {
-  if (ctx.kind !== "instance") {
-    return { ok: true, permanentFailure: false };
-  }
-
-  const qs = buildInstanceQueryParams(ctx);
-  const url = `${API_BASE_URL}/api/games/${ctx.gameId}/instance${qs ? `?${qs}` : ""}`;
-
-  try {
-    const response = await fetch(url, {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        "x-ws-service-token": WS_SERVICE_TOKEN,
-      },
-      body: JSON.stringify({ progressData }),
-    });
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => "");
-      console.error(`[db-save:error] status=${response.status} url=${url}${errorText ? ` body=${errorText}` : ""}`);
-      return {
-        ok: false,
-        permanentFailure: response.status === 404,
-      };
-    }
-    console.log(`[db-save:ok] gameId=${ctx.gameId}`);
-    return { ok: true, permanentFailure: false };
-  } catch (err) {
-    console.error(`[db-save:error] url=${url}`, err.message);
-    return { ok: false, permanentFailure: false };
-  }
-}
-
-async function fetchCreatorLevels(ctx) {
-  const url = `${API_BASE_URL}/api/maps/levels/${encodeURIComponent(ctx.mapName)}`;
-
-  try {
-    const response = await fetch(url);
-    if (!response.ok) {
-      console.error(`[creator-fetch:error] status=${response.status} url=${url}`);
-      return [];
-    }
-
-    const levels = await response.json();
-    return Array.isArray(levels) ? levels : [];
-  } catch (err) {
-    console.error(`[creator-fetch:error] url=${url}`, err.message);
-    return [];
-  }
-}
-
-async function fetchLevelsForMapName(mapName) {
-  const url = `${API_BASE_URL}/api/maps/levels/${encodeURIComponent(mapName)}`;
-
-  try {
-    const response = await fetch(url);
-    if (!response.ok) {
-      console.error(`[map-fetch:error] status=${response.status} url=${url}`);
-      return [];
-    }
-
-    const levels = await response.json();
-    return Array.isArray(levels) ? levels : [];
-  } catch (err) {
-    console.error(`[map-fetch:error] url=${url}`, err.message);
-    return [];
-  }
-}
-
-function mergeTemplateAndProgressLevels(templateLevels = [], progressLevels = []) {
-  const mergedLevels = [];
-  const maxLevelCount = Math.max(templateLevels.length, progressLevels.length);
-
-  for (let levelIndex = 0; levelIndex < maxLevelCount; levelIndex += 1) {
-    const templateLevel = templateLevels[levelIndex];
-    const progressLevel = progressLevels[levelIndex];
-
-    if (templateLevel && progressLevel && typeof progressLevel === "object") {
-      const templateCode =
-        templateLevel.code && typeof templateLevel.code === "object" ? templateLevel.code : {};
-      const progressCode =
-        progressLevel.code && typeof progressLevel.code === "object" ? progressLevel.code : {};
-
-      mergedLevels.push({
-        ...templateLevel,
-        ...progressLevel,
-        name:
-          typeof progressLevel.name === "string" && progressLevel.name.length > 0
-            ? progressLevel.name
-            : templateLevel.name,
-        code: {
-          html:
-            typeof progressCode.html === "string"
-              ? progressCode.html
-              : (typeof templateCode.html === "string" ? templateCode.html : ""),
-          css:
-            typeof progressCode.css === "string"
-              ? progressCode.css
-              : (typeof templateCode.css === "string" ? templateCode.css : ""),
-          js:
-            typeof progressCode.js === "string"
-              ? progressCode.js
-              : (typeof templateCode.js === "string" ? templateCode.js : ""),
-        },
-      });
-      continue;
-    }
-
-    if (templateLevel) {
-      mergedLevels.push(templateLevel);
-      continue;
-    }
-
-    if (progressLevel && typeof progressLevel === "object") {
-      mergedLevels.push(progressLevel);
-    }
-  }
-
-  return mergedLevels;
-}
-
-function createStarterLevel(mapName = "") {
-  return {
-    name: "template",
-    scenarios: [],
-    buildingBlocks: { pictures: [], colors: [] },
-    code: { html: "", css: "", js: "" },
-    solution: { html: "", css: "", js: "" },
-    accuracy: 0,
-    week: mapName,
-    percentageTreshold: 70,
-    percentageFullPointsTreshold: 95,
-    difficulty: "easy",
-    instructions: [],
-    question_and_answer: { question: "", answer: "" },
-    help: { description: "Start coding!", images: [], usefullCSSProperties: [] },
-    timeData: { startTime: 0, pointAndTime: { 0: "0:0", 1: "0:0", 2: "0:0", 3: "0:0", 4: "0:0", 5: "0:0" } },
-    events: [],
-    interactive: false,
-    showScenarioModel: true,
-    showHotkeys: false,
-    showModelPicture: true,
-    lockCSS: false,
-    lockHTML: false,
-    lockJS: false,
-    completed: "",
-    points: 0,
-    maxPoints: 100,
-    confettiSprinkled: false,
-  };
-}
-
-function createVersionMap(source = {}) {
-  return {
-    html: Number.isFinite(source?.html) ? source.html : 0,
-    css: Number.isFinite(source?.css) ? source.css : 0,
-    js: Number.isFinite(source?.js) ? source.js : 0,
-  };
-}
-
-function createLevelState(level = {}) {
-  const { name = "", code = {}, versions = {}, ...meta } = level || {};
-  return {
-    name: typeof name === "string" ? name : "",
-    code: {
-      html: typeof code?.html === "string" ? code.html : "",
-      css: typeof code?.css === "string" ? code.css : "",
-      js: typeof code?.js === "string" ? code.js : "",
-    },
-    versions: createVersionMap(versions),
-    meta,
-  };
-}
-
-function serializeLevelState(level) {
-  return {
-    ...level.meta,
-    name: level.name,
-    code: {
-      html: level.code.html,
-      css: level.code.css,
-      js: level.code.js,
-    },
-  };
-}
-
-function createRoomState(ctx, progressData, options = {}) {
-  const { templateLevels = [], mapName = "", instanceId = null } = options;
-  const normalizedProgressData =
-    progressData && typeof progressData === "object" && !Array.isArray(progressData)
-      ? { ...progressData }
-      : {};
-  const levels = Array.isArray(normalizedProgressData.levels)
-    ? normalizedProgressData.levels.map((level) => createLevelState(level))
-    : [];
-  const normalizedTemplateLevels = Array.isArray(templateLevels)
-    ? templateLevels.map((level) => serializeLevelState(createLevelState(level)))
-    : [];
-
-  return {
-    ctx,
-    progressData: normalizedProgressData,
-    levels,
-    templateLevels: normalizedTemplateLevels,
-    mapName: typeof mapName === "string" ? mapName : "",
-    instanceId: typeof instanceId === "string" ? instanceId : null,
-  };
-}
-
-function ensureLevelState(state, levelIndex) {
-  if (!state.levels[levelIndex]) {
-    state.levels[levelIndex] = createLevelState();
-  }
-  return state.levels[levelIndex];
-}
-
 function serializeRoomStateSync(roomId, state) {
-  syncStateFromYDoc(roomId, state);
+  if (!isYjsEnabled()) {
+    syncStateFromYDoc(roomId, state);
+  }
   const payload = {
-    levels: state.levels.map((level) => ({
-      ...serializeLevelState(level),
-      versions: { ...level.versions },
-    })),
+    levels: state.levels.map((level) => (
+      isYjsEnabled()
+        ? {
+            ...level.meta,
+            name: level.name,
+          }
+        : {
+            ...serializeLevelState(level),
+            versions: { ...level.versions },
+          }
+    )),
     ts: Date.now(),
   };
   const gate = ensureGroupStartGate(state);
   if (gate) {
     payload.groupStartGate = gate;
   }
+  if (isYjsEnabled()) {
+    payload.yjsDocGeneration = getRoomYDocGeneration(roomId);
+  }
   return payload;
-}
-
-function serializeProgressData(state) {
-  return {
-    ...state.progressData,
-    levels: state.levels.map((level) => serializeLevelState(level)),
-  };
 }
 
 function serializeCodeLevels(roomId, state) {
@@ -1189,13 +959,17 @@ async function flushWriteBuffer(roomId) {
     roomWriteBuffer.delete(roomId);
     if (!rooms.has(roomId)) {
       roomEditorState.delete(roomId);
+      roomYDocs.get(roomId)?.destroy();
       roomYDocs.delete(roomId);
+      roomYDocGenerations.delete(roomId);
     }
   } else if (result.permanentFailure) {
     roomWriteBuffer.delete(roomId);
     if (!rooms.has(roomId)) {
       roomEditorState.delete(roomId);
+      roomYDocs.get(roomId)?.destroy();
       roomYDocs.delete(roomId);
+      roomYDocGenerations.delete(roomId);
     }
     console.warn(`[db-save:drop-room] room=${roomId} gameId=${state.ctx.gameId} reason=not-found`);
   } else {
@@ -1400,15 +1174,6 @@ wsServer.on("connection", (socket, request) => {
         if (ctx) {
           const state = await ensureRoomState(roomId, ctx);
           sendMessage(socket, "room-state-sync", serializeRoomStateSync(roomId, state));
-          if (isYjsEnabled()) {
-            const doc = getOrCreateYDoc(roomId, state);
-            sendMessage(socket, "yjs-sync", {
-              roomId,
-              groupId: extractGroupIdFromRoomId(roomId),
-              updateBase64: encodeUpdateToBase64(Y.encodeStateAsUpdate(doc)),
-              ts: Date.now(),
-            });
-          }
           const groupStartSync = serializeGroupStartSync(roomId, state);
           if (groupStartSync) {
             sendMessage(socket, "group-start-sync", groupStartSync);
@@ -1443,15 +1208,6 @@ wsServer.on("connection", (socket, request) => {
 
         const state = await ensureRoomState(roomId, ctx);
         sendMessage(socket, "room-state-sync", serializeRoomStateSync(roomId, state));
-        if (isYjsEnabled()) {
-          const doc = getOrCreateYDoc(roomId, state);
-          sendMessage(socket, "yjs-sync", {
-            roomId,
-            groupId: extractGroupIdFromRoomId(roomId),
-            updateBase64: encodeUpdateToBase64(Y.encodeStateAsUpdate(doc)),
-            ts: Date.now(),
-          });
-        }
         const groupStartSync = serializeGroupStartSync(roomId, state);
         if (groupStartSync) {
           sendMessage(socket, "group-start-sync", groupStartSync);
@@ -1461,13 +1217,18 @@ wsServer.on("connection", (socket, request) => {
         );
         return;
       }
-      case "yjs-sync-request": {
+      case "yjs-protocol": {
         if (!isYjsEnabled()) {
           return;
         }
 
         const roomId = resolveRoomId(data);
-        if (!roomId) {
+        if (
+          !roomId
+          || data.channel !== "sync"
+          || typeof data.payloadBase64 !== "string"
+          || data.payloadBase64.length === 0
+        ) {
           return;
         }
 
@@ -1478,45 +1239,13 @@ wsServer.on("connection", (socket, request) => {
 
         const state = await ensureRoomState(roomId, ctx);
         const doc = getOrCreateYDoc(roomId, state);
-        console.log(`[yjs-sync:emit] room=${roomId} target=${socketId} stateBytes=${Y.encodeStateAsUpdate(doc).byteLength}`);
-        sendMessage(socket, "yjs-sync", {
-          roomId,
-          groupId: extractGroupIdFromRoomId(roomId),
-          updateBase64: encodeUpdateToBase64(Y.encodeStateAsUpdate(doc)),
-          ts: Date.now(),
-        });
-        return;
-      }
-      case "yjs-update": {
-        if (!isYjsEnabled()) {
-          return;
-        }
-
-        const roomId = resolveRoomId(data);
-        if (!roomId || typeof data.updateBase64 !== "string" || data.updateBase64.length === 0) {
-          return;
-        }
-
-        const ctx = parseRoomContext(roomId);
-        if (!ctx) {
-          return;
-        }
-
-        const state = await ensureRoomState(roomId, ctx);
-        const doc = getOrCreateYDoc(roomId, state);
-        const beforeHtmlLen = state.levels?.[0]?.code?.html?.length ?? 0;
-        console.log(`[yjs-update:recv] room=${roomId} socket=${socketId} updateLen=${data.updateBase64.length} beforeHtmlLen=${beforeHtmlLen}`);
-        Y.applyUpdate(doc, decodeBase64Update(data.updateBase64), socketId);
-        syncStateFromYDoc(roomId, state);
-        const afterHtmlLen = state.levels?.[0]?.code?.html?.length ?? 0;
-        markRoomDirty(roomId, ctx);
-        console.log(`[yjs-update:broadcast] room=${roomId} socket=${socketId} afterHtmlLen=${afterHtmlLen}`);
-        broadcastToRoom(roomId, "yjs-update", {
-          roomId,
-          groupId: extractGroupIdFromRoomId(roomId),
-          updateBase64: data.updateBase64,
-          ts: Date.now(),
-        }, socket);
+        const decoder = decoding.createDecoder(decodeBase64Update(data.payloadBase64));
+        const encoder = encoding.createEncoder();
+        const syncMessageType = syncProtocol.readSyncMessage(decoder, encoder, doc, socket);
+        console.log(
+          `[yjs-protocol:recv] room=${roomId} socket=${socketId} messageType=${syncMessageType} payloadLen=${data.payloadBase64.length}`
+        );
+        sendYjsProtocol(socket, roomId, "sync", encoder);
         return;
       }
       case "client-state-hash": {
@@ -2012,10 +1741,8 @@ wsServer.on("connection", (socket, request) => {
         applyStartedGateToLevels(nextState);
         roomEditorState.set(roomId, nextState);
         if (isYjsEnabled()) {
-          // Create a fresh Y.Doc to avoid CRDT tombstone/merge conflicts on reset
-          const freshDoc = new Y.Doc();
-          hydrateYDocFromState(freshDoc, nextState);
-          roomYDocs.set(roomId, freshDoc);
+          const nextGeneration = Math.max(getRoomYDocGeneration(roomId) + 1, 1);
+          createRoomYDoc(roomId, nextState, nextGeneration);
         }
 
         const existingBuffer = roomWriteBuffer.get(roomId);
@@ -2036,15 +1763,7 @@ wsServer.on("connection", (socket, request) => {
           scope === "game"
             ? nextState.levels.map((_, index) => index)
             : [levelIndex];
-        if (isYjsEnabled()) {
-          const doc = roomYDocs.get(roomId);
-          broadcastToRoom(roomId, "yjs-reset", {
-            roomId,
-            groupId: extractGroupIdFromRoomId(roomId),
-            updateBase64: encodeUpdateToBase64(Y.encodeStateAsUpdate(doc)),
-            ts: Date.now(),
-          });
-        } else {
+        if (!isYjsEnabled()) {
           for (const resyncLevelIndex of resyncIndices) {
             const resyncLevel = nextState.levels[resyncLevelIndex];
             if (!resyncLevel) {
