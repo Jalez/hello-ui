@@ -15,6 +15,7 @@ import { useTheme } from "next-themes";
 import EditorMagicButton from "@/components/CreatorControls/EditorMagicButton";
 import { useAppSelector } from "@/store/hooks/hooks";
 import { useGameplayTelemetry } from "@/components/General/useGameplayTelemetry";
+import { useOptionalCollaboration } from "@/lib/collaboration/CollaborationProvider";
 
 import { AiReviewPanel } from "./AiReviewPanel";
 import {
@@ -29,6 +30,7 @@ import { createConsistentLineTheme } from "./theme";
 import type { CodeEditorProps } from "./types";
 import { useCodeEditorCollaboration } from "./useCodeEditorCollaboration";
 import { buildReviewDecorations, useCodeEditorReview } from "./useCodeEditorReview";
+import { titleToEditorType } from "./utils";
 
 const lineNumberCompartment = new Compartment();
 
@@ -80,6 +82,7 @@ export default function CodeEditor({
   const theme = isDark ? vscodeDark : githubLight;
   const consistentLineTheme = createConsistentLineTheme(isDark);
   const lastActivityTsRef = useRef<number | null>(null);
+  const collaboration = useOptionalCollaboration();
 
   const {
     review,
@@ -125,6 +128,7 @@ export default function CodeEditor({
         }
       : undefined,
   });
+  const editorType = titleToEditorType(title);
 
   useEffect(() => {
     const view = editorViewRef.current;
@@ -145,10 +149,14 @@ export default function CodeEditor({
     if (pendingCode === null || pendingCode === template) {
       return;
     }
+    // In Yjs mode, Redux is synced from the shared Y.Doc observer in Editors.tsx.
+    // Pushing transient local mirror state here creates a second authority and
+    // can reintroduce stale template churn during concurrent typing.
+    if (isYjsManaged) {
+      return;
+    }
     // In custom engine mode, skip if applying external update (avoids echo).
-    // In Yjs mode, always flush — Yjs handles WS sync independently and
-    // Redux needs every change for preview, scoring, and submission.
-    if (!isYjsManaged && applyingExternalUpdateRef.current) {
+    if (applyingExternalUpdateRef.current) {
       return;
     }
     codeUpdater({ [title.toLowerCase()]: pendingCode }, type);
@@ -175,6 +183,42 @@ export default function CodeEditor({
   useEffect(() => {
     clearReview();
   }, [clearReview, levelIdentifier, template]);
+
+  useEffect(() => {
+    if (!collaboration?.reportEditorWatchState) {
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      const view = editorViewRef.current;
+      const isFocused = view?.hasFocus ?? false;
+      const isEditable = !locked && Boolean(view?.contentDOM?.isContentEditable ?? true);
+      const version = isYjsManaged ? null : collaboration.getEditorVersion(editorType, currentLevel - 1);
+
+      collaboration.reportEditorWatchState({
+        editorType,
+        levelIndex: currentLevel - 1,
+        content: code,
+        version,
+        isEditable,
+        isFocused,
+        isTyping: false,
+        source: "interval",
+      });
+
+      if (isFocused && !isEditable && !locked) {
+        collaboration.reportCollaborationHealthEvent("editor_readonly_stall", "warn", {
+          contentLength: code.length,
+          version,
+        }, {
+          editorType,
+          levelIndex: currentLevel - 1,
+        });
+      }
+    }, 2000);
+
+    return () => window.clearInterval(interval);
+  }, [code, collaboration, currentLevel, editorType, isYjsManaged, locked, editorViewRef]);
 
   const sharedExtensions = [
     consistentLineTheme,

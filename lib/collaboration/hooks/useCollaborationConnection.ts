@@ -4,6 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActiveUser,
   CanvasCursor,
+  ClientHealthEventMessage,
+  ClientStateHashMessage,
+  CollaborationHealthMessage,
   EditorChange,
   EditorChangeApplied,
   EditorCursor,
@@ -23,6 +26,7 @@ import {
   YjsUpdateMessage,
   GameInstancesResetMessage,
 } from "../types";
+import { getClientCollaborationEngine } from "../engine";
 import { extractGroupIdFromRoomId, generateClientId, generateUserColor, getWebSocketUrl } from "../utils";
 import { RECONNECT_DELAY_MS, MAX_RECONNECT_ATTEMPTS } from "../constants";
 import { logDebugClient } from "@/lib/debug-logger";
@@ -53,6 +57,8 @@ interface UseCollaborationConnectionOptions {
   onYjsUpdate?: (message: YjsUpdateMessage) => void;
   onGameInstancesReset?: (message: GameInstancesResetMessage) => void;
   onIdentityAssigned?: (message: IdentityAssignedMessage) => void;
+  onCollaborationHealth?: (message: CollaborationHealthMessage) => void;
+  onTransportMessage?: (type: string) => void;
 }
 
 interface UseCollaborationConnectionReturn {
@@ -84,6 +90,8 @@ interface UseCollaborationConnectionReturn {
   sendGroupStartReady: () => void;
   sendGroupStartUnready: () => void;
   sendLobbyChat: (text: string) => void;
+  sendClientStateHash: (message: Omit<ClientStateHashMessage, "roomId" | "groupId" | "clientId" | "userId" | "userEmail" | "engine" | "ts">) => void;
+  sendClientHealthEvent: (message: Omit<ClientHealthEventMessage, "roomId" | "groupId" | "clientId" | "userId" | "userEmail" | "engine" | "ts">) => void;
   effectiveIdentity: UserIdentity | null;
 }
 
@@ -109,6 +117,7 @@ export function useCollaborationConnection(
   options: UseCollaborationConnectionOptions
 ): UseCollaborationConnectionReturn {
   const { roomId, user } = options;
+  const collabEngine = getClientCollaborationEngine();
   const parsedGroupId = extractGroupIdFromRoomId(roomId);
 
   const optionsRef = useRef(options);
@@ -279,6 +288,7 @@ export function useCollaborationConnection(
         }
 
         const payload = envelope.payload;
+        optionsRef.current.onTransportMessage?.(envelope.type);
 
         switch (envelope.type) {
           case "error": {
@@ -479,6 +489,9 @@ export function useCollaborationConnection(
             return;
           case "game-instances-reset":
             optionsRef.current.onGameInstancesReset?.(payload as GameInstancesResetMessage);
+            return;
+          case "collaboration-health":
+            optionsRef.current.onCollaborationHealth?.(payload as CollaborationHealthMessage);
             return;
           default:
             return;
@@ -839,6 +852,38 @@ export function useCollaborationConnection(
     });
   }, [effectiveIdentity, roomId, sendMessage]);
 
+  const sendClientStateHash = useCallback((message: Omit<ClientStateHashMessage, "roomId" | "groupId" | "clientId" | "userId" | "userEmail" | "engine" | "ts">) => {
+    if (!roomId || !effectiveIdentity || !clientIdRef.current) {
+      return;
+    }
+    sendMessage("client-state-hash", {
+      roomId,
+      groupId: parsedGroupId ?? undefined,
+      clientId: clientIdRef.current,
+      userId: effectiveIdentity.id,
+      userEmail: effectiveIdentity.email,
+      engine: collabEngine,
+      ...message,
+      ts: Date.now(),
+    } satisfies ClientStateHashMessage);
+  }, [collabEngine, effectiveIdentity, parsedGroupId, roomId, sendMessage]);
+
+  const sendClientHealthEvent = useCallback((message: Omit<ClientHealthEventMessage, "roomId" | "groupId" | "clientId" | "userId" | "userEmail" | "engine" | "ts">) => {
+    if (!roomId || !effectiveIdentity || !clientIdRef.current) {
+      return;
+    }
+    sendMessage("client-health-event", {
+      roomId,
+      groupId: parsedGroupId ?? undefined,
+      clientId: clientIdRef.current,
+      userId: effectiveIdentity.id,
+      userEmail: effectiveIdentity.email,
+      engine: collabEngine,
+      ...message,
+      ts: Date.now(),
+    } satisfies ClientHealthEventMessage);
+  }, [collabEngine, effectiveIdentity, parsedGroupId, roomId, sendMessage]);
+
   const connect = useCallback(() => {
     manualDisconnectRef.current = false;
     if (!socketRef.current) {
@@ -869,6 +914,8 @@ export function useCollaborationConnection(
     sendGroupStartReady,
     sendGroupStartUnready,
     sendLobbyChat,
+    sendClientStateHash,
+    sendClientHealthEvent,
     effectiveIdentity,
   };
 }

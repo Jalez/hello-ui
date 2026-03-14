@@ -39,6 +39,7 @@ export interface RoomStateSyncLevel {
 
 export interface RoomStateSyncMessage {
   levels: RoomStateSyncLevel[];
+  groupStartGate?: GroupStartGateState;
   ts: number;
 }
 
@@ -234,4 +235,66 @@ export interface GameInstancesResetMessage {
   actorUserName?: string;
   reason?: string;
   ts: number;
+}
+
+export type CollaborationHealthSeverity = "info" | "warn" | "error";
+
+export interface CollaborationHealthMessage {
+  roomId: string;
+  groupId?: string;
+  eventType: string;
+  severity: CollaborationHealthSeverity;
+  clientId?: string;
+  userId?: string;
+  editorType?: EditorType;
+  levelIndex?: number;
+  details?: Record<string, unknown>;
+  ts: number;
+}
+
+export interface ClientStateHashMessage {
+  roomId: string;
+  groupId?: string;
+  clientId: string;
+  userId: string;
+  userEmail?: string;
+  engine: "custom" | "yjs";
+  editorType: EditorType;
+  levelIndex: number;
+  contentHash: string;
+  contentLength: number;
+  version?: number | null;
+  isFocused?: boolean;
+  isEditable?: boolean;
+  isTyping?: boolean;
+  localInputAgeMs?: number | null;
+  remoteApplyAgeMs?: number | null;
+  ts: number;
+}
+
+export interface ClientHealthEventMessage {
+  roomId: string;
+  groupId?: string;
+  clientId: string;
+  userId: string;
+  userEmail?: string;
+  engine: "custom" | "yjs";
+  eventType: string;
+  severity: CollaborationHealthSeverity;
+  editorType?: EditorType;
+  levelIndex?: number;
+  details?: Record<string, unknown>;
+  ts: number;
+}
+
+export interface EditorWatchdogSnapshot {
+  editorType: EditorType;
+  levelIndex: number;
+  content: string;
+  version?: number | null;
+  isEditable: boolean;
+  isFocused: boolean;
+  isTyping?: boolean;
+  source: "interval" | "local_input" | "remote_apply" | "room_sync" | "focus";
+  ts?: number;
 }

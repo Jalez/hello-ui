@@ -5,9 +5,12 @@ import * as Y from "yjs";
 import {
   ActiveUser,
   CanvasCursor,
+  CollaborationHealthMessage,
+  CollaborationHealthSeverity,
   EditorCursor,
   EditorChange,
   EditorChangeApplied,
+  EditorWatchdogSnapshot,
   EditorResync,
   GroupStartGateState,
   GroupStartSyncMessage,
@@ -63,6 +66,34 @@ export type ProgressSync = ProgressSyncMessage | null;
 export type GroupStartSync = GroupStartSyncMessage | null;
 export type GameInstancesResetSync = GameInstancesResetMessage | null;
 
+const EDITOR_HASH_INTERVAL_MS = 2000;
+const STALL_DETECTION_WINDOW_MS = 6000;
+const STALL_RETRY_COOLDOWN_MS = 10000;
+const LONG_TASK_WARN_MS = 700;
+
+type LocalEditorWatchState = EditorWatchdogSnapshot & {
+  contentHash: string;
+  contentLength: number;
+  lastObservedAt: number;
+  lastHashSentAt: number;
+  lastLocalInputAt: number;
+  lastRemoteApplyAt: number;
+  lastStallEventAt: number;
+};
+
+function getEditorWatchKey(editorType: EditorType, levelIndex: number): string {
+  return `${levelIndex}:${editorType}`;
+}
+
+function hashContent(content: string): string {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < content.length; index += 1) {
+    hash ^= content.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
 function hasSharedStartTime(roomState: RoomStateSync): boolean {
   const firstLevel = roomState?.levels?.[0];
   const timeData =
@@ -70,6 +101,51 @@ function hasSharedStartTime(roomState: RoomStateSync): boolean {
       ? (firstLevel.timeData as Record<string, unknown>)
       : null;
   return Number(timeData?.startTime ?? 0) > 0;
+}
+
+function normalizeGroupStartGateFromRoomState(roomState: RoomStateSync): GroupStartGateState | null {
+  const candidate = roomState?.groupStartGate;
+  if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+    return null;
+  }
+
+  const readyUserIds = Array.isArray(candidate.readyUserIds)
+    ? candidate.readyUserIds.filter((entry): entry is string => typeof entry === "string" && entry.length > 0)
+    : [];
+  const rawReadyUsers =
+    candidate.readyUsers && typeof candidate.readyUsers === "object" && !Array.isArray(candidate.readyUsers)
+      ? candidate.readyUsers
+      : {};
+
+  return {
+    status: candidate.status === "started" ? "started" : "waiting",
+    minReadyCount:
+      typeof candidate.minReadyCount === "number" && Number.isFinite(candidate.minReadyCount)
+        ? candidate.minReadyCount
+        : 2,
+    readyUserIds,
+    readyUsers: readyUserIds.reduce<Record<string, GroupStartGateState["readyUsers"][string]>>((acc, userId) => {
+      const readyUser = rawReadyUsers[userId];
+      acc[userId] = {
+        userId,
+        ...(readyUser && typeof readyUser === "object" && !Array.isArray(readyUser) && typeof readyUser.userName === "string"
+          ? { userName: readyUser.userName }
+          : {}),
+        ...(readyUser && typeof readyUser === "object" && !Array.isArray(readyUser) && typeof readyUser.userEmail === "string"
+          ? { userEmail: readyUser.userEmail }
+          : {}),
+        ...(readyUser && typeof readyUser === "object" && !Array.isArray(readyUser) && typeof readyUser.userImage === "string"
+          ? { userImage: readyUser.userImage }
+          : {}),
+        ...(readyUser && typeof readyUser === "object" && !Array.isArray(readyUser) && typeof readyUser.readyAt === "string"
+          ? { readyAt: readyUser.readyAt }
+          : {}),
+      };
+      return acc;
+    }, {}),
+    startedAt: typeof candidate.startedAt === "string" ? candidate.startedAt : null,
+    startedByUserId: typeof candidate.startedByUserId === "string" ? candidate.startedByUserId : null,
+  };
 }
 
 interface CollaborationContextValue {
@@ -94,6 +170,7 @@ interface CollaborationContextValue {
   groupStartGate: GroupStartGateState | null;
   lobbyMessages: LobbyChatEntry[];
   initialRoomState: RoomStateSync;
+  lastHealthMessage: CollaborationHealthMessage | null;
   codeSyncReady: boolean;
   yjsReady: boolean;
   yjsDocGeneration: number;
@@ -113,6 +190,13 @@ interface CollaborationContextValue {
   syncProgressData: (progressData: Record<string, unknown>) => void;
   setGroupReady: (isReady: boolean) => void;
   sendLobbyChat: (text: string) => void;
+  reportEditorWatchState: (snapshot: EditorWatchdogSnapshot) => void;
+  reportCollaborationHealthEvent: (
+    eventType: string,
+    severity: CollaborationHealthSeverity,
+    details?: Record<string, unknown>,
+    scope?: { editorType?: EditorType; levelIndex?: number }
+  ) => void;
   getYText: (editorType: EditorType, levelIndex: number) => Y.Text | null;
   connect: () => void;
   disconnect: () => void;
@@ -142,13 +226,43 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
   const [groupStartGate, setGroupStartGate] = useState<GroupStartGateState | null>(null);
   const [lobbyMessages, setLobbyMessages] = useState<LobbyChatEntry[]>([]);
   const [initialRoomState, setInitialRoomState] = useState<RoomStateSync>(null);
+  const [lastHealthMessage, setLastHealthMessage] = useState<CollaborationHealthMessage | null>(null);
   const [codeSyncReady, setCodeSyncReady] = useState(false);
   const [yjsReady, setYjsReady] = useState(false);
   const [yjsDocGeneration, setYjsDocGeneration] = useState(0);
   const remoteEventSeqRef = React.useRef(0);
   const wasConnectedRef = React.useRef(false);
   const hasConnectedOnceRef = React.useRef(false);
+  const hasDisconnectedUnexpectedlyRef = React.useRef(false);
   const yDocRef = React.useRef<Y.Doc | null>(null);
+  const editorWatchStatesRef = React.useRef<Map<string, LocalEditorWatchState>>(new Map());
+  const lastTransportMessageAtRef = React.useRef(0);
+  const localActiveEditorRef = React.useRef<{ editorType: EditorType; levelIndex: number } | null>(null);
+  const lastHealthEventAtRef = React.useRef<Map<string, number>>(new Map());
+
+  const markEditorRemoteApply = useCallback((editorType?: EditorType, levelIndex?: number) => {
+    const now = Date.now();
+    if (editorType && Number.isInteger(levelIndex)) {
+      const key = getEditorWatchKey(editorType, levelIndex);
+      const existing = editorWatchStatesRef.current.get(key);
+      if (existing) {
+        editorWatchStatesRef.current.set(key, {
+          ...existing,
+          lastRemoteApplyAt: now,
+          lastObservedAt: now,
+        });
+      }
+      return;
+    }
+
+    editorWatchStatesRef.current.forEach((state, key) => {
+      editorWatchStatesRef.current.set(key, {
+        ...state,
+        lastRemoteApplyAt: now,
+        lastObservedAt: now,
+      });
+    });
+  }, []);
 
   const getYTextKey = useCallback((editorType: EditorType, levelIndex: number) => {
     return `level:${levelIndex}:${editorType}`;
@@ -269,6 +383,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
     if (isYjsEnabled) {
       return;
     }
+    markEditorRemoteApply(change.editorType, change.levelIndex);
     setEditorVersion(change.editorType, change.levelIndex, change.nextVersion);
     const seq = ++remoteEventSeqRef.current;
     setRemoteCodeChanges((prev) => [
@@ -284,12 +399,13 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
         ts: Date.now(),
       },
     ]);
-  }, [isYjsEnabled, setEditorVersion]);
+  }, [isYjsEnabled, markEditorRemoteApply, setEditorVersion]);
 
   const handleEditorChangeApplied = useCallback((message: EditorChangeApplied) => {
     if (isYjsEnabled) {
       return;
     }
+    markEditorRemoteApply(message.editorType, message.levelIndex);
     setEditorVersion(message.editorType, message.levelIndex, message.nextVersion);
     const seq = ++remoteEventSeqRef.current;
     setLocalCodeAcks((prev) => [
@@ -303,12 +419,13 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
         ts: Date.now(),
       },
     ]);
-  }, [isYjsEnabled, setEditorVersion]);
+  }, [isYjsEnabled, markEditorRemoteApply, setEditorVersion]);
 
   const handleEditorResync = useCallback((message: EditorResync) => {
     if (isYjsEnabled) {
       return;
     }
+    markEditorRemoteApply(message.editorType, message.levelIndex);
     setEditorVersion(message.editorType, message.levelIndex, message.version);
     const seq = ++remoteEventSeqRef.current;
     setRemoteCodeResyncs((prev) => [
@@ -322,16 +439,21 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
         ts: Date.now(),
       },
     ]);
-  }, [isYjsEnabled, setEditorVersion]);
+  }, [isYjsEnabled, markEditorRemoteApply, setEditorVersion]);
 
   const handleRoomStateSync = useCallback((roomState: RoomStateSyncMessage) => {
+    markEditorRemoteApply();
     setInitialRoomState(roomState);
+    const roomGate = normalizeGroupStartGateFromRoomState(roomState);
+    if (roomGate) {
+      setGroupStartGate(roomGate);
+    }
     if (!isYjsEnabled) {
       syncEditorVersions(roomState);
       setCodeSyncReady(true);
       return;
     }
-  }, [isYjsEnabled, syncEditorVersions]);
+  }, [isYjsEnabled, markEditorRemoteApply, syncEditorVersions]);
 
   const handleProgressSync = useCallback((message: ProgressSyncMessage) => {
     setLastProgressSync(message);
@@ -351,6 +473,34 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
 
   const handleLobbyChatMessage = useCallback((message: LobbyChatEntry) => {
     setLobbyMessages((prev) => [...prev.slice(-99), message]);
+  }, []);
+
+  const handleTransportMessage = useCallback(() => {
+    lastTransportMessageAtRef.current = Date.now();
+  }, []);
+
+  const handleCollaborationHealth = useCallback((message: CollaborationHealthMessage) => {
+    setLastHealthMessage(message);
+  }, []);
+
+  const handleSocketConnected = useCallback(() => {
+    hasDisconnectedUnexpectedlyRef.current = false;
+    lastTransportMessageAtRef.current = Date.now();
+  }, []);
+
+  const handleSocketDisconnected = useCallback(() => {
+    hasDisconnectedUnexpectedlyRef.current = true;
+    lastTransportMessageAtRef.current = 0;
+    editorWatchStatesRef.current.clear();
+    setCodeSyncReady(false);
+    setYjsReady(false);
+    setInitialRoomState(null);
+    setLastHealthMessage(null);
+    setRemoteCodeChanges([]);
+    setRemoteCodeResyncs([]);
+    setLocalCodeAcks([]);
+    setCanvasCursors(new Map());
+    setEditorCursors(new Map());
   }, []);
 
   const handleTabFocus = useCallback((message: TabFocusMessage) => {
@@ -383,8 +533,9 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       updateLength: message.updateBase64.length,
     });
     Y.applyUpdate(doc, decodeBase64ToUint8Array(message.updateBase64), "remote-yjs");
+    markEditorRemoteApply();
     setYjsReady(true);
-  }, [resolvedRoomId]);
+  }, [markEditorRemoteApply, resolvedRoomId]);
 
   const handleYjsReset = useCallback((message: { updateBase64: string }) => {
     if (!message.updateBase64) {
@@ -409,9 +560,10 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       }
       sendYjsUpdateRef.current?.(encodeUint8ArrayToBase64(update));
     });
+    markEditorRemoteApply();
     setYjsReady(true);
     setYjsDocGeneration((prev) => prev + 1);
-  }, [resolvedRoomId]);
+  }, [markEditorRemoteApply, resolvedRoomId]);
 
   const handleYjsUpdate = useCallback((message: { updateBase64: string }) => {
     const doc = yDocRef.current;
@@ -423,8 +575,9 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       updateLength: message.updateBase64.length,
     });
     Y.applyUpdate(doc, decodeBase64ToUint8Array(message.updateBase64), "remote-yjs");
+    markEditorRemoteApply();
     setYjsReady(true);
-  }, [resolvedRoomId]);
+  }, [markEditorRemoteApply, resolvedRoomId]);
 
   const {
     isConnected,
@@ -446,12 +599,16 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
     sendGroupStartReady,
     sendGroupStartUnready,
     sendLobbyChat,
+    sendClientStateHash,
+    sendClientHealthEvent,
     effectiveIdentity,
   } = useCollaborationConnection({
     roomId: resolvedRoomId,
     user,
     onUserJoined: handleUserJoined,
     onUserLeft: handleUserLeft,
+    onConnected: handleSocketConnected,
+    onDisconnected: handleSocketDisconnected,
     onCanvasCursor: handleCanvasCursor,
     onEditorCursor: handleEditorCursor,
     onEditorChange: handleEditorChange,
@@ -469,7 +626,98 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
     onYjsSync: handleYjsSync,
     onYjsReset: handleYjsReset,
     onYjsUpdate: handleYjsUpdate,
+    onCollaborationHealth: handleCollaborationHealth,
+    onTransportMessage: handleTransportMessage,
   });
+
+  const reportCollaborationHealthEvent = useCallback((
+    eventType: string,
+    severity: CollaborationHealthSeverity,
+    details: Record<string, unknown> = {},
+    scope?: { editorType?: EditorType; levelIndex?: number }
+  ) => {
+    const dedupeKey = `${eventType}:${scope?.levelIndex ?? "na"}:${scope?.editorType ?? "na"}`;
+    const now = Date.now();
+    const lastSentAt = lastHealthEventAtRef.current.get(dedupeKey) ?? 0;
+    if (now - lastSentAt < STALL_RETRY_COOLDOWN_MS) {
+      return;
+    }
+    lastHealthEventAtRef.current.set(dedupeKey, now);
+    sendClientHealthEvent({
+      eventType,
+      severity,
+      editorType: scope?.editorType,
+      levelIndex: scope?.levelIndex,
+      details,
+    });
+  }, [sendClientHealthEvent]);
+
+  const maybeSendEditorHash = useCallback((state: LocalEditorWatchState, minIntervalMs: number) => {
+    const now = Date.now();
+    if (!resolvedRoomId || !isConnected) {
+      return;
+    }
+    if (now - state.lastHashSentAt < minIntervalMs) {
+      return;
+    }
+    const recentlyActive =
+      state.isFocused
+      || now - state.lastLocalInputAt < STALL_DETECTION_WINDOW_MS
+      || now - state.lastRemoteApplyAt < STALL_DETECTION_WINDOW_MS;
+    if (!recentlyActive) {
+      return;
+    }
+    sendClientStateHash({
+      editorType: state.editorType,
+      levelIndex: state.levelIndex,
+      contentHash: state.contentHash,
+      contentLength: state.contentLength,
+      version: state.version ?? null,
+      isFocused: state.isFocused,
+      isEditable: state.isEditable,
+      isTyping: state.isTyping,
+      localInputAgeMs: state.lastLocalInputAt > 0 ? now - state.lastLocalInputAt : null,
+      remoteApplyAgeMs: state.lastRemoteApplyAt > 0 ? now - state.lastRemoteApplyAt : null,
+    });
+    editorWatchStatesRef.current.set(getEditorWatchKey(state.editorType, state.levelIndex), {
+      ...state,
+      lastHashSentAt: now,
+    });
+  }, [isConnected, resolvedRoomId, sendClientStateHash]);
+
+  const reportEditorWatchState = useCallback((snapshot: EditorWatchdogSnapshot) => {
+    const now = snapshot.ts ?? Date.now();
+    const key = getEditorWatchKey(snapshot.editorType, snapshot.levelIndex);
+    const previous = editorWatchStatesRef.current.get(key);
+    const nextState: LocalEditorWatchState = {
+      ...snapshot,
+      contentHash: hashContent(snapshot.content),
+      contentLength: snapshot.content.length,
+      lastObservedAt: now,
+      lastHashSentAt: previous?.lastHashSentAt ?? 0,
+      lastLocalInputAt: snapshot.source === "local_input" ? now : (previous?.lastLocalInputAt ?? 0),
+      lastRemoteApplyAt:
+        snapshot.source === "remote_apply" || snapshot.source === "room_sync"
+          ? now
+          : (previous?.lastRemoteApplyAt ?? 0),
+      lastStallEventAt: previous?.lastStallEventAt ?? 0,
+    };
+
+    editorWatchStatesRef.current.set(key, nextState);
+    if (snapshot.isFocused) {
+      localActiveEditorRef.current = {
+        editorType: snapshot.editorType,
+        levelIndex: snapshot.levelIndex,
+      };
+    } else if (
+      localActiveEditorRef.current?.editorType === snapshot.editorType
+      && localActiveEditorRef.current?.levelIndex === snapshot.levelIndex
+    ) {
+      localActiveEditorRef.current = null;
+    }
+
+    maybeSendEditorHash(nextState, snapshot.source === "local_input" ? 600 : EDITOR_HASH_INTERVAL_MS);
+  }, [maybeSendEditorHash]);
 
   useEffect(() => {
     sendYjsUpdateRef.current = sendYjsUpdate;
@@ -541,16 +789,19 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
     const isReconnect = hasConnectedOnceRef.current && !wasConnected;
     hasConnectedOnceRef.current = true;
 
-    if (!isReconnect || !initialRoomState) {
+    if (!isReconnect) {
       return;
     }
 
     const timer = setTimeout(() => {
       requestRoomStateSync("reconnect_recover");
+      if (isYjsEnabled) {
+        requestYjsSync();
+      }
     }, 250);
 
     return () => clearTimeout(timer);
-  }, [initialRoomState, isConnected, requestRoomStateSync, resolvedRoomId]);
+  }, [isConnected, isYjsEnabled, requestRoomStateSync, requestYjsSync, resolvedRoomId]);
 
   useEffect(() => {
     if (isYjsEnabled) {
@@ -569,6 +820,112 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
   }, [isConnected, isYjsEnabled, remoteCodeResyncs, requestRoomStateSync, resolvedRoomId]);
 
   const { activeUsers, usersByTab, addUser, setUsers, removeUser, clearUsers, updateUserTab, updateUserTyping } = useCollaborationPresence({});
+
+  useEffect(() => {
+    if (!lastHealthMessage || !resolvedRoomId || !isConnected) {
+      return;
+    }
+
+    if (lastHealthMessage.eventType !== "divergence_detected") {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      requestRoomStateSync(`health:${lastHealthMessage.eventType}`);
+      if (isYjsEnabled) {
+        requestYjsSync();
+      }
+    }, 150);
+
+    return () => clearTimeout(timer);
+  }, [isConnected, isYjsEnabled, lastHealthMessage, requestRoomStateSync, requestYjsSync, resolvedRoomId]);
+
+  useEffect(() => {
+    if (!resolvedRoomId || !isConnected) {
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      const now = Date.now();
+      const latestTransportAt = lastTransportMessageAtRef.current;
+
+      editorWatchStatesRef.current.forEach((state, key) => {
+        maybeSendEditorHash(state, EDITOR_HASH_INTERVAL_MS);
+
+        const remoteTypers = activeUsers.filter((user) =>
+          user.isTyping
+          && user.activeTab === state.editorType
+          && user.activeLevelIndex === state.levelIndex
+        ).length;
+        const recentLocalTyping = now - state.lastLocalInputAt < STALL_DETECTION_WINDOW_MS;
+        const transportStale = latestTransportAt > 0 && now - latestTransportAt > STALL_DETECTION_WINDOW_MS;
+        const remoteApplyStale = state.lastRemoteApplyAt > 0 && now - state.lastRemoteApplyAt > STALL_DETECTION_WINDOW_MS;
+        const focusedEditable = state.isFocused && state.isEditable;
+
+        if (
+          focusedEditable
+          && recentLocalTyping
+          && remoteTypers > 0
+          && (transportStale || remoteApplyStale)
+          && now - state.lastStallEventAt > STALL_RETRY_COOLDOWN_MS
+        ) {
+          editorWatchStatesRef.current.set(key, {
+            ...state,
+            lastStallEventAt: now,
+          });
+          reportCollaborationHealthEvent("editor_stalled", "error", {
+            transportAgeMs: latestTransportAt > 0 ? now - latestTransportAt : null,
+            remoteApplyAgeMs: state.lastRemoteApplyAt > 0 ? now - state.lastRemoteApplyAt : null,
+            remoteTypers,
+            contentHash: state.contentHash,
+            contentLength: state.contentLength,
+            version: state.version ?? null,
+          }, {
+            editorType: state.editorType,
+            levelIndex: state.levelIndex,
+          });
+          requestRoomStateSync(`stall:${state.editorType}:${state.levelIndex}`);
+          if (isYjsEnabled) {
+            requestYjsSync();
+          }
+        }
+      });
+    }, 1000);
+
+    return () => window.clearInterval(interval);
+  }, [
+    activeUsers,
+    isConnected,
+    isYjsEnabled,
+    maybeSendEditorHash,
+    reportCollaborationHealthEvent,
+    requestRoomStateSync,
+    requestYjsSync,
+    resolvedRoomId,
+  ]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof PerformanceObserver === "undefined" || !resolvedRoomId || !isConnected) {
+      return;
+    }
+
+    const observer = new PerformanceObserver((entryList) => {
+      const activeEditor = localActiveEditorRef.current;
+      for (const entry of entryList.getEntries()) {
+        if (entry.duration < LONG_TASK_WARN_MS) {
+          continue;
+        }
+        reportCollaborationHealthEvent("main_thread_blocked", "warn", {
+          durationMs: Math.round(entry.duration),
+          entryType: entry.entryType,
+          name: entry.name,
+        }, activeEditor ?? undefined);
+      }
+    });
+
+    observer.observe({ entryTypes: ["longtask"] });
+    return () => observer.disconnect();
+  }, [isConnected, reportCollaborationHealthEvent, resolvedRoomId]);
 
   // Wire refs so handleUserJoined / handleCurrentUsers / handleUserLeftId can call them; flush any events that arrived early
   React.useLayoutEffect(() => {
@@ -607,6 +964,14 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
   }, [clearUsers, resetEditorVersions]);
 
   useEffect(() => {
+    if (!resolvedRoomId || isConnected || !hasDisconnectedUnexpectedlyRef.current) {
+      return;
+    }
+
+    clearUsers();
+  }, [clearUsers, isConnected, resolvedRoomId]);
+
+  useEffect(() => {
     queueMicrotask(() => {
       setRemoteCodeChanges([]);
       setRemoteCodeResyncs([]);
@@ -615,6 +980,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       setGroupStartGate(null);
       setLobbyMessages([]);
       setInitialRoomState(null);
+      setLastHealthMessage(null);
       setCodeSyncReady(false);
       setYjsReady(false);
       setYjsDocGeneration(0);
@@ -623,6 +989,10 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
     });
     wasConnectedRef.current = false;
     hasConnectedOnceRef.current = false;
+    lastTransportMessageAtRef.current = 0;
+    editorWatchStatesRef.current.clear();
+    localActiveEditorRef.current = null;
+    lastHealthEventAtRef.current.clear();
     resetEditorVersions();
   }, [resolvedRoomId, resetEditorVersions]);
 
@@ -642,6 +1012,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
 
   const setActiveTab = useCallback(
     (editorType: EditorType, levelIndex: number) => {
+      localActiveEditorRef.current = { editorType, levelIndex };
       sendTabFocus(editorType, levelIndex);
     },
     [sendTabFocus]
@@ -708,6 +1079,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       groupStartGate,
       lobbyMessages,
       initialRoomState,
+      lastHealthMessage,
       codeSyncReady: resolvedCodeSyncReady,
       yjsReady,
       yjsDocGeneration,
@@ -721,6 +1093,8 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       syncProgressData,
       setGroupReady,
       sendLobbyChat,
+      reportEditorWatchState,
+      reportCollaborationHealthEvent,
       getYText,
       connect,
       disconnect,
@@ -747,6 +1121,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       groupStartGate,
       lobbyMessages,
       initialRoomState,
+      lastHealthMessage,
       resolvedCodeSyncReady,
       yjsReady,
       yjsDocGeneration,
@@ -760,6 +1135,8 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       syncProgressData,
       setGroupReady,
       sendLobbyChat,
+      reportEditorWatchState,
+      reportCollaborationHealthEvent,
       getYText,
       connect,
       disconnect,

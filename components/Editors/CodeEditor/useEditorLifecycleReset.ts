@@ -2,6 +2,7 @@ import { useEffect, useRef, type Dispatch, type MutableRefObject, type SetStateA
 import type { ChangeSet } from "@codemirror/state";
 
 interface UseEditorLifecycleResetOptions {
+  enabled?: boolean;
   levelIdentifier: string;
   template: string;
   code: string;
@@ -18,6 +19,7 @@ interface UseEditorLifecycleResetOptions {
 }
 
 export function useEditorLifecycleReset({
+  enabled = true,
   levelIdentifier,
   template,
   code,
@@ -37,6 +39,9 @@ export function useEditorLifecycleReset({
   const lastTemplateRef = useRef(template);
 
   useEffect(() => {
+    if (!enabled) {
+      return;
+    }
     const levelChanged = lastLevelIdentifierRef.current !== levelIdentifier;
     lastLevelIdentifierRef.current = levelIdentifier;
 
@@ -83,6 +88,9 @@ export function useEditorLifecycleReset({
   ]);
 
   useEffect(() => {
+    if (!enabled) {
+      return;
+    }
     if (!applyingExternalUpdateRef.current) {
       return;
     }
@@ -93,6 +101,9 @@ export function useEditorLifecycleReset({
   }, [code, template]);
 
   useEffect(() => {
+    if (!enabled) {
+      return;
+    }
     const templateChanged = lastTemplateRef.current !== template;
     lastTemplateRef.current = template;
 
