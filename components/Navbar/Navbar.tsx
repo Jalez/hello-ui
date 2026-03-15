@@ -65,6 +65,7 @@ export const Navbar = () => {
     isGameRoute &&
     Boolean(currentGame?.id) &&
     canEditCurrentGame;
+  const isCreatorWorkbenchContext = isCreatorRoute && canEditCurrentGame;
   const shouldShowMobileSidebarToggle =
     isGameRoute &&
     isVisible &&
@@ -510,7 +511,7 @@ export const Navbar = () => {
     <div
       className="flex w-full flex-wrap items-center justify-around gap-2 border-b bg-background/80 px-3 py-2 2xl:flex-nowrap 2xl:justify-between"
     >
-      {(isGameRoute || (isCreator && !isGameRoute)) && (
+      {(isGameRoute || isCreatorWorkbenchContext) && (
         <div className="flex w-full min-w-0 items-center gap-1 sm:hidden">
           {!showCreatorGameMenus && shouldShowMobileSidebarToggle && (
             <div className="flex-none rounded-md px-2 py-1.5">
@@ -526,7 +527,7 @@ export const Navbar = () => {
           <div className="flex min-w-0 flex-1 items-center gap-1">
             {showCreatorGameMenus
               ? renderCompactCreatorMenus()
-              : isCreator && !isGameRoute
+              : isCreatorWorkbenchContext
                 ? renderCompactCreatorWorkbenchMenus()
                 : renderCompactPlayerMenus()}
           </div>
@@ -537,7 +538,7 @@ export const Navbar = () => {
       <div className="hidden sm:flex flex-1 min-w-0 items-center gap-1">
         {showCreatorGameMenus && currentGame?.id ? (
           renderCompactCreatorMenus()
-        ) : isCreator && !isGameRoute ? (
+        ) : isCreatorWorkbenchContext ? (
           renderCompactCreatorWorkbenchMenus()
         ) : !isCreatorRoute && !isGameRoute ? (
           <ModeToggleButton displayMode="icon-label" />
