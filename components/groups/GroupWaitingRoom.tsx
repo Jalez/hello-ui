@@ -217,73 +217,43 @@ export function GroupWaitingRoom({
 
         <div className="mt-6 rounded-lg border p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-sm text-muted-foreground">Group status</p>
-              <p className="mt-1 text-xl font-semibold">
-                {isStarted ? "Starting game..." : isReady ? "You are ready" : "Waiting for players"}
-              </p>
-            </div>
+            {joinKey ? (
+              <div>
+                <p className="text-sm text-muted-foreground uppercase tracking-wider">Group Join Key</p>
+                <p className="mt-1 text-2xl font-mono font-semibold tracking-[0.2em]">{joinKey}</p>
+              </div>
+            ) : (
+              <div>
+                <p className="text-sm text-muted-foreground uppercase tracking-wider">Group ID</p>
+                <p className="mt-1 text-xl font-mono font-semibold">{groupId}</p>
+              </div>
+            )}
             <PresenceStack users={connectedUsers} readyUserIds={gate.readyUserIds} />
-          </div>
-          <div className="mt-4 grid gap-2 sm:grid-cols-2">
-            {connectedUsers.map((user) => {
-              const label = user.userName || user.userEmail || user.userId || "Anonymous";
-              const isUserReady = user.userId ? gate.readyUserIds.includes(user.userId) : false;
-
-              // Status text and color logic moved here to match PresenceStack priority
-              const statusText = isUserReady ? "Ready" : user.isConnected ? "Connected" : "Offline";
-              const statusColorClass = isUserReady
-                ? "text-emerald-600"
-                : user.isConnected
-                  ? "text-blue-600"
-                  : "text-muted-foreground";
-
-              return (
-                <div
-                  key={user.userId || user.userEmail}
-                  className="flex items-center justify-between rounded-md border bg-muted/20 px-3 py-2"
-                >
-                  <span className="truncate text-sm">{label}</span>
-                  <span className={cn("text-xs font-medium", statusColorClass)}>
-                    {statusText}
-                  </span>
-                </div>
-              );
-            })}
           </div>
         </div>
 
         <div className="mt-6 flex flex-col gap-3 rounded-lg border p-4 md:flex-row md:items-center md:justify-between">
           <div className="flex flex-wrap gap-3">
             <Button
-              onClick={() => collaboration.setGroupReady(true)}
-              disabled={!collaboration.isConnected || isReady || isStarted}
+              className="min-w-[200px]"
+              variant={isReady ? "outline" : "default"}
+              onClick={() => collaboration.setGroupReady(!isReady)}
+              disabled={!collaboration.isConnected || isStarted}
             >
-              Start Game
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => collaboration.setGroupReady(false)}
-              disabled={!collaboration.isConnected || !isReady || isStarted}
-            >
-              Cancel Ready
+              {!isReady 
+                ? "Start Game" 
+                : isStarted 
+                  ? "Starting game..." 
+                  : gate.readyUserIds.length < GROUP_START_MIN_READY_COUNT
+                    ? `Waiting for ${GROUP_START_MIN_READY_COUNT - gate.readyUserIds.length} more to be ready...`
+                    : "Ready! Starting..."
+              }
             </Button>
           </div>
           <p className="max-w-xl text-sm text-muted-foreground">
-            The game starts for the whole group as soon as at least two members are ready. Later joiners skip this
-            waiting room and enter the running game directly.
+            The game starts as soon as at least two members are ready. Share the key with teammates so they can join!
           </p>
         </div>
-
-        {joinKey && (
-          <div className="mt-4 rounded-lg border bg-muted/20 p-4">
-            <p className="text-sm text-muted-foreground">Group join key</p>
-            <p className="mt-1 text-2xl font-mono font-semibold tracking-[0.2em]">{joinKey}</p>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Share this key with teammates so they can join this group from the lobby.
-            </p>
-          </div>
-        )}
 
         <div className="mt-4 text-sm text-muted-foreground">
           {connectedUsers.filter((user) => user.isConnected).length} player
