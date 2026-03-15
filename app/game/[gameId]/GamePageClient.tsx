@@ -9,6 +9,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { GroupSelector, PublicGroupLobby, GroupWaitingRoom, normalizeGroupStartGate } from "@/components/groups";
 import { useSidebarCollapse } from "@/components/default/sidebar/context/SidebarCollapseContext";
 import { GameSummaryView } from "@/components/GameSummary/GameSummaryView";
+import { FinishGameView } from "@/components/GameSummary/FinishGameView";
 import { apiUrl } from "@/lib/apiUrl";
 import { useAppDispatch } from "@/store/hooks/hooks";
 import { logDebugClient } from "@/lib/debug-logger";
@@ -735,6 +736,22 @@ export default function GamePage({ params }: GamePageProps) {
   }
 
   const showSummary = isFinished && currentGame?.progressData && searchParams.get("view") !== "play";
+  const showFinishView = searchParams.get("view") === "finish";
+
+  if (showFinishView) {
+    return (
+      <CollaborationProvider roomId={roomId} user={user}>
+        <CollaborationNotice>
+          <GameInstancesResetWatcher gameId={gameId} />
+          <FinishGameView
+            gameId={gameId}
+            gameTitle={currentGame?.title}
+          />
+        </CollaborationNotice>
+      </CollaborationProvider>
+    );
+  }
+
   if (showSummary) {
     return (
       <GameSummaryView

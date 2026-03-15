@@ -82,7 +82,6 @@ export const Navbar = () => {
   const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
   const [resetScope, setResetScope] = useState<"level" | "game">("level");
   const [isResettingInstances, setIsResettingInstances] = useState(false);
-  const [isFinishDialogOpen, setIsFinishDialogOpen] = useState(false);
 
   const levelChanger = useCallback((pickedLevel: number) => {
     dispatch(setCurrentLevel(pickedLevel));
@@ -269,10 +268,15 @@ export const Navbar = () => {
               <RotateCcw className="h-4 w-4 mr-2" />
               Reset Game
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => setIsFinishDialogOpen(true)}>
-              <Flag className="h-4 w-4 mr-2" />
-              Finish Game
-            </DropdownMenuItem>
+            <AplusSubmitButton
+              displayMode="icon-label"
+              renderTrigger={({ openDialog }) => (
+                <DropdownMenuItem onSelect={openDialog}>
+                  <Flag className="h-4 w-4 mr-2" />
+                  Finish Game
+                </DropdownMenuItem>
+              )}
+            />
             <DropdownMenuSeparator />
           </>
         )}
@@ -359,7 +363,7 @@ export const Navbar = () => {
                       onClick={openGameLobby}
                     >
                       <Users className="h-4 w-4" />
-                      <span>Back to game lobby</span>
+                      <span>To lobby</span>
                     </Button>
                   </div>
                   <div className="mt-3 rounded-md bg-background/80 px-3 py-2">
@@ -385,6 +389,36 @@ export const Navbar = () => {
         </div>
       </div>
 
+      <div className="flex flex-1 min-w-0">
+        <div className="w-full rounded-md px-2 py-1.5">
+          <div className="flex-1 min-w-0">
+            <LevelSelect levelHandler={levelChanger} compact compactLabel="Levels" />
+          </div>
+        </div>
+      </div>
+    </>
+  );
+
+  const renderInlinePlayerMenus = () => (
+    <>
+      <div className="flex flex-none">
+        <InfoGamePoints />
+      </div>
+      <div className="flex flex-none">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="justify-center gap-2"
+          onClick={openGameLobby}
+        >
+          <Users className="h-4 w-4" />
+          <span>To lobby</span>
+        </Button>
+      </div>
+      <div className="flex flex-none">
+        <AplusSubmitButton displayMode="icon-label" />
+      </div>
       <div className="flex flex-1 min-w-0">
         <div className="w-full rounded-md px-2 py-1.5">
           <div className="flex-1 min-w-0">
@@ -510,7 +544,14 @@ export const Navbar = () => {
         ) : null}
 
         {isGameRoute && !showCreatorGameMenus ? (
-          renderCompactPlayerMenus()
+          <>
+            <div className="hidden md:flex flex-1 min-w-0 items-center gap-2">
+              {renderInlinePlayerMenus()}
+            </div>
+            <div className="flex md:hidden flex-1 min-w-0 items-center gap-1">
+              {renderCompactPlayerMenus()}
+            </div>
+          </>
         ) : !showCreatorGameMenus ? (
           <>
             <InfoGamePoints />
@@ -521,12 +562,6 @@ export const Navbar = () => {
 
       {/* Game Levels dialog controlled from navbar menu */}
       <MapEditor ref={mapEditorRef} renderButton={false} />
-      <AplusSubmitButton
-        open={isFinishDialogOpen}
-        onOpenChange={setIsFinishDialogOpen}
-        renderTrigger={() => null}
-      />
-
       {/* Dialog for reset confirmation */}
       <NavPopper
         open={isResetDialogOpen}
