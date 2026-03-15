@@ -156,7 +156,7 @@ function normalizeGroupStartGateFromRoomState(roomState: RoomStateSync): GroupSt
   };
 }
 
-interface CollaborationContextValue {
+export interface CollaborationContextValue {
   collabEngine: "yjs";
   isYjsEnabled: boolean;
   isConnected: boolean;

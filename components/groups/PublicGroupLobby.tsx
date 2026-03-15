@@ -7,6 +7,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { PresenceStack, buildAvatarFallbacks } from "./PresenceStack";
 import { GroupTab } from "./GroupTab";
+import { LobbyChatSection } from "./LobbyChatSection";
+import { CollaborationProvider } from "@/lib/collaboration";
 import type { LobbyChatEntry, UserIdentity } from "@/lib/collaboration/types";
 
 interface PublicGroupLobbyProps {
@@ -26,11 +28,12 @@ export function PublicGroupLobby({
   currentUser,
   onGroupSelect,
 }: PublicGroupLobbyProps) {
-  const collaboration = useCollaboration();
-  const [draftMessage, setDraftMessage] = useState("");
-  const effectiveCurrentUser = collaboration.effectiveIdentity ?? currentUser;
+  const lobbyCollaboration = useCollaboration();
+  const [chatMode, setChatMode] = useState<"lobby" | "group">("lobby");
+  const effectiveCurrentUser = lobbyCollaboration.effectiveIdentity ?? currentUser;
 
-  const connectedUsers = useMemo(() => {
+  const connectedUsersLobby = useMemo(() => {
+    const presenceByKey = new Map<string, any>();
     const avatarFallbacks = buildAvatarFallbacks([
       {
         userId: effectiveCurrentUser.id,
@@ -40,10 +43,10 @@ export function PublicGroupLobby({
         userName: effectiveCurrentUser.name,
         userImage: effectiveCurrentUser.image,
       },
-      ...collaboration.activeUsers,
+      ...lobbyCollaboration.activeUsers,
     ]);
-    const seen = new Set<string>();
-    const combined = [
+
+    for (const entry of [
       {
         userId: effectiveCurrentUser.id,
         accountUserId: effectiveCurrentUser.id,
@@ -51,35 +54,28 @@ export function PublicGroupLobby({
         accountUserEmail: effectiveCurrentUser.email,
         userName: effectiveCurrentUser.name,
         userImage: effectiveCurrentUser.image,
+        clientId: "self",
       },
-      ...collaboration.activeUsers,
-    ];
-
-    return combined.filter((entry) => {
-      const key = entry.userId || entry.userEmail;
-      if (!key || seen.has(key)) return false;
-      seen.add(key);
+      ...lobbyCollaboration.activeUsers,
+    ]) {
+      const email = entry.accountUserEmail || entry.userEmail;
+      const key = email?.toLowerCase() || entry.userId || entry.clientId;
+      if (!key || presenceByKey.has(key)) continue;
+      
       const fallback = (entry.accountUserId ? avatarFallbacks.byUserId.get(entry.accountUserId) : undefined)
-        ?? (entry.accountUserEmail ? avatarFallbacks.byEmail.get(entry.accountUserEmail.toLowerCase()) : undefined)
-        ?? (entry.userEmail ? avatarFallbacks.byEmail.get(entry.userEmail.toLowerCase()) : undefined);
-      if (!entry.userName && fallback?.userName) {
-        entry.userName = fallback.userName;
-      }
-      if (!entry.userImage && fallback?.userImage) {
-        entry.userImage = fallback.userImage;
-      }
-      return true;
-    });
-  }, [collaboration.activeUsers, effectiveCurrentUser.email, effectiveCurrentUser.id, effectiveCurrentUser.image, effectiveCurrentUser.name]);
+        ?? (email ? avatarFallbacks.byEmail.get(email.toLowerCase()) : undefined);
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    collaboration.sendLobbyChat(draftMessage);
-    setDraftMessage("");
-  };
+      presenceByKey.set(key, {
+        ...entry,
+        userName: entry.userName || fallback?.userName || undefined,
+        userImage: entry.userImage || fallback?.userImage || undefined,
+      });
+    }
 
-  const formatChatLabel = (entry: LobbyChatEntry) =>
-    entry.userName || entry.userEmail || entry.userId || "Anonymous";
+    return Array.from(presenceByKey.values());
+  }, [lobbyCollaboration.activeUsers, effectiveCurrentUser.email, effectiveCurrentUser.id, effectiveCurrentUser.image, effectiveCurrentUser.name]);
+
+  const groupRoomId = groupId ? `group:${groupId}:game:${gameId}` : null;
 
   return (
     <div className="flex h-full items-center justify-center px-4 py-8 overflow-y-auto">
@@ -103,69 +99,105 @@ export function PublicGroupLobby({
           </p>
         </div>
 
-        <Tabs defaultValue="group" className="mt-6 min-h-[480px]">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="group">Group tab</TabsTrigger>
-            <TabsTrigger value="chat" className="flex items-center gap-2">
-              Chat tab
-              <div className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium transition-colors group-data-[state=active]:bg-primary group-data-[state=active]:text-primary-foreground">
-                <Users className="h-3 w-3" />
-                <span>{connectedUsers.length}</span>
-              </div>
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="group" className="mt-4">
-            <GroupTab
-              gameId={gameId}
-              gameTitle={gameTitle}
-              courseName={courseName}
-              currentUser={currentUser}
-              selectedGroupId={groupId}
-              onGroupSelect={onGroupSelect}
-            />
-          </TabsContent>
-
-          <TabsContent value="chat" className="mt-4">
-            <div className="rounded-lg border p-4 min-h-[400px]">
-              <div className="flex items-center justify-between gap-4">
-                <h2 className="text-lg font-semibold">Chat tab</h2>
-                <PresenceStack users={connectedUsers} className="justify-end" />
-              </div>
-            <div className="mt-3 h-72 overflow-y-auto space-y-3 rounded-md bg-muted/30 p-3">
-              {collaboration.lobbyMessages.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No messages yet. Introduce yourselves and agree on a shared app group before starting.
-                </p>
-              ) : (
-                collaboration.lobbyMessages.map((entry) => (
-                  <div key={entry.id} className="rounded-md bg-background px-3 py-2">
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-sm font-medium">{formatChatLabel(entry)}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {new Date(entry.createdAt).toLocaleTimeString()}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-sm whitespace-pre-wrap break-words">{entry.text}</p>
+        {groupRoomId ? (
+          <CollaborationProvider roomId={groupRoomId} user={currentUser}>
+            <Tabs defaultValue="group" className="mt-6 min-h-[480px]">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="group">Group tab</TabsTrigger>
+                <TabsTrigger value="chat" className="flex items-center gap-2">
+                  Chat tab
+                  <div className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium transition-colors group-data-[state=active]:bg-primary group-data-[state=active]:text-primary-foreground">
+                    <Users className="h-3 w-3" />
+                    <span>{connectedUsersLobby.length}</span>
                   </div>
-                ))
-              )}
-            </div>
-            <form className="mt-3 flex gap-2" onSubmit={handleSubmit}>
-              <input
-                type="text"
-                value={draftMessage}
-                onChange={(event) => setDraftMessage(event.target.value)}
-                placeholder="Say hello or share your planned group"
-                className="flex-1 rounded-md border bg-background px-3 py-2 text-sm"
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="group" className="mt-4">
+                <GroupTab
+                  gameId={gameId}
+                  gameTitle={gameTitle}
+                  courseName={courseName}
+                  currentUser={currentUser}
+                  selectedGroupId={groupId}
+                  onGroupSelect={onGroupSelect}
+                />
+              </TabsContent>
+
+              <TabsContent value="chat" className="mt-4 space-y-4">
+                <div className="flex items-center gap-2 p-1 rounded-lg bg-muted/50 w-fit">
+                  <Button
+                    variant={chatMode === "lobby" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setChatMode("lobby")}
+                    className="h-8 text-xs px-4 font-normal"
+                  >
+                    Lobby Chat
+                  </Button>
+                  <Button
+                    variant={chatMode === "group" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setChatMode("group")}
+                    className="h-8 text-xs px-4 font-normal"
+                  >
+                    Group Chat
+                  </Button>
+                </div>
+
+                {chatMode === "group" ? (
+                  <LobbyChatSection
+                    currentUser={currentUser}
+                    title="Group Chat"
+                    placeholder="Chat with your group..."
+                    emptyMessage="No group messages yet."
+                  />
+                ) : (
+                  <LobbyChatSection
+                    currentUser={currentUser}
+                    title="Lobby Chat"
+                    collaboration={lobbyCollaboration}
+                    placeholder="Chat with everyone in the lobby..."
+                    emptyMessage="No lobby messages yet."
+                  />
+                )}
+              </TabsContent>
+            </Tabs>
+          </CollaborationProvider>
+        ) : (
+          <Tabs defaultValue="group" className="mt-6 min-h-[480px]">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="group">Group tab</TabsTrigger>
+              <TabsTrigger value="chat" className="flex items-center gap-2">
+                Chat tab
+                <div className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium transition-colors group-data-[state=active]:bg-primary group-data-[state=active]:text-primary-foreground">
+                  <Users className="h-3 w-3" />
+                  <span>{connectedUsersLobby.length}</span>
+                </div>
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="group" className="mt-4">
+              <GroupTab
+                gameId={gameId}
+                gameTitle={gameTitle}
+                courseName={courseName}
+                currentUser={currentUser}
+                selectedGroupId={groupId}
+                onGroupSelect={onGroupSelect}
               />
-              <Button type="submit" disabled={!collaboration.isConnected || !draftMessage.trim()}>
-                Send
-              </Button>
-            </form>
-            </div>
-          </TabsContent>
-        </Tabs>
+            </TabsContent>
+
+            <TabsContent value="chat" className="mt-4 space-y-4">
+              <LobbyChatSection
+                currentUser={currentUser}
+                title="Lobby Chat"
+                collaboration={lobbyCollaboration}
+                placeholder="Chat with everyone in the lobby..."
+                emptyMessage="No lobby messages yet."
+              />
+            </TabsContent>
+          </Tabs>
+        )}
       </div>
     </div>
   );

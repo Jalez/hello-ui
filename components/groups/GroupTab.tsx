@@ -15,6 +15,7 @@ interface GroupTabProps {
   currentUser: UserIdentity;
   selectedGroupId: string | null;
   onGroupSelect: (groupId: string | null) => void;
+  collaboration?: any;
 }
 
 export function GroupTab({
@@ -24,10 +25,12 @@ export function GroupTab({
   currentUser,
   selectedGroupId,
   onGroupSelect,
+  collaboration,
 }: GroupTabProps) {
   const [currentGroupName, setCurrentGroupName] = useState<string | null>(null);
   const [currentGroupJoinKey, setCurrentGroupJoinKey] = useState<string | null>(null);
   const [currentGroupMembers, setCurrentGroupMembers] = useState<ClientGroupMember[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     if (!selectedGroupId) {
@@ -39,6 +42,7 @@ export function GroupTab({
 
     let cancelled = false;
     const loadGroupDetails = async () => {
+      setIsLoading(true);
       try {
         const data = await fetchGroupDetailsCached(selectedGroupId);
         if (cancelled) return;
@@ -51,6 +55,8 @@ export function GroupTab({
           setCurrentGroupJoinKey(null);
           setCurrentGroupMembers([]);
         }
+      } finally {
+        if (!cancelled) setIsLoading(false);
       }
     };
 
@@ -60,11 +66,14 @@ export function GroupTab({
     };
   }, [selectedGroupId]);
 
-  if (selectedGroupId) {
-    // When a group is selected, we wrap in its own provider for the group room.
-    // The room ID must match the game instance room: group:{groupId}:game:{gameId}
-    return (
-      <CollaborationProvider roomId={`group:${selectedGroupId}:game:${gameId}`} user={currentUser}>
+  return (
+    <div className="rounded-lg border p-4 min-h-[400px]">
+      {isLoading ? (
+        <div className="flex flex-col items-center justify-center min-h-[300px] space-y-4">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          <p className="text-sm text-muted-foreground">Loading group details...</p>
+        </div>
+      ) : selectedGroupId ? (
         <GroupWaitingRoom
           gameTitle={gameTitle}
           groupId={selectedGroupId}
@@ -75,30 +84,28 @@ export function GroupTab({
           onBack={() => onGroupSelect(null)}
           isNested={true}
         />
-      </CollaborationProvider>
-    );
-  }
-
-  return (
-    <div className="rounded-lg border p-4 min-h-[400px]">
-      <h2 className="text-lg font-semibold">Select or Create Group</h2>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Pick an existing group or create a new one to start playing with teammates.
-      </p>
-      <div className="mt-3">
-        <GroupSelector
-          selectedGroupId={null}
-          onGroupSelect={onGroupSelect}
-          showRefreshButton
-          allowCreate
-          createContext={{
-            ltiContextTitle: courseName,
-            resourceLinkId: gameId,
-          }}
-          createPlaceholder="Example: Team 2 / UI Squad"
-          currentUserId={currentUser.id}
-        />
-      </div>
+      ) : (
+        <>
+          <h2 className="text-lg font-semibold">Select or Create Group</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Pick an existing group or create a new one to start playing with teammates.
+          </p>
+          <div className="mt-3">
+            <GroupSelector
+              selectedGroupId={null}
+              onGroupSelect={onGroupSelect}
+              showRefreshButton
+              allowCreate
+              createContext={{
+                ltiContextTitle: courseName,
+                resourceLinkId: gameId,
+              }}
+              createPlaceholder="Example: Team 2 / UI Squad"
+              currentUserId={currentUser.id}
+            />
+          </div>
+        </>
+      )}
     </div>
   );
 }

@@ -558,7 +558,7 @@ export default function GamePage({ params }: GamePageProps) {
       setCurrentGroupName(null);
       setCurrentGroupJoinKey(null);
       setCurrentGroupMembers([]);
-      setRoomId(`lobby:game:${gameId}`);
+      setRoomId(`lobby:all:game:${gameId}`);
       return;
     }
 
@@ -748,7 +748,7 @@ export default function GamePage({ params }: GamePageProps) {
 
   if (isGroupWorkMode && user && !isStarted) {
     // Determine the stable lobby room ID. If we resolved a specific LTI context earlier, use it.
-    const lobbyRoomId = publicLobby?.roomId || `lobby:${gameId}`;
+    const lobbyRoomId = publicLobby?.roomId || `lobby:all:game:${gameId}`;
     
     return (
       <CollaborationProvider roomId={lobbyRoomId} user={user}>
