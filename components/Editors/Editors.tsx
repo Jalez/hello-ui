@@ -9,7 +9,7 @@ import {
 import { Level } from "@/types";
 import { useCallback, useEffect, useRef } from "react";
 import EditorTabs from "./EditorTabs";
-import { useOptionalCollaboration } from "@/lib/collaboration/CollaborationProvider";
+import { useOptionalCollaboration, useYjsLevelCodeSnapshot } from "@/lib/collaboration/CollaborationProvider";
 import { store } from "@/store/store";
 import { LOCAL_REDUX_UPDATE_DEBOUNCE_MS } from "./CodeEditor/constants";
 
@@ -18,7 +18,6 @@ const Editors = (): React.ReactNode => {
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const levels = useAppSelector((state) => state.levels);
   const collaboration = useOptionalCollaboration();
-  const isYjsEnabled = collaboration?.isYjsEnabled ?? false;
   const getYText = collaboration?.getYText;
   const yjsDocGeneration = collaboration?.yjsDocGeneration ?? 0;
   const remoteSyncTimeoutsRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
@@ -49,7 +48,7 @@ const Editors = (): React.ReactNode => {
   );
 
   useEffect(() => {
-    if (!isYjsEnabled || !getYText || levels.length === 0) {
+    if (!getYText || levels.length === 0) {
       return;
     }
 
@@ -126,9 +125,10 @@ const Editors = (): React.ReactNode => {
       remoteSyncTimeouts.clear();
       unobserveCallbacks.forEach((unobserve) => unobserve());
     };
-  }, [dispatch, getYText, isYjsEnabled, levels.length, yjsDocGeneration]);
+  }, [dispatch, getYText, levels.length, yjsDocGeneration]);
 
   const level = levels[currentLevel - 1] as Level | undefined;
+  const yjsLevelCode = useYjsLevelCodeSnapshot(currentLevel - 1, level?.code ?? { html: "", css: "", js: "" });
 
   if (!level) {
     return null;
@@ -138,17 +138,17 @@ const Editors = (): React.ReactNode => {
 
   const languages = {
     html: {
-      code: level.code.html || "",
+      code: yjsLevelCode.html || "",
       solution: level.solution.html || "",
       locked: level.lockHTML,
     },
     css: {
-      code: level.code.css || "",
+      code: yjsLevelCode.css || "",
       solution: level.solution.css || "",
       locked: level.lockCSS,
     },
     js: {
-      code: level.code.js || "",
+      code: yjsLevelCode.js || "",
       solution: level.solution.js || "",
       locked: level.lockJS,
     },

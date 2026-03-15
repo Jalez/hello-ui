@@ -176,7 +176,7 @@ export function useYjsCodeEditorCollaboration({
     code,
   });
 
-  const handleCodeUpdate = useCallback(() => {
+  const handleCodeUpdate = useCallback((_value?: string) => {
     // Yjs-managed editors use CodeMirror updates as the source of truth.
   }, []);
 

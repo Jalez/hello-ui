@@ -1,15 +1,13 @@
 'use client';
 
 import React from "react";
-import { ChangeSet, Text } from "@codemirror/state";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import CodeEditor from "./CodeEditor/CodeEditor";
 import { Lock, LockOpen, Menu } from "lucide-react";
-import { handleLocking, updateCode } from "@/store/slices/levels.slice";
+import { handleLocking } from "@/store/slices/levels.slice";
 import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
-import { store } from "@/store/store";
 import { html } from "@codemirror/lang-html";
 import { css } from "@codemirror/lang-css";
 import { javascript } from "@codemirror/lang-javascript";
@@ -23,7 +21,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { apiUrl } from "@/lib/apiUrl";
-import { RemoteCodeChange, RemoteCodeResync, useOptionalCollaboration } from "@/lib/collaboration/CollaborationProvider";
+import { useOptionalCollaboration } from "@/lib/collaboration/CollaborationProvider";
 import { TabPresence } from "@/components/collaboration/TabPresence";
 import { ActiveUser, EditorType } from "@/lib/collaboration/types";
 import { logDebugClient } from "@/lib/debug-logger";
@@ -45,9 +43,6 @@ interface EditorTabsProps {
 }
 
 const EMPTY_ACTIVE_USERS: ActiveUser[] = [];
-const EMPTY_REMOTE_CODE_CHANGES: RemoteCodeChange[] = [];
-const EMPTY_REMOTE_CODE_RESYNCS: RemoteCodeResync[] = [];
-
 function EditorTabs({
   languages,
   codeUpdater,
@@ -85,36 +80,7 @@ function EditorTabs({
     };
   }, [activeUsers, currentLevel, myClientId]);
   const setActiveTab = collaboration?.setActiveTab;
-  const remoteCodeChanges = collaboration?.remoteCodeChanges ?? EMPTY_REMOTE_CODE_CHANGES;
-  const remoteCodeResyncs = collaboration?.remoteCodeResyncs ?? EMPTY_REMOTE_CODE_RESYNCS;
-  const lastAppliedRemotePatchSeqRef = React.useRef<number>(0);
-  const lastAppliedRemoteResyncSeqRef = React.useRef<number>(0);
   const lastSentTabRef = React.useRef<string | null>(null);
-
-  const applyTemplateCodeUpdate = React.useCallback((
-    levelIndex: number,
-    editorType: 'html' | 'css' | 'js',
-    nextContent: string
-  ) => {
-    const stateLevels = store.getState().levels;
-    const targetLevel = stateLevels[levelIndex];
-    if (!targetLevel) {
-      return;
-    }
-
-    const currentCode = targetLevel.code || { html: "", css: "", js: "" };
-    if ((currentCode[editorType] || "") === nextContent) {
-      return;
-    }
-
-    dispatch(updateCode({
-      id: levelIndex + 1,
-      code: {
-        ...currentCode,
-        [editorType]: nextContent,
-      },
-    }));
-  }, [dispatch]);
 
   React.useEffect(() => {
     if (!isConnected || !setActiveTab) return;
@@ -123,54 +89,6 @@ function EditorTabs({
     lastSentTabRef.current = nextPresenceKey;
     setActiveTab(activeLanguage, currentLevel - 1);
   }, [currentLevel, isConnected, setActiveTab, activeLanguage]);
-
-  React.useEffect(() => {
-    const unseenChanges = remoteCodeChanges.filter(
-      (change) => change.seq > lastAppliedRemotePatchSeqRef.current
-    );
-    if (unseenChanges.length === 0) return;
-
-    try {
-      for (const change of unseenChanges) {
-        lastAppliedRemotePatchSeqRef.current = change.seq;
-
-        const isActiveEditorTarget =
-          change.levelIndex === currentLevel - 1 &&
-          change.editorType === activeLanguage;
-        if (isActiveEditorTarget) {
-          continue;
-        }
-
-        const currentLevels = store.getState().levels;
-        const targetLevel = currentLevels[change.levelIndex];
-        const currentContent = targetLevel?.code?.[change.editorType] || "";
-        const nextContent = ChangeSet.fromJSON(change.changeSetJson)
-          .apply(Text.of(currentContent.split("\n")))
-          .toString();
-        applyTemplateCodeUpdate(change.levelIndex, change.editorType, nextContent);
-      }
-    } catch (error) {
-      console.error("Failed to apply remote editor patch", error);
-    }
-  }, [activeLanguage, applyTemplateCodeUpdate, currentLevel, remoteCodeChanges]);
-
-  React.useEffect(() => {
-    const unseenResyncs = remoteCodeResyncs.filter(
-      (resync) => resync.seq > lastAppliedRemoteResyncSeqRef.current
-    );
-    if (unseenResyncs.length === 0) return;
-
-    for (const resync of unseenResyncs) {
-      lastAppliedRemoteResyncSeqRef.current = resync.seq;
-      const isActiveEditorTarget =
-        resync.levelIndex === currentLevel - 1 &&
-        resync.editorType === activeLanguage;
-      if (isActiveEditorTarget) {
-        continue;
-      }
-      applyTemplateCodeUpdate(resync.levelIndex, resync.editorType, resync.content);
-    }
-  }, [activeLanguage, applyTemplateCodeUpdate, currentLevel, remoteCodeResyncs]);
 
   const handleLanguageChange = (newLanguage: string) => {
     const editorType = newLanguage as EditorType;

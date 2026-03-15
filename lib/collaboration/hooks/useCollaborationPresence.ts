@@ -32,7 +32,7 @@ export function useCollaborationPresence(
   const addUser = useCallback(
     (user: ActiveUser) => {
       setActiveUsers((prev) => {
-        const existing = prev.find((u) => u.userId === user.userId);
+        const existing = prev.find((u) => u.clientId === user.clientId);
         if (existing) {
           return prev;
         }
@@ -63,7 +63,7 @@ export function useCollaborationPresence(
   const setUsers = useCallback((users: ActiveUser[]) => {
     const uniqueUsers = new Map<string, ActiveUser>();
     for (const user of users) {
-      const dedupeKey = user.userId || user.userEmail || user.clientId;
+      const dedupeKey = user.clientId;
       if (!dedupeKey || uniqueUsers.has(dedupeKey)) {
         continue;
       }

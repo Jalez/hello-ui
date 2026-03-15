@@ -33,13 +33,14 @@ export interface EditorVersionMap {
 export interface RoomStateSyncLevel {
   [key: string]: unknown;
   name: string;
-  code: { html: string; css: string; js: string };
-  versions: EditorVersionMap;
+  code?: { html: string; css: string; js: string };
+  versions?: EditorVersionMap;
 }
 
 export interface RoomStateSyncMessage {
   levels: RoomStateSyncLevel[];
   groupStartGate?: GroupStartGateState;
+  yjsDocGeneration?: number;
   ts: number;
 }
 
@@ -207,22 +208,11 @@ export interface TypingStatusMessage {
   ts: number;
 }
 
-export interface YjsSyncRequestMessage {
+export interface YjsProtocolMessage {
   roomId: string;
   groupId?: string;
-}
-
-export interface YjsSyncMessage {
-  roomId: string;
-  groupId?: string;
-  updateBase64: string;
-  ts: number;
-}
-
-export interface YjsUpdateMessage {
-  roomId: string;
-  groupId?: string;
-  updateBase64: string;
+  channel: "sync" | "awareness";
+  payloadBase64: string;
   ts: number;
 }
 
@@ -258,7 +248,7 @@ export interface ClientStateHashMessage {
   clientId: string;
   userId: string;
   userEmail?: string;
-  engine: "custom" | "yjs";
+  engine: "yjs";
   editorType: EditorType;
   levelIndex: number;
   contentHash: string;
@@ -278,7 +268,7 @@ export interface ClientHealthEventMessage {
   clientId: string;
   userId: string;
   userEmail?: string;
-  engine: "custom" | "yjs";
+  engine: "yjs";
   eventType: string;
   severity: CollaborationHealthSeverity;
   editorType?: EditorType;
