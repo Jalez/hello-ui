@@ -1,15 +1,15 @@
 'use client';
 
-import { FormEvent, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useCollaboration } from "@/lib/collaboration";
 import { Users } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { PresenceStack, buildAvatarFallbacks } from "./PresenceStack";
+import { buildAvatarFallbacks } from "./PresenceStack";
 import { GroupTab } from "./GroupTab";
 import { LobbyChatSection } from "./LobbyChatSection";
 import { CollaborationProvider } from "@/lib/collaboration";
-import type { LobbyChatEntry, UserIdentity } from "@/lib/collaboration/types";
+import type { UserIdentity } from "@/lib/collaboration/types";
 
 interface PublicGroupLobbyProps {
   gameId: string;
@@ -61,7 +61,7 @@ export function PublicGroupLobby({
       const email = entry.accountUserEmail || entry.userEmail;
       const key = email?.toLowerCase() || entry.userId || entry.clientId;
       if (!key || presenceByKey.has(key)) continue;
-      
+
       const fallback = (entry.accountUserId ? avatarFallbacks.byUserId.get(entry.accountUserId) : undefined)
         ?? (email ? avatarFallbacks.byEmail.get(email.toLowerCase()) : undefined);
 
@@ -99,32 +99,40 @@ export function PublicGroupLobby({
           </p>
         </div>
 
-        {groupRoomId ? (
+        {/*
+          A single Tabs tree is always rendered to prevent layout jitter when a group is
+          selected or deselected. One CollaborationProvider for the group room wraps both
+          tab contents so GroupWaitingRoom and Group Chat share the same connection — no
+          double-connect and no reconnect when toggling between Lobby/Group chat.
+          The provider handles null roomId gracefully (stays disconnected) until a group
+          is selected.
+        */}
+        <Tabs defaultValue="group" className="mt-6 min-h-[550px]">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="group">Group tab</TabsTrigger>
+            <TabsTrigger value="chat" className="flex items-center gap-2">
+              Chat tab
+              <div className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium transition-colors group-data-[state=active]:bg-primary group-data-[state=active]:text-primary-foreground">
+                <Users className="h-3 w-3" />
+                <span>{connectedUsersLobby.length}</span>
+              </div>
+            </TabsTrigger>
+          </TabsList>
+
           <CollaborationProvider roomId={groupRoomId} user={currentUser}>
-            <Tabs defaultValue="group" className="mt-6 min-h-[480px]">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="group">Group tab</TabsTrigger>
-                <TabsTrigger value="chat" className="flex items-center gap-2">
-                  Chat tab
-                  <div className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium transition-colors group-data-[state=active]:bg-primary group-data-[state=active]:text-primary-foreground">
-                    <Users className="h-3 w-3" />
-                    <span>{connectedUsersLobby.length}</span>
-                  </div>
-                </TabsTrigger>
-              </TabsList>
+            <TabsContent value="group" className="mt-4 min-h-[400px]">
+              <GroupTab
+                gameId={gameId}
+                gameTitle={gameTitle}
+                courseName={courseName}
+                currentUser={currentUser}
+                selectedGroupId={groupId}
+                onGroupSelect={onGroupSelect}
+              />
+            </TabsContent>
 
-              <TabsContent value="group" className="mt-4">
-                <GroupTab
-                  gameId={gameId}
-                  gameTitle={gameTitle}
-                  courseName={courseName}
-                  currentUser={currentUser}
-                  selectedGroupId={groupId}
-                  onGroupSelect={onGroupSelect}
-                />
-              </TabsContent>
-
-              <TabsContent value="chat" className="mt-4 space-y-4">
+            <TabsContent value="chat" className="mt-4 space-y-4 min-h-[400px]">
+              {groupRoomId && (
                 <div className="flex items-center gap-2 p-1 rounded-lg bg-muted/50 w-fit">
                   <Button
                     variant={chatMode === "lobby" ? "default" : "ghost"}
@@ -143,61 +151,29 @@ export function PublicGroupLobby({
                     Group Chat
                   </Button>
                 </div>
+              )}
 
-                {chatMode === "group" ? (
-                  <LobbyChatSection
-                    currentUser={currentUser}
-                    title="Group Chat"
-                    placeholder="Chat with your group..."
-                    emptyMessage="No group messages yet."
-                  />
-                ) : (
-                  <LobbyChatSection
-                    currentUser={currentUser}
-                    title="Lobby Chat"
-                    collaboration={lobbyCollaboration}
-                    placeholder="Chat with everyone in the lobby..."
-                    emptyMessage="No lobby messages yet."
-                  />
-                )}
-              </TabsContent>
-            </Tabs>
+              {chatMode === "group" && groupRoomId ? (
+                /* Group Chat: uses the inner group CollaborationProvider via useCollaboration() */
+                <LobbyChatSection
+                  currentUser={currentUser}
+                  title="Group Chat"
+                  placeholder="Chat with your group..."
+                  emptyMessage="No group messages yet."
+                />
+              ) : (
+                /* Lobby Chat: always uses the outer lobby collaboration captured above */
+                <LobbyChatSection
+                  currentUser={currentUser}
+                  title="Lobby Chat"
+                  collaboration={lobbyCollaboration}
+                  placeholder="Chat with everyone in the lobby..."
+                  emptyMessage="No lobby messages yet."
+                />
+              )}
+            </TabsContent>
           </CollaborationProvider>
-        ) : (
-          <Tabs defaultValue="group" className="mt-6 min-h-[480px]">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="group">Group tab</TabsTrigger>
-              <TabsTrigger value="chat" className="flex items-center gap-2">
-                Chat tab
-                <div className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium transition-colors group-data-[state=active]:bg-primary group-data-[state=active]:text-primary-foreground">
-                  <Users className="h-3 w-3" />
-                  <span>{connectedUsersLobby.length}</span>
-                </div>
-              </TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="group" className="mt-4">
-              <GroupTab
-                gameId={gameId}
-                gameTitle={gameTitle}
-                courseName={courseName}
-                currentUser={currentUser}
-                selectedGroupId={groupId}
-                onGroupSelect={onGroupSelect}
-              />
-            </TabsContent>
-
-            <TabsContent value="chat" className="mt-4 space-y-4">
-              <LobbyChatSection
-                currentUser={currentUser}
-                title="Lobby Chat"
-                collaboration={lobbyCollaboration}
-                placeholder="Chat with everyone in the lobby..."
-                emptyMessage="No lobby messages yet."
-              />
-            </TabsContent>
-          </Tabs>
-        )}
+        </Tabs>
       </div>
     </div>
   );
