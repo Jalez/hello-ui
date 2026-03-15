@@ -1,278 +1,44 @@
 "use client";
 
-import { useState, useEffect, useCallback, type ReactNode } from "react";
+import { type ReactNode, useCallback } from "react";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
-import { apiUrl, stripBasePath } from "@/lib/apiUrl";
-import { Flag, Loader2, Send } from "lucide-react";
+import { stripBasePath } from "@/lib/apiUrl";
+import { Flag } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { useAppSelector } from "@/store/hooks/hooks";
 import PoppingTitle from "@/components/General/PoppingTitle";
-import { useGameStore } from "@/components/default/games";
-import { useOptionalCollaboration } from "@/lib/collaboration/CollaborationProvider";
-import { logDebugClient } from "@/lib/debug-logger";
-
-interface LtiSessionInfo {
-  isLtiMode: boolean;
-  hasOutcomeService: boolean;
-  isInIframe: boolean;
-  courseName: string | null;
-  returnUrl: string | null;
-  role: string;
-}
-
-let ltiSessionRequest: Promise<LtiSessionInfo | null> | null = null;
-
-function fetchLtiSessionCached(): Promise<LtiSessionInfo | null> {
-  if (!ltiSessionRequest) {
-    ltiSessionRequest = fetch(apiUrl("/api/games/lti-session"))
-      .then(async (res) => {
-        if (!res.ok) {
-          return null;
-        }
-        return res.json() as Promise<LtiSessionInfo>;
-      })
-      .catch(() => null);
-  }
-
-  return ltiSessionRequest;
-}
 
 type NavbarActionDisplayMode = "icon-label" | "icon";
-
-function stripCodeLevelsFromProgressData(progressData: Record<string, unknown> | undefined) {
-  if (!progressData) {
-    return undefined;
-  }
-
-  return Object.fromEntries(
-    Object.entries(progressData).filter(([key]) => key !== "levels")
-  );
-}
 
 interface AplusSubmitButtonProps {
   displayMode?: NavbarActionDisplayMode;
   renderTrigger?: (options: { openDialog: () => void }) => ReactNode;
-  open?: boolean;
-  onOpenChange?: (open: boolean) => void;
 }
 
 export const AplusSubmitButton = ({
   displayMode = "icon",
   renderTrigger,
-  open,
-  onOpenChange,
 }: AplusSubmitButtonProps) => {
   const params = useParams();
   const pathname = usePathname();
   const normalizedPathname = stripBasePath(pathname);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const currentGame = useGameStore((s) => s.getCurrentGame());
-  const addGameToStore = useGameStore((s) => s.addGameToStore);
-  const collaboration = useOptionalCollaboration();
-
-  const [ltiInfo, setLtiInfo] = useState<LtiSessionInfo | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [internalShowDialog, setInternalShowDialog] = useState(false);
-  const [result, setResult] = useState<{ success: boolean; message?: string; error?: string } | null>(null);
-  const showDialog = open ?? internalShowDialog;
-  const setShowDialog = onOpenChange ?? setInternalShowDialog;
-
-  const points = useAppSelector((state) => state.points);
-
   const gameIdParam = params?.gameId;
   const gameId = typeof gameIdParam === "string" ? gameIdParam : Array.isArray(gameIdParam) ? gameIdParam[0] : null;
   const isGameRoute = normalizedPathname.startsWith("/game/") && Boolean(gameId);
-  const isGroupGameplay = Boolean(searchParams.get("groupId"));
 
-  useEffect(() => {
-    let cancelled = false;
-    fetchLtiSessionCached().then((data) => {
-      if (!cancelled) {
-        setLtiInfo(data);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const buildFinishUrl = useCallback(() => {
-    if (!gameId) return apiUrl(`/api/games/${gameId}/finish`);
-    const params = new URLSearchParams();
-    params.set("accessContext", "game");
-    const groupId = searchParams.get("groupId");
-    const guestId = searchParams.get("guestId");
-    const key = searchParams.get("key");
-    if (groupId) params.set("groupId", groupId);
-    if (guestId) params.set("guestId", guestId);
-    if (key) params.set("key", key);
-    return `${apiUrl(`/api/games/${gameId}/finish`)}?${params.toString()}`;
-  }, [gameId, searchParams]);
-
-  const triggerAplusRefresh = useCallback(() => {
-    if (typeof window === "undefined" || !window.parent) {
-      return;
-    }
-
-    setTimeout(() => {
-      window.parent.postMessage({ type: "a-plus-refresh-stats" }, "*");
-      if (window.top) {
-        window.top.location.reload();
-      }
-    }, 500);
-  }, []);
-
-  const notifyGroupMembersAboutGradeSubmit = useCallback((finishedAt?: string) => {
-    collaboration?.syncProgressData({
-      finishedAt: finishedAt ?? new Date().toISOString(),
-      finalScore: { points: points.allPoints, maxPoints: points.allMaxPoints },
-      ltiGradeRefreshAt: new Date().toISOString(),
-    });
-  }, [collaboration, points.allMaxPoints, points.allPoints]);
-
-  const submitGradeDirectly = useCallback(async () => {
-    const gradeRes = await fetch(apiUrl("/api/games/submit-grade"), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        gameId,
-        points: points.allPoints,
-        maxPoints: points.allMaxPoints,
-      }),
-    });
-
-    return gradeRes.json() as Promise<{
-      success?: boolean;
-      message?: string;
-      error?: string;
-      isInIframe?: boolean;
-    }>;
-  }, [gameId, points.allMaxPoints, points.allPoints]);
-
-  const handleFinishGame = useCallback(async () => {
-    if (!gameId) return;
-
-    logDebugClient("finish_click", {
-      gameId,
-      groupId: searchParams.get("groupId"),
-      roomId: collaboration?.roomId ?? null,
-      href: typeof window !== "undefined" ? window.location.href : null,
-      isGroupGameplay,
-    });
-    setIsSubmitting(true);
-    setResult(null);
-
-    try {
-      const finishRes = await fetch(buildFinishUrl(), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          points: points.allPoints,
-          maxPoints: points.allMaxPoints,
-          progressData:
-            currentGame?.progressData && typeof currentGame.progressData === "object" && !Array.isArray(currentGame.progressData)
-              ? stripCodeLevelsFromProgressData(currentGame.progressData)
-              : undefined,
-          pointsByLevel: Object.fromEntries(
-            Object.entries(points.levels).map(([name, data]) => [
-              name,
-              { points: data.points, maxPoints: data.maxPoints, accuracy: data.accuracy, bestTime: data.bestTime, scenarios: data.scenarios },
-            ])
-          ),
-        }),
-      });
-
-      const finishData = await finishRes.json();
-
-      if (!finishRes.ok || !finishData.success) {
-        setResult({
-          success: false,
-          error: finishData.error || "Failed to finish game",
-        });
-        setIsSubmitting(false);
-        return;
-      }
-
-      if (currentGame && finishData.instance?.progressData) {
-        addGameToStore({
-          ...currentGame,
-          progressData: finishData.instance.progressData,
-        });
-      }
-
-      const nextParams = new URLSearchParams(searchParams.toString());
-      nextParams.delete("view");
-      const nextQuery = nextParams.toString();
-      const nextHref = nextQuery ? `${normalizedPathname}?${nextQuery}` : normalizedPathname;
-
-      if (ltiInfo?.hasOutcomeService) {
-        const fallbackGradeData = await submitGradeDirectly();
-
-        if (fallbackGradeData.success) {
-          setResult({ success: true, message: fallbackGradeData.message });
-          setShowDialog(false);
-          notifyGroupMembersAboutGradeSubmit(finishData.instance?.progressData?.finishedAt);
-          if (fallbackGradeData.isInIframe) {
-            triggerAplusRefresh();
-          }
-        } else {
-          setResult({
-            success: true,
-            message: "Game marked as finished. Grade could not be sent to A+.",
-          });
-          setShowDialog(false);
-        }
-      } else {
-        setResult({ success: true, message: "Game finished. Your result has been saved." });
-        setShowDialog(false);
-      }
-
-      router.replace(nextHref);
-    } catch (error) {
-      setResult({
-        success: false,
-        error: error instanceof Error ? error.message : "Failed to finish game",
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  }, [
-    collaboration?.roomId,
-    gameId,
-    buildFinishUrl,
-    isGroupGameplay,
-    points.allPoints,
-    points.allMaxPoints,
-    points.levels,
-    currentGame,
-    addGameToStore,
-    ltiInfo?.hasOutcomeService,
-    normalizedPathname,
-    router,
-    searchParams,
-    setShowDialog,
-    submitGradeDirectly,
-    notifyGroupMembersAboutGradeSubmit,
-    triggerAplusRefresh,
-  ]);
-
-  const percentage =
-    points.allMaxPoints > 0 ? Math.round((points.allPoints / points.allMaxPoints) * 100) : 0;
+  const openFinishView = useCallback(() => {
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.set("view", "finish");
+    const nextQuery = nextParams.toString();
+    router.push(nextQuery ? `${normalizedPathname}?${nextQuery}` : normalizedPathname);
+  }, [normalizedPathname, router, searchParams]);
 
   if (!isGameRoute || !gameId) {
     return null;
   }
 
-  const openDialog = () => setShowDialog(true);
+  const openDialog = openFinishView;
 
   const trigger = renderTrigger ? renderTrigger({ openDialog }) : (
     displayMode === "icon" ? (
@@ -300,79 +66,5 @@ export const AplusSubmitButton = ({
     )
   );
 
-  return (
-    <>
-      {trigger}
-
-      <Dialog open={showDialog} onOpenChange={setShowDialog}>
-        <DialogContent className="z-[1200]">
-          <DialogHeader>
-            <DialogTitle>Finish game</DialogTitle>
-            <DialogDescription>
-              Save your result and mark this game as finished. You can view your summary when you return.
-              {ltiInfo?.hasOutcomeService && (
-                isGroupGameplay
-                  ? " In group games, each member must submit their own score to A+ (Plussa)."
-                  : " Your score will also be submitted to A+ (Plussa)."
-              )}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="py-4">
-            <div className="bg-muted rounded-lg p-4 text-center">
-              <div className="text-3xl font-bold">
-                {points.allPoints} / {points.allMaxPoints}
-              </div>
-              <div className="text-lg text-muted-foreground mt-1">{percentage}%</div>
-            </div>
-
-            {ltiInfo?.courseName && (
-              <p className="text-sm text-muted-foreground mt-4">
-                Course: <strong>{ltiInfo.courseName}</strong>
-              </p>
-            )}
-
-            {ltiInfo?.hasOutcomeService && isGroupGameplay && (
-              <p className="text-sm text-muted-foreground mt-3">
-                This game is collaborative, but A+ grading is individual. Ask each group member to finish and submit
-                their own score after the group is done.
-              </p>
-            )}
-
-            {result && (
-              <div
-                className={`mt-4 p-3 rounded-lg ${result.success
-                  ? "bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200"
-                  : "bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200"
-                  }`}
-              >
-                {result.success ? result.message : result.error}
-              </div>
-            )}
-          </div>
-
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setShowDialog(false)} disabled={isSubmitting}>
-              Cancel
-            </Button>
-            <Button onClick={handleFinishGame} disabled={isSubmitting}>
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Saving...
-                </>
-              ) : ltiInfo?.hasOutcomeService ? (
-                <>
-                  <Send className="h-4 w-4 mr-2" />
-                  {isGroupGameplay ? "Finish and submit your score" : "Finish and submit to A+"}
-                </>
-              ) : (
-                "Finish game"
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
-  );
+  return <>{trigger}</>;
 };
