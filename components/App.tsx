@@ -157,7 +157,9 @@ function App() {
     const gameChanged = lastGameIdRef.current !== currentGameId;
     const modeChanged = lastModeRef.current !== currentMode;
     const roomChanged = lastRoomIdRef.current !== (collaboration?.roomId || null);
-    const roomStateChanged = lastRoomStateSignatureRef.current !== roomStateSignature;
+    // Room state changes only matter in game mode where WS is the code source.
+    // In creator mode, re-running applyLevels would overwrite in-progress solution edits.
+    const roomStateChanged = shouldUseWsCodeSource && lastRoomStateSignatureRef.current !== roomStateSignature;
 
     // If nothing affecting the data source changed and we already fetched, skip
     if (hasFetchedRef.current && !gameChanged && !modeChanged && !roomChanged && !roomStateChanged) {
