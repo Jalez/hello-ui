@@ -25,7 +25,7 @@ async function handleJoinGame({ socket, data, socketId, resolveRoomId, ctx }) {
     accountUserId: data.userId || "",
     accountUserEmail: data.userEmail || "",
   };
-  const existingDuplicates = ctx.findDuplicateUsersInGame(gameId, baseUserData);
+  const existingDuplicates = ctx.findDuplicateUsersInGame(gameId, baseUserData, roomId);
   if (gameId && existingDuplicates.length > 0 && !await ctx.isDuplicateGroupUserAllowed(gameId)) {
     const conflictingUser = existingDuplicates[0];
     const attemptedLabel = baseUserData.userName || baseUserData.userEmail || "this account";
