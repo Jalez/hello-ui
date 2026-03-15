@@ -315,8 +315,11 @@ export default function GamePage({ params }: GamePageProps) {
       if (!hasUser && !guestId) return;
 
       try {
-        setIsLoading(true);
-        setLoadingMessage("Loading game...");
+        const isSwitchingGroup = Boolean(currentGame && searchParams.get("groupId") !== currentGame.progressData?.groupId);
+        if (!isSwitchingGroup || !currentGame) {
+          setIsLoading(true);
+          setLoadingMessage("Loading game...");
+        }
         setError(null);
         setRequiresGroup(false);
         setPublicLobby(null);
@@ -599,7 +602,6 @@ export default function GamePage({ params }: GamePageProps) {
     normalizedParams.set("groupId", groupId);
     router.push(`${pathname}?${normalizedParams.toString()}`);
     setRequiresGroup(false);
-    setIsLoading(true);
   };
 
   useEffect(() => {
