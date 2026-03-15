@@ -145,6 +145,7 @@ export default function CodeEditor({
     });
   }, [editorViewRef, review]);
 
+  const isSolution = type === "Solution" || type === "solution";
   const flushPendingLocalCodeUpdate = useCallback((pendingCode) => {
     if (pendingCode === null || pendingCode === template) {
       return;
@@ -152,7 +153,8 @@ export default function CodeEditor({
     // In Yjs mode, Redux is synced from the shared Y.Doc observer in Editors.tsx.
     // Pushing transient local mirror state here creates a second authority and
     // can reintroduce stale template churn during concurrent typing.
-    if (isYjsManaged) {
+    // Solution editors are never Yjs-managed and must always flush to Redux.
+    if (isYjsManaged && !isSolution) {
       return;
     }
     // Skip if applying external update (avoids echo).
@@ -160,7 +162,7 @@ export default function CodeEditor({
       return;
     }
     codeUpdater({ [title.toLowerCase()]: pendingCode }, type);
-  }, [applyingExternalUpdateRef, codeUpdater, isYjsManaged, template, title, type]);
+  }, [applyingExternalUpdateRef, codeUpdater, isSolution, isYjsManaged, template, title, type]);
 
   useEffect(() => {
     if (!isYjsManaged && applyingExternalUpdateRef.current) {
