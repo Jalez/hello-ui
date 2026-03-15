@@ -99,6 +99,7 @@
     "html2canvas": "^1.4.1",
     "joi": "^17.13.1",
     "jsonwebtoken": "^9.0.2",
+    "lib0": "^0.2.117",
     "lti-v1.0-node-library": "^1.0.0",
     "lucide-react": "^0.454.0",
     "modern-screenshot": "^4.4.9",
