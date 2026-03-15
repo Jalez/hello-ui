@@ -64,7 +64,7 @@ const EDITOR_HASH_INTERVAL_MS = 2000;
 const STALL_DETECTION_WINDOW_MS = 6000;
 const STALL_RETRY_COOLDOWN_MS = 10000;
 const LONG_TASK_WARN_MS = 700;
-const DIVERGENCE_RECOVERY_WINDOW_MS = 1500;
+const DIVERGENCE_RECOVERY_WINDOW_MS = 5000;
 
 type LocalEditorWatchState = EditorWatchdogSnapshot & {
   contentHash: string;
@@ -249,7 +249,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
   const lastTransportMessageAtRef = React.useRef(0);
   const localActiveEditorRef = React.useRef<{ editorType: EditorType; levelIndex: number } | null>(null);
   const lastHealthEventAtRef = React.useRef<Map<string, number>>(new Map());
-  const divergenceRecoveryRef = React.useRef<Map<string, { retriedAt: number; replacedAt: number }>>(new Map());
+  const divergenceRecoveryRef = React.useRef<Map<string, { retriedAt: number }>>(new Map());
 
   const markEditorRemoteApply = useCallback((editorType?: EditorType, levelIndex?: number) => {
     const now = Date.now();
@@ -904,6 +904,16 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
 
   const { activeUsers, usersByTab, addUser, setUsers, removeUser, clearUsers } = useCollaborationPresence({});
 
+  // Divergence recovery: when the server detects that client content hashes
+  // differ, it sends a divergence_detected health message. We recover by
+  // requesting a fresh room-state-sync and re-running the Yjs sync protocol
+  // (SyncStep1 → server responds with SyncStep2 containing missing updates).
+  //
+  // IMPORTANT: We never call replaceLocalYDoc here. Replacing the Y.Doc
+  // destroys all unsynced local edits and causes the editor to remount,
+  // which users experience as "typed text getting erased". The CRDT sync
+  // protocol is designed to merge divergent state non-destructively — a
+  // SyncStep1 exchange is sufficient to reconcile any missing updates.
   useEffect(() => {
     if (!lastHealthMessage || !resolvedRoomId || !isConnected) {
       return;
@@ -913,75 +923,23 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       return;
     }
 
-    let replaceTimer: number | null = null;
-
     const timer = window.setTimeout(() => {
       requestRoomStateSync(`health:${lastHealthMessage.eventType}`);
       if (isYjsEnabled) {
         const scopeKey = `${lastHealthMessage.levelIndex ?? "na"}:${lastHealthMessage.editorType ?? "na"}`;
-        const recoveryState = divergenceRecoveryRef.current.get(scopeKey) || { retriedAt: 0, replacedAt: 0 };
+        const recoveryState = divergenceRecoveryRef.current.get(scopeKey) || { retriedAt: 0 };
         const now = Date.now();
         if (recoveryState.retriedAt === 0 || now - recoveryState.retriedAt > DIVERGENCE_RECOVERY_WINDOW_MS) {
-          divergenceRecoveryRef.current.set(scopeKey, {
-            ...recoveryState,
-            retriedAt: now,
-          });
-          sendYjsSyncStep1(`health_retry:${scopeKey}`);
-          if (
-            typeof lastHealthMessage.editorType === "string"
-            && Number.isInteger(lastHealthMessage.levelIndex)
-          ) {
-            const watchKey = getEditorWatchKey(lastHealthMessage.editorType, lastHealthMessage.levelIndex);
-            const retryIssuedAt = now;
-            replaceTimer = window.setTimeout(() => {
-              if (!isConnected) {
-                return;
-              }
-              const latestRecoveryState = divergenceRecoveryRef.current.get(scopeKey);
-              if (!latestRecoveryState || latestRecoveryState.retriedAt !== retryIssuedAt) {
-                return;
-              }
-              const latestWatchState = editorWatchStatesRef.current.get(watchKey);
-              if (latestWatchState && latestWatchState.lastRemoteApplyAt >= retryIssuedAt) {
-                return;
-              }
-              if (latestRecoveryState.replacedAt >= retryIssuedAt) {
-                return;
-              }
-              divergenceRecoveryRef.current.set(scopeKey, {
-                retriedAt: retryIssuedAt,
-                replacedAt: Date.now(),
-              });
-              replaceLocalYDoc(`health_retry_timeout:${scopeKey}`, serverYjsDocGenerationRef.current, initialRoomState);
-              window.setTimeout(() => {
-                sendYjsSyncStep1(`health_retry_timeout:${scopeKey}`);
-              }, 80);
-            }, DIVERGENCE_RECOVERY_WINDOW_MS + 100);
-          }
-          return;
-        }
-
-        if (now - recoveryState.replacedAt > DIVERGENCE_RECOVERY_WINDOW_MS) {
-          divergenceRecoveryRef.current.set(scopeKey, {
-            retriedAt: recoveryState.retriedAt,
-            replacedAt: now,
-          });
-          replaceLocalYDoc(`health_replace:${scopeKey}`, serverYjsDocGenerationRef.current, initialRoomState);
-          setTimeout(() => {
-            sendYjsSyncStep1(`health_replace:${scopeKey}`);
-          }, 80);
-          return;
+          divergenceRecoveryRef.current.set(scopeKey, { retriedAt: now });
+          sendYjsSyncStep1(`health_resync:${scopeKey}`);
         }
       }
     }, 150);
 
     return () => {
       window.clearTimeout(timer);
-      if (replaceTimer) {
-        window.clearTimeout(replaceTimer);
-      }
     };
-  }, [initialRoomState, isConnected, isYjsEnabled, lastHealthMessage, replaceLocalYDoc, requestRoomStateSync, resolvedRoomId, sendYjsSyncStep1]);
+  }, [isConnected, isYjsEnabled, lastHealthMessage, requestRoomStateSync, resolvedRoomId, sendYjsSyncStep1]);
 
   useEffect(() => {
     if (!resolvedRoomId || !isConnected) {
