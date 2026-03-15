@@ -204,7 +204,7 @@ export function GroupWaitingRoom({
     dispatch(startLevelTimerAt({ levelId: 1, startTime: startedAtMs }));
   }, [dispatch, levels, startedAtMs]);
 
-  if (isStarted) {
+  if (isStarted && !isNested) {
     return <App />;
   }
 
