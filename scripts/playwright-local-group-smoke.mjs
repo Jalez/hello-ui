@@ -151,6 +151,9 @@ function scenarioFlags() {
     useLtiLobby: false,
     httpDelayMs: 0,
     httpJitterMs: 0,
+    wsReceiveDelayMs: 0,
+    wsReceiveJitterMs: 0,
+    wsDropYjsUpdates: 0,
   };
 
   if (scenario === "baseline") {
@@ -314,6 +317,9 @@ function scenarioFlags() {
       submitAfterStress: true,
       httpDelayMs: 200,
       httpJitterMs: 400,
+      wsReceiveDelayMs: 150,
+      wsReceiveJitterMs: 300,
+      wsDropYjsUpdates: 50,
     };
   }
 
@@ -718,6 +724,7 @@ async function runWsRecoveryScenario(browser) {
       const context = await browser.newContext({ baseURL: baseUrl, viewport: smokeViewport });
       await enableHttpLatency(context);
       const page = await context.newPage();
+      await enableWsReceiveDelay(page);
       await configureConsoleLogging(page, username);
       contexts.push({ username, context, page, extraPages: [] });
       await signInDevUser(page, username);
@@ -796,6 +803,7 @@ async function runRefreshDesyncScenario(browser) {
       const context = await browser.newContext({ baseURL: baseUrl, viewport: smokeViewport });
       await enableHttpLatency(context);
       const page = await context.newPage();
+      await enableWsReceiveDelay(page);
       await configureConsoleLogging(page, username);
       contexts.push({ username, context, page, extraPages: [] });
       await signInDevUser(page, username);
@@ -1025,6 +1033,82 @@ async function enableHttpLatency(context) {
       await new Promise((resolve) => setTimeout(resolve, flags.httpDelayMs + jitter));
     }
     await route.continue();
+  });
+}
+
+// ---------------------------------------------------------------------------
+// WS receive-delay via Playwright's routeWebSocket
+// ---------------------------------------------------------------------------
+// Intercepts browser WebSocket connections at the Playwright level and delays
+// server→client messages, simulating production latency. This is the critical
+// path that triggers desync when the client creates an empty Y.Doc and the
+// server SyncStep2 response arrives late.
+//
+// When wsDropYjsUpdateCount > 0, the first N Yjs update messages from the
+// server are silently dropped to force a real content divergence between
+// clients, triggering the server-side health check → divergence_detected →
+// client recovery path. Pre-fix code creates an empty Y.Doc during recovery
+// which (with receive delay) cascades into a recovery loop / text erasure.
+// ---------------------------------------------------------------------------
+
+// Per-page drop control: test code can call startDroppingYjsUpdates(page)
+// to begin dropping server→client Yjs messages, and stopDroppingYjsUpdates(page)
+// to stop. This allows dropping to start only after the editor is fully loaded.
+const pageDropState = new WeakMap();
+
+function startDroppingYjsUpdates(page) {
+  const state = pageDropState.get(page);
+  if (state) state.dropping = true;
+}
+
+function stopDroppingYjsUpdates(page) {
+  const state = pageDropState.get(page);
+  if (state) state.dropping = false;
+}
+
+async function enableWsReceiveDelay(page) {
+  const delayMs = flags.wsReceiveDelayMs;
+  const jitterMs = flags.wsReceiveJitterMs;
+  const hasDrops = flags.wsDropYjsUpdates > 0;
+  if (delayMs <= 0 && jitterMs <= 0 && !hasDrops) return;
+
+  const dropState = { dropping: false, count: 0 };
+  pageDropState.set(page, dropState);
+
+  const wsUrl = getPlaywrightWebSocketUrl();
+  const wsOrigin = new URL(wsUrl).origin.replace("http", "ws");
+
+  await page.routeWebSocket(`${wsOrigin}/**`, (ws) => {
+    const server = ws.connectToServer();
+
+    // Client → server: forward immediately
+    ws.onMessage((message) => {
+      server.send(message);
+    });
+
+    // Server → client: optionally drop + delay
+    server.onMessage((message) => {
+      // Drop Yjs updates when dropping is active to force divergence
+      if (dropState.dropping && typeof message === "string") {
+        try {
+          const parsed = JSON.parse(message);
+          if (parsed.type === "yjs-protocol" || parsed.type === "yjs-update") {
+            dropState.count++;
+            return; // silently drop
+          }
+        } catch {}
+      }
+
+      const jitter = jitterMs > 0 ? Math.floor(Math.random() * jitterMs) : 0;
+      const totalDelay = delayMs + jitter;
+      if (totalDelay <= 0) {
+        ws.send(message);
+        return;
+      }
+      setTimeout(() => {
+        ws.send(message);
+      }, totalDelay);
+    });
   });
 }
 
@@ -1656,6 +1740,112 @@ async function trySamePositionConcurrentEdit(pages, groupName) {
   return false;
 }
 
+/**
+ * Edit-stability check: types a marker on the target page while OTHER pages
+ * type concurrently, creating conditions for divergence when the target page
+ * drops incoming Yjs updates. The target page's content hash will differ from
+ * the server's (missing other users' edits), triggering divergence_detected
+ * and the replaceLocalYDoc recovery path.
+ *
+ * The test then polls the target page to verify the marker is NOT reverted
+ * by the recovery. Pre-fix code (empty Y.Doc on replace) causes the marker
+ * to disappear. Fixed code (pre-hydrated Y.Doc) preserves it.
+ *
+ * @param {import("@playwright/test").Page} targetPage  The page that should retain its edit
+ * @param {import("@playwright/test").Page[]} allPages  All pages in the group
+ * @param {string} groupName  For logging
+ * @param {object} [opts]
+ * @param {number} [opts.stabilityWindowMs]  How long the marker must persist (default 10s)
+ * @param {number} [opts.pollIntervalMs]     Check interval (default 400ms)
+ * @returns {Promise<{stable: boolean, appearedAt: number|null, disappearedAt: number|null}>}
+ */
+async function tryEditStability(targetPage, allPages, groupName, opts = {}) {
+  const stabilityWindowMs = opts.stabilityWindowMs ?? 10000;
+  const pollIntervalMs = opts.pollIntervalMs ?? 400;
+
+  const marker = `pw-stable-${Date.now().toString(36)}`;
+  const otherPages = allPages.filter((p) => p !== targetPage);
+
+  // Type the marker on the target page
+  const editor = targetPage.locator(".cm-content[contenteditable='true']").first();
+  await editor.click();
+  await editor.press("End");
+  await targetPage.keyboard.type(`\n<!-- ${marker} -->`, { delay: 30 });
+
+  // Wait for the marker to first appear on the target page
+  let appearedAt = null;
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const content = await getEditableContent(targetPage);
+    if (content.includes(marker)) {
+      appearedAt = Date.now();
+      break;
+    }
+    await targetPage.waitForTimeout(250);
+  }
+
+  if (!appearedAt) {
+    console.warn(`[stability:never-appeared] ${groupName} marker=${marker}`);
+    return { stable: false, appearedAt: null, disappearedAt: null };
+  }
+
+  // Have ONE other page type a few edits to create divergence conditions.
+  // The target page is dropping incoming Yjs updates, so it won't see these
+  // edits → its hash will differ from the server's → divergence_detected fires.
+  // Only type on one page with pauses to avoid destabilizing the test.
+  const bgPage = otherPages[0];
+  const bgTypingPromise = (async () => {
+    for (let round = 0; round < 4; round++) {
+      try {
+        const otherEditor = bgPage.locator(".cm-content[contenteditable='true']").first();
+        await otherEditor.click();
+        await otherEditor.press("End");
+        await bgPage.keyboard.type(`\n<!-- bg-${round} -->`, { delay: 40 });
+      } catch {
+        // page may have navigated or closed
+      }
+      await bgPage.waitForTimeout(1500);
+    }
+  })();
+
+  // Poll the target page: the marker must not disappear
+  let disappearedAt = null;
+  let checks = 0;
+  const deadline = Date.now() + stabilityWindowMs;
+  while (Date.now() < deadline) {
+    await targetPage.waitForTimeout(pollIntervalMs);
+    checks++;
+    const content = await getEditableContent(targetPage);
+    if (!content.includes(marker)) {
+      disappearedAt = Date.now();
+      console.warn(
+        `[stability:reverted] ${groupName} marker=${marker} afterMs=${disappearedAt - appearedAt} checks=${checks} content=${JSON.stringify(content.slice(-200))}`,
+      );
+      break;
+    }
+  }
+
+  // Wait for background typing to finish
+  await bgTypingPromise;
+
+  const stable = disappearedAt === null;
+  if (stable) {
+    // Verify the marker eventually reaches other pages (convergence still works)
+    for (const page of otherPages) {
+      try {
+        const hasMarker = await waitForMarkerOnPage(page, marker, `${groupName}:stability-converge`, scaledTimeout(10000));
+        if (!hasMarker) {
+          console.warn(`[stability:no-converge] ${groupName} marker=${marker} did not reach all pages`);
+        }
+      } catch (err) {
+        console.warn(`[stability:converge-error] ${groupName} marker=${marker} ${err.message?.slice(0, 100)}`);
+      }
+    }
+  }
+
+  console.log(`stability:check ${groupName} stable=${stable} checks=${checks} marker=${marker}`);
+  return { stable, appearedAt, disappearedAt };
+}
+
 async function switchToEditorTab(page, label) {
   await page.getByRole("tab", { name: label }).click();
   await page.waitForTimeout(300);
@@ -2225,6 +2415,7 @@ async function runLtiAplusGroupScenario(browser) {
       const context = await browser.newContext({ baseURL: baseUrl, viewport: smokeViewport });
       await enableHttpLatency(context);
       const page = await context.newPage();
+      await enableWsReceiveDelay(page);
       await configureConsoleLogging(page, username);
       const layoutIndex = groupLayouts.findIndex((layout) => layout.includes(index));
       const aplusGroup = String(Math.max(layoutIndex, 0));
@@ -2337,6 +2528,7 @@ async function closeAndReopenMember(group, contexts, memberIndex) {
   const participant = contexts[memberIndex];
   await participant.page.close().catch(() => {});
   participant.page = await participant.context.newPage();
+  await enableWsReceiveDelay(participant.page);
   await configureConsoleLogging(participant.page, participant.username);
   await gotoGamePage(participant.page, gameUrl(activeGameId, group.groupId), `rejoin:${participant.username}`);
   await waitForEditorOnPage(participant.page, `rejoin:${participant.username}`);
@@ -2384,10 +2576,12 @@ async function main() {
   const summary = [];
 
   try {
-    for (const username of usernames) {
+    for (let userIdx = 0; userIdx < usernames.length; userIdx++) {
+      const username = usernames[userIdx];
       const context = await browser.newContext({ baseURL: baseUrl, viewport: smokeViewport });
       await enableHttpLatency(context);
       const page = await context.newPage();
+      await enableWsReceiveDelay(page);
       await configureConsoleLogging(page, username);
       contexts.push({ username, context, page, extraPages: [] });
       await signInDevUser(page, username);
@@ -2597,6 +2791,7 @@ async function main() {
       const group = groups[index];
       const participant = contexts[group.ownerIndex];
       const extraPage = await participant.context.newPage();
+      await enableWsReceiveDelay(extraPage);
       await configureConsoleLogging(extraPage, `${participant.username}-tab2`);
       await gotoGamePage(extraPage, gameUrl(activeGameId, group.groupId), `extra-tab:${participant.username}`);
       if (!isInGameFocusedScenario()) {
@@ -2726,6 +2921,22 @@ async function main() {
         }
       }
 
+      // Edit-stability check: verify typed content is NOT reverted by recovery cycles.
+      // Starts dropping Yjs updates on a non-typing user so the typing user's edits
+      // don't reach them → their hashes diverge → server fires divergence_detected →
+      // the typing user's client runs replaceLocalYDoc recovery.
+      let editStable = null;
+      if (flags.wsReceiveDelayMs > 0 || flags.wsDropYjsUpdates > 0) {
+        const typingIdx = participantIndexes[0];
+        const typingPage = contexts[typingIdx].page;
+        // Start dropping on the typing user's page so they don't receive remote updates
+        // This creates a genuine hash divergence from the server's perspective
+        startDroppingYjsUpdates(typingPage);
+        const stabilityResult = await tryEditStability(typingPage, memberPages, group.groupName);
+        stopDroppingYjsUpdates(typingPage);
+        editStable = stabilityResult.stable;
+      }
+
       if (flags.closeReopenCount > 0 && participantIndexes.length > 1) {
         const memberIndex = participantIndexes[participantIndexes.length - 1];
         await closeAndReopenMember(group, contexts, memberIndex);
@@ -2756,6 +2967,7 @@ async function main() {
         stressPasses: stressResults.filter(Boolean).length,
         stressTotal: stressResults.length,
         resetOk,
+        editStable,
         submitOk: submitResult?.submitOk ?? null,
         actualSubmitParticipants: submitResult?.actualNames ?? [],
       });
@@ -2768,10 +2980,11 @@ async function main() {
     console.log(`Playwright scenario: ${scenario}`);
     console.log(`Game: ${activeGameId}`);
     console.log("Summary");
-    console.log("group | members | instance | single | concurrent | stress | reset | submit");
+    console.log("group | members | instance | single | concurrent | stress | reset | stable | submit");
     for (const row of summary) {
+      const stableCol = row.editStable == null ? "n/a" : row.editStable ? "PASS" : "FAIL";
       console.log(
-        `${row.name} | ${row.members} | ${row.instanceId || "none"} | ${row.singleEdit ? "PASS" : "FAIL"} | ${row.concurrent ? "PASS" : "FAIL"} | ${row.stressPasses}/${row.stressTotal} | ${row.resetOk ? "PASS" : "FAIL"} | ${row.submitOk == null ? "n/a" : row.submitOk ? "PASS" : "FAIL"}`,
+        `${row.name} | ${row.members} | ${row.instanceId || "none"} | ${row.singleEdit ? "PASS" : "FAIL"} | ${row.concurrent ? "PASS" : "FAIL"} | ${row.stressPasses}/${row.stressTotal} | ${row.resetOk ? "PASS" : "FAIL"} | ${stableCol} | ${row.submitOk == null ? "n/a" : row.submitOk ? "PASS" : "FAIL"}`,
       );
       console.log(
         `summary:${row.name} expected=${row.expectedMembers.join("|")} join=${row.observedJoinMembers.join("|")} start=${row.observedStartMembers.join("|")} finish=${row.observedFinishMembers.join("|")} submit=${row.actualSubmitParticipants.join("|")}`,
