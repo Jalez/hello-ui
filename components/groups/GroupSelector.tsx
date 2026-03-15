@@ -11,6 +11,8 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Loader2 } from "lucide-react";
+import { useNotificationStore } from "@/components/default/notifications";
 
 interface Group {
   id: string;
@@ -50,7 +52,11 @@ function buildGroupMeta(group: Group): string | null {
 
 function buildGroupLabel(group: Group): string {
   const meta = buildGroupMeta(group);
-  return meta ? `${group.name} (${meta})` : group.name;
+  let label = meta ? `${group.name} (${meta})` : group.name;
+  if (group.isMember) {
+    label = `✓ ${label}`;
+  }
+  return label;
 }
 
 export function GroupSelector({
@@ -63,8 +69,11 @@ export function GroupSelector({
   createPlaceholder = "Create a new group",
   currentUserId,
 }: GroupSelectorProps) {
+  const showSuccess = useNotificationStore((state) => state.showSuccess);
+  const showError = useNotificationStore((state) => state.showError);
   const [groups, setGroups] = useState<Group[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createName, setCreateName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
@@ -82,9 +91,15 @@ export function GroupSelector({
     selectedGroup.createdBy !== currentUserId
   );
 
-  const fetchGroups = useCallback(async () => {
+  const fetchGroups = useCallback(async (options?: { background?: boolean; notifyOnComplete?: boolean }) => {
+    const background = options?.background === true;
+    const notifyOnComplete = options?.notifyOnComplete === true;
     try {
-      setIsLoading(true);
+      if (background) {
+        setIsRefreshing(true);
+      } else {
+        setIsLoading(true);
+      }
       setError(null);
       const params = new URLSearchParams();
       if (createContext?.ltiContextId) {
@@ -104,12 +119,25 @@ export function GroupSelector({
 
       const { groups: fetchedGroups } = await response.json();
       setGroups(fetchedGroups);
+
+      if (notifyOnComplete) {
+        showSuccess(`Groups refreshed (${Array.isArray(fetchedGroups) ? fetchedGroups.length : 0}).`);
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch groups");
+      const message = err instanceof Error ? err.message : "Failed to fetch groups";
+      setError(message);
+
+      if (notifyOnComplete) {
+        showError(message);
+      }
     } finally {
-      setIsLoading(false);
+      if (background) {
+        setIsRefreshing(false);
+      } else {
+        setIsLoading(false);
+      }
     }
-  }, [createContext?.ltiContextId, createContext?.resourceLinkId]);
+  }, [createContext?.ltiContextId, createContext?.resourceLinkId, showError, showSuccess]);
 
   const handleCreateGroup = async () => {
     const trimmedName = createName.trim();
@@ -155,6 +183,13 @@ export function GroupSelector({
 
     try {
       setError(null);
+      
+      // Memory: save this group as the last visited one for this resource context
+      if (typeof window !== "undefined" && createContext?.resourceLinkId) {
+        const storageKey = `last-visited-group:${createContext.resourceLinkId}`;
+        window.sessionStorage.setItem(storageKey, selectedGroup.id);
+      }
+
       await onGroupSelect(selectedGroup.id, requiresJoinKey ? { joinKey } : undefined);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to open group");
@@ -162,42 +197,48 @@ export function GroupSelector({
   };
 
   useEffect(() => {
-    fetchGroups();
-  }, [fetchGroups]);
+    const init = async () => {
+      await fetchGroups();
+      
+      // After fetching groups, try to set a sensible default if none is already selected
+      if (!selectedGroupId && createContext?.resourceLinkId && typeof window !== "undefined") {
+        const storageKey = `last-visited-group:${createContext.resourceLinkId}`;
+        const lastVisitedId = window.sessionStorage.getItem(storageKey);
+        
+        setGroups((currentGroups) => {
+          if (lastVisitedId && currentGroups.some(g => g.id === lastVisitedId)) {
+            setPendingGroupId(lastVisitedId);
+          } else {
+            // Fallback to the first group the user is already part of
+            const joinedGroup = currentGroups.find(g => g.isMember);
+            if (joinedGroup) {
+              setPendingGroupId(joinedGroup.id);
+            }
+          }
+          return currentGroups;
+        });
+      }
+    };
+    init();
+  }, [fetchGroups, selectedGroupId, createContext?.resourceLinkId]);
 
   useEffect(() => {
     setPendingGroupId(selectedGroupId || "");
   }, [selectedGroupId]);
 
-  if (isLoading) {
-    return (
-      <div className={className}>
-        <Select disabled>
-          <SelectTrigger>
-            <SelectValue placeholder="Loading groups..." />
-          </SelectTrigger>
-        </Select>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className={className}>
-        <p className="text-sm text-destructive">{error}</p>
-        <Button variant="outline" size="sm" onClick={fetchGroups} className="mt-2">
-          Retry
-        </Button>
-      </div>
-    );
-  }
-
   return (
-    <div className={`space-y-2 ${className || ""}`}>
+    <div className={`w-full space-y-2 ${className || ""}`}>
       <Select value={pendingGroupId} onValueChange={setPendingGroupId}>
-        <SelectTrigger className="w-[240px]">
-          <SelectValue placeholder="Select a group">
-            {selectedGroup ? buildGroupLabel(selectedGroup) : undefined}
+        <SelectTrigger className="w-full min-w-0 max-w-full" disabled={isLoading && sortedGroups.length === 0}>
+          <SelectValue
+            placeholder={isLoading && sortedGroups.length === 0 ? "Loading groups..." : "Select a group"}
+            className="truncate"
+          >
+            {selectedGroup ? (
+              <span className="block truncate" title={buildGroupLabel(selectedGroup)}>
+                {buildGroupLabel(selectedGroup)}
+              </span>
+            ) : undefined}
           </SelectValue>
         </SelectTrigger>
         <SelectContent>
@@ -219,6 +260,7 @@ export function GroupSelector({
           You are not a member of any group yet.
         </p>
       )}
+      {error && <p className="text-sm text-destructive">{error}</p>}
       {selectedGroup && (
         <div className="rounded-md border bg-muted/20 p-3 space-y-2">
           {requiresJoinKey ? (
@@ -259,8 +301,20 @@ export function GroupSelector({
         </div>
       )}
       {showRefreshButton && (
-        <Button variant="outline" size="sm" onClick={fetchGroups}>
-          Refresh Groups
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => fetchGroups({ background: true, notifyOnComplete: true })}
+          disabled={isLoading || isRefreshing}
+        >
+          {isRefreshing ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Refresh Groups
+            </>
+          ) : (
+            "Refresh Groups"
+          )}
         </Button>
       )}
     </div>
