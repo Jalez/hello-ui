@@ -7,6 +7,7 @@ import { useGameStore } from "@/components/default/games";
 import { CollaborationProvider, useCollaboration } from "@/lib/collaboration";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { GroupSelector } from "@/components/groups";
+import { Users } from "lucide-react";
 import { useSidebarCollapse } from "@/components/default/sidebar/context/SidebarCollapseContext";
 import { GameSummaryView } from "@/components/GameSummary/GameSummaryView";
 import { apiUrl } from "@/lib/apiUrl";
@@ -686,16 +687,7 @@ function PublicGroupLobby({
         </div>
 
         <div className="mt-5 rounded-lg border p-4">
-          <div className="flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <p className="text-sm text-muted-foreground">Lobby status</p>
-              <p className="mt-1 text-2xl font-semibold">{connectedUsers.length} online</p>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              {collaboration.isConnected ? "Connected" : "Connecting..."}
-            </p>
-          </div>
-          <div className="mt-4 space-y-2 text-sm text-muted-foreground">
+          <div className="space-y-2 text-sm text-muted-foreground">
             <p><strong className="text-foreground">1.</strong> Create an app group or pick an existing one.</p>
             <p><strong className="text-foreground">2.</strong> Ask your teammates to join the same group.</p>
             <p><strong className="text-foreground">3.</strong> Enter the group waiting room and start together.</p>
@@ -708,7 +700,13 @@ function PublicGroupLobby({
         <Tabs defaultValue="group" className="mt-6">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="group">Enter Your Group</TabsTrigger>
-            <TabsTrigger value="chat">Lobby Chat</TabsTrigger>
+            <TabsTrigger value="chat" className="flex items-center gap-2">
+              Lobby Chat
+              <div className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium transition-colors group-data-[state=active]:bg-primary group-data-[state=active]:text-primary-foreground">
+                <Users className="h-3 w-3" />
+                <span>{connectedUsers.length}</span>
+              </div>
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="group" className="mt-4">
