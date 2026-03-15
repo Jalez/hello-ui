@@ -155,7 +155,7 @@ export default function CodeEditor({
     if (isYjsManaged) {
       return;
     }
-    // In custom engine mode, skip if applying external update (avoids echo).
+    // Skip if applying external update (avoids echo).
     if (applyingExternalUpdateRef.current) {
       return;
     }
@@ -336,6 +336,7 @@ export default function CodeEditor({
         <div ref={editorViewportRef} className="relative">
           {isYjsManaged ? (
             <YjsEditorSurface
+              key={editorKey}
               editorProps={editableEditorProps}
               editorKey={editorKey}
               editorInitialState={editorInitialState}

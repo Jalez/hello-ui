@@ -2,16 +2,17 @@
 
 import React, { createContext, useContext, useCallback, useMemo, useState, useEffect } from "react";
 import * as Y from "yjs";
+import * as decoding from "lib0/decoding";
+import * as encoding from "lib0/encoding";
+import * as syncProtocol from "y-protocols/sync";
+import * as awarenessProtocol from "y-protocols/awareness";
 import {
   ActiveUser,
   CanvasCursor,
   CollaborationHealthMessage,
   CollaborationHealthSeverity,
   EditorCursor,
-  EditorChange,
-  EditorChangeApplied,
   EditorWatchdogSnapshot,
-  EditorResync,
   GroupStartGateState,
   GroupStartSyncMessage,
   LobbyChatEntry,
@@ -20,18 +21,18 @@ import {
   RoomStateSyncMessage,
   UserIdentity,
   EditorType,
-  TabFocusMessage,
-  TypingStatusMessage,
   GameInstancesResetMessage,
 } from "./types";
-import { getClientCollaborationEngine } from "./engine";
 import { useCollaborationConnection } from "./hooks/useCollaborationConnection";
 import { useCollaborationCursor } from "./hooks/useCollaborationCursor";
 import { useCollaborationPresence } from "./hooks/useCollaborationPresence";
-import { useCollaborationEditor } from "./hooks/useCollaborationEditor";
-import { extractGroupIdFromRoomId } from "./utils";
+import { extractGroupIdFromRoomId, generateUserColor } from "./utils";
 import { decodeBase64ToUint8Array, encodeUint8ArrayToBase64 } from "./yjs-base64";
 
+export type RoomStateSync = RoomStateSyncMessage | null;
+export type ProgressSync = ProgressSyncMessage | null;
+export type GroupStartSync = GroupStartSyncMessage | null;
+export type GameInstancesResetSync = GameInstancesResetMessage | null;
 export interface RemoteCodeChange {
   seq: number;
   editorType: EditorType;
@@ -42,7 +43,6 @@ export interface RemoteCodeChange {
   clientId: string;
   ts: number;
 }
-
 export interface RemoteCodeResync {
   seq: number;
   editorType: EditorType;
@@ -51,7 +51,6 @@ export interface RemoteCodeResync {
   version: number;
   ts: number;
 }
-
 export interface LocalCodeAck {
   seq: number;
   editorType: EditorType;
@@ -61,15 +60,11 @@ export interface LocalCodeAck {
   ts: number;
 }
 
-export type RoomStateSync = RoomStateSyncMessage | null;
-export type ProgressSync = ProgressSyncMessage | null;
-export type GroupStartSync = GroupStartSyncMessage | null;
-export type GameInstancesResetSync = GameInstancesResetMessage | null;
-
 const EDITOR_HASH_INTERVAL_MS = 2000;
 const STALL_DETECTION_WINDOW_MS = 6000;
 const STALL_RETRY_COOLDOWN_MS = 10000;
 const LONG_TASK_WARN_MS = 700;
+const DIVERGENCE_RECOVERY_WINDOW_MS = 1500;
 
 type LocalEditorWatchState = EditorWatchdogSnapshot & {
   contentHash: string;
@@ -92,6 +87,19 @@ function hashContent(content: string): string {
     hash = Math.imul(hash, 0x01000193);
   }
   return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+function sameSelection(
+  left: { from: number; to: number } | null | undefined,
+  right: { from: number; to: number } | null | undefined,
+): boolean {
+  if (!left && !right) {
+    return true;
+  }
+  if (!left || !right) {
+    return false;
+  }
+  return left.from === right.from && left.to === right.to;
 }
 
 function hasSharedStartTime(roomState: RoomStateSync): boolean {
@@ -149,7 +157,7 @@ function normalizeGroupStartGateFromRoomState(roomState: RoomStateSync): GroupSt
 }
 
 interface CollaborationContextValue {
-  collabEngine: "custom" | "yjs";
+  collabEngine: "yjs";
   isYjsEnabled: boolean;
   isConnected: boolean;
   isConnecting: boolean;
@@ -198,6 +206,7 @@ interface CollaborationContextValue {
     scope?: { editorType?: EditorType; levelIndex?: number }
   ) => void;
   getYText: (editorType: EditorType, levelIndex: number) => Y.Text | null;
+  getYCodeSnapshot: (editorType: EditorType, levelIndex: number) => string | null;
   connect: () => void;
   disconnect: () => void;
 }
@@ -212,15 +221,15 @@ interface CollaborationProviderProps {
 }
 
 export function CollaborationProvider({ children, roomId, groupId, user }: CollaborationProviderProps) {
-  const collabEngine = getClientCollaborationEngine();
-  const isYjsEnabled = collabEngine === "yjs";
+  const collabEngine = "yjs" as const;
+  const isYjsEnabled = true;
   const resolvedRoomId = roomId ?? groupId ?? null;
   const resolvedGroupId = extractGroupIdFromRoomId(resolvedRoomId);
   const [canvasCursors, setCanvasCursors] = useState<Map<string, CanvasCursor>>(new Map());
   const [editorCursors, setEditorCursors] = useState<Map<string, EditorCursor>>(new Map());
-  const [remoteCodeChanges, setRemoteCodeChanges] = useState<RemoteCodeChange[]>([]);
-  const [remoteCodeResyncs, setRemoteCodeResyncs] = useState<RemoteCodeResync[]>([]);
-  const [localCodeAcks, setLocalCodeAcks] = useState<LocalCodeAck[]>([]);
+  const remoteCodeChanges: RemoteCodeChange[] = [];
+  const remoteCodeResyncs: RemoteCodeResync[] = [];
+  const localCodeAcks: LocalCodeAck[] = [];
   const [lastProgressSync, setLastProgressSync] = useState<ProgressSync>(null);
   const [lastGameInstancesReset, setLastGameInstancesReset] = useState<GameInstancesResetSync>(null);
   const [groupStartGate, setGroupStartGate] = useState<GroupStartGateState | null>(null);
@@ -230,15 +239,17 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
   const [codeSyncReady, setCodeSyncReady] = useState(false);
   const [yjsReady, setYjsReady] = useState(false);
   const [yjsDocGeneration, setYjsDocGeneration] = useState(0);
-  const remoteEventSeqRef = React.useRef(0);
   const wasConnectedRef = React.useRef(false);
   const hasConnectedOnceRef = React.useRef(false);
   const hasDisconnectedUnexpectedlyRef = React.useRef(false);
   const yDocRef = React.useRef<Y.Doc | null>(null);
+  const yAwarenessRef = React.useRef<awarenessProtocol.Awareness | null>(null);
+  const serverYjsDocGenerationRef = React.useRef(0);
   const editorWatchStatesRef = React.useRef<Map<string, LocalEditorWatchState>>(new Map());
   const lastTransportMessageAtRef = React.useRef(0);
   const localActiveEditorRef = React.useRef<{ editorType: EditorType; levelIndex: number } | null>(null);
   const lastHealthEventAtRef = React.useRef<Map<string, number>>(new Map());
+  const divergenceRecoveryRef = React.useRef<Map<string, { retriedAt: number; replacedAt: number }>>(new Map());
 
   const markEditorRemoteApply = useCallback((editorType?: EditorType, levelIndex?: number) => {
     const now = Date.now();
@@ -276,15 +287,72 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
     return doc.getText(getYTextKey(editorType, levelIndex));
   }, [getYTextKey]);
 
+  const getYCodeSnapshot = useCallback((editorType: EditorType, levelIndex: number) => {
+    return getYText(editorType, levelIndex)?.toString() ?? null;
+  }, [getYText]);
+
+  const replaceLocalYDoc = useCallback((reason: string, nextServerGeneration?: number | null) => {
+    const previousDoc = yDocRef.current;
+    if (previousDoc) {
+      previousDoc.destroy();
+    }
+    const previousAwareness = yAwarenessRef.current;
+    if (previousAwareness) {
+      previousAwareness.destroy();
+    }
+
+    const doc = new Y.Doc();
+    const awareness = new awarenessProtocol.Awareness(doc);
+    awareness.setLocalState(null);
+    yDocRef.current = doc;
+    yAwarenessRef.current = awareness;
+    if (Number.isInteger(nextServerGeneration) && typeof nextServerGeneration === "number") {
+      serverYjsDocGenerationRef.current = nextServerGeneration;
+    }
+
+    doc.on("update", (update: Uint8Array, origin: unknown) => {
+      if (origin === "remote-yjs") {
+        return;
+      }
+
+      const encoder = encoding.createEncoder();
+      syncProtocol.writeUpdate(encoder, update);
+      sendYjsProtocolRef.current?.({
+        channel: "sync",
+        payloadBase64: encodeUint8ArrayToBase64(encoding.toUint8Array(encoder)),
+      });
+    });
+
+    awareness.on("update", ({ added, updated, removed }, origin) => {
+      if (origin === "remote-yjs-awareness") {
+        return;
+      }
+      const changedClients = added.concat(updated, removed);
+      if (changedClients.length === 0) {
+        return;
+      }
+      const encoder = encoding.createEncoder();
+      encoding.writeVarUint8Array(encoder, awarenessProtocol.encodeAwarenessUpdate(awareness, changedClients));
+      sendYjsProtocolRef.current?.({
+        channel: "awareness",
+        payloadBase64: encodeUint8ArrayToBase64(encoding.toUint8Array(encoder)),
+      });
+    });
+
+    setYjsReady(false);
+    setYjsDocGeneration((prev) => prev + 1);
+    console.log("[yjs-doc:replace]", {
+      roomId: resolvedRoomId,
+      reason,
+      serverGeneration: serverYjsDocGenerationRef.current,
+    });
+  }, [resolvedRoomId]);
+
   // Presence helpers — populated after useCollaborationPresence is called below
   const addUserRef = React.useRef<((u: ActiveUser) => void) | null>(null);
   const setUsersRef = React.useRef<((u: ActiveUser[]) => void) | null>(null);
   const removeUserRef = React.useRef<((id: string) => void) | null>(null);
-  const updateUserTabRef = React.useRef<((clientId: string, editorType: EditorType, levelIndex: number) => void) | null>(null);
-  const updateUserTypingRef = React.useRef<((clientId: string, editorType: EditorType, levelIndex: number, isTyping: boolean) => void) | null>(null);
-  const sendEditorCursorRef = React.useRef<((editorType: EditorType, levelIndex: number, selection: { from: number; to: number }) => void) | null>(null);
-  const sendEditorChangeRef = React.useRef<((editorType: EditorType, levelIndex: number, baseVersion: number, changeSetJson: unknown, selection?: { from: number; to: number }) => void) | null>(null);
-  const sendYjsUpdateRef = React.useRef<((updateBase64: string) => void) | null>(null);
+  const sendYjsProtocolRef = React.useRef<((message: { channel: "sync" | "awareness"; payloadBase64: string }) => void) | null>(null);
 
   // Queue presence events that arrive before refs are set (e.g. fast current-users after join)
   const pendingPresenceRef = React.useRef<Array<{ type: "user-joined"; user: ActiveUser } | { type: "current-users"; users: ActiveUser[] }>>([]);
@@ -351,109 +419,32 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       return next;
     });
   }, []);
-
-  const sendCursorThroughRef = useCallback((editorType: EditorType, levelIndex: number, selection: { from: number; to: number }) => {
-    sendEditorCursorRef.current?.(editorType, levelIndex, selection);
-  }, []);
-
-  const sendChangeThroughRef = useCallback((
-    editorType: EditorType,
-    levelIndex: number,
-    baseVersion: number,
-    changeSetJson: unknown,
-    selection?: { from: number; to: number }
-  ) => {
-    sendEditorChangeRef.current?.(editorType, levelIndex, baseVersion, changeSetJson, selection);
-  }, []);
-
-  const { updateLocalSelectionForLevel, applyLocalChange, setEditorVersion, getEditorVersion, syncEditorVersions, resetEditorVersions } = useCollaborationEditor({
-    sendCursor: sendCursorThroughRef,
-    sendChange: sendChangeThroughRef,
-  });
-
-  const handleEditorCursor = useCallback((cursor: EditorCursor) => {
-    setEditorCursors((prev) => {
-      const next = new Map(prev);
-      next.set(`${cursor.clientId}-${cursor.editorType}-${cursor.levelIndex}`, cursor);
-      return next;
-    });
-  }, []);
-
-  const handleEditorChange = useCallback((change: EditorChange) => {
-    if (isYjsEnabled) {
-      return;
-    }
-    markEditorRemoteApply(change.editorType, change.levelIndex);
-    setEditorVersion(change.editorType, change.levelIndex, change.nextVersion);
-    const seq = ++remoteEventSeqRef.current;
-    setRemoteCodeChanges((prev) => [
-      ...prev.slice(-99),
-      {
-        seq,
-        editorType: change.editorType,
-        changeSetJson: change.changeSetJson,
-        levelIndex: change.levelIndex,
-        baseVersion: change.baseVersion,
-        nextVersion: change.nextVersion,
-        clientId: change.clientId,
-        ts: Date.now(),
-      },
-    ]);
-  }, [isYjsEnabled, markEditorRemoteApply, setEditorVersion]);
-
-  const handleEditorChangeApplied = useCallback((message: EditorChangeApplied) => {
-    if (isYjsEnabled) {
-      return;
-    }
-    markEditorRemoteApply(message.editorType, message.levelIndex);
-    setEditorVersion(message.editorType, message.levelIndex, message.nextVersion);
-    const seq = ++remoteEventSeqRef.current;
-    setLocalCodeAcks((prev) => [
-      ...prev.slice(-49),
-      {
-        seq,
-        editorType: message.editorType,
-        levelIndex: message.levelIndex,
-        nextVersion: message.nextVersion,
-        content: message.content,
-        ts: Date.now(),
-      },
-    ]);
-  }, [isYjsEnabled, markEditorRemoteApply, setEditorVersion]);
-
-  const handleEditorResync = useCallback((message: EditorResync) => {
-    if (isYjsEnabled) {
-      return;
-    }
-    markEditorRemoteApply(message.editorType, message.levelIndex);
-    setEditorVersion(message.editorType, message.levelIndex, message.version);
-    const seq = ++remoteEventSeqRef.current;
-    setRemoteCodeResyncs((prev) => [
-      ...prev.slice(-49),
-      {
-        seq,
-        editorType: message.editorType,
-        levelIndex: message.levelIndex,
-        content: message.content,
-        version: message.version,
-        ts: Date.now(),
-      },
-    ]);
-  }, [isYjsEnabled, markEditorRemoteApply, setEditorVersion]);
+  const getEditorVersion = useCallback(() => 0, []);
 
   const handleRoomStateSync = useCallback((roomState: RoomStateSyncMessage) => {
     markEditorRemoteApply();
     setInitialRoomState(roomState);
     const roomGate = normalizeGroupStartGateFromRoomState(roomState);
-    if (roomGate) {
+    const inferredStarted = hasSharedStartTime(roomState);
+    if (roomGate?.status === "started") {
+      setGroupStartGate(roomGate);
+    } else if (inferredStarted) {
+      setGroupStartGate((prev) => ({
+        status: "started",
+        minReadyCount: roomGate?.minReadyCount ?? prev?.minReadyCount ?? 2,
+        readyUserIds: roomGate?.readyUserIds ?? prev?.readyUserIds ?? [],
+        readyUsers: roomGate?.readyUsers ?? prev?.readyUsers ?? {},
+        startedAt: roomGate?.startedAt ?? prev?.startedAt ?? new Date().toISOString(),
+        startedByUserId: roomGate?.startedByUserId ?? prev?.startedByUserId ?? null,
+      }));
+    } else if (roomGate) {
       setGroupStartGate(roomGate);
     }
-    if (!isYjsEnabled) {
-      syncEditorVersions(roomState);
-      setCodeSyncReady(true);
-      return;
+    const nextGeneration = Number.isInteger(roomState.yjsDocGeneration) ? roomState.yjsDocGeneration ?? 0 : 0;
+    if (!yDocRef.current || nextGeneration !== serverYjsDocGenerationRef.current) {
+      replaceLocalYDoc("room_state_generation", nextGeneration);
     }
-  }, [isYjsEnabled, markEditorRemoteApply, syncEditorVersions]);
+  }, [markEditorRemoteApply, replaceLocalYDoc]);
 
   const handleProgressSync = useCallback((message: ProgressSyncMessage) => {
     setLastProgressSync(message);
@@ -493,91 +484,120 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
     lastTransportMessageAtRef.current = 0;
     editorWatchStatesRef.current.clear();
     setCodeSyncReady(false);
-    setYjsReady(false);
-    setInitialRoomState(null);
     setLastHealthMessage(null);
-    setRemoteCodeChanges([]);
-    setRemoteCodeResyncs([]);
-    setLocalCodeAcks([]);
     setCanvasCursors(new Map());
     setEditorCursors(new Map());
   }, []);
 
-  const handleTabFocus = useCallback((message: TabFocusMessage) => {
-    updateUserTabRef.current?.(message.clientId, message.editorType, message.levelIndex);
-    setEditorCursors((prev) => {
-      const next = new Map(prev);
-      for (const key of next.keys()) {
-        if (
-          key.startsWith(`${message.clientId}-`) &&
-          key !== `${message.clientId}-${message.editorType}-${message.levelIndex}`
-        ) {
-          next.delete(key);
-        }
+  const syncPresenceFromAwareness = useCallback(() => {
+    const awareness = yAwarenessRef.current;
+    if (!awareness) {
+      return;
+    }
+    const nextUsers: ActiveUser[] = [];
+    const nextEditorCursors = new Map<string, EditorCursor>();
+    const localState = awareness.getLocalState();
+    const localClientId =
+      localState && typeof localState === "object" && localState.session && typeof localState.session === "object" && typeof localState.session.clientId === "string"
+        ? localState.session.clientId
+        : "";
+    for (const [, rawState] of awareness.getStates()) {
+      if (!rawState || typeof rawState !== "object") {
+        continue;
       }
-      return next;
-    });
-  }, []);
+      const session = rawState.session && typeof rawState.session === "object" ? rawState.session : null;
+      const userState = rawState.user && typeof rawState.user === "object" ? rawState.user : null;
+      const editor = rawState.editor && typeof rawState.editor === "object" ? rawState.editor : null;
+      const awarenessClientId = typeof session?.clientId === "string" ? session.clientId : "";
+      const userId = typeof userState?.id === "string" ? userState.id : "";
+      if (!awarenessClientId || !userId) {
+        continue;
+      }
+      if (localClientId && awarenessClientId === localClientId) {
+        continue;
+      }
+      const editorType = editor?.editorType;
+      const levelIndex = Number.isInteger(editor?.levelIndex) ? editor.levelIndex : undefined;
+      const isTyping = editor?.isTyping === true;
+      nextUsers.push({
+        clientId: awarenessClientId,
+        userId,
+        userEmail: typeof userState?.email === "string" ? userState.email : "",
+        userName: typeof userState?.name === "string" ? userState.name : undefined,
+        userImage: typeof userState?.image === "string" ? userState.image : undefined,
+        activeTab: editorType === "html" || editorType === "css" || editorType === "js" ? editorType : undefined,
+        activeLevelIndex: levelIndex,
+        isTyping,
+      });
+      if (
+        (editorType === "html" || editorType === "css" || editorType === "js")
+        && Number.isInteger(levelIndex)
+        && editor?.selection
+        && typeof editor.selection === "object"
+        && Number.isInteger(editor.selection.from)
+        && Number.isInteger(editor.selection.to)
+      ) {
+        nextEditorCursors.set(`${awarenessClientId}-${editorType}-${levelIndex}`, {
+          roomId: resolvedRoomId || "",
+          groupId: resolvedGroupId || undefined,
+          editorType,
+          levelIndex,
+          clientId: awarenessClientId,
+          userId,
+          userName: typeof userState?.name === "string" ? userState.name : undefined,
+          color: generateUserColor(typeof userState?.email === "string" ? userState.email : awarenessClientId),
+          selection: {
+            from: editor.selection.from,
+            to: editor.selection.to,
+          },
+          ts: Date.now(),
+        });
+      }
+    }
+    setUsersRef.current?.(nextUsers);
+    setEditorCursors(nextEditorCursors);
+  }, [resolvedGroupId, resolvedRoomId]);
 
-  const handleTypingStatus = useCallback((message: TypingStatusMessage) => {
-    updateUserTypingRef.current?.(message.clientId, message.editorType, message.levelIndex, message.isTyping);
-  }, []);
-
-  const handleYjsSync = useCallback((message: { updateBase64: string }) => {
+  const handleYjsProtocol = useCallback((message: { channel: "sync" | "awareness"; payloadBase64: string }) => {
     const doc = yDocRef.current;
-    if (!doc || !message.updateBase64) {
+    if (!doc || !message.payloadBase64) {
       return;
     }
-    console.log("[yjs-sync:apply]", {
-      roomId: resolvedRoomId,
-      updateLength: message.updateBase64.length,
-    });
-    Y.applyUpdate(doc, decodeBase64ToUint8Array(message.updateBase64), "remote-yjs");
-    markEditorRemoteApply();
-    setYjsReady(true);
-  }, [markEditorRemoteApply, resolvedRoomId]);
-
-  const handleYjsReset = useCallback((message: { updateBase64: string }) => {
-    if (!message.updateBase64) {
-      return;
-    }
-    // Destroy old Y.Doc and create a fresh one to avoid CRDT tombstone conflicts
-    const oldDoc = yDocRef.current;
-    if (oldDoc) {
-      oldDoc.destroy();
-    }
-    const freshDoc = new Y.Doc();
-    yDocRef.current = freshDoc;
-    console.log("[yjs-reset:apply]", {
-      roomId: resolvedRoomId,
-      updateLength: message.updateBase64.length,
-    });
-    Y.applyUpdate(freshDoc, decodeBase64ToUint8Array(message.updateBase64), "remote-yjs");
-    // Wire up outbound update handler on the new doc
-    freshDoc.on("update", (update: Uint8Array, origin: unknown) => {
-      if (origin === "remote-yjs" || origin === "hydrate-room-state") {
+    if (message.channel === "awareness") {
+      const awareness = yAwarenessRef.current;
+      if (!awareness) {
         return;
       }
-      sendYjsUpdateRef.current?.(encodeUint8ArrayToBase64(update));
-    });
-    markEditorRemoteApply();
-    setYjsReady(true);
-    setYjsDocGeneration((prev) => prev + 1);
-  }, [markEditorRemoteApply, resolvedRoomId]);
-
-  const handleYjsUpdate = useCallback((message: { updateBase64: string }) => {
-    const doc = yDocRef.current;
-    if (!doc || !message.updateBase64) {
+      const rawPayload = decodeBase64ToUint8Array(message.payloadBase64);
+      const awarenessDecoder = decoding.createDecoder(rawPayload);
+      const awarenessUpdate = decoding.readVarUint8Array(awarenessDecoder);
+      awarenessProtocol.applyAwarenessUpdate(
+        awareness,
+        awarenessUpdate,
+        "remote-yjs-awareness",
+      );
+      syncPresenceFromAwareness();
       return;
     }
-    console.log("[yjs-update:apply]", {
+    const decoder = decoding.createDecoder(decodeBase64ToUint8Array(message.payloadBase64));
+    const encoder = encoding.createEncoder();
+    const syncMessageType = syncProtocol.readSyncMessage(decoder, encoder, doc, "remote-yjs");
+    console.log("[yjs-protocol:apply]", {
       roomId: resolvedRoomId,
-      updateLength: message.updateBase64.length,
+      messageType: syncMessageType,
+      payloadLength: message.payloadBase64.length,
     });
-    Y.applyUpdate(doc, decodeBase64ToUint8Array(message.updateBase64), "remote-yjs");
+    if (encoding.length(encoder) > 0) {
+      sendYjsProtocolRef.current?.({
+        channel: "sync",
+        payloadBase64: encodeUint8ArrayToBase64(encoding.toUint8Array(encoder)),
+      });
+    }
     markEditorRemoteApply();
-    setYjsReady(true);
-  }, [markEditorRemoteApply, resolvedRoomId]);
+    if (syncMessageType !== syncProtocol.messageYjsSyncStep1) {
+      setYjsReady(true);
+    }
+  }, [markEditorRemoteApply, resolvedRoomId, syncPresenceFromAwareness]);
 
   const {
     isConnected,
@@ -587,13 +607,8 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
     connect,
     disconnect,
     sendCanvasCursor,
-    sendEditorCursor,
-    sendEditorChange,
-    sendTabFocus,
-    sendTypingStatus,
     requestRoomStateSync,
-    requestYjsSync,
-    sendYjsUpdate,
+    sendYjsProtocol,
     sendRoomReset,
     sendProgressSync,
     sendGroupStartReady,
@@ -610,25 +625,56 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
     onConnected: handleSocketConnected,
     onDisconnected: handleSocketDisconnected,
     onCanvasCursor: handleCanvasCursor,
-    onEditorCursor: handleEditorCursor,
-    onEditorChange: handleEditorChange,
-    onEditorChangeApplied: handleEditorChangeApplied,
-    onEditorResync: handleEditorResync,
     onCurrentUsers: handleCurrentUsers,
-    onTabFocus: handleTabFocus,
-    onTypingStatus: handleTypingStatus,
     onRoomStateSync: handleRoomStateSync,
     onProgressSync: handleProgressSync,
     onGameInstancesReset: handleGameInstancesReset,
     onGroupStartSync: handleGroupStartSync,
     onLobbyChatSync: handleLobbyChatSync,
     onLobbyChatMessage: handleLobbyChatMessage,
-    onYjsSync: handleYjsSync,
-    onYjsReset: handleYjsReset,
-    onYjsUpdate: handleYjsUpdate,
+    onYjsProtocol: handleYjsProtocol,
     onCollaborationHealth: handleCollaborationHealth,
     onTransportMessage: handleTransportMessage,
   });
+
+  useEffect(() => {
+    if (!isYjsEnabled) {
+      return;
+    }
+    const awareness = yAwarenessRef.current;
+    if (!awareness) {
+      return;
+    }
+    if (!isConnected || !effectiveIdentity || !clientId) {
+      awareness.setLocalState(null);
+      return;
+    }
+    const existing = (awareness.getLocalState() || {}) as {
+      user?: { id?: string; name?: string; email?: string; image?: string };
+      session?: { clientId?: string };
+    };
+    const userChanged =
+      existing.user?.id !== effectiveIdentity.id
+      || existing.user?.name !== effectiveIdentity.name
+      || existing.user?.email !== effectiveIdentity.email
+      || existing.user?.image !== effectiveIdentity.image;
+    const sessionChanged = existing.session?.clientId !== clientId;
+    if (!userChanged && !sessionChanged) {
+      return;
+    }
+    awareness.setLocalState({
+      ...existing,
+      user: {
+        id: effectiveIdentity.id,
+        name: effectiveIdentity.name,
+        email: effectiveIdentity.email,
+        image: effectiveIdentity.image,
+      },
+      session: {
+        clientId,
+      },
+    });
+  }, [clientId, effectiveIdentity, isConnected, isYjsEnabled]);
 
   const reportCollaborationHealthEvent = useCallback((
     eventType: string,
@@ -651,6 +697,27 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       details,
     });
   }, [sendClientHealthEvent]);
+
+  const sendYjsSyncStep1 = useCallback((reason: string) => {
+    const doc = yDocRef.current;
+    if (!resolvedRoomId || !isConnected || !doc) {
+      return;
+    }
+
+    const encoder = encoding.createEncoder();
+    syncProtocol.writeSyncStep1(encoder, doc);
+    const payloadBase64 = encodeUint8ArrayToBase64(encoding.toUint8Array(encoder));
+    console.log("[yjs-sync:step1]", {
+      roomId: resolvedRoomId,
+      reason,
+      serverGeneration: serverYjsDocGenerationRef.current,
+      payloadLength: payloadBase64.length,
+    });
+    sendYjsProtocol({
+      channel: "sync",
+      payloadBase64,
+    });
+  }, [isConnected, resolvedRoomId, sendYjsProtocol]);
 
   const maybeSendEditorHash = useCallback((state: LocalEditorWatchState, minIntervalMs: number) => {
     const now = Date.now();
@@ -720,36 +787,47 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
   }, [maybeSendEditorHash]);
 
   useEffect(() => {
-    sendYjsUpdateRef.current = sendYjsUpdate;
-  }, [sendYjsUpdate]);
+    sendYjsProtocolRef.current = sendYjsProtocol;
+    // Re-broadcast local awareness state now that the send ref is ready.
+    // The initial setLocalState (user info) may have fired before this ref was set,
+    // causing the awareness update to be silently dropped.
+    const awareness = yAwarenessRef.current;
+    if (awareness && sendYjsProtocol) {
+      const localState = awareness.getLocalState();
+      if (localState && typeof localState === "object" && localState.user) {
+        const encoder = encoding.createEncoder();
+        encoding.writeVarUint8Array(
+          encoder,
+          awarenessProtocol.encodeAwarenessUpdate(awareness, [awareness.clientID]),
+        );
+        sendYjsProtocol({
+          channel: "awareness",
+          payloadBase64: encodeUint8ArrayToBase64(encoding.toUint8Array(encoder)),
+        });
+      }
+    }
+  }, [sendYjsProtocol]);
 
   useEffect(() => {
     if (!isYjsEnabled) {
       return;
     }
 
-    const doc = new Y.Doc();
-    yDocRef.current = doc;
-
-    const handleDocUpdate = (update: Uint8Array, origin: unknown) => {
-      if (origin === "remote-yjs" || origin === "hydrate-room-state") {
-        return;
-      }
-      console.log("[yjs-doc:update:emit]", {
-        roomId: resolvedRoomId,
-        origin: String(origin),
-        updateBytes: update.byteLength,
-      });
-      sendYjsUpdate(encodeUint8ArrayToBase64(update));
-    };
-
-    doc.on("update", handleDocUpdate);
+    replaceLocalYDoc("room_mount", 0);
     return () => {
-      doc.off("update", handleDocUpdate);
-      doc.destroy();
+      const doc = yDocRef.current;
+      if (doc) {
+        doc.destroy();
+      }
       yDocRef.current = null;
+      const awareness = yAwarenessRef.current;
+      if (awareness) {
+        awareness.destroy();
+      }
+      yAwarenessRef.current = null;
+      serverYjsDocGenerationRef.current = 0;
     };
-  }, [isYjsEnabled, resolvedRoomId, sendYjsUpdate]);
+  }, [isYjsEnabled, replaceLocalYDoc, resolvedRoomId]);
 
   useEffect(() => {
     if (!resolvedRoomId || !isConnected) {
@@ -765,7 +843,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
 
     if (isYjsEnabled && !yjsReady) {
       const timer = setTimeout(() => {
-        requestYjsSync();
+        sendYjsSyncStep1("startup_missing_yjs_sync");
       }, 150);
       return () => clearTimeout(timer);
     }
@@ -776,7 +854,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       }, 600);
       return () => clearTimeout(timer);
     }
-  }, [groupStartGate?.status, initialRoomState, isConnected, isYjsEnabled, requestRoomStateSync, requestYjsSync, resolvedRoomId, yjsReady]);
+  }, [groupStartGate?.status, initialRoomState, isConnected, isYjsEnabled, requestRoomStateSync, resolvedRoomId, sendYjsSyncStep1, yjsReady]);
 
   useEffect(() => {
     const wasConnected = wasConnectedRef.current;
@@ -796,30 +874,14 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
     const timer = setTimeout(() => {
       requestRoomStateSync("reconnect_recover");
       if (isYjsEnabled) {
-        requestYjsSync();
+        sendYjsSyncStep1("reconnect_recover");
       }
     }, 250);
 
     return () => clearTimeout(timer);
-  }, [isConnected, isYjsEnabled, requestRoomStateSync, requestYjsSync, resolvedRoomId]);
+  }, [isConnected, isYjsEnabled, requestRoomStateSync, resolvedRoomId, sendYjsSyncStep1]);
 
-  useEffect(() => {
-    if (isYjsEnabled) {
-      return;
-    }
-    if (!resolvedRoomId || !isConnected || remoteCodeResyncs.length === 0) {
-      return;
-    }
-
-    const latestResync = remoteCodeResyncs[remoteCodeResyncs.length - 1];
-    const timer = setTimeout(() => {
-      requestRoomStateSync(`editor_resync_recover:${latestResync.editorType}:${latestResync.levelIndex}`);
-    }, 200);
-
-    return () => clearTimeout(timer);
-  }, [isConnected, isYjsEnabled, remoteCodeResyncs, requestRoomStateSync, resolvedRoomId]);
-
-  const { activeUsers, usersByTab, addUser, setUsers, removeUser, clearUsers, updateUserTab, updateUserTyping } = useCollaborationPresence({});
+  const { activeUsers, usersByTab, addUser, setUsers, removeUser, clearUsers } = useCollaborationPresence({});
 
   useEffect(() => {
     if (!lastHealthMessage || !resolvedRoomId || !isConnected) {
@@ -830,15 +892,75 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       return;
     }
 
-    const timer = setTimeout(() => {
+    let replaceTimer: number | null = null;
+
+    const timer = window.setTimeout(() => {
       requestRoomStateSync(`health:${lastHealthMessage.eventType}`);
       if (isYjsEnabled) {
-        requestYjsSync();
+        const scopeKey = `${lastHealthMessage.levelIndex ?? "na"}:${lastHealthMessage.editorType ?? "na"}`;
+        const recoveryState = divergenceRecoveryRef.current.get(scopeKey) || { retriedAt: 0, replacedAt: 0 };
+        const now = Date.now();
+        if (recoveryState.retriedAt === 0 || now - recoveryState.retriedAt > DIVERGENCE_RECOVERY_WINDOW_MS) {
+          divergenceRecoveryRef.current.set(scopeKey, {
+            ...recoveryState,
+            retriedAt: now,
+          });
+          sendYjsSyncStep1(`health_retry:${scopeKey}`);
+          if (
+            typeof lastHealthMessage.editorType === "string"
+            && Number.isInteger(lastHealthMessage.levelIndex)
+          ) {
+            const watchKey = getEditorWatchKey(lastHealthMessage.editorType, lastHealthMessage.levelIndex);
+            const retryIssuedAt = now;
+            replaceTimer = window.setTimeout(() => {
+              if (!isConnected) {
+                return;
+              }
+              const latestRecoveryState = divergenceRecoveryRef.current.get(scopeKey);
+              if (!latestRecoveryState || latestRecoveryState.retriedAt !== retryIssuedAt) {
+                return;
+              }
+              const latestWatchState = editorWatchStatesRef.current.get(watchKey);
+              if (latestWatchState && latestWatchState.lastRemoteApplyAt >= retryIssuedAt) {
+                return;
+              }
+              if (latestRecoveryState.replacedAt >= retryIssuedAt) {
+                return;
+              }
+              divergenceRecoveryRef.current.set(scopeKey, {
+                retriedAt: retryIssuedAt,
+                replacedAt: Date.now(),
+              });
+              replaceLocalYDoc(`health_retry_timeout:${scopeKey}`, serverYjsDocGenerationRef.current);
+              window.setTimeout(() => {
+                sendYjsSyncStep1(`health_retry_timeout:${scopeKey}`);
+              }, 80);
+            }, DIVERGENCE_RECOVERY_WINDOW_MS + 100);
+          }
+          return;
+        }
+
+        if (now - recoveryState.replacedAt > DIVERGENCE_RECOVERY_WINDOW_MS) {
+          divergenceRecoveryRef.current.set(scopeKey, {
+            retriedAt: recoveryState.retriedAt,
+            replacedAt: now,
+          });
+          replaceLocalYDoc(`health_replace:${scopeKey}`, serverYjsDocGenerationRef.current);
+          setTimeout(() => {
+            sendYjsSyncStep1(`health_replace:${scopeKey}`);
+          }, 80);
+          return;
+        }
       }
     }, 150);
 
-    return () => clearTimeout(timer);
-  }, [isConnected, isYjsEnabled, lastHealthMessage, requestRoomStateSync, requestYjsSync, resolvedRoomId]);
+    return () => {
+      window.clearTimeout(timer);
+      if (replaceTimer) {
+        window.clearTimeout(replaceTimer);
+      }
+    };
+  }, [isConnected, isYjsEnabled, lastHealthMessage, replaceLocalYDoc, requestRoomStateSync, resolvedRoomId, sendYjsSyncStep1]);
 
   useEffect(() => {
     if (!resolvedRoomId || !isConnected) {
@@ -886,7 +1008,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
           });
           requestRoomStateSync(`stall:${state.editorType}:${state.levelIndex}`);
           if (isYjsEnabled) {
-            requestYjsSync();
+            sendYjsSyncStep1(`stall:${state.editorType}:${state.levelIndex}`);
           }
         }
       });
@@ -900,8 +1022,8 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
     maybeSendEditorHash,
     reportCollaborationHealthEvent,
     requestRoomStateSync,
-    requestYjsSync,
     resolvedRoomId,
+    sendYjsSyncStep1,
   ]);
 
   useEffect(() => {
@@ -932,13 +1054,11 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
     addUserRef.current = addUser;
     setUsersRef.current = setUsers;
     removeUserRef.current = removeUser;
-    updateUserTabRef.current = updateUserTab;
-    updateUserTypingRef.current = updateUserTyping;
     flushPendingPresence();
     // Delayed flush in case presence events were queued after this layout effect (e.g. fast current-users)
     const t = setTimeout(flushPendingPresence, 80);
     return () => clearTimeout(t);
-  }, [addUser, setUsers, removeUser, updateUserTab, updateUserTyping, flushPendingPresence]);
+  }, [addUser, setUsers, removeUser, flushPendingPresence]);
 
   const { updateLocalCursor } = useCollaborationCursor({
     sendCursor: sendCanvasCursor,
@@ -946,22 +1066,12 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
   });
 
   useEffect(() => {
-    sendEditorCursorRef.current = sendEditorCursor;
-    sendEditorChangeRef.current = sendEditorChange;
-    return () => {
-      sendEditorCursorRef.current = null;
-      sendEditorChangeRef.current = null;
-    };
-  }, [sendEditorCursor, sendEditorChange]);
-
-  useEffect(() => {
     return () => {
       clearUsers();
       setCanvasCursors(new Map());
       setEditorCursors(new Map());
-      resetEditorVersions();
     };
-  }, [clearUsers, resetEditorVersions]);
+  }, [clearUsers]);
 
   useEffect(() => {
     if (!resolvedRoomId || isConnected || !hasDisconnectedUnexpectedlyRef.current) {
@@ -973,8 +1083,6 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
 
   useEffect(() => {
     queueMicrotask(() => {
-      setRemoteCodeChanges([]);
-      setRemoteCodeResyncs([]);
       setLastProgressSync(null);
       setLastGameInstancesReset(null);
       setGroupStartGate(null);
@@ -993,8 +1101,9 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
     editorWatchStatesRef.current.clear();
     localActiveEditorRef.current = null;
     lastHealthEventAtRef.current.clear();
-    resetEditorVersions();
-  }, [resolvedRoomId, resetEditorVersions]);
+    divergenceRecoveryRef.current.clear();
+    serverYjsDocGenerationRef.current = 0;
+  }, [resolvedRoomId]);
 
   const updateCanvasCursor = useCallback(
     (x: number, y: number) => {
@@ -1003,26 +1112,65 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
     [updateLocalCursor]
   );
 
+  const updateAwarenessEditorState = useCallback((patch: {
+    editorType?: EditorType;
+    levelIndex?: number;
+    selection?: { from: number; to: number } | null;
+    isTyping?: boolean;
+  }) => {
+    const awareness = yAwarenessRef.current;
+    if (!awareness) {
+      return;
+    }
+    const current = awareness.getLocalState() || {};
+    const currentEditor =
+      current.editor && typeof current.editor === "object" && !Array.isArray(current.editor)
+        ? current.editor
+        : {};
+    const nextEditor = {
+      ...currentEditor,
+      ...(patch.editorType ? { editorType: patch.editorType } : {}),
+      ...(Number.isInteger(patch.levelIndex) ? { levelIndex: patch.levelIndex } : {}),
+      ...(typeof patch.isTyping === "boolean" ? { isTyping: patch.isTyping } : {}),
+      ...(patch.selection ? { selection: patch.selection } : {}),
+    };
+    const changed =
+      currentEditor.editorType !== nextEditor.editorType
+      || currentEditor.levelIndex !== nextEditor.levelIndex
+      || currentEditor.isTyping !== nextEditor.isTyping
+      || !sameSelection(
+        currentEditor.selection as { from: number; to: number } | null | undefined,
+        nextEditor.selection as { from: number; to: number } | null | undefined
+      );
+    if (!changed) {
+      return;
+    }
+    awareness.setLocalState({
+      ...current,
+      editor: nextEditor,
+    });
+  }, []);
+
   const updateEditorSelection = useCallback(
     (editorType: EditorType, levelIndex: number, selection: { from: number; to: number }) => {
-      updateLocalSelectionForLevel(editorType, levelIndex, selection);
+      updateAwarenessEditorState({ editorType, levelIndex, selection });
     },
-    [updateLocalSelectionForLevel]
+    [updateAwarenessEditorState]
   );
 
   const setActiveTab = useCallback(
     (editorType: EditorType, levelIndex: number) => {
       localActiveEditorRef.current = { editorType, levelIndex };
-      sendTabFocus(editorType, levelIndex);
+      updateAwarenessEditorState({ editorType, levelIndex, isTyping: false });
     },
-    [sendTabFocus]
+    [updateAwarenessEditorState]
   );
 
   const setTyping = useCallback(
     (editorType: EditorType, levelIndex: number, isTyping: boolean) => {
-      sendTypingStatus(editorType, levelIndex, isTyping);
+      updateAwarenessEditorState({ editorType, levelIndex, isTyping });
     },
-    [sendTypingStatus]
+    [updateAwarenessEditorState]
   );
 
   const resetRoomState = useCallback((scope: "level" | "game", levelIndex?: number) => {
@@ -1043,18 +1191,18 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
 
   const applyEditorChangeWrapper = useCallback(
     (
-      editorType: EditorType,
-      changeSetJson: unknown,
-      levelIndex: number,
-      baseVersion: number,
-      selection?: { from: number; to: number }
+      _editorType: EditorType,
+      _changeSetJson: unknown,
+      _levelIndex: number,
+      _baseVersion: number,
+      _selection?: { from: number; to: number }
     ) => {
-      applyLocalChange(editorType, changeSetJson, levelIndex, baseVersion, selection);
+      // Yjs is the only document sync path; local changes flow through Y.Text bindings.
     },
-    [applyLocalChange]
+    []
   );
 
-  const resolvedCodeSyncReady = isYjsEnabled ? Boolean(initialRoomState) && yjsReady : codeSyncReady;
+  const resolvedCodeSyncReady = Boolean(initialRoomState) && yjsReady;
 
   const value = useMemo<CollaborationContextValue>(
     () => ({
@@ -1096,6 +1244,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       reportEditorWatchState,
       reportCollaborationHealthEvent,
       getYText,
+      getYCodeSnapshot,
       connect,
       disconnect,
     }),
@@ -1138,6 +1287,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       reportEditorWatchState,
       reportCollaborationHealthEvent,
       getYText,
+      getYCodeSnapshot,
       connect,
       disconnect,
     ]
@@ -1160,4 +1310,49 @@ export function useCollaboration(): CollaborationContextValue {
 
 export function useOptionalCollaboration(): CollaborationContextValue | null {
   return useContext(CollaborationContext);
+}
+
+export function useYjsLevelCodeSnapshot(
+  levelIndex: number,
+  fallbackCode: { html: string; css: string; js: string },
+) {
+  const collaboration = useOptionalCollaboration();
+  const getYText = collaboration?.getYText;
+  const yjsDocGeneration = collaboration?.yjsDocGeneration ?? 0;
+  const [code, setCode] = useState(fallbackCode);
+
+  useEffect(() => {
+    if (!getYText || levelIndex < 0) {
+      setCode(fallbackCode);
+      return;
+    }
+
+    const editorTypes: EditorType[] = ["html", "css", "js"];
+    const sync = () => {
+      setCode({
+        html: getYText("html", levelIndex)?.toString() ?? fallbackCode.html,
+        css: getYText("css", levelIndex)?.toString() ?? fallbackCode.css,
+        js: getYText("js", levelIndex)?.toString() ?? fallbackCode.js,
+      });
+    };
+
+    sync();
+    const texts = editorTypes.map((editorType) => getYText(editorType, levelIndex)).filter((text): text is Y.Text => Boolean(text));
+    const observer = () => {
+      sync();
+    };
+    texts.forEach((text) => text.observe(observer));
+    return () => {
+      texts.forEach((text) => text.unobserve(observer));
+    };
+  }, [
+    fallbackCode.css,
+    fallbackCode.html,
+    fallbackCode.js,
+    getYText,
+    levelIndex,
+    yjsDocGeneration,
+  ]);
+
+  return code;
 }
