@@ -131,6 +131,7 @@ const {
   dbPool,
   gameDuplicateSettingsCache,
   gameDuplicateSettingsTtlMs: GAME_DUPLICATE_SETTINGS_TTL_MS,
+  isLobbyRoom,
   rooms,
   getRoomUsers,
   extractGameIdFromRoomId,

@@ -5,6 +5,7 @@ export function createDuplicateIdentityService({
   rooms,
   getRoomUsers,
   extractGameIdFromRoomId,
+  isLobbyRoom,
 }) {
   function normalizeDuplicateBaseName(name, email, userId) {
     return name || email || userId || "Anonymous";
@@ -97,14 +98,27 @@ export function createDuplicateIdentityService({
     };
   }
 
-  function findDuplicateUsersInGame(gameId, baseUserData) {
+  function findDuplicateUsersInGame(gameId, baseUserData, targetRoomId) {
     if (!gameId) {
       return [];
     }
 
+    const isTargetLobby = isLobbyRoom(targetRoomId);
     const duplicates = [];
     for (const [candidateRoomId, roomUsers] of rooms.entries()) {
+      // Don't count yourself in the same room as a duplicate
+      if (candidateRoomId === targetRoomId) {
+        continue;
+      }
+
       if (extractGameIdFromRoomId(candidateRoomId) !== gameId) {
+        continue;
+      }
+
+      // Allow one lobby connection and one non-lobby (instance/creator) connection simultaneously.
+      // This enables staying in the public lobby chat while being in a group waiting room.
+      const isCandidateLobby = isLobbyRoom(candidateRoomId);
+      if (isTargetLobby !== isCandidateLobby) {
         continue;
       }
 
