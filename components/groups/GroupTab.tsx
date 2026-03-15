@@ -61,9 +61,10 @@ export function GroupTab({
   }, [selectedGroupId]);
 
   if (selectedGroupId) {
-    // When a group is selected, we wrap in its own provider for the group room
+    // When a group is selected, we wrap in its own provider for the group room.
+    // The room ID must match the game instance room: group:{groupId}:game:{gameId}
     return (
-      <CollaborationProvider roomId={`group:${selectedGroupId}`} user={currentUser}>
+      <CollaborationProvider roomId={`group:${selectedGroupId}:game:${gameId}`} user={currentUser}>
         <GroupWaitingRoom
           gameTitle={gameTitle}
           groupId={selectedGroupId}

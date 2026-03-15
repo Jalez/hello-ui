@@ -740,9 +740,11 @@ export default function GamePage({ params }: GamePageProps) {
     );
   }
 
+  const gate = currentGame?.progressData?.groupStartGate as Record<string, unknown> | undefined;
+  const isStarted = gate?.status === "started";
   const isGroupWorkMode = currentGame?.collaborationMode === "group";
 
-  if (isGroupWorkMode && user) {
+  if (isGroupWorkMode && user && !isStarted) {
     // Determine the stable lobby room ID. If we resolved a specific LTI context earlier, use it.
     const lobbyRoomId = publicLobby?.roomId || `lobby:${gameId}`;
     
