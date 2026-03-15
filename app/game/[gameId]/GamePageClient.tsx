@@ -17,10 +17,10 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import type { GroupStartGateState, LobbyChatEntry, UserIdentity } from "@/lib/collaboration/types";
 import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
 import { startLevelTimerAt } from "@/store/slices/levels.slice";
-import { addNotificationData } from "@/store/slices/notifications.slice";
 import { logDebugClient } from "@/lib/debug-logger";
 import { fetchGroupDetailsCached } from "@/lib/group-details-client";
 import type { ClientGroupMember } from "@/lib/group-details-client";
+import { toast } from "sonner";
 
 interface GamePageProps {
   params: Promise<{
@@ -590,12 +590,7 @@ function GameInstancesResetWatcher({ gameId }: { gameId: string }) {
       resetMessage.actorUserEmail ||
       "The creator";
 
-    dispatch(
-      addNotificationData({
-        type: "info",
-        message: `${actorLabel} reset all saved game instances. Rejoining from a fresh game state.`,
-      })
-    );
+    toast.info(`${actorLabel} reset all saved game instances. Rejoining from a fresh game state.`);
 
     collaboration.disconnect();
 
@@ -710,11 +705,34 @@ function PublicGroupLobby({
           </p>
         </div>
 
-        <Tabs defaultValue="chat" className="mt-6">
+        <Tabs defaultValue="group" className="mt-6">
           <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="chat">Lobby Chat</TabsTrigger>
             <TabsTrigger value="group">Enter Your Group</TabsTrigger>
+            <TabsTrigger value="chat">Lobby Chat</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="group" className="mt-4">
+            <div className="rounded-lg border p-4">
+              <h2 className="text-lg font-semibold">Enter Your Group</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Use your app group here. If none exists yet, create one with a name your teammates can recognize.
+              </p>
+              <div className="mt-3">
+                <GroupSelector
+                  selectedGroupId={groupId}
+                  onGroupSelect={onGroupSelect}
+                  showRefreshButton
+                  allowCreate
+                  createContext={{
+                    ltiContextTitle: courseName,
+                    resourceLinkId: gameId,
+                  }}
+                  createPlaceholder="Example: Team 2 / UI Squad"
+                  currentUserId={currentUser.id}
+                />
+              </div>
+            </div>
+          </TabsContent>
 
           <TabsContent value="chat" className="mt-4">
             <div className="rounded-lg border p-4">
@@ -753,29 +771,6 @@ function PublicGroupLobby({
                 Send
               </Button>
             </form>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="group" className="mt-4">
-            <div className="rounded-lg border p-4">
-              <h2 className="text-lg font-semibold">Enter Your Group</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Use your app group here. If none exists yet, create one with a name your teammates can recognize.
-              </p>
-              <div className="mt-3">
-                <GroupSelector
-                  selectedGroupId={groupId}
-                  onGroupSelect={onGroupSelect}
-                  showRefreshButton
-                  allowCreate
-                  createContext={{
-                    ltiContextTitle: courseName,
-                    resourceLinkId: gameId,
-                  }}
-                  createPlaceholder="Example: Team 2 / UI Squad"
-                  currentUserId={currentUser.id}
-                />
-              </div>
             </div>
           </TabsContent>
         </Tabs>

@@ -5,12 +5,12 @@ import { useGameStore } from "@/components/default/games";
 import { getMapLevels, removeLevelFromMap as removeLevelFromMapRequest } from "@/lib/utils/network/maps";
 import { initializePointsFromLevelsStateThunk } from "@/store/actions/score.actions";
 import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
-import { addNotificationData } from "@/store/slices/notifications.slice";
 import { setCurrentLevel } from "@/store/slices/currentLevel.slice";
 import { removeLevel, updateWeek, setAllLevels } from "@/store/slices/levels.slice";
 import { resetSolutionUrls } from "@/store/slices/solutionUrls.slice";
 import { setSolutions } from "@/store/slices/solutions.slice";
 import { Level } from "@/types";
+import { toast } from "sonner";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -60,7 +60,7 @@ export const useLevelRemover = () => {
 
   const handleRemove = useCallback(async () => {
     if (levels.length === 1) {
-      dispatch(addNotificationData({ message: "Cannot remove the last level", type: "warning" }));
+      toast.warning("Cannot remove the last level");
       return;
     }
 
@@ -74,22 +74,22 @@ export const useLevelRemover = () => {
         dispatch(setCurrentLevel(Math.max(1, currentLevel - 1)));
       }
       dispatch(removeLevel(currentLevel));
-      dispatch(addNotificationData({ message: "Unsaved level removed", type: "success" }));
+      toast.success("Unsaved level removed");
       return;
     }
 
     if (!currentGame?.mapName) {
-      dispatch(addNotificationData({ message: "Current game map is missing", type: "error" }));
+      toast.error("Current game map is missing");
       return;
     }
 
     try {
       await removeLevelFromMapRequest(currentGame.mapName, levelToRemove.identifier);
       await refreshCurrentMapLevels();
-      dispatch(addNotificationData({ message: "Level removed from game", type: "success" }));
+      toast.success("Level removed from game");
     } catch (error) {
       console.error("Failed to remove level from map", error);
-      dispatch(addNotificationData({ message: "Failed to remove level", type: "error" }));
+      toast.error("Failed to remove level");
     }
   }, [levels, currentLevel, currentGame?.mapName, refreshCurrentMapLevels, dispatch]);
 

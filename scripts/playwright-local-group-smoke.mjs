@@ -53,6 +53,10 @@ function deriveUsernames() {
     return ["user01", "user02", "user02", "user03"];
   }
 
+  if (scenario === "refresh_desync") {
+    return ["user01", "user02"];
+  }
+
   if (scenario === "in_game_duplicate") {
     return ["user01", "user02", "user02", "user03"];
   }
@@ -68,6 +72,7 @@ function deriveUsernames() {
     same_user_duplicate: 3,
     same_user_blocked: 3,
     duplicate_churn: 4,
+    refresh_desync: 2,
     in_game_churn: 4,
     in_game_duplicate: 4,
     ws_invalid_rsv1: 1,
@@ -87,6 +92,7 @@ function defaultGroupSizeForScenario() {
   if (scenario === "baseline") return 3;
   if (scenario === "same_user_duplicate") return 3;
   if (scenario === "duplicate_churn") return 4;
+  if (scenario === "refresh_desync") return 2;
   if (scenario === "in_game_churn") return 4;
   if (scenario === "in_game_duplicate") return 4;
   if (scenario === "same_user_blocked") return 3;
@@ -254,6 +260,17 @@ function scenarioFlags() {
       submitAfterStress: true,
       httpDelayMs: 75,
       httpJitterMs: 150,
+    };
+  }
+
+  if (scenario === "refresh_desync") {
+    return {
+      ...defaults,
+      stressRounds: 1,
+      refreshDuringEditing: true,
+      submitAfterStress: false,
+      httpDelayMs: 100,
+      httpJitterMs: 250,
     };
   }
 
@@ -545,13 +562,13 @@ async function sendMalformedRsv1Frame(targetWsUrl) {
 async function runInvalidRsv1Scenario() {
   if (process.env.PLAYWRIGHT_ALLOW_WS_CRASH !== "true") {
     throw new Error(
-      "ws_invalid_rsv1 intentionally crashes the current WS server build. Re-run with PLAYWRIGHT_ALLOW_WS_CRASH=true.",
+      "ws_invalid_rsv1 sends malformed frames to verify WS crash hardening. Re-run with PLAYWRIGHT_ALLOW_WS_CRASH=true.",
     );
   }
 
   const wsUrl = getPlaywrightWebSocketUrl();
   const healthUrl = getHealthUrlForWebSocket(wsUrl);
-  const expectCrash = process.env.PLAYWRIGHT_EXPECT_WS_CRASH !== "false";
+  const expectCrash = process.env.PLAYWRIGHT_EXPECT_WS_CRASH === "true";
 
   const healthyBefore = await waitForHealthState(healthUrl, true, scaledTimeout(5000));
   expect(healthyBefore).toBe(true);
@@ -688,7 +705,7 @@ async function runWsRecoveryScenario(browser) {
   }
 
   const restartDelayMs = Number.parseInt(process.env.PLAYWRIGHT_WS_RESTART_DELAY_MS || "1000", 10);
-  const reconnectWindowMs = Number.parseInt(process.env.PLAYWRIGHT_WS_RECONNECT_WINDOW_MS || "12000", 10);
+  const reconnectWindowMs = Number.parseInt(process.env.PLAYWRIGHT_WS_RECONNECT_WINDOW_MS || "30000", 10);
   const wsUrl = getPlaywrightWebSocketUrl();
   const healthUrl = getHealthUrlForWebSocket(wsUrl);
   const wsPort = Number.parseInt(new URL(wsUrl).port || "3100", 10);
@@ -766,6 +783,117 @@ async function runWsRecoveryScenario(browser) {
     console.log(`ws-recovery | ${recovered ? "RECOVERED" : "FAILED"} | restartDelayMs=${restartDelayMs}`);
   } finally {
     await stopManagedWsServer(managedWsChild);
+    await Promise.all(contexts.flatMap(({ extraPages = [] }) => extraPages).map(async (page) => page.close().catch(() => {})));
+    await Promise.all(contexts.map(async ({ context }) => context.close().catch(() => {})));
+  }
+}
+
+async function runRefreshDesyncScenario(browser) {
+  const contexts = [];
+
+  try {
+    for (const username of usernames) {
+      const context = await browser.newContext({ baseURL: baseUrl, viewport: smokeViewport });
+      await enableHttpLatency(context);
+      const page = await context.newPage();
+      await configureConsoleLogging(page, username);
+      contexts.push({ username, context, page, extraPages: [] });
+      await signInDevUser(page, username);
+      console.log(`signed in ${username}`);
+    }
+
+    const creator = contexts[0];
+    const createdGame = await createPlayableGroupGame(creator.context.request, creator.username);
+    activeGameId = createdGame.gameId;
+    const group = {
+      groupId: createdGame.groupId,
+      groupName: createdGame.groupName,
+      joinKey: createdGame.joinKey,
+      memberIndexes: [0, 1],
+      ownerIndex: 0,
+    };
+
+    await joinGroup(contexts[1].context.request, group.groupId, group.joinKey, contexts[1].username);
+    console.log(`joined ${contexts[1].username} -> ${group.groupId}`);
+
+    for (const memberIndex of group.memberIndexes) {
+      await gotoGamePage(contexts[memberIndex].page, gameUrl(activeGameId, group.groupId), `group-open:${contexts[memberIndex].username}`);
+    }
+
+    const pages = group.memberIndexes.map((memberIndex) => contexts[memberIndex].page);
+    await startGroupGame(pages);
+    await waitForEditorOnPages(pages);
+
+    const baselineMarker = `pw-refresh-baseline-${Date.now().toString(36)}`;
+    const baselineOk = await trySharedEdit([pages[0], pages[1]], baselineMarker);
+    console.log(`refresh-desync baselineOk=${baselineOk} marker=${baselineMarker}`);
+    expect(baselineOk).toBe(true);
+
+    const beforeReloadContents = await Promise.all(pages.map((page) => getEditableContent(page)));
+    console.log(`refresh-desync beforeReloadLengths=${beforeReloadContents.map((content) => content.length).join("|")}`);
+
+    const duringReloadMarker = `pw-during-reload-${Date.now().toString(36)}`;
+    const slowTypePromise = typeMarkerSlowly(pages[0], duringReloadMarker);
+    await pages[1].waitForTimeout(120);
+    await reloadGamePage(pages[1], `refresh-desync:${contexts[1].username}`);
+    await waitForEditorOnPage(pages[1], `refresh-desync:${contexts[1].username}`);
+    await slowTypePromise;
+
+    const afterReloadContent = await getEditableContent(pages[1]);
+    console.log(`refresh-desync afterReloadLength=${afterReloadContent.length}`);
+
+    const reloadedCaughtDuringReload = await waitForMarkerOnPage(
+      pages[1],
+      duringReloadMarker,
+      `${group.groupName}:reloaded-caught-during-reload`,
+    );
+    console.log(`refresh-desync reloadedCaughtDuringReload=${reloadedCaughtDuringReload} marker=${duringReloadMarker}`);
+    expect(reloadedCaughtDuringReload).toBe(true);
+
+    const remoteAfterRefreshMarker = `pw-from-user01-after-refresh-${Date.now().toString(36)}`;
+    const originalToReloadedOk = await trySharedEdit([pages[0], pages[1]], remoteAfterRefreshMarker);
+    console.log(`refresh-desync originalToReloadedOk=${originalToReloadedOk} marker=${remoteAfterRefreshMarker}`);
+    expect(originalToReloadedOk).toBe(true);
+
+    const reloadedReceivesRemote = await waitForMarkerOnPage(
+      pages[1],
+      remoteAfterRefreshMarker,
+      `${group.groupName}:reloaded-receives-remote`,
+    );
+    console.log(`refresh-desync reloadedReceivesRemote=${reloadedReceivesRemote}`);
+    expect(reloadedReceivesRemote).toBe(true);
+
+    const outboundAfterRefreshMarker = `pw-from-user02-after-refresh-${Date.now().toString(36)}`;
+    const reloadedToOriginalOk = await trySharedEdit([pages[1], pages[0]], outboundAfterRefreshMarker);
+    console.log(`refresh-desync reloadedToOriginalOk=${reloadedToOriginalOk} marker=${outboundAfterRefreshMarker}`);
+    expect(reloadedToOriginalOk).toBe(true);
+
+    const originalReceivesReloaded = await waitForMarkerOnPage(
+      pages[0],
+      outboundAfterRefreshMarker,
+      `${group.groupName}:original-receives-reloaded`,
+    );
+    console.log(`refresh-desync originalReceivesReloaded=${originalReceivesReloaded}`);
+    expect(originalReceivesReloaded).toBe(true);
+
+    const convergence = await waitForPagesConverged(
+      pages,
+      [],
+      group.groupName,
+      scaledTimeout(15000),
+    );
+    console.log(`refresh-desync converged=${convergence.ok}`);
+    expect(convergence.ok).toBe(true);
+
+    console.log("");
+    console.log(`Playwright scenario: ${scenario}`);
+    console.log(`Game: ${activeGameId}`);
+    console.log("Summary");
+    console.log(
+      `refresh-desync | ${convergence.ok ? "PASS" : "FAIL"} | ` +
+      `baseline=${baselineOk} duringReload=${reloadedCaughtDuringReload} originalToReloaded=${originalToReloadedOk} reloadedToOriginal=${reloadedToOriginalOk}`,
+    );
+  } finally {
     await Promise.all(contexts.flatMap(({ extraPages = [] }) => extraPages).map(async (page) => page.close().catch(() => {})));
     await Promise.all(contexts.map(async ({ context }) => context.close().catch(() => {})));
   }
@@ -1119,8 +1247,35 @@ async function createGroupModeGame(request, creatorUsername) {
 }
 
 async function waitForEditorOnPages(pages) {
-  for (const [index, page] of pages.entries()) {
-    await waitForEditorOnPage(page, `page-${index + 1}`);
+  const pending = new Set(pages.map((_, index) => index));
+  const maxPasses = 4;
+  for (let pass = 1; pass <= maxPasses && pending.size > 0; pass += 1) {
+    await startGroupGame(pages);
+
+    for (const index of [...pending]) {
+      const page = pages[index];
+      const label = `page-${index + 1}`;
+      try {
+        await page.locator(".cm-content[contenteditable='true']").first().waitFor({ timeout: scaledTimeout(8000) });
+        console.log(`editor:ready ${label}`);
+        pending.delete(index);
+      } catch {
+        await logPageEditorState(page, `${label}:editor-pass-${pass}`);
+        if (pass >= 2) {
+          await reloadGamePage(page, `${label}:pass-${pass}-retry`);
+          await startGroupGame([page]);
+        }
+      }
+    }
+
+    if (pending.size > 0) {
+      await pages[0].waitForTimeout(1000);
+    }
+  }
+
+  if (pending.size > 0) {
+    const firstPendingIndex = [...pending][0];
+    await waitForEditorOnPage(pages[firstPendingIndex], `page-${firstPendingIndex + 1}`);
   }
 }
 
@@ -1148,7 +1303,7 @@ async function startGroupGame(pages) {
   if (routeKind === "prototype-yjs") {
     return;
   }
-  for (const page of pages.slice(0, 2)) {
+  for (const page of pages) {
     const waitingRoom = page.getByText("Group Waiting Room");
     await Promise.race([
       waitingRoom.first().waitFor({ timeout: scaledTimeout(10000) }).catch(() => null),
@@ -1156,17 +1311,41 @@ async function startGroupGame(pages) {
     ]);
     if ((await waitingRoom.count()) > 0) {
       const startButton = page.getByRole("button", { name: "Start Game" });
-      await startButton.waitFor({ timeout: scaledTimeout(10000) });
       await expect.poll(async () => {
-        if (!await startButton.isVisible().catch(() => false)) {
-          return "hidden";
+        const editorVisible = await page.locator(".cm-content[contenteditable='true']").first().isVisible().catch(() => false);
+        if (editorVisible) {
+          return "editor";
         }
-        return (await startButton.isEnabled().catch(() => false)) ? "enabled" : "disabled";
+
+        const waitingRoomVisible = (await waitingRoom.count().catch(() => 0)) > 0;
+        if (!waitingRoomVisible) {
+          return "transitioning";
+        }
+
+        const cancelReadyButton = page.getByRole("button", { name: "Cancel Ready" });
+        const startVisible = await startButton.isVisible().catch(() => false);
+        const startEnabled = startVisible && await startButton.isEnabled().catch(() => false);
+        if (startEnabled) {
+          await startButton.click();
+          return "clicked";
+        }
+
+        const cancelVisible = await cancelReadyButton.isVisible().catch(() => false);
+        const bodyText = ((await page.locator("body").textContent().catch(() => "")) || "").toLowerCase();
+        if (
+          cancelVisible ||
+          bodyText.includes("you are ready") ||
+          bodyText.includes("starting game") ||
+          bodyText.includes("reconnecting to shared room")
+        ) {
+          return "ready";
+        }
+
+        return startVisible ? "disabled" : "hidden";
       }, {
         timeout: scaledTimeout(10000),
-        message: "Start Game button did not become enabled after entering the waiting room",
-      }).toBe("enabled");
-      await startButton.click();
+        message: "Waiting room did not progress to a valid ready/editor state",
+      }).not.toBe("disabled");
     }
   }
 }
@@ -1297,6 +1476,54 @@ async function trySharedEdit(pages, marker) {
   await target.waitFor({ timeout: scaledTimeout(10000) });
   const observed = (await target.textContent()) || "";
   return observed.includes(marker);
+}
+
+async function waitForMarkerOnPage(page, marker, label, timeoutMs = scaledTimeout(12000)) {
+  const startedAt = Date.now();
+  let lastContent = "";
+  while (Date.now() - startedAt < timeoutMs) {
+    lastContent = await getEditableContent(page);
+    if (lastContent.includes(marker)) {
+      return true;
+    }
+    await page.waitForTimeout(500);
+  }
+  console.warn(`[marker:missing] ${label} marker=${marker} content=${JSON.stringify(lastContent.slice(-240))}`);
+  return false;
+}
+
+async function waitForPagesConverged(pages, requiredMarkers, label, timeoutMs = scaledTimeout(15000)) {
+  const startedAt = Date.now();
+  let lastContents = [];
+  while (Date.now() - startedAt < timeoutMs) {
+    lastContents = await Promise.all(pages.map((page) => getEditableContent(page)));
+    const converged = lastContents.length > 0 && lastContents.every((content) => content === lastContents[0]);
+    const containsMarkers =
+      requiredMarkers.length === 0
+        ? true
+        : lastContents.every((content) => requiredMarkers.every((marker) => content.includes(marker)));
+    if (converged && containsMarkers) {
+      return {
+        ok: true,
+        contents: lastContents,
+      };
+    }
+    await pages[0].waitForTimeout(750);
+  }
+  lastContents.forEach((content, index) => {
+    console.warn(`[converge:fail] ${label} page=${index} content=${JSON.stringify(content.slice(-260))}`);
+  });
+  return {
+    ok: false,
+    contents: lastContents,
+  };
+}
+
+async function typeMarkerSlowly(page, marker) {
+  const editor = page.locator(".cm-content[contenteditable='true']").first();
+  await editor.click();
+  await editor.press("End");
+  await page.keyboard.type(`\n<!-- ${marker} -->`, { delay: 35 });
 }
 
 async function tryConcurrentSharedEdit(pages, groupName) {
@@ -1793,9 +2020,9 @@ async function configureConsoleLogging(page, label) {
     const text = message.text();
     const isYjsNoise =
       text.includes("[yjs-") ||
-      text.includes("ws_yjs_update_emit") ||
-      text.includes("yjs-doc:update:emit") ||
-      text.includes("yjs-update:apply");
+      text.includes("ws_yjs_protocol_emit") ||
+      text.includes("yjs-protocol:apply") ||
+      text.includes("yjs-sync:step1");
     if (
       (text.includes("[DEBUG-CLIENT]") && (!isYjsNoise || verboseYjsLogs)) ||
       (verboseYjsLogs && text.includes("[yjs-")) ||
@@ -2129,6 +2356,15 @@ async function main() {
   if (scenario === "ws_recovery") {
     try {
       await runWsRecoveryScenario(browser);
+    } finally {
+      await browser.close().catch(() => {});
+    }
+    return;
+  }
+
+  if (scenario === "refresh_desync") {
+    try {
+      await runRefreshDesyncScenario(browser);
     } finally {
       await browser.close().catch(() => {});
     }

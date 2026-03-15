@@ -9,6 +9,8 @@ cd "${SCRIPT_DIR}"
 export WS_SERVICE_TOKEN="${WS_SERVICE_TOKEN:-ws-service-secret}"
 export COLLAB_ENGINE="${COLLAB_ENGINE:-${NEXT_PUBLIC_COLLAB_ENGINE:-yjs}}"
 export NEXT_PUBLIC_COLLAB_ENGINE="${NEXT_PUBLIC_COLLAB_ENGINE:-${COLLAB_ENGINE}}"
+export WS_ARTIFICIAL_DELAY_MS="${WS_ARTIFICIAL_DELAY_MS:-80}"
+export WS_ARTIFICIAL_JITTER_MS="${WS_ARTIFICIAL_JITTER_MS:-120}"
 
 # Function to clean up background processes on exit
 cleanup() {
@@ -33,6 +35,7 @@ if [ ! -d "node_modules" ]; then
   echo "Installing ws-server dependencies..."
   npm install
 fi
+echo "WS latency simulation: base=${WS_ARTIFICIAL_DELAY_MS}ms jitter=${WS_ARTIFICIAL_JITTER_MS}ms"
 npm run dev &
 WS_PID=$!
 

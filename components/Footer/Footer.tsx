@@ -95,7 +95,7 @@ function CreatorGroupsMenu({
         <Users className="h-3.5 w-3.5" />
         <span>Active Group Instances</span>
       </div>
-      <div className="mt-3 space-y-2">
+      <div className="mt-3 max-h-64 space-y-2 overflow-y-auto pr-1">
         {isLoading ? (
           <div className="flex items-center gap-2 rounded-md bg-background/80 px-3 py-3 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />

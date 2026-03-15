@@ -7,7 +7,7 @@ import { useGameStore } from "@/components/default/games";
 import { apiUrl } from "@/lib/apiUrl";
 import { useOptionalCollaboration } from "@/lib/collaboration/CollaborationProvider";
 import { mergeSavedPoints } from "@/store/slices/points.slice";
-import { addNotificationData } from "@/store/slices/notifications.slice";
+import { toast } from "sonner";
 
 const SAVE_DEBOUNCE_MS = 2000;
 
@@ -119,12 +119,8 @@ export function ProgressPersistence() {
       ltiGradeRefreshAt !== lastAppliedLtiGradeRefreshAtRef.current
     ) {
       lastAppliedLtiGradeRefreshAtRef.current = ltiGradeRefreshAt;
-      dispatch(
-        addNotificationData({
-          type: "info",
-          message:
-            "A group member has finished the game. Please click 'Finish game' to save your progress and submit your score to A+.",
-        }),
+      toast.info(
+        "A group member has finished the game. Please click 'Finish game' to save your progress and submit your score to A+.",
       );
     }
 
@@ -151,14 +147,10 @@ export function ProgressPersistence() {
         (typeof resetNotice.userName === "string" && resetNotice.userName) ||
         (typeof resetNotice.userEmail === "string" && resetNotice.userEmail) ||
         "Someone";
-      dispatch(
-        addNotificationData({
-          type: "info",
-          message:
-            resetNotice.scope === "game"
-              ? `${label} reset the game back to the template.`
-              : `${label} reset this level back to the template.`,
-        }),
+      toast.info(
+        resetNotice.scope === "game"
+          ? `${label} reset the game back to the template.`
+          : `${label} reset this level back to the template.`,
       );
     }
 

@@ -2,8 +2,7 @@
 
 import { MapDetails } from "@/types";
 import { getMapByName } from "@/lib/utils/network/maps";
-import { useAppDispatch } from "@/store/hooks/hooks";
-import { addNotificationData } from "@/store/slices/notifications.slice";
+import { toast } from "sonner";
 
 type MapSelectorProps = {
   handleNameSelect: (mapName: string) => void;
@@ -18,21 +17,15 @@ const MapSelector = ({
   selectedMap,
   MapNames,
 }: MapSelectorProps) => {
-  const dispatch = useAppDispatch();
   const handleMapSelect = async (event: React.ChangeEvent<HTMLSelectElement>) => {
     const mapName = event.target.value;
     try {
       console.log("mapName", mapName);
       updateDetails(await getMapByName(mapName));
-      dispatch(
-        addNotificationData({
-          message: "Map selected: " + mapName,
-          type: "success",
-        })
-      );
+      toast.success("Map selected: " + mapName);
       handleNameSelect(mapName);
     } catch (error: any) {
-      dispatch(addNotificationData({ message: error.message, type: "error" }));
+      toast.error(error.message);
     }
   };
 

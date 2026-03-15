@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { useAppDispatch } from "@/store/hooks/hooks";
 import { useAppSelector } from "@/store/hooks/hooks";
-import { addNotificationData } from "@/store/slices/notifications.slice";
 import { InfoBoard } from "./InfoBoard";
 import { InfoColor } from "./InfoColor";
 import { InfoColors } from "./InfoColors";
@@ -23,6 +22,7 @@ import { resetLevel } from "@/store/slices/levels.slice";
 import { useOptionalCollaboration } from "@/lib/collaboration/CollaborationProvider";
 import Shaker from "@/components/General/Shaker/Shaker";
 import { CompactMenuButton, compactMenuLabelClass } from "@/components/General/CompactMenuButton";
+import { toast } from "sonner";
 
 function CompactMenuItem({
   label,
@@ -69,12 +69,7 @@ export function LevelFooterMenu() {
   const handleResetLevel = () => {
     if (collaboration?.resetRoomState) {
       if (!collaboration.isConnected) {
-        dispatch(
-          addNotificationData({
-            type: "error",
-            message: "Shared reset is unavailable until the room connection is ready.",
-          }),
-        );
+        toast.error("Shared reset is unavailable until the room connection is ready.");
         return;
       }
       collaboration.resetRoomState("level", currentLevel - 1);

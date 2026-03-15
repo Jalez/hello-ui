@@ -8,7 +8,6 @@ import roomReducer from "./slices/room.slice";
 import optionsReducer from "./slices/options.slice";
 import differenceUrlsReducer from "./slices/differenceUrls.slice";
 import solutionUrlsReducer from "./slices/solutionUrls.slice";
-import notificationsReducer from "./slices/notifications.slice";
 import solutionsReducer from "./slices/solutions.slice";
 import pointsReducer from "./slices/points.slice";
 
@@ -36,7 +35,6 @@ export const store = configureStore({
     options: optionsReducer,
     differenceUrls: differenceUrlsReducer,
     solutionUrls: solutionUrlsReducer,
-    notifications: notificationsReducer,
     solutions: solutionsReducer,
     points: pointsReducer,
   },
