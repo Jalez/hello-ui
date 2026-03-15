@@ -7,10 +7,6 @@ import {
   ClientHealthEventMessage,
   ClientStateHashMessage,
   CollaborationHealthMessage,
-  EditorChange,
-  EditorChangeApplied,
-  EditorCursor,
-  EditorResync,
   GroupStartSyncMessage,
   IdentityAssignedMessage,
   LobbyChatEntry,
@@ -18,15 +14,10 @@ import {
   ProgressSyncMessage,
   RoomStateSyncMessage,
   UserIdentity,
-  TabFocusMessage,
-  TypingStatusMessage,
   EditorType,
-  YjsSyncMessage,
-  YjsSyncRequestMessage,
-  YjsUpdateMessage,
+  YjsProtocolMessage,
   GameInstancesResetMessage,
 } from "../types";
-import { getClientCollaborationEngine } from "../engine";
 import { extractGroupIdFromRoomId, generateClientId, generateUserColor, getWebSocketUrl } from "../utils";
 import { RECONNECT_DELAY_MS, MAX_RECONNECT_ATTEMPTS } from "../constants";
 import { logDebugClient } from "@/lib/debug-logger";
@@ -40,21 +31,13 @@ interface UseCollaborationConnectionOptions {
   onUserJoined?: (user: ActiveUser) => void;
   onUserLeft?: (user: { userId: string; userEmail: string; userName?: string }) => void;
   onCanvasCursor?: (cursor: CanvasCursor) => void;
-  onEditorCursor?: (cursor: EditorCursor) => void;
-  onEditorChange?: (change: EditorChange) => void;
-  onEditorChangeApplied?: (message: EditorChangeApplied) => void;
-  onEditorResync?: (message: EditorResync) => void;
   onCurrentUsers?: (users: ActiveUser[]) => void;
-  onTabFocus?: (message: TabFocusMessage) => void;
-  onTypingStatus?: (message: TypingStatusMessage) => void;
   onRoomStateSync?: (roomState: RoomStateSyncMessage) => void;
   onProgressSync?: (message: ProgressSyncMessage) => void;
   onGroupStartSync?: (message: GroupStartSyncMessage) => void;
   onLobbyChatSync?: (message: LobbyChatSyncMessage) => void;
   onLobbyChatMessage?: (message: LobbyChatEntry) => void;
-  onYjsSync?: (message: YjsSyncMessage) => void;
-  onYjsReset?: (message: YjsSyncMessage) => void;
-  onYjsUpdate?: (message: YjsUpdateMessage) => void;
+  onYjsProtocol?: (message: YjsProtocolMessage) => void;
   onGameInstancesReset?: (message: GameInstancesResetMessage) => void;
   onIdentityAssigned?: (message: IdentityAssignedMessage) => void;
   onCollaborationHealth?: (message: CollaborationHealthMessage) => void;
@@ -72,19 +55,8 @@ interface UseCollaborationConnectionReturn {
   joinGame: (roomId: string) => void;
   leaveGame: () => void;
   sendCanvasCursor: (x: number, y: number) => void;
-  sendEditorCursor: (editorType: EditorType, levelIndex: number, selection: { from: number; to: number }) => void;
-  sendEditorChange: (
-    editorType: EditorType,
-    levelIndex: number,
-    baseVersion: number,
-    changeSetJson: unknown,
-    selection?: { from: number; to: number }
-  ) => void;
-  sendTabFocus: (editorType: EditorType, levelIndex: number) => void;
-  sendTypingStatus: (editorType: EditorType, levelIndex: number, isTyping: boolean) => void;
   requestRoomStateSync: (reason?: string) => void;
-  requestYjsSync: () => void;
-  sendYjsUpdate: (updateBase64: string) => void;
+  sendYjsProtocol: (message: Omit<YjsProtocolMessage, "roomId" | "groupId" | "ts">) => void;
   sendRoomReset: (scope: "level" | "game", levelIndex?: number) => void;
   sendProgressSync: (progressData: Record<string, unknown>) => void;
   sendGroupStartReady: () => void;
@@ -117,7 +89,6 @@ export function useCollaborationConnection(
   options: UseCollaborationConnectionOptions
 ): UseCollaborationConnectionReturn {
   const { roomId, user } = options;
-  const collabEngine = getClientCollaborationEngine();
   const parsedGroupId = extractGroupIdFromRoomId(roomId);
 
   const optionsRef = useRef(options);
@@ -128,7 +99,6 @@ export function useCollaborationConnection(
   const socketRef = useRef<WebSocket | null>(null);
   const clientIdRef = useRef<string | null>(null);
   const userColorRef = useRef<string | null>(null);
-  const typingStatusRef = useRef<Record<string, boolean>>({});
   const reconnectAttemptsRef = useRef(0);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isConnectedRef = useRef(false);
@@ -214,7 +184,6 @@ export function useCollaborationConnection(
         socketRef.current = null;
       }
       setSocketState(null);
-      typingStatusRef.current = {};
       isConnectedRef.current = false;
     };
 
@@ -236,7 +205,6 @@ export function useCollaborationConnection(
         }
 
         isConnectedRef.current = true;
-        typingStatusRef.current = {};
         setIsConnected(true);
         setIsConnecting(false);
         setError(null);
@@ -409,46 +377,6 @@ export function useCollaborationConnection(
             }
             return;
           }
-          case "editor-cursor": {
-            const data = payload as EditorCursor & { clientId: string };
-            if (data.clientId !== clientIdRef.current) {
-              optionsRef.current.onEditorCursor?.(data);
-            }
-            return;
-          }
-          case "editor-change": {
-            const data = payload as EditorChange;
-            if (data.clientId === clientIdRef.current) {
-              logDebugClient("ws_editor_change_ignored_self", {
-                clientId: data.clientId,
-                editorType: data.editorType,
-                nextVersion: data.nextVersion,
-              });
-              return;
-            }
-            optionsRef.current.onEditorChange?.(data);
-            return;
-          }
-          case "editor-change-applied":
-            optionsRef.current.onEditorChangeApplied?.(payload as EditorChangeApplied);
-            return;
-          case "editor-resync":
-            optionsRef.current.onEditorResync?.(payload as EditorResync);
-            return;
-          case "tab-focus": {
-            const data = payload as TabFocusMessage & { clientId: string };
-            if (data.clientId !== clientIdRef.current) {
-              optionsRef.current.onTabFocus?.(data);
-            }
-            return;
-          }
-          case "typing-status": {
-            const data = payload as TypingStatusMessage & { clientId: string };
-            if (data.clientId !== clientIdRef.current) {
-              optionsRef.current.onTypingStatus?.(data);
-            }
-            return;
-          }
           case "room-state-sync":
             optionsRef.current.onRoomStateSync?.(payload as RoomStateSyncMessage);
             return;
@@ -478,14 +406,8 @@ export function useCollaborationConnection(
           case "lobby-chat-message":
             optionsRef.current.onLobbyChatMessage?.(payload as LobbyChatEntry);
             return;
-          case "yjs-sync":
-            optionsRef.current.onYjsSync?.(payload as YjsSyncMessage);
-            return;
-          case "yjs-reset":
-            optionsRef.current.onYjsReset?.(payload as YjsSyncMessage);
-            return;
-          case "yjs-update":
-            optionsRef.current.onYjsUpdate?.(payload as YjsUpdateMessage);
+          case "yjs-protocol":
+            optionsRef.current.onYjsProtocol?.(payload as YjsProtocolMessage);
             return;
           case "game-instances-reset":
             optionsRef.current.onGameInstancesReset?.(payload as GameInstancesResetMessage);
@@ -523,7 +445,6 @@ export function useCollaborationConnection(
           setSocketState(null);
         }
         isConnectedRef.current = false;
-        typingStatusRef.current = {};
         setIsConnected(false);
         setIsConnecting(false);
 
@@ -599,7 +520,6 @@ export function useCollaborationConnection(
       socketRef.current = null;
     }
     isConnectedRef.current = false;
-    typingStatusRef.current = {};
     setIsConnected(false);
     setIsConnecting(false);
     setClientId(null);
@@ -633,84 +553,6 @@ export function useCollaborationConnection(
     }
   }, [effectiveIdentity, parsedGroupId, roomId, sendMessage]);
 
-  const sendEditorCursor = useCallback((editorType: "html" | "css" | "js", levelIndex: number, selection: { from: number; to: number }) => {
-    if (roomId && effectiveIdentity && clientIdRef.current) {
-      sendMessage("editor-cursor", {
-        roomId,
-        groupId: parsedGroupId ?? undefined,
-        editorType,
-        levelIndex,
-        clientId: clientIdRef.current,
-        userId: effectiveIdentity.id,
-        userName: effectiveIdentity.name,
-        color: userColorRef.current,
-        selection,
-        ts: Date.now(),
-      });
-    }
-  }, [effectiveIdentity, parsedGroupId, roomId, sendMessage]);
-
-  const sendEditorChange = useCallback((
-    editorType: EditorType,
-    levelIndex: number,
-    baseVersion: number,
-    changeSetJson: unknown,
-    selection?: { from: number; to: number }
-  ) => {
-    if (roomId && effectiveIdentity && clientIdRef.current) {
-      sendMessage("editor-change", {
-        roomId,
-        groupId: parsedGroupId ?? undefined,
-        editorType,
-        clientId: clientIdRef.current,
-        userId: effectiveIdentity.id,
-        baseVersion,
-        changeSetJson,
-        levelIndex,
-        selection,
-        ts: Date.now(),
-      });
-    }
-  }, [effectiveIdentity, parsedGroupId, roomId, sendMessage]);
-
-  const sendTabFocus = useCallback((editorType: EditorType, levelIndex: number) => {
-    if (roomId && effectiveIdentity && clientIdRef.current) {
-      sendMessage("tab-focus", {
-        roomId,
-        groupId: parsedGroupId ?? undefined,
-        editorType,
-        levelIndex,
-        clientId: clientIdRef.current,
-        userId: effectiveIdentity.id,
-        userName: effectiveIdentity.name,
-        ts: Date.now(),
-      });
-    }
-  }, [effectiveIdentity, parsedGroupId, roomId, sendMessage]);
-
-  const sendTypingStatus = useCallback((editorType: EditorType, levelIndex: number, isTyping: boolean) => {
-    if (roomId && effectiveIdentity && clientIdRef.current) {
-      const nextIsTyping = Boolean(isTyping);
-      const typingKey = `${levelIndex}:${editorType}`;
-      if (typingStatusRef.current[typingKey] === nextIsTyping) {
-        return;
-      }
-      typingStatusRef.current[typingKey] = nextIsTyping;
-
-      sendMessage("typing-status", {
-        roomId,
-        groupId: parsedGroupId ?? undefined,
-        editorType,
-        levelIndex,
-        clientId: clientIdRef.current,
-        userId: effectiveIdentity.id,
-        userName: effectiveIdentity.name,
-        isTyping: nextIsTyping,
-        ts: Date.now(),
-      });
-    }
-  }, [effectiveIdentity, parsedGroupId, roomId, sendMessage]);
-
   const requestRoomStateSync = useCallback((reason = "client_request") => {
     if (!roomId) {
       return;
@@ -727,37 +569,23 @@ export function useCollaborationConnection(
     });
   }, [parsedGroupId, roomId, sendMessage]);
 
-  const requestYjsSync = useCallback(() => {
-    if (!roomId) {
+  const sendYjsProtocol = useCallback((message: Omit<YjsProtocolMessage, "roomId" | "groupId" | "ts">) => {
+    if (!roomId || !message.payloadBase64) {
       return;
     }
 
-    logDebugClient("ws_yjs_sync_requested", {
+    logDebugClient("ws_yjs_protocol_emit", {
       roomId,
       groupId: parsedGroupId,
+      channel: message.channel,
+      payloadLength: message.payloadBase64.length,
     });
-    sendMessage("yjs-sync-request", {
+    sendMessage("yjs-protocol", {
       roomId,
       groupId: parsedGroupId ?? undefined,
-    } satisfies YjsSyncRequestMessage);
-  }, [parsedGroupId, roomId, sendMessage]);
-
-  const sendYjsUpdate = useCallback((updateBase64: string) => {
-    if (!roomId || !updateBase64) {
-      return;
-    }
-
-    logDebugClient("ws_yjs_update_emit", {
-      roomId,
-      groupId: parsedGroupId,
-      updateLength: updateBase64.length,
-    });
-    sendMessage("yjs-update", {
-      roomId,
-      groupId: parsedGroupId ?? undefined,
-      updateBase64,
+      ...message,
       ts: Date.now(),
-    } satisfies YjsUpdateMessage);
+    } satisfies YjsProtocolMessage);
   }, [parsedGroupId, roomId, sendMessage]);
 
   const sendRoomReset = useCallback((scope: "level" | "game", levelIndex?: number) => {
@@ -862,11 +690,11 @@ export function useCollaborationConnection(
       clientId: clientIdRef.current,
       userId: effectiveIdentity.id,
       userEmail: effectiveIdentity.email,
-      engine: collabEngine,
+      engine: "yjs",
       ...message,
       ts: Date.now(),
     } satisfies ClientStateHashMessage);
-  }, [collabEngine, effectiveIdentity, parsedGroupId, roomId, sendMessage]);
+  }, [effectiveIdentity, parsedGroupId, roomId, sendMessage]);
 
   const sendClientHealthEvent = useCallback((message: Omit<ClientHealthEventMessage, "roomId" | "groupId" | "clientId" | "userId" | "userEmail" | "engine" | "ts">) => {
     if (!roomId || !effectiveIdentity || !clientIdRef.current) {
@@ -878,11 +706,11 @@ export function useCollaborationConnection(
       clientId: clientIdRef.current,
       userId: effectiveIdentity.id,
       userEmail: effectiveIdentity.email,
-      engine: collabEngine,
+      engine: "yjs",
       ...message,
       ts: Date.now(),
     } satisfies ClientHealthEventMessage);
-  }, [collabEngine, effectiveIdentity, parsedGroupId, roomId, sendMessage]);
+  }, [effectiveIdentity, parsedGroupId, roomId, sendMessage]);
 
   const connect = useCallback(() => {
     manualDisconnectRef.current = false;
@@ -902,13 +730,8 @@ export function useCollaborationConnection(
     joinGame: () => {},
     leaveGame,
     sendCanvasCursor,
-    sendEditorCursor,
-    sendEditorChange,
-    sendTabFocus,
-    sendTypingStatus,
     requestRoomStateSync,
-    requestYjsSync,
-    sendYjsUpdate,
+    sendYjsProtocol,
     sendRoomReset,
     sendProgressSync,
     sendGroupStartReady,
