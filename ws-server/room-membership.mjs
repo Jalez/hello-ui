@@ -57,7 +57,7 @@ export function createRoomMembership(deps) {
     if (room.size === 0) {
       console.log(`[room-empty] room=${roomId} trigger=last-user-left flushing=queued`);
       rooms.delete(roomId);
-      flushWriteBuffer(roomId, { reason: "last-user-left" }).finally(() => {
+      flushWriteBuffer(roomId, { force: true, reason: "last-user-left" }).finally(() => {
         if (!rooms.has(roomId) && !roomWriteBuffer.has(roomId)) {
           clearRoomMemory(roomId);
         }
@@ -107,12 +107,25 @@ export function createRoomMembership(deps) {
     );
   }
 
+  const outDelayMs = deps.artificialDelayMs ?? 0;
+  const outJitterMs = deps.artificialJitterMs ?? 0;
+
   function sendMessage(socket, type, payload) {
     if (socket.readyState !== WebSocket.OPEN) {
       return;
     }
 
-    socket.send(JSON.stringify({ type, payload, ts: Date.now() }));
+    const data = JSON.stringify({ type, payload, ts: Date.now() });
+    if (outDelayMs <= 0 && outJitterMs <= 0) {
+      socket.send(data);
+      return;
+    }
+    const jitter = outJitterMs > 0 ? Math.floor(Math.random() * outJitterMs) : 0;
+    setTimeout(() => {
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.send(data);
+      }
+    }, outDelayMs + jitter);
   }
 
   function broadcastToRoom(roomId, type, payload, excludeSocket = null) {

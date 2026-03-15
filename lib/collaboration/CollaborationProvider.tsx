@@ -291,7 +291,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
     return getYText(editorType, levelIndex)?.toString() ?? null;
   }, [getYText]);
 
-  const replaceLocalYDoc = useCallback((reason: string, nextServerGeneration?: number | null) => {
+  const replaceLocalYDoc = useCallback((reason: string, nextServerGeneration?: number | null, hydrateFrom?: RoomStateSync) => {
     const previousDoc = yDocRef.current;
     if (previousDoc) {
       previousDoc.destroy();
@@ -310,8 +310,28 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       serverYjsDocGenerationRef.current = nextServerGeneration;
     }
 
+    // Pre-hydrate from the last known room state so the editor does not flash
+    // empty content while waiting for the server SyncStep2 response.
+    // Use "hydrate-local" origin so the update listener does NOT broadcast
+    // this hydration to the server — it's local-only scaffolding that the
+    // incoming SyncStep2 will authoratively replace.
+    if (hydrateFrom?.levels && Array.isArray(hydrateFrom.levels)) {
+      const editorTypes: EditorType[] = ["html", "css", "js"];
+      doc.transact(() => {
+        hydrateFrom.levels.forEach((level: Record<string, unknown>, levelIndex: number) => {
+          const code = level?.code && typeof level.code === "object" ? (level.code as Record<string, string>) : {};
+          for (const editorType of editorTypes) {
+            const value = typeof code[editorType] === "string" ? code[editorType] : "";
+            if (value) {
+              doc.getText(`level:${levelIndex}:${editorType}`).insert(0, value);
+            }
+          }
+        });
+      }, "hydrate-local");
+    }
+
     doc.on("update", (update: Uint8Array, origin: unknown) => {
-      if (origin === "remote-yjs") {
+      if (origin === "remote-yjs" || origin === "hydrate-local") {
         return;
       }
 
@@ -345,6 +365,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       roomId: resolvedRoomId,
       reason,
       serverGeneration: serverYjsDocGenerationRef.current,
+      hydrated: Boolean(hydrateFrom?.levels),
     });
   }, [resolvedRoomId]);
 
@@ -442,7 +463,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
     }
     const nextGeneration = Number.isInteger(roomState.yjsDocGeneration) ? roomState.yjsDocGeneration ?? 0 : 0;
     if (!yDocRef.current || nextGeneration !== serverYjsDocGenerationRef.current) {
-      replaceLocalYDoc("room_state_generation", nextGeneration);
+      replaceLocalYDoc("room_state_generation", nextGeneration, roomState);
     }
   }, [markEditorRemoteApply, replaceLocalYDoc]);
 
@@ -931,7 +952,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
                 retriedAt: retryIssuedAt,
                 replacedAt: Date.now(),
               });
-              replaceLocalYDoc(`health_retry_timeout:${scopeKey}`, serverYjsDocGenerationRef.current);
+              replaceLocalYDoc(`health_retry_timeout:${scopeKey}`, serverYjsDocGenerationRef.current, initialRoomState);
               window.setTimeout(() => {
                 sendYjsSyncStep1(`health_retry_timeout:${scopeKey}`);
               }, 80);
@@ -945,7 +966,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
             retriedAt: recoveryState.retriedAt,
             replacedAt: now,
           });
-          replaceLocalYDoc(`health_replace:${scopeKey}`, serverYjsDocGenerationRef.current);
+          replaceLocalYDoc(`health_replace:${scopeKey}`, serverYjsDocGenerationRef.current, initialRoomState);
           setTimeout(() => {
             sendYjsSyncStep1(`health_replace:${scopeKey}`);
           }, 80);
@@ -960,7 +981,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
         window.clearTimeout(replaceTimer);
       }
     };
-  }, [isConnected, isYjsEnabled, lastHealthMessage, replaceLocalYDoc, requestRoomStateSync, resolvedRoomId, sendYjsSyncStep1]);
+  }, [initialRoomState, isConnected, isYjsEnabled, lastHealthMessage, replaceLocalYDoc, requestRoomStateSync, resolvedRoomId, sendYjsSyncStep1]);
 
   useEffect(() => {
     if (!resolvedRoomId || !isConnected) {
