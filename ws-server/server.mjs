@@ -121,6 +121,8 @@ const {
   parseRoomContext,
   randomUUID,
   WebSocket,
+  artificialDelayMs: WS_ARTIFICIAL_DELAY_MS,
+  artificialJitterMs: WS_ARTIFICIAL_JITTER_MS,
 });
 
 const {
