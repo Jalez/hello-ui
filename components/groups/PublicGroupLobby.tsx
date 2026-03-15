@@ -5,8 +5,8 @@ import { useCollaboration } from "@/lib/collaboration";
 import { Users } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { GroupSelector } from "./GroupSelector";
 import { PresenceStack, buildAvatarFallbacks } from "./PresenceStack";
+import { GroupTab } from "./GroupTab";
 import type { LobbyChatEntry, UserIdentity } from "@/lib/collaboration/types";
 
 interface PublicGroupLobbyProps {
@@ -15,7 +15,7 @@ interface PublicGroupLobbyProps {
   gameTitle: string;
   courseName: string | null;
   currentUser: UserIdentity;
-  onGroupSelect: (groupId: string) => void | Promise<void>;
+  onGroupSelect: (groupId: string | null) => void | Promise<void>;
 }
 
 export function PublicGroupLobby({
@@ -103,11 +103,11 @@ export function PublicGroupLobby({
           </p>
         </div>
 
-        <Tabs defaultValue="group" className="mt-6">
+        <Tabs defaultValue="group" className="mt-6 min-h-[480px]">
           <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="group">Enter Your Group</TabsTrigger>
+            <TabsTrigger value="group">Group tab</TabsTrigger>
             <TabsTrigger value="chat" className="flex items-center gap-2">
-              Lobby Chat
+              Chat tab
               <div className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium transition-colors group-data-[state=active]:bg-primary group-data-[state=active]:text-primary-foreground">
                 <Users className="h-3 w-3" />
                 <span>{connectedUsers.length}</span>
@@ -116,32 +116,20 @@ export function PublicGroupLobby({
           </TabsList>
 
           <TabsContent value="group" className="mt-4">
-            <div className="rounded-lg border p-4">
-              <h2 className="text-lg font-semibold">Enter Your Group</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Use your app group here. If none exists yet, create one with a name your teammates can recognize.
-              </p>
-              <div className="mt-3">
-                <GroupSelector
-                  selectedGroupId={groupId}
-                  onGroupSelect={onGroupSelect}
-                  showRefreshButton
-                  allowCreate
-                  createContext={{
-                    ltiContextTitle: courseName,
-                    resourceLinkId: gameId,
-                  }}
-                  createPlaceholder="Example: Team 2 / UI Squad"
-                  currentUserId={currentUser.id}
-                />
-              </div>
-            </div>
+            <GroupTab
+              gameId={gameId}
+              gameTitle={gameTitle}
+              courseName={courseName}
+              currentUser={currentUser}
+              selectedGroupId={groupId}
+              onGroupSelect={onGroupSelect}
+            />
           </TabsContent>
 
           <TabsContent value="chat" className="mt-4">
-            <div className="rounded-lg border p-4">
+            <div className="rounded-lg border p-4 min-h-[400px]">
               <div className="flex items-center justify-between gap-4">
-                <h2 className="text-lg font-semibold">Lobby Chat</h2>
+                <h2 className="text-lg font-semibold">Chat tab</h2>
                 <PresenceStack users={connectedUsers} className="justify-end" />
               </div>
             <div className="mt-3 h-72 overflow-y-auto space-y-3 rounded-md bg-muted/30 p-3">
