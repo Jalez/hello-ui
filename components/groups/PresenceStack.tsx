@@ -2,6 +2,7 @@
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils/cn";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 export function getInitials(label: string): string {
   return label
@@ -74,8 +75,8 @@ export function PresenceStack({
   className?: string;
 }) {
   return (
-    <div className={cn("flex items-center gap-1", className)}>
-      {users.map((user) => {
+    <div className={cn("flex items-center -space-x-2 isolate", className)}>
+      {users.map((user, idx) => {
         const label = user.userName || user.userEmail || user.userId || "Anonymous";
         const isReady = user.userId ? readyUserIds.includes(user.userId) : false;
         const isConnected = user.isConnected !== false; // Default to true if not provided (e.g. in PublicLobby where all are active)
@@ -88,20 +89,27 @@ export function PresenceStack({
             : "rgb(156 163 175)"; // gray-400
 
         return (
-          <Avatar
-            key={user.userId || user.userEmail}
-            className={cn(
-              "h-9 w-9 border-2 bg-background",
-              !isConnected && "opacity-60"
-            )}
-            style={{ borderColor: statusColor }}
-            title={`${label}${isReady ? " • Ready" : isConnected ? " • Online" : " • Offline"}`}
-          >
-            {user.userImage && <AvatarImage src={user.userImage} alt={label} />}
-            <AvatarFallback className="text-xs font-medium">
-              {getInitials(label)}
-            </AvatarFallback>
-          </Avatar>
+          <Tooltip key={user.userId || user.userEmail}>
+            <TooltipTrigger asChild>
+              <Avatar
+                className={cn(
+                  "h-9 w-9 border-2 bg-background relative"
+                )}
+                style={{ borderColor: statusColor, zIndex: users.length - idx }}
+              >
+                {user.userImage && <AvatarImage src={user.userImage} alt={label} />}
+                <AvatarFallback className="text-xs font-medium">
+                  {getInitials(label)}
+                </AvatarFallback>
+              </Avatar>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p className="font-medium">{label}</p>
+              <p className="text-xs text-muted-foreground">
+                {isReady ? "Ready" : isConnected ? "Online" : "Offline"}
+              </p>
+            </TooltipContent>
+          </Tooltip>
         );
       })}
     </div>

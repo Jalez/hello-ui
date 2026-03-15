@@ -1,0 +1,84 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { createSocketHandlerRegistry, createSocketMessageRouter } from "./socket-router.mjs";
+
+function createTestContext(overrides = {}) {
+  const sent = [];
+  const base = {
+    sent,
+    maybeDelaySocketHandling: async () => {},
+    parseEnvelope: () => ({ type: "unknown", payload: {} }),
+    sendMessage: (socket, type, payload) => {
+      sent.push({ socket, type, payload });
+    },
+    getConnectionState: () => ({ roomId: "room-1" }),
+    getConnectionId: () => "socket-1",
+  };
+  return { ...base, ...overrides };
+}
+
+test("socket-router: invalid envelope sends invalid-message error", async () => {
+  const ctx = createTestContext({
+    parseEnvelope: () => null,
+  });
+  const route = createSocketMessageRouter(ctx);
+  const socket = {};
+
+  await route(socket, Buffer.from("not-json"));
+
+  assert.equal(ctx.sent.length, 1);
+  assert.equal(ctx.sent[0].type, "error");
+  assert.deepEqual(ctx.sent[0].payload, { error: "Invalid message" });
+});
+
+test("socket-router: unknown message type is ignored", async () => {
+  const ctx = createTestContext({
+    parseEnvelope: () => ({ type: "non-existent-event", payload: {} }),
+  });
+  const route = createSocketMessageRouter(ctx);
+  const socket = {};
+
+  await route(socket, Buffer.from("{}"));
+
+  assert.equal(ctx.sent.length, 0);
+});
+
+test("socket-router: thrown handler is caught and returns internal-server error", async () => {
+  const ctx = createTestContext({
+    parseEnvelope: () => ({ type: "boom", payload: {} }),
+  });
+  const route = createSocketMessageRouter(ctx, {
+    handlers: {
+      boom: async () => {
+        throw new Error("expected test throw");
+      },
+    },
+  });
+  const socket = {};
+  const originalConsoleError = console.error;
+  console.error = () => {};
+  try {
+    await route(socket, Buffer.from("{}"));
+  } finally {
+    console.error = originalConsoleError;
+  }
+
+  assert.equal(ctx.sent.length, 1);
+  assert.equal(ctx.sent[0].type, "error");
+  assert.deepEqual(ctx.sent[0].payload, { error: "Internal server error" });
+});
+
+test("socket-router: removed legacy editor/presence message handlers are not registered", () => {
+  const handlers = createSocketHandlerRegistry();
+  const removed = [
+    "editor-change",
+    "editor-change-applied",
+    "editor-resync",
+    "editor-cursor",
+    "typing-status",
+    "tab-focus",
+  ];
+  for (const messageType of removed) {
+    assert.equal(Object.prototype.hasOwnProperty.call(handlers, messageType), false);
+  }
+});

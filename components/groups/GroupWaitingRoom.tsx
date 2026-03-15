@@ -57,6 +57,8 @@ interface GroupWaitingRoomProps {
   joinKey?: string | null;
   currentUser: UserIdentity;
   groupMembers: ClientGroupMember[];
+  onBack?: () => void;
+  isNested?: boolean;
 }
 
 export function GroupWaitingRoom({
@@ -66,6 +68,8 @@ export function GroupWaitingRoom({
   joinKey,
   currentUser,
   groupMembers,
+  onBack,
+  isNested,
 }: GroupWaitingRoomProps) {
   const collaboration = useCollaboration();
   const dispatch = useAppDispatch();
@@ -204,9 +208,9 @@ export function GroupWaitingRoom({
     return <App />;
   }
 
-  return (
-    <div className="flex h-full items-center justify-center px-4 py-8 overflow-y-auto">
-      <div className="w-full max-w-3xl rounded-xl border bg-card p-6 shadow-sm">
+  const content = (
+    <div className={cn("w-full space-y-6", !isNested && "max-w-3xl rounded-xl border bg-card p-6 shadow-sm")}>
+      <div className="flex items-start justify-between gap-4">
         <div className="space-y-2">
           <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">Group Waiting Room</p>
           <h1 className="text-3xl font-bold">{gameTitle}</h1>
@@ -214,53 +218,68 @@ export function GroupWaitingRoom({
             Group <span className={groupName ? "" : "font-mono"}>{groupName || groupId}</span>
           </p>
         </div>
+        {onBack && (
+          <Button variant="ghost" size="sm" onClick={onBack} className="-mt-1">
+            ← Back to Groups
+          </Button>
+        )}
+      </div>
 
-        <div className="mt-6 rounded-lg border p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            {joinKey ? (
-              <div>
-                <p className="text-sm text-muted-foreground uppercase tracking-wider">Group Join Key</p>
-                <p className="mt-1 text-2xl font-mono font-semibold tracking-[0.2em]">{joinKey}</p>
-              </div>
-            ) : (
-              <div>
-                <p className="text-sm text-muted-foreground uppercase tracking-wider">Group ID</p>
-                <p className="mt-1 text-xl font-mono font-semibold">{groupId}</p>
-              </div>
-            )}
-            <PresenceStack users={connectedUsers} readyUserIds={gate.readyUserIds} />
-          </div>
-        </div>
-
-        <div className="mt-6 flex flex-col gap-3 rounded-lg border p-4 md:flex-row md:items-center md:justify-between">
-          <div className="flex flex-wrap gap-3">
-            <Button
-              className="min-w-[200px]"
-              variant={isReady ? "outline" : "default"}
-              onClick={() => collaboration.setGroupReady(!isReady)}
-              disabled={!collaboration.isConnected || isStarted}
-            >
-              {!isReady 
-                ? "Start Game" 
-                : isStarted 
-                  ? "Starting game..." 
-                  : gate.readyUserIds.length < GROUP_START_MIN_READY_COUNT
-                    ? `Waiting for ${GROUP_START_MIN_READY_COUNT - gate.readyUserIds.length} more to be ready...`
-                    : "Ready! Starting..."
-              }
-            </Button>
-          </div>
-          <p className="max-w-xl text-sm text-muted-foreground">
-            The game starts as soon as at least two members are ready. Share the key with teammates so they can join!
-          </p>
-        </div>
-
-        <div className="mt-4 text-sm text-muted-foreground">
-          {connectedUsers.filter((user) => user.isConnected).length} player
-          {connectedUsers.filter((user) => user.isConnected).length === 1 ? "" : "s"} currently connected.
-          {!collaboration.isConnected && " Reconnecting to shared room..."}
+      <div className="rounded-lg border p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          {joinKey ? (
+            <div>
+              <p className="text-sm text-muted-foreground uppercase tracking-wider">Group Join Key</p>
+              <p className="mt-1 text-2xl font-mono font-semibold tracking-[0.2em]">{joinKey}</p>
+            </div>
+          ) : (
+            <div>
+              <p className="text-sm text-muted-foreground uppercase tracking-wider">Group ID</p>
+              <p className="mt-1 text-xl font-mono font-semibold">{groupId}</p>
+            </div>
+          )}
+          <PresenceStack users={connectedUsers} readyUserIds={gate.readyUserIds} />
         </div>
       </div>
+
+      <div className="flex flex-col gap-3 rounded-lg border p-4 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-wrap gap-3">
+          <Button
+            className="min-w-[200px]"
+            variant={isReady ? "outline" : "default"}
+            onClick={() => collaboration.setGroupReady(!isReady)}
+            disabled={!collaboration.isConnected || isStarted}
+          >
+            {!isReady 
+              ? "Start Game" 
+              : isStarted 
+                ? "Starting game..." 
+                : gate.readyUserIds.length < GROUP_START_MIN_READY_COUNT
+                  ? `Waiting for ${GROUP_START_MIN_READY_COUNT - gate.readyUserIds.length} more to be ready...`
+                  : "Ready! Starting..."
+            }
+          </Button>
+        </div>
+        <p className="max-w-xl text-sm text-muted-foreground">
+          The game starts as soon as at least two members are ready. Share the key with teammates so they can join!
+        </p>
+      </div>
+
+      <div className="text-sm text-muted-foreground">
+        {connectedUsers.filter((user) => user.isConnected).length} player
+        {connectedUsers.filter((user) => user.isConnected).length === 1 ? "" : "s"} currently connected.
+        {!collaboration.isConnected && " Reconnecting to shared room..."}
+      </div>
+    </div>
+  );
+
+  if (isNested) {
+    return content;
+  }
+
+  return (
+    <div className="flex h-full items-center justify-center px-4 py-8 overflow-y-auto">
+      {content}
     </div>
   );
 }

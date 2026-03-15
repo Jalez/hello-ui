@@ -546,7 +546,19 @@ export default function GamePage({ params }: GamePageProps) {
     initializeGame();
   }, [gameId, hasUser, sessionUserId, guestId, setCurrentGameId, searchParams, router, pathname, addGameToStore, loadAttempt, accessKeyReady, submittedAccessKey, isReplayView]);
 
-  const handleGroupSelect = async (groupId: string, options?: { joinKey?: string }) => {
+  const handleGroupSelect = async (groupId: string | null, options?: { joinKey?: string }) => {
+    if (!groupId) {
+      const normalizedParams = new URLSearchParams(searchParams.toString());
+      normalizedParams.delete("groupId");
+      normalizedParams.set("mode", "game");
+      router.push(`${pathname}?${normalizedParams.toString()}`);
+      setCurrentGroupName(null);
+      setCurrentGroupJoinKey(null);
+      setCurrentGroupMembers([]);
+      setRoomId(`lobby:game:${gameId}`);
+      return;
+    }
+
     if (hasUser && session?.user?.email) {
       const membershipResponse = await fetch(apiUrl(`/api/groups/${groupId}/members`), {
         method: "POST",
@@ -685,24 +697,6 @@ export default function GamePage({ params }: GamePageProps) {
       }
       : null;
 
-  if (publicLobby && user) {
-    return (
-      <CollaborationProvider roomId={publicLobby.roomId} user={user}>
-        <CollaborationNotice>
-          <GameInstancesResetWatcher gameId={gameId} />
-          <PublicGroupLobby
-            gameId={gameId}
-            groupId={selectedGroupId}
-            gameTitle={currentGame?.title || "Group Game"}
-            courseName={publicLobby.courseName}
-            currentUser={user}
-            onGroupSelect={handleGroupSelect}
-          />
-        </CollaborationNotice>
-      </CollaborationProvider>
-    );
-  }
-
   if (requiresAccessKey) {
     return (
       <div className="flex items-center justify-center h-screen px-4">
@@ -743,6 +737,50 @@ export default function GamePage({ params }: GamePageProps) {
         gameTitle={currentGame.title}
         progressData={currentGame.progressData as { finishedAt?: string; finalScore?: { points: number; maxPoints: number } }}
       />
+    );
+  }
+
+  const isGroupWorkMode = currentGame?.collaborationMode === "group";
+
+  if (isGroupWorkMode && user) {
+    // Determine the stable lobby room ID. If we resolved a specific LTI context earlier, use it.
+    const lobbyRoomId = publicLobby?.roomId || `lobby:${gameId}`;
+    
+    return (
+      <CollaborationProvider roomId={lobbyRoomId} user={user}>
+        <CollaborationNotice>
+          <GameInstancesResetWatcher gameId={gameId} />
+          <PublicGroupLobby
+            gameId={gameId}
+            groupId={selectedGroupId}
+            gameTitle={currentGame?.title || "Group Game"}
+            courseName={publicLobby?.courseName || null}
+            currentUser={user}
+            onGroupSelect={handleGroupSelect}
+          />
+        </CollaborationNotice>
+      </CollaborationProvider>
+    );
+  }
+
+  if (requiresGroup) {
+    return (
+      <div className="flex h-full items-center justify-center px-4 py-8">
+        <div className="w-full max-w-xl rounded-lg border bg-card p-6 space-y-4 shadow-sm">
+          <h2 className="text-xl font-semibold">Select Group</h2>
+          <p className="text-sm text-muted-foreground">
+            This game is in Group Work Mode. Choose one of your existing groups to open the shared instance.
+          </p>
+          <GroupSelector
+            selectedGroupId={searchParams.get("groupId")}
+            onGroupSelect={handleGroupSelect}
+            allowCreate
+            createContext={{ resourceLinkId: gameId }}
+            createPlaceholder="Create a group name"
+            currentUserId={sessionUserId}
+          />
+        </div>
+      </div>
     );
   }
 
