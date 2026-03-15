@@ -248,16 +248,22 @@ export function GroupWaitingRoom({
             className="min-w-[200px]"
             variant={isReady ? "outline" : "default"}
             onClick={() => collaboration.setGroupReady(!isReady)}
-            disabled={!collaboration.isConnected || isStarted}
+            disabled={(!collaboration.isConnected && !isReady) || isStarted}
           >
-            {!isReady 
-              ? "Start Game" 
-              : isStarted 
-                ? "Starting game..." 
-                : gate.readyUserIds.length < GROUP_START_MIN_READY_COUNT
-                  ? `Waiting for ${GROUP_START_MIN_READY_COUNT - gate.readyUserIds.length} more to be ready...`
-                  : "Ready! Starting..."
-            }
+            {!collaboration.isConnected && !isReady ? (
+              <span className="flex items-center gap-2">
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                Connecting...
+              </span>
+            ) : !isReady ? (
+              "Start Game"
+            ) : isStarted ? (
+              "Starting game..."
+            ) : gate.readyUserIds.length < GROUP_START_MIN_READY_COUNT ? (
+              `Waiting for ${GROUP_START_MIN_READY_COUNT - gate.readyUserIds.length} more...`
+            ) : (
+              "Ready! Starting..."
+            )}
           </Button>
         </div>
         <p className="max-w-xl text-sm text-muted-foreground">
