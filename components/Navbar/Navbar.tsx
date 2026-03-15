@@ -1,9 +1,8 @@
 'use client';
 
 import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
-import { addNotificationData } from "@/store/slices/notifications.slice";
 import { Button } from "@/components/ui/button";
-import { RotateCcw, PanelLeft, Map, Flag, Settings, Trash2, Loader2, Gamepad2, BarChart3 } from "lucide-react";
+import { RotateCcw, PanelLeft, Map, Flag, Settings, Trash2, Loader2, Gamepad2, BarChart3, Users } from "lucide-react";
 import LevelControls, { LevelSelect } from "@/components/General/LevelControls/LevelControls";
 import { setCurrentLevel } from "@/store/slices/currentLevel.slice";
 import { resetLevel } from "@/store/slices/levels.slice";
@@ -11,7 +10,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import CreatorControls from "@/components/CreatorControls/CreatorControls";
 import MapEditor, { MapEditorRef } from "@/components/CreatorControls/MapEditor";
 import { useSidebarCollapse } from "@/components/default/sidebar/context/SidebarCollapseContext";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   Dialog,
   DialogContent,
@@ -40,11 +39,13 @@ import { apiUrl, stripBasePath } from "@/lib/apiUrl";
 import { useGameplayTelemetry } from "@/components/General/useGameplayTelemetry";
 import { logDebugClient } from "@/lib/debug-logger";
 import Shaker from "@/components/General/Shaker/Shaker";
-import { cn } from "@/lib/utils/cn";
 import { CompactMenuButton, compactMenuButtonClass, compactMenuLabelClass } from "@/components/General/CompactMenuButton";
+import { toast } from "sonner";
 
 export const Navbar = () => {
   const dispatch = useAppDispatch();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { openOverlay, toggleCollapsed, isMobile, isOverlayOpen, isVisible } = useSidebarCollapse();
   const pathname = usePathname();
   const normalizedPathname = stripBasePath(pathname);
@@ -109,12 +110,7 @@ export const Navbar = () => {
           roomId: collaboration.roomId,
           groupId: collaboration.groupId,
         });
-        dispatch(
-          addNotificationData({
-            type: "error",
-            message: "Shared reset is unavailable until the room connection is ready.",
-          }),
-        );
+        toast.error("Shared reset is unavailable until the room connection is ready.");
         return;
       }
 
@@ -149,6 +145,18 @@ export const Navbar = () => {
     setIsResetDialogOpen(true);
   }, []);
 
+  const openGameLobby = useCallback(() => {
+    if (!currentGame?.id) {
+      return;
+    }
+
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("mode", "game");
+    params.delete("groupId");
+    const query = params.toString();
+    router.push(apiUrl(`/game/${currentGame.id}${query ? `?${query}` : ""}`));
+  }, [currentGame?.id, router, searchParams]);
+
   const handleResetGameInstances = useCallback(async () => {
     if (!currentGame?.id) {
       return;
@@ -172,26 +180,17 @@ export const Navbar = () => {
         throw new Error(data.error || "Failed to reset game instances");
       }
 
-      dispatch(
-        addNotificationData({
-          type: "success",
-          message:
-            data.deletedCount > 0
-              ? `Reset ${data.deletedCount} saved game instance${data.deletedCount === 1 ? "" : "s"}.`
-              : "No saved game instances to reset.",
-        }),
+      toast.success(
+        data.deletedCount > 0
+          ? `Reset ${data.deletedCount} saved game instance${data.deletedCount === 1 ? "" : "s"}.`
+          : "No saved game instances to reset.",
       );
     } catch (error) {
-      dispatch(
-        addNotificationData({
-          type: "error",
-          message: error instanceof Error ? error.message : "Failed to reset game instances",
-        }),
-      );
+      toast.error(error instanceof Error ? error.message : "Failed to reset game instances");
     } finally {
       setIsResettingInstances(false);
     }
-  }, [currentGame?.id, dispatch]);
+  }, [currentGame?.id]);
 
   const handleResetLeaderboard = useCallback(async () => {
     if (!currentGame?.id) {
@@ -216,26 +215,17 @@ export const Navbar = () => {
         throw new Error(data.error || "Failed to reset leaderboard");
       }
 
-      dispatch(
-        addNotificationData({
-          type: "success",
-          message:
-            data.deletedAttempts > 0
-              ? `Reset leaderboard for ${data.deletedAttempts} attempt${data.deletedAttempts === 1 ? "" : "s"}.`
-              : "No leaderboard data to reset.",
-        }),
+      toast.success(
+        data.deletedAttempts > 0
+          ? `Reset leaderboard for ${data.deletedAttempts} attempt${data.deletedAttempts === 1 ? "" : "s"}.`
+          : "No leaderboard data to reset.",
       );
     } catch (error) {
-      dispatch(
-        addNotificationData({
-          type: "error",
-          message: error instanceof Error ? error.message : "Failed to reset leaderboard",
-        }),
-      );
+      toast.error(error instanceof Error ? error.message : "Failed to reset leaderboard");
     } finally {
       setIsResettingInstances(false);
     }
-  }, [currentGame?.id, dispatch]);
+  }, [currentGame?.id]);
 
   const handleAnchorElReset = useCallback(() => {
     setIsResetDialogOpen(false);
@@ -249,6 +239,15 @@ export const Navbar = () => {
       <DropdownMenuContent align="start" className="w-72 border-0 shadow-lg">
         <DropdownMenuLabel>Game Tools</DropdownMenuLabel>
         <DropdownMenuSeparator />
+        {isGameRoute && currentGame?.id && (
+          <>
+            <DropdownMenuItem onSelect={openGameLobby}>
+              <Users className="h-4 w-4 mr-2" />
+              Back to Game Lobby
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
+        )}
         {isCreatorRoute && currentGame?.id && canEditCurrentGame && (
           <>
             <DropdownMenuItem asChild>
@@ -350,6 +349,18 @@ export const Navbar = () => {
                     <div className="mt-1 text-sm font-semibold text-foreground">
                       {points.allPoints || 0}/{points.allMaxPoints || 0}
                     </div>
+                  </div>
+                  <div className="mt-3 rounded-md bg-background/80 px-3 py-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="w-full justify-center gap-2"
+                      onClick={openGameLobby}
+                    >
+                      <Users className="h-4 w-4" />
+                      <span>Back to game lobby</span>
+                    </Button>
                   </div>
                   <div className="mt-3 rounded-md bg-background/80 px-3 py-2">
                     <AplusSubmitButton
@@ -463,7 +474,7 @@ export const Navbar = () => {
 
   return (
     <div
-      className="flex w-full flex-wrap items-center justify-around gap-2 border-b bg-background/80 px-3 py-2"
+      className="flex w-full flex-wrap items-center justify-around gap-2 border-b bg-background/80 px-3 py-2 2xl:flex-nowrap 2xl:justify-between"
     >
       {(isGameRoute || (isCreator && !isGameRoute)) && (
         <div className="flex w-full min-w-0 items-center gap-1 sm:hidden">
@@ -489,7 +500,7 @@ export const Navbar = () => {
       )}
 
       {/* Compact nav: text-first menus (no icon-only mode). Hide Game and Level menus on game route. */}
-      <div className="hidden sm:flex 2xl:hidden flex-1 min-w-0 items-center gap-1">
+      <div className="hidden sm:flex flex-1 min-w-0 items-center gap-1">
         {showCreatorGameMenus && currentGame?.id ? (
           renderCompactCreatorMenus()
         ) : isCreator && !isGameRoute ? (
@@ -506,54 +517,6 @@ export const Navbar = () => {
             {!showCreatorGameMenus && <AplusSubmitButton displayMode="icon-label" />}
           </>
         ) : null}
-      </div>
-
-      {/* Left section - Creator controls or Art tab switch. Hide creator tools on game route. */}
-      <div className="hidden 2xl:flex flex-row gap-2 justify-center items-center flex-[1_0_25%]">
-        {isCreator && !isGameRoute ? (
-          <CreatorControls displayMode="icon-label" />
-        ) : null}
-      </div>
-
-      {/* Center section - Mode toggle, Reset, and Level controls */}
-      <div
-        className={cn(
-          "flex basis-full flex-wrap justify-center items-center gap-2 lg:gap-3 2xl:basis-auto 2xl:flex-nowrap 2xl:flex-1 2xl:flex-[1_0_50%]",
-          showCreatorGameMenus && "hidden 2xl:flex",
-          isCreator && !isGameRoute && "hidden 2xl:flex",
-        )}
-      >
-        {/* Mode switch */}
-        <div className="hidden 2xl:flex gap-1 items-center">
-          {showCreatorGameMenus && currentGame?.id ? (
-            <>
-              <CreatorMenu
-                gameId={currentGame.id}
-                collaborationMode={currentGame.collaborationMode}
-              />
-              {renderGameMenu()}
-            </>
-          ) : (
-            <ModeToggleButton displayMode="icon-label" />
-          )}
-        </div>
-
-        {/* Reset button */}
-        {/* Level controls - Always visible */}
-        {(!isGameRoute || canEditCurrentGame) && !(isGameRoute && showCreatorGameMenus) && !(isCreator && !isGameRoute) && (
-          <LevelControls
-            currentlevel={currentLevel}
-            levelHandler={levelChanger}
-            maxLevels={Object.keys(levels).length}
-            levelName={level.name}
-          />
-        )}
-      </div>
-
-      {/* Right section - Game points + A+ submit */}
-      <div className="hidden 2xl:flex flex-[1_0_25%] justify-center items-center gap-2">
-        <InfoGamePoints />
-        {!showCreatorGameMenus && <AplusSubmitButton displayMode="icon-label" />}
       </div>
 
       {/* Game Levels dialog controlled from navbar menu */}

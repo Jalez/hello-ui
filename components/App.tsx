@@ -13,8 +13,6 @@ import { Navbar } from "./Navbar/Navbar";
 import { setMode } from "@/store/slices/options.slice";
 import { setCurrentLevel } from "@/store/slices/currentLevel.slice";
 import { Level } from "@/types";
-import Notifications from "./General/Notifications";
-import { SnackbarProvider } from "notistack";
 import { setSolutions } from "@/store/slices/solutions.slice";
 import { resetSolutionUrls } from "@/store/slices/solutionUrls.slice";
 import { getAllLevels } from "@/lib/utils/network/levels";
@@ -33,13 +31,27 @@ import { apiUrl, stripBasePath } from "@/lib/apiUrl";
 export const allLevels: Level[] = [];
 type SolutionsByLevelName = Record<string, { html: string; css: string; js: string }>;
 
-function normalizeRoomStateLevels(levels: Array<Record<string, unknown>>): Level[] {
-  return levels.map((rawLevel) => {
+function normalizeRoomStateLevels(
+  levels: Array<Record<string, unknown>>,
+  getYCodeSnapshot?: (editorType: "html" | "css" | "js", levelIndex: number) => string | null,
+): Level[] {
+  return levels.map((rawLevel, levelIndex) => {
     const levelWithoutVersions = {
       ...rawLevel,
     } as Record<string, unknown> & { versions?: unknown };
     delete levelWithoutVersions.versions;
-    return levelWithoutVersions as unknown as Level;
+    const nextLevel = levelWithoutVersions as unknown as Level;
+    if (nextLevel.code) {
+      return nextLevel;
+    }
+    return {
+      ...nextLevel,
+      code: {
+        html: getYCodeSnapshot?.("html", levelIndex) ?? "",
+        css: getYCodeSnapshot?.("css", levelIndex) ?? "",
+        js: getYCodeSnapshot?.("js", levelIndex) ?? "",
+      },
+    };
   });
 }
 
@@ -63,7 +75,7 @@ function App() {
   const lastGameIdRef = useRef<string | null>(null);
   const lastModeRef = useRef<string | null>(null);
   const lastRoomIdRef = useRef<string | null>(null);
-  const lastRoomStateTsRef = useRef<number | null>(null);
+  const lastRoomStateSignatureRef = useRef<string | null>(null);
   const setIsLoadingAsync = (value: boolean) => {
     queueMicrotask(() => setIsLoading(value));
   };
@@ -73,7 +85,7 @@ function App() {
     lastGameIdRef.current = null;
     lastModeRef.current = null;
     lastRoomIdRef.current = null;
-    lastRoomStateTsRef.current = null;
+    lastRoomStateSignatureRef.current = null;
     if (currentGame?.id) {
       console.log("[App] Game context changed, forcing reload", {
         gameId: currentGame.id,
@@ -125,7 +137,13 @@ function App() {
     }
 
     const currentGameId = currentGame?.id || null;
-    const roomStateTs = collaboration?.initialRoomState?.ts ?? null;
+    const roomStateSignature = collaboration?.initialRoomState
+      ? JSON.stringify({
+          levels: collaboration.initialRoomState.levels ?? [],
+          groupStartGate: collaboration.initialRoomState.groupStartGate ?? null,
+          yjsDocGeneration: collaboration.initialRoomState.yjsDocGeneration ?? null,
+        })
+      : null;
     const shouldUseWsCodeSource =
       currentMode === "game" &&
       Boolean(collaboration?.roomId);
@@ -139,7 +157,7 @@ function App() {
     const gameChanged = lastGameIdRef.current !== currentGameId;
     const modeChanged = lastModeRef.current !== currentMode;
     const roomChanged = lastRoomIdRef.current !== (collaboration?.roomId || null);
-    const roomStateChanged = lastRoomStateTsRef.current !== roomStateTs;
+    const roomStateChanged = lastRoomStateSignatureRef.current !== roomStateSignature;
 
     // If nothing affecting the data source changed and we already fetched, skip
     if (hasFetchedRef.current && !gameChanged && !modeChanged && !roomChanged && !roomStateChanged) {
@@ -150,7 +168,7 @@ function App() {
     lastGameIdRef.current = currentGameId;
     lastModeRef.current = currentMode;
     lastRoomIdRef.current = collaboration?.roomId || null;
-    lastRoomStateTsRef.current = roomStateTs;
+    lastRoomStateSignatureRef.current = roomStateSignature;
 
     const isCreator = currentMode === "creator";
 
@@ -248,17 +266,9 @@ function App() {
 
     setIsLoadingAsync(true);
     if (shouldUseWsCodeSource) {
-      const isYjsActive = collaboration?.isYjsEnabled ?? false;
-      // On initial load with Yjs, blank code to prevent dual-bootstrap (Y.Doc is
-      // the single source of truth). On subsequent syncs (e.g. after a reset),
-      // pass code through so Redux gets the correct template content immediately.
-      const shouldBlankCode = isYjsActive && !hasFetchedRef.current;
       const roomStateLevels = normalizeRoomStateLevels(
-        (collaboration?.initialRoomState?.levels || []) as Array<Record<string, unknown>>
-      ).map((level) =>
-        shouldBlankCode
-          ? { ...level, code: { html: "", css: "", js: "" } }
-          : level
+        (collaboration?.initialRoomState?.levels || []) as Array<Record<string, unknown>>,
+        collaboration?.getYCodeSnapshot as ((editorType: "html" | "css" | "js", levelIndex: number) => string | null) | undefined,
       );
       applyLevels(roomStateLevels, currentGame!.mapName);
     } else {
@@ -326,15 +336,13 @@ function App() {
   }, [isLoading]);
 
   return (
-    <SnackbarProvider>
+    <>
       <ProgressionSync />
       <ProgressPersistence />
       <GameplayTelemetryTracker />
       <article id="App" className="h-full flex flex-col justify-between">
         <LevelUpdater />
         <div className="flex-1">
-          <Notifications />
-
           <GameContainer>
             {isLoading || isWaitingForSharedCode ? (
               <div className="flex items-center justify-center h-full">
@@ -362,7 +370,7 @@ function App() {
           </GameContainer>
         </div>
       </article>
-    </SnackbarProvider>
+    </>
   );
 }
 

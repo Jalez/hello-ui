@@ -14,6 +14,7 @@
     "pw:same-user": "PLAYWRIGHT_SCENARIO=same_user_duplicate node scripts/playwright-local-group-smoke.mjs",
     "pw:same-user-blocked": "PLAYWRIGHT_SCENARIO=same_user_blocked node scripts/playwright-local-group-smoke.mjs",
     "pw:duplicate-churn": "PLAYWRIGHT_SCENARIO=duplicate_churn node scripts/playwright-local-group-smoke.mjs",
+    "pw:refresh-desync": "PLAYWRIGHT_SCENARIO=refresh_desync node scripts/playwright-local-group-smoke.mjs",
     "pw:in-game-duplicate": "PLAYWRIGHT_SCENARIO=in_game_duplicate node scripts/playwright-local-group-smoke.mjs",
     "pw:ws-invalid-frame": "PLAYWRIGHT_SCENARIO=ws_invalid_rsv1 node scripts/playwright-local-group-smoke.mjs",
     "pw:ws-recovery": "PLAYWRIGHT_SCENARIO=ws_recovery node scripts/playwright-local-group-smoke.mjs",

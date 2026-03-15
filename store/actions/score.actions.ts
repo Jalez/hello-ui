@@ -1,10 +1,10 @@
 /** @format */
 
 import { scoreTypes } from "@/store/constants/score.actions";
-import { addNotificationData } from "../slices/notifications.slice";
 import { updatePoints } from "../slices/score.slice";
 import { AppThunk } from "../store";
 import { Level } from "@/types";
+import { toast } from "sonner";
 
 export const updateMaxPoints = (maxPoints = 0) => {
   return {
@@ -127,46 +127,34 @@ export const sendScoreToParentFrame = (): AppThunk => (dispatch, getState) => {
   }
 
   if (levelsWithPoints === 0) {
-    dispatch(
-      addNotificationData({
-        message:
-          "Score " +
-          allPoints +
-          " / " +
-          maxPoints +
-          " saved. No levels were reported as completed.",
-        type: "error",
-      })
+    toast.error(
+      "Score " +
+        allPoints +
+        " / " +
+        maxPoints +
+        " saved. No levels were reported as completed.",
     );
     return;
   }
   if (levelsWithZeroPoints === 0) {
-    dispatch(
-      addNotificationData({
-        message:
-          "Score " +
-          allPoints +
-          " / " +
-          maxPoints +
-          " saved. You have completed all levels. Remember to submit your work!",
-        type: "success",
-      })
-    );
-    return;
-  }
-  dispatch(
-    addNotificationData({
-      message:
-        "Score " +
+    toast.success(
+      "Score " +
         allPoints +
         " / " +
         maxPoints +
-        " saved. You have completed " +
-        levelsWithPoints +
-        " levels and have " +
-        levelsWithZeroPoints +
-        " levels with 0 points.",
-      type: "info",
-    })
+        " saved. You have completed all levels. Remember to submit your work!",
+    );
+    return;
+  }
+  toast.info(
+    "Score " +
+      allPoints +
+      " / " +
+      maxPoints +
+      " saved. You have completed " +
+      levelsWithPoints +
+      " levels and have " +
+      levelsWithZeroPoints +
+      " levels with 0 points.",
   );
 };

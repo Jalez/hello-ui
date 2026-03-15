@@ -23,8 +23,8 @@ import { updateWeek, setAllLevels } from "@/store/slices/levels.slice";
 import { setSolutions } from "@/store/slices/solutions.slice";
 import { resetSolutionUrls } from "@/store/slices/solutionUrls.slice";
 import { initializePointsFromLevelsStateThunk } from "@/store/actions/score.actions";
-import { addNotificationData } from "@/store/slices/notifications.slice";
 import { Level } from "@/types";
+import { toast } from "sonner";
 
 export interface MapEditorRef {
   triggerOpen: () => void;
@@ -146,7 +146,7 @@ const MapEditor = forwardRef<MapEditorRef, MapEditorProps>(({ renderButton = tru
       } catch (error) {
         console.error("Failed to load import candidates", error);
         if (mounted) {
-          dispatch(addNotificationData({ message: "Failed to load level import list", type: "error" }));
+          toast.error("Failed to load level import list");
         }
       } finally {
         if (mounted) {
@@ -187,14 +187,14 @@ const MapEditor = forwardRef<MapEditorRef, MapEditorProps>(({ renderButton = tru
       await addLevelsToMap(currentGame.mapName, [copied.identifier]);
       await refreshCurrentMapLevels();
       setSelectedImportId("");
-      dispatch(addNotificationData({ message: "Copied level added to game", type: "success" }));
+      toast.success("Copied level added to game");
     } catch (error) {
       console.error(error);
-      dispatch(addNotificationData({ message: "Failed to copy level", type: "error" }));
+      toast.error("Failed to copy level");
     } finally {
       setIsApplyingImport(false);
     }
-  }, [selectedCandidate, currentGame?.mapName, refreshCurrentMapLevels, dispatch]);
+  }, [selectedCandidate, currentGame?.mapName, refreshCurrentMapLevels]);
 
   const getThumbnailForLevel = useCallback(
     (level: Level) => {
