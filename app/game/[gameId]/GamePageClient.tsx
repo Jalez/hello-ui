@@ -116,7 +116,7 @@ function getRoomIdForInstance(
 }
 
 function getPublicLobbyRoomId(gameId: string, contextId: string | null, courseName: string | null): string {
-  const scope = (contextId || courseName || "unresolved-lti-group").trim();
+  const scope = (contextId || courseName || "all").trim();
   return `lobby:${encodeURIComponent(scope)}:game:${gameId}`;
 }
 
@@ -322,7 +322,10 @@ export default function GamePage({ params }: GamePageProps) {
         }
         setError(null);
         setRequiresGroup(false);
-        setPublicLobby(null);
+        // Do NOT reset publicLobby here — the LTI-scoped lobby room ID is stable for the
+        // entire session. Resetting it on every re-run (e.g. when groupId changes) would
+        // fall back to lobby:all:game:xxx, putting group-selected users in a different room
+        // from users still in the lobby, causing chat desync.
         setRequiresAccessKey(false);
         setAccessKeyError(null);
 
