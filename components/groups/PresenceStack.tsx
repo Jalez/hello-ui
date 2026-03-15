@@ -68,24 +68,34 @@ export function PresenceStack({
     userName?: string;
     userImage?: string;
     color?: string;
+    isConnected?: boolean;
   }>;
   readyUserIds?: string[];
   className?: string;
 }) {
   return (
-    <div className={cn("flex items-center -space-x-2", className)}>
+    <div className={cn("flex items-center gap-1", className)}>
       {users.map((user) => {
         const label = user.userName || user.userEmail || user.userId || "Anonymous";
         const isReady = user.userId ? readyUserIds.includes(user.userId) : false;
+        const isConnected = user.isConnected !== false; // Default to true if not provided (e.g. in PublicLobby where all are active)
+        
+        // Single color priority: Ready > Connected > Disconnected
+        const statusColor = isReady 
+          ? "rgb(16 185 129)" // emerald-500
+          : isConnected 
+            ? (user.color || "rgb(59 130 246)") // user color or blue-500
+            : "rgb(156 163 175)"; // gray-400
+
         return (
           <Avatar
             key={user.userId || user.userEmail}
             className={cn(
-              "h-9 w-9 border-2 border-background ring-1 ring-border",
-              isReady && "ring-2 ring-emerald-500"
+              "h-9 w-9 border-2 bg-background",
+              !isConnected && "opacity-60"
             )}
-            style={{ borderColor: user.color || undefined }}
-            title={`${label}${isReady ? " • Ready" : ""}`}
+            style={{ borderColor: statusColor }}
+            title={`${label}${isReady ? " • Ready" : isConnected ? " • Online" : " • Offline"}`}
           >
             {user.userImage && <AvatarImage src={user.userImage} alt={label} />}
             <AvatarFallback className="text-xs font-medium">
