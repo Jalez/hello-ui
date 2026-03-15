@@ -121,11 +121,20 @@ export function GroupWaitingRoom({
       },
       ...collaboration.activeUsers,
     ]) {
-      const key = entry.userId || entry.userEmail || entry.clientId;
-      if (!key || presenceByKey.has(key)) {
-        continue;
-      }
-      presenceByKey.set(key, entry);
+      const email = entry.accountUserEmail || entry.userEmail;
+      const key = email?.toLowerCase() || entry.userId || entry.clientId;
+      if (!key || presenceByKey.has(key)) continue;
+      
+      const userId = entry.accountUserId || entry.userId;
+      const fallback = (userId ? avatarFallbacks.byUserId.get(userId) : undefined)
+        ?? (email ? avatarFallbacks.byEmail.get(email.toLowerCase()) : undefined);
+
+      presenceByKey.set(key, {
+        ...entry,
+        userId,
+        userName: entry.userName || fallback?.userName || undefined,
+        userImage: entry.userImage || fallback?.userImage || undefined,
+      });
     }
 
     const roster = groupMembers.map((member) => {
