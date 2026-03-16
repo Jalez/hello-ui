@@ -248,6 +248,7 @@ export default function GamePage({ params }: GamePageProps) {
   const { setCurrentGameId, addGameToStore } = useGameStore();
   const searchParams = useSearchParams();
   const selectedGroupId = searchParams.get("groupId");
+  const requestedMode = searchParams.get("mode") === "lobby" ? "lobby" : "game";
   const router = useRouter();
   const pathname = usePathname();
   const [isLoading, setIsLoading] = useState(true);
@@ -331,8 +332,8 @@ export default function GamePage({ params }: GamePageProps) {
         setAccessKeyError(null);
 
         const normalizedParams = new URLSearchParams(searchParams.toString());
-        if (normalizedParams.get("mode") !== "game") {
-          normalizedParams.set("mode", "game");
+        if (normalizedParams.get("mode") !== requestedMode) {
+          normalizedParams.set("mode", requestedMode);
           router.replace(`${pathname}?${normalizedParams.toString()}`);
         }
 
@@ -394,7 +395,8 @@ export default function GamePage({ params }: GamePageProps) {
           }
           const groupId = searchParams.get("groupId");
           const canOpenCreatorPreview = Boolean(game.canEdit);
-          if (!groupId && !canOpenCreatorPreview) {
+          const shouldOpenCreatorLobby = canOpenCreatorPreview && !groupId && requestedMode === "lobby";
+          if ((!groupId && !canOpenCreatorPreview) || shouldOpenCreatorLobby) {
             let nextLtiInfo: LtiSessionInfo | null = null;
             try {
               setLoadingMessage("Resolving your group from the course workspace...");
@@ -406,23 +408,23 @@ export default function GamePage({ params }: GamePageProps) {
               // Ignore LTI session probe failures and fall back to the normal group picker.
             }
 
-            if (nextLtiInfo?.isLtiMode) {
+            if (nextLtiInfo?.isLtiMode || shouldOpenCreatorLobby) {
               setLoadingMessage("Opening group lobby...");
-              const lobbyRoomId = getPublicLobbyRoomId(gameId, nextLtiInfo.contextId, nextLtiInfo.courseName);
+              const lobbyRoomId = getPublicLobbyRoomId(gameId, nextLtiInfo?.contextId ?? null, nextLtiInfo?.courseName ?? null);
               addGameToStore(game);
               setCurrentGameId(gameId);
               setRoomId(lobbyRoomId);
               logDebugClient("room_resolution_lti_lobby", {
                 gameId,
                 roomId: lobbyRoomId,
-                contextId: nextLtiInfo.contextId,
-                courseName: nextLtiInfo.courseName,
+                contextId: nextLtiInfo?.contextId ?? null,
+                courseName: nextLtiInfo?.courseName ?? null,
                 href: typeof window !== "undefined" ? window.location.href : null,
               });
               setPublicLobby({
                 roomId: lobbyRoomId,
-                courseName: nextLtiInfo.courseName,
-                contextId: nextLtiInfo.contextId,
+                courseName: nextLtiInfo?.courseName ?? null,
+                contextId: nextLtiInfo?.contextId ?? null,
               });
             } else {
               setRequiresGroup(true);
@@ -551,18 +553,18 @@ export default function GamePage({ params }: GamePageProps) {
     };
 
     initializeGame();
-  }, [gameId, hasUser, sessionUserId, guestId, setCurrentGameId, searchParams, router, pathname, addGameToStore, loadAttempt, accessKeyReady, submittedAccessKey, isReplayView]);
+  }, [gameId, hasUser, sessionUserId, guestId, setCurrentGameId, searchParams, requestedMode, router, pathname, addGameToStore, loadAttempt, accessKeyReady, submittedAccessKey, isReplayView]);
 
   const handleGroupSelect = async (groupId: string | null, options?: { joinKey?: string }) => {
     if (!groupId) {
       const normalizedParams = new URLSearchParams(searchParams.toString());
       normalizedParams.delete("groupId");
-      normalizedParams.set("mode", "game");
+      normalizedParams.set("mode", "lobby");
       router.push(`${pathname}?${normalizedParams.toString()}`);
       setCurrentGroupName(null);
       setCurrentGroupJoinKey(null);
       setCurrentGroupMembers([]);
-      setRoomId(`lobby:all:game:${gameId}`);
+      setRoomId(publicLobby?.roomId ?? `lobby:all:game:${gameId}`);
       return;
     }
 
@@ -765,8 +767,10 @@ export default function GamePage({ params }: GamePageProps) {
   const gate = currentGame?.progressData?.groupStartGate as Record<string, unknown> | undefined;
   const isStarted = gate?.status === "started";
   const isGroupWorkMode = currentGame?.collaborationMode === "group";
+  const canEditCurrentGame = Boolean(currentGame?.canEdit ?? currentGame?.isOwner);
+  const isCreatorPreviewWithoutGroup = isGroupWorkMode && canEditCurrentGame && !selectedGroupId && requestedMode !== "lobby";
 
-  if (isGroupWorkMode && user && !isStarted) {
+  if (isGroupWorkMode && user && !isStarted && !isCreatorPreviewWithoutGroup) {
     // Determine the stable lobby room ID. If we resolved a specific LTI context earlier, use it.
     const lobbyRoomId = publicLobby?.roomId || `lobby:all:game:${gameId}`;
     

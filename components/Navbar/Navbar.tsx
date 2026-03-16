@@ -151,7 +151,7 @@ export const Navbar = () => {
     }
 
     const params = new URLSearchParams(searchParams.toString());
-    params.set("mode", "game");
+    params.set("mode", "lobby");
     params.delete("groupId");
     const query = params.toString();
     router.push(apiUrl(`/game/${currentGame.id}${query ? `?${query}` : ""}`));
