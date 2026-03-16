@@ -3,6 +3,7 @@ export interface Game {
   user_id: string;
   map_name: string;
   title: string;
+  description: string | null;
   progress_data: Record<string, unknown>;
   is_public: boolean;
   share_token: string | null;
@@ -33,6 +34,7 @@ export interface CreateGameOptions {
 
 export interface UpdateGameOptions {
   title?: string;
+  description?: string | null;
   progressData?: Record<string, unknown>;
   isPublic?: boolean;
   shareToken?: string | null;

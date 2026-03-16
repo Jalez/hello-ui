@@ -62,6 +62,7 @@ function buildGamePayload(game: Game | null) {
     userId: game.user_id,
     mapName: game.map_name,
     title: game.title,
+    description: game.description,
     progressData: game.progress_data,
     isPublic: game.is_public,
     shareToken: game.share_token,
@@ -190,6 +191,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     const game = await updateGame(id, {
       title: body.title,
+      description: body.description,
       progressData: body.progressData,
       isPublic: body.isPublic,
       shareToken,

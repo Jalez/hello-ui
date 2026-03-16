@@ -67,6 +67,7 @@ export async function GET() {
         id: game.id,
         mapName: game.map_name,
         title: game.title,
+        description: game.description,
         thumbnailUrl: game.thumbnail_url,
         shareToken: game.share_token,
         accessWindowEnabled: game.access_window_enabled,

@@ -3,6 +3,7 @@ import type { Game } from "../../types";
 
 export interface UpdateGameOptions {
   title?: string;
+  description?: string | null;
   progressData?: Record<string, unknown>;
   isPublic?: boolean;
   shareToken?: string | null;

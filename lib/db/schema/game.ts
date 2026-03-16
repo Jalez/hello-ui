@@ -61,6 +61,7 @@ export const projects = pgTable(
     userId: text("user_id").notNull(),
     mapName: text("map_name").notNull().references(() => maps.name, { onDelete: "cascade" }),
     title: text("title").notNull(),
+    description: text("description"),
     progressData: jsonb("progress_data").notNull().default({}),
     isPublic: boolean("is_public").default(false).notNull(),
     shareToken: text("share_token").unique(),

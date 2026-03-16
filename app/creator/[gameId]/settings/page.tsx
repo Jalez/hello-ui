@@ -27,6 +27,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import { useGameStore } from "@/components/default/games";
 import { useAppSelector } from "@/store/hooks/hooks";
 import { apiUrl } from "@/lib/apiUrl";
@@ -44,6 +45,7 @@ interface CreatorSettingsPageProps {
 }
 
 type SettingsDraft = {
+  description: string;
   isPublic: boolean;
   collaborationMode: "individual" | "group";
   allowDuplicateUsersInGroup: boolean;
@@ -81,6 +83,7 @@ function toIsoOrNull(value: string): string | null {
 }
 
 function createDraft(game: {
+  description?: string | null;
   isPublic: boolean;
   collaborationMode: "individual" | "group";
   allowDuplicateUsersInGroup?: boolean;
@@ -93,6 +96,7 @@ function createDraft(game: {
   accessKey?: string | null;
 }): SettingsDraft {
   return {
+    description: game.description ?? "",
     isPublic: game.isPublic,
     collaborationMode: game.collaborationMode,
     allowDuplicateUsersInGroup: game.allowDuplicateUsersInGroup === true,
@@ -235,6 +239,7 @@ export default function CreatorSettingsPage({ params }: CreatorSettingsPageProps
       setSaveSuccess(null);
 
       await updateGame(game.id, {
+        description: draft.description.trim() || null,
         isPublic: draft.isPublic,
         collaborationMode: draft.collaborationMode,
         allowDuplicateUsersInGroup: draft.allowDuplicateUsersInGroup,
@@ -414,6 +419,24 @@ export default function CreatorSettingsPage({ params }: CreatorSettingsPageProps
 
       <div className="flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-4xl p-6 space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Description</CardTitle>
+              <CardDescription>Shown on public game cards instead of the internal map identifier.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Textarea
+                value={draft.description}
+                onChange={(event) => {
+                  setDraft((current) => (current ? { ...current, description: event.target.value } : current));
+                  setSaveSuccess(null);
+                }}
+                placeholder="Add a short description for this game..."
+                className="min-h-[120px]"
+              />
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Visibility</CardTitle>

@@ -22,6 +22,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -73,6 +74,7 @@ export const GameSettingsButton = ({ displayMode = "icon" }: GameSettingsButtonP
   const [copied, setCopied] = useState(false);
   const [copiedLti, setCopiedLti] = useState(false);
   const [copiedAccessKey, setCopiedAccessKey] = useState(false);
+  const [descriptionInput, setDescriptionInput] = useState("");
   const [thumbnailInput, setThumbnailInput] = useState("");
   const [collaboratorEmail, setCollaboratorEmail] = useState("");
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
@@ -97,6 +99,7 @@ export const GameSettingsButton = ({ displayMode = "icon" }: GameSettingsButtonP
     }
 
     setThumbnailInput(game.thumbnailUrl ?? "");
+    setDescriptionInput(game.description ?? "");
     setAccessStartsAtInput(toDateTimeInputValue(game.accessStartsAt));
     setAccessEndsAtInput(toDateTimeInputValue(game.accessEndsAt));
 
@@ -210,6 +213,12 @@ export const GameSettingsButton = ({ displayMode = "icon" }: GameSettingsButtonP
     if (!game) return;
     await updateGame(game.id, { thumbnailUrl: thumbnailInput || null });
   }, [game, thumbnailInput, updateGame]);
+
+  const handleDescriptionSave = useCallback(async () => {
+    if (!game) return;
+    const trimmedDescription = descriptionInput.trim();
+    await updateGame(game.id, { description: trimmedDescription || null });
+  }, [descriptionInput, game, updateGame]);
 
   const handleUseSolutionScreenshot = useCallback(
     async (dataUrl: string) => {
@@ -436,6 +445,21 @@ export const GameSettingsButton = ({ displayMode = "icon" }: GameSettingsButtonP
                 title="Copy link"
               >
                 <RefreshCw className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-sm font-semibold">Description</p>
+            <Textarea
+              placeholder="Add a short description for the public games card..."
+              value={descriptionInput}
+              onChange={(event) => setDescriptionInput(event.target.value)}
+              className="min-h-[96px] text-sm"
+            />
+            <div className="flex justify-end">
+              <Button size="sm" variant="outline" onClick={handleDescriptionSave}>
+                Save Description
               </Button>
             </div>
           </div>
