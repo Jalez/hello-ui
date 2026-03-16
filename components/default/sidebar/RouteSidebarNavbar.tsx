@@ -45,7 +45,7 @@ export const RouteSidebarNavbar = () => {
     <nav
       aria-label="Sidebar navigation bar"
       className={`bg-transparent border-0 shadow-none ${
-        isHomeRoute ? "absolute inset-x-0 top-0 z-20 pointer-events-none" : ""
+        isHomeRoute ? "absolute inset-x-0 top-0 z-20" : ""
       }`}
     >
       <div className={`flex items-center gap-2 px-2 ${isHomeRoute ? "h-auto py-2" : "h-12"}`}>
