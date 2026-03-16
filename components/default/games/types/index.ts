@@ -3,6 +3,7 @@ export interface Game {
   userId: string;
   mapName: string;
   title: string;
+  description: string | null;
   progressData: Record<string, unknown>;
   isPublic: boolean;
   shareToken: string | null;

@@ -15,6 +15,7 @@ interface PublicGame {
   id: string;
   mapName: string;
   title: string;
+  description: string | null;
   thumbnailUrl: string | null;
   shareToken: string | null;
   accessKeyRequired: boolean;
@@ -70,8 +71,9 @@ export default function GamesPage() {
 
     return games.filter((game) => {
       const title = game.title?.toLowerCase() ?? "";
+      const description = game.description?.toLowerCase() ?? "";
       const mapName = game.mapName?.toLowerCase() ?? "";
-      return title.includes(normalizedSearch) || mapName.includes(normalizedSearch);
+      return title.includes(normalizedSearch) || description.includes(normalizedSearch) || mapName.includes(normalizedSearch);
     });
   }, [games, normalizedSearch]);
 
@@ -163,6 +165,7 @@ export default function GamesPage() {
     <div className="grid grid-cols-1 justify-items-center gap-6 sm:grid-cols-2 lg:grid-cols-3">
       {items.map((game) => {
         const href = `/game/${game.id}?mode=game`;
+        const description = game.description?.trim() || "No description yet.";
         const languageBadges = [
           game.languages.html ? "HTML" : null,
           game.languages.css ? "CSS" : null,
@@ -217,7 +220,7 @@ export default function GamesPage() {
                   </div>
                 )}
               </div>
-              <p className="text-xs text-muted-foreground mt-1 truncate">{game.mapName}</p>
+              <p className="mt-1 min-h-8 line-clamp-2 text-xs text-muted-foreground">{description}</p>
               <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                 <div className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1">
                   <Layers3 className="h-3.5 w-3.5" />

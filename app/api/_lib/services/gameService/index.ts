@@ -39,6 +39,7 @@ function mapGame(row: typeof projects.$inferSelect): Game {
     user_id: row.userId,
     map_name: row.mapName,
     title: row.title,
+    description: row.description ?? null,
     progress_data: row.progressData as Record<string, unknown>,
     is_public: row.isPublic ?? false,
     share_token: row.shareToken ?? null,
@@ -311,6 +312,13 @@ export async function updateGame(id: string, options: UpdateGameOptions): Promis
       throw new Error("Invalid title: must be a string");
     }
     updateData.title = options.title;
+  }
+
+  if (options.description !== undefined) {
+    if (options.description !== null && typeof options.description !== "string") {
+      throw new Error("Invalid description: must be a string or null");
+    }
+    updateData.description = options.description;
   }
 
   if (options.progressData !== undefined) {

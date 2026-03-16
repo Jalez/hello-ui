@@ -46,7 +46,7 @@ export const Navbar = () => {
   const dispatch = useAppDispatch();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { openOverlay, toggleCollapsed, isMobile, isOverlayOpen, isVisible } = useSidebarCollapse();
+  const { openOverlay, toggleCollapsed, isMobile, isOverlayOpen, isVisible, isCollapsed } = useSidebarCollapse();
   const pathname = usePathname();
   const normalizedPathname = stripBasePath(pathname);
   const isCreatorRoute = normalizedPathname.startsWith("/creator/");
@@ -75,7 +75,10 @@ export const Navbar = () => {
   const shouldShowCreatorSidebarToggle =
     isCreator &&
     isVisible &&
-    (!isMobile || !isOverlayOpen);
+    (
+      (isMobile && !isOverlayOpen) ||
+      (!isMobile && isCollapsed)
+    );
 
   const level = levels[currentLevel - 1];
   const points = useAppSelector((state) => state.points);
