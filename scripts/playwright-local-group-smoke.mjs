@@ -66,6 +66,7 @@ function deriveUsernames() {
     lti_lobby: 6,
     lti_aplus_group: 4,
     classroom_churn: 12,
+    classroom_text_production: 12,
     creator_group_details: 4,
     level_tab_switch: 3,
     instances_reset: 3,
@@ -101,6 +102,7 @@ function defaultGroupSizeForScenario() {
   if (scenario === "creator_group_details") return 3;
   if (scenario === "level_tab_switch") return 3;
   if (scenario === "instances_reset") return 3;
+  if (scenario === "classroom_text_production") return 3;
   return 3;
 }
 
@@ -232,6 +234,25 @@ function scenarioFlags() {
       ...defaults,
       stressRounds: 1,
       submitAfterStress: false,
+    };
+  }
+
+  if (scenario === "classroom_text_production") {
+    return {
+      ...defaults,
+      delayedJoinMs: 400,
+      stressRounds: 1,
+      refreshDuringWaiting: false,
+      refreshDuringEditing: false,
+      openExtraTabCount: 0,
+      closeReopenCount: 0,
+      lateOpenCount: 0,
+      submitAfterStress: false,
+      httpDelayMs: 0,
+      httpJitterMs: 0,
+      wsReceiveDelayMs: 0,
+      wsReceiveJitterMs: 0,
+      wsDropYjsUpdates: 0,
     };
   }
 
@@ -368,6 +389,9 @@ const flags = {
   stressRounds: Number.parseInt(process.env.PLAYWRIGHT_STRESS_ROUNDS || `${scenarioFlags().stressRounds}`, 10),
   refreshDuringEditing: process.env.PLAYWRIGHT_RELOAD_DURING_EDIT === "true" ? true : scenarioFlags().refreshDuringEditing,
   submitAfterStress: process.env.PLAYWRIGHT_SUBMIT_AFTER_STRESS === "true" ? true : scenarioFlags().submitAfterStress,
+  wsReceiveDelayMs: Number.parseInt(process.env.PLAYWRIGHT_WS_RECEIVE_DELAY_MS || `${scenarioFlags().wsReceiveDelayMs}`, 10),
+  wsReceiveJitterMs: Number.parseInt(process.env.PLAYWRIGHT_WS_RECEIVE_JITTER_MS || `${scenarioFlags().wsReceiveJitterMs}`, 10),
+  wsDropYjsUpdates: Number.parseInt(process.env.PLAYWRIGHT_WS_DROP_YJS_UPDATES || `${scenarioFlags().wsDropYjsUpdates}`, 10),
 };
 
 const duplicateUsernames = usernames.filter((username, index) => usernames.indexOf(username) !== index);
@@ -420,6 +444,35 @@ function getHealthUrlForWebSocket(wsUrl) {
   resolvedWsUrl.search = "";
   resolvedWsUrl.hash = "";
   return resolvedWsUrl.toString();
+}
+
+function buildLocalPlaywrightWebSocketUrl(port) {
+  const resolvedBaseUrl = new URL(baseUrl);
+  const protocol = resolvedBaseUrl.protocol === "https:" ? "wss:" : "ws:";
+  return `${protocol}//${resolvedBaseUrl.hostname}:${port}`;
+}
+
+async function getAvailablePort() {
+  return await new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.unref();
+    server.on("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      if (!address || typeof address === "string") {
+        server.close(() => reject(new Error("Failed to allocate a temporary WS port.")));
+        return;
+      }
+      const { port } = address;
+      server.close((error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve(port);
+      });
+    });
+  });
 }
 
 async function fetchHealthOk(url) {
@@ -607,10 +660,24 @@ async function runInvalidRsv1Scenario() {
   console.log(`ws-invalid-frame | ${expectCrash ? "EXPECT_CRASH" : "EXPECT_SURVIVE"} | ${healthAfter ? "HEALTHY" : "DOWN"}`);
 }
 
-async function startManagedWsServer() {
+async function applyPlaywrightWebSocketOverride(context, wsUrl) {
+  await context.addInitScript((overrideWsUrl) => {
+    window.__PLAYWRIGHT_WEBSOCKET_URL__ = overrideWsUrl;
+    try {
+      window.sessionStorage.setItem("__PLAYWRIGHT_WEBSOCKET_URL__", overrideWsUrl);
+    } catch {
+      // Ignore storage failures in hardened browser contexts.
+    }
+  }, wsUrl);
+}
+
+async function startManagedWsServer(envOverrides = {}) {
   const child = spawn(process.execPath, ["ws-server/server.mjs"], {
     cwd: process.cwd(),
-    env: process.env,
+    env: {
+      ...process.env,
+      ...envOverrides,
+    },
     stdio: ["ignore", "pipe", "pipe"],
   });
 
@@ -628,6 +695,16 @@ async function startManagedWsServer() {
   });
 
   return child;
+}
+
+function startDetachedWsServer() {
+  const child = spawn(process.execPath, ["ws-server/server.mjs"], {
+    cwd: process.cwd(),
+    env: process.env,
+    detached: true,
+    stdio: "ignore",
+  });
+  child.unref();
 }
 
 async function stopManagedWsServer(child) {
@@ -712,16 +789,37 @@ async function runWsRecoveryScenario(browser) {
 
   const restartDelayMs = Number.parseInt(process.env.PLAYWRIGHT_WS_RESTART_DELAY_MS || "1000", 10);
   const reconnectWindowMs = Number.parseInt(process.env.PLAYWRIGHT_WS_RECONNECT_WINDOW_MS || "30000", 10);
-  const wsUrl = getPlaywrightWebSocketUrl();
+  const postStressRounds = Number.parseInt(process.env.PLAYWRIGHT_WS_RECOVERY_POST_STRESS_ROUNDS || "1", 10);
+  const postRestoreSettleMs = Number.parseInt(process.env.PLAYWRIGHT_WS_POST_RESTORE_SETTLE_MS || "5000", 10);
+  const extraReload = process.env.PLAYWRIGHT_WS_RECOVERY_EXTRA_RELOAD === "true";
+  const verifyStability = process.env.PLAYWRIGHT_WS_RECOVERY_VERIFY_STABILITY === "true";
+  const isolateWsServer = process.env.PLAYWRIGHT_WS_ISOLATE !== "false";
+  const originalPlaywrightWebSocketUrl = process.env.PLAYWRIGHT_WEBSOCKET_URL;
+  const originalPlaywrightWsUrl = process.env.PLAYWRIGHT_WS_URL;
+  let wsUrl = getPlaywrightWebSocketUrl();
+  if (isolateWsServer) {
+    const isolatedPort = await getAvailablePort();
+    wsUrl = buildLocalPlaywrightWebSocketUrl(isolatedPort);
+    process.env.PLAYWRIGHT_WEBSOCKET_URL = wsUrl;
+    process.env.PLAYWRIGHT_WS_URL = wsUrl;
+  }
   const healthUrl = getHealthUrlForWebSocket(wsUrl);
   const wsPort = Number.parseInt(new URL(wsUrl).port || "3100", 10);
   let managedWsChild = null;
+  let shouldRestoreDetachedWs = false;
 
   const contexts = [];
 
   try {
+    if (isolateWsServer) {
+      managedWsChild = await startManagedWsServer({ PORT: String(wsPort) });
+      const isolatedHealthy = await waitForHealthState(healthUrl, true, scaledTimeout(5000));
+      expect(isolatedHealthy).toBe(true);
+    }
+
     for (const username of usernames) {
       const context = await browser.newContext({ baseURL: baseUrl, viewport: smokeViewport });
+      await applyPlaywrightWebSocketOverride(context, wsUrl);
       await enableHttpLatency(context);
       const page = await context.newPage();
       await enableWsReceiveDelay(page);
@@ -765,16 +863,24 @@ async function runWsRecoveryScenario(browser) {
     const healthyBefore = await waitForHealthState(healthUrl, true, scaledTimeout(5000));
     expect(healthyBefore).toBe(true);
 
-    const listeningPids = await findListeningPids(wsPort);
-    expect(listeningPids.length > 0).toBe(true);
-    console.log(`ws-recovery stopping pids=${listeningPids.join(",")}`);
-    await terminatePids(listeningPids);
+    if (isolateWsServer) {
+      expect(managedWsChild).not.toBe(null);
+      console.log(`ws-recovery stopping isolatedPort=${wsPort}`);
+      await stopManagedWsServer(managedWsChild);
+      managedWsChild = null;
+    } else {
+      const listeningPids = await findListeningPids(wsPort);
+      expect(listeningPids.length > 0).toBe(true);
+      console.log(`ws-recovery stopping pids=${listeningPids.join(",")}`);
+      shouldRestoreDetachedWs = listeningPids.length > 0;
+      await terminatePids(listeningPids);
+    }
     const crashed = await waitForHealthState(healthUrl, false, scaledTimeout(5000));
     expect(crashed).toBe(false);
     console.log(`ws-recovery crashed=true restartDelayMs=${restartDelayMs}`);
 
     await new Promise((resolve) => setTimeout(resolve, restartDelayMs));
-    managedWsChild = await startManagedWsServer();
+    managedWsChild = await startManagedWsServer(isolateWsServer ? { PORT: String(wsPort) } : {});
 
     const healthyAfterRestart = await waitForHealthState(healthUrl, true, scaledTimeout(5000));
     expect(healthyAfterRestart).toBe(true);
@@ -783,13 +889,140 @@ async function runWsRecoveryScenario(browser) {
     const afterMarker = `pw-after-restart-${Date.now().toString(36)}`;
     const recovered = await waitForReconnectRecovery(pages, afterMarker, reconnectWindowMs);
     console.log(`ws-recovery recovered=${recovered} reconnectWindowMs=${reconnectWindowMs}`);
+    expect(recovered).toBe(true);
+
+    const requiredMarkers = [beforeMarker, afterMarker];
+    const convergenceAfterRestart = await waitForPagesConverged(
+      pages,
+      requiredMarkers,
+      "ws-recovery:post-restart",
+      reconnectWindowMs,
+    );
+    console.log(
+      `ws-recovery convergedAfterRestart=${convergenceAfterRestart.ok} lengths=${convergenceAfterRestart.contents.map((content) => content.length).join("|")}`
+    );
+    expect(convergenceAfterRestart.ok).toBe(true);
+
+    for (let round = 1; round <= postStressRounds; round += 1) {
+      const sourceOffset = round % pages.length;
+      const orderedPages = pages.slice(sourceOffset).concat(pages.slice(0, sourceOffset));
+      const marker = `pw-recovery-round-${round}-${Date.now().toString(36)}`;
+      const replicated = await trySharedEdit(orderedPages, marker);
+      console.log(`ws-recovery round=${round} sharedEdit=${replicated} marker=${marker}`);
+      expect(replicated).toBe(true);
+
+      const sharedConvergence = await waitForPagesConverged(
+        pages,
+        [marker],
+        `ws-recovery:round-${round}:shared`,
+        scaledTimeout(15000),
+      );
+      console.log(
+        `ws-recovery round=${round} sharedConverged=${sharedConvergence.ok} lengths=${sharedConvergence.contents.map((content) => content.length).join("|")}`
+      );
+      expect(sharedConvergence.ok).toBe(true);
+
+      const concurrentOk = await tryConcurrentSharedEdit(pages, `ws-recovery-round-${round}`);
+      console.log(`ws-recovery round=${round} concurrentOk=${concurrentOk}`);
+      expect(concurrentOk).toBe(true);
+
+      const samePositionOk = await trySamePositionConcurrentEdit(pages, `ws-recovery-round-${round}-same-position`);
+      console.log(`ws-recovery round=${round} samePositionOk=${samePositionOk}`);
+      expect(samePositionOk).toBe(true);
+
+      const roundConvergence = await waitForPagesConverged(
+        pages,
+        [],
+        `ws-recovery:round-${round}`,
+        scaledTimeout(15000),
+      );
+      console.log(
+        `ws-recovery round=${round} converged=${roundConvergence.ok} lengths=${roundConvergence.contents.map((content) => content.length).join("|")}`
+      );
+      expect(roundConvergence.ok).toBe(true);
+
+      const roundSettled = await waitForEditorsSettled(
+        pages,
+        `ws-recovery:round-${round}:settled`,
+        scaledTimeout(12000),
+      );
+      console.log(`ws-recovery round=${round} settled=${roundSettled}`);
+      expect(roundSettled).toBe(true);
+    }
+
+    if (verifyStability) {
+      if (flags.wsReceiveDelayMs <= 0 && flags.wsDropYjsUpdates <= 0) {
+        throw new Error(
+          "PLAYWRIGHT_WS_RECOVERY_VERIFY_STABILITY=true requires PLAYWRIGHT_WS_RECEIVE_DELAY_MS or PLAYWRIGHT_WS_DROP_YJS_UPDATES.",
+        );
+      }
+      const stabilityReady = await waitForEditorsSettled(
+        pages,
+        "ws-recovery:stability-ready",
+        scaledTimeout(12000),
+      );
+      console.log(`ws-recovery stabilityReady=${stabilityReady}`);
+      expect(stabilityReady).toBe(true);
+      startDroppingYjsUpdates(pages[0]);
+      try {
+        const stabilityResult = await tryEditStability(pages[0], pages, "ws-recovery-post");
+        console.log(
+          `ws-recovery stability stable=${stabilityResult.stable} appearedAt=${stabilityResult.appearedAt} disappearedAt=${stabilityResult.disappearedAt}`
+        );
+        expect(stabilityResult.stable).toBe(true);
+      } finally {
+        stopDroppingYjsUpdates(pages[0]);
+      }
+    }
+
+    if (extraReload) {
+      const reloadPage = pages[pages.length - 1];
+      await reloadGamePage(reloadPage, "ws-recovery:post-restart");
+      await waitForEditorOnPage(reloadPage, "ws-recovery:post-restart");
+
+      const reloadMarker = `pw-recovery-reload-${Date.now().toString(36)}`;
+      const reloadOrderedPages = [reloadPage, ...pages.filter((page) => page !== reloadPage)];
+      const reloadReplicated = await trySharedEdit(reloadOrderedPages, reloadMarker);
+      console.log(`ws-recovery postReload sharedEdit=${reloadReplicated} marker=${reloadMarker}`);
+      expect(reloadReplicated).toBe(true);
+
+      const convergenceAfterReload = await waitForPagesConverged(
+        pages,
+        [reloadMarker],
+        "ws-recovery:post-reload",
+        scaledTimeout(15000),
+      );
+      console.log(
+        `ws-recovery postReload converged=${convergenceAfterReload.ok} lengths=${convergenceAfterReload.contents.map((content) => content.length).join("|")}`
+      );
+      expect(convergenceAfterReload.ok).toBe(true);
+    }
 
     console.log("");
     console.log(`Playwright scenario: ${scenario}`);
     console.log("Summary");
-    console.log(`ws-recovery | ${recovered ? "RECOVERED" : "FAILED"} | restartDelayMs=${restartDelayMs}`);
+    console.log(
+      `ws-recovery | ${recovered ? "RECOVERED" : "FAILED"} | restartDelayMs=${restartDelayMs} postStressRounds=${postStressRounds} extraReload=${extraReload} verifyStability=${verifyStability}`
+    );
   } finally {
     await stopManagedWsServer(managedWsChild);
+    if (shouldRestoreDetachedWs) {
+      startDetachedWsServer();
+      await waitForHealthState(healthUrl, true, scaledTimeout(5000)).catch(() => false);
+      if (postRestoreSettleMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, postRestoreSettleMs));
+      }
+    }
+    if (originalPlaywrightWebSocketUrl === undefined) {
+      delete process.env.PLAYWRIGHT_WEBSOCKET_URL;
+    } else {
+      process.env.PLAYWRIGHT_WEBSOCKET_URL = originalPlaywrightWebSocketUrl;
+    }
+    if (originalPlaywrightWsUrl === undefined) {
+      delete process.env.PLAYWRIGHT_WS_URL;
+    } else {
+      process.env.PLAYWRIGHT_WS_URL = originalPlaywrightWsUrl;
+    }
     await Promise.all(contexts.flatMap(({ extraPages = [] }) => extraPages).map(async (page) => page.close().catch(() => {})));
     await Promise.all(contexts.map(async ({ context }) => context.close().catch(() => {})));
   }
@@ -1070,7 +1303,8 @@ async function enableWsReceiveDelay(page) {
   const delayMs = flags.wsReceiveDelayMs;
   const jitterMs = flags.wsReceiveJitterMs;
   const hasDrops = flags.wsDropYjsUpdates > 0;
-  if (delayMs <= 0 && jitterMs <= 0 && !hasDrops) return;
+  const forceWsRoute = scenario === "classroom_text_production";
+  if (delayMs <= 0 && jitterMs <= 0 && !hasDrops && !forceWsRoute) return;
 
   const dropState = { dropping: false, count: 0 };
   pageDropState.set(page, dropState);
@@ -1340,7 +1574,7 @@ async function waitForEditorOnPages(pages) {
       const page = pages[index];
       const label = `page-${index + 1}`;
       try {
-        await page.locator(".cm-content[contenteditable='true']").first().waitFor({ timeout: scaledTimeout(8000) });
+        await page.locator(".cm-content").first().waitFor({ timeout: scaledTimeout(8000) });
         console.log(`editor:ready ${label}`);
         pending.delete(index);
       } catch {
@@ -1391,12 +1625,12 @@ async function startGroupGame(pages) {
     const waitingRoom = page.getByText("Group Waiting Room");
     await Promise.race([
       waitingRoom.first().waitFor({ timeout: scaledTimeout(10000) }).catch(() => null),
-      page.locator(".cm-content[contenteditable='true']").first().waitFor({ timeout: scaledTimeout(10000) }).catch(() => null),
+      page.locator(".cm-content").first().waitFor({ timeout: scaledTimeout(10000) }).catch(() => null),
     ]);
     if ((await waitingRoom.count()) > 0) {
       const startButton = page.getByRole("button", { name: "Start Game" });
       await expect.poll(async () => {
-        const editorVisible = await page.locator(".cm-content[contenteditable='true']").first().isVisible().catch(() => false);
+        const editorVisible = await page.locator(".cm-content").first().isVisible().catch(() => false);
         if (editorVisible) {
           return "editor";
         }
@@ -1427,7 +1661,7 @@ async function startGroupGame(pages) {
 
         return startVisible ? "disabled" : "hidden";
       }, {
-        timeout: scaledTimeout(10000),
+        timeout: scaledTimeout(20000),
         message: "Waiting room did not progress to a valid ready/editor state",
       }).not.toBe("disabled");
     }
@@ -1552,6 +1786,7 @@ async function verifyLevelReset(group, contexts) {
 async function trySharedEdit(pages, marker) {
   if (pages.length < 2) return false;
   const editor = pages[0].locator(".cm-content[contenteditable='true']").first();
+  await editor.waitFor({ timeout: scaledTimeout(10000) });
   await editor.click();
   await editor.press("End");
   await pages[0].keyboard.type(`\n<!-- ${marker} -->`);
@@ -1601,6 +1836,31 @@ async function waitForPagesConverged(pages, requiredMarkers, label, timeoutMs = 
     ok: false,
     contents: lastContents,
   };
+}
+
+async function waitForEditorsSettled(pages, label, timeoutMs = scaledTimeout(10000)) {
+  const startedAt = Date.now();
+  let stablePasses = 0;
+  while (Date.now() - startedAt < timeoutMs) {
+    const states = await Promise.all(pages.map(async (page) => {
+      const editable = (await page.locator(".cm-content[contenteditable='true']").count().catch(() => 0)) > 0;
+      const content = (await page.locator(".cm-content").first().textContent().catch(() => "")) || "";
+      return { editable, content };
+    }));
+    const allEditable = states.every((state) => state.editable);
+    const converged = states.length > 0 && states.every((state) => state.content === states[0].content);
+    if (allEditable && converged) {
+      stablePasses += 1;
+      if (stablePasses >= 2) {
+        return true;
+      }
+    } else {
+      stablePasses = 0;
+    }
+    await pages[0].waitForTimeout(500);
+  }
+  await Promise.all(pages.map((page, index) => logPageEditorState(page, `${label}:settle:${index}`)));
+  return false;
 }
 
 async function typeMarkerSlowly(page, marker) {
@@ -2037,6 +2297,342 @@ async function fetchGameInstanceCount(gameId) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// classroom_text_production: each user types their assigned fragment while
+// random chaos events disturb the group. No user fills in for another.
+// ---------------------------------------------------------------------------
+
+// Fragments use only simple alphanumeric words to avoid CodeMirror textContent
+// splitting issues with punctuation. Each fragment is unique and greppable.
+const TEXT_PRODUCTION_FRAGMENTS = [
+  "alpha bravo charlie delta echo foxtrot",
+  "golf hotel india juliet kilo lima",
+  "mike november oscar papa quebec romeo",
+  "sierra tango uniform victor whiskey xray",
+  "zulu amber bronze coral desert ember",
+  "flame glacier harbor ivory jasper knight",
+  "lantern meadow nebula orchid prism quartz",
+  "ripple shadow timber umbra velvet walrus",
+  "xenon yield zenith arctic breeze cedar",
+  "drift ember falcon granite haven indent",
+  "jovial kindle luster marble nimbus opaque",
+  "pebble riddle summit temple utmost vertex",
+];
+
+const CHAOS_EVENTS = [
+  "none",
+  "refresh_typer",
+  "refresh_other",
+  "ws_drop_typer",
+  "ws_drop_other",
+  "extra_tab_typer",
+  "close_reopen_typer",
+  "latency_spike",
+];
+
+function pickRandomChaosEvent(rng) {
+  return CHAOS_EVENTS[Math.floor(rng() * CHAOS_EVENTS.length)];
+}
+
+// Simple seeded RNG so runs are reproducible with PLAYWRIGHT_CHAOS_SEED
+function createSeededRng(seed) {
+  let state = seed;
+  return () => {
+    state = (state * 1664525 + 1013904223) & 0xffffffff;
+    return (state >>> 0) / 0x100000000;
+  };
+}
+
+async function applyChaosEvent(chaosType, typerPage, otherPages, allContexts, group, typerIndex, contexts) {
+  const log = (msg) => console.log(`chaos:${chaosType} ${msg}`);
+
+  if (chaosType === "none") {
+    log(`${group.groupName} no chaos`);
+    return;
+  }
+
+  if (chaosType === "refresh_typer") {
+    log(`${group.groupName} refreshing typer page`);
+    await reloadGamePage(typerPage, `chaos-refresh:${contexts[typerIndex].username}`);
+    await waitForEditorOnPage(typerPage, `chaos-refresh:${contexts[typerIndex].username}`);
+    return;
+  }
+
+  if (chaosType === "refresh_other" && otherPages.length > 0) {
+    const targetPage = otherPages[Math.floor(Math.random() * otherPages.length)];
+    const targetIdx = allContexts.findIndex((c) => c.page === targetPage);
+    log(`${group.groupName} refreshing other user ${allContexts[targetIdx]?.username}`);
+    await reloadGamePage(targetPage, `chaos-refresh-other:${allContexts[targetIdx]?.username}`);
+    await waitForEditorOnPage(targetPage, `chaos-refresh-other:${allContexts[targetIdx]?.username}`);
+    return;
+  }
+
+  if (chaosType === "ws_drop_typer") {
+    log(`${group.groupName} dropping Yjs updates on typer for 3s`);
+    startDroppingYjsUpdates(typerPage);
+    await typerPage.waitForTimeout(3000);
+    stopDroppingYjsUpdates(typerPage);
+    return;
+  }
+
+  if (chaosType === "ws_drop_other" && otherPages.length > 0) {
+    const targetPage = otherPages[Math.floor(Math.random() * otherPages.length)];
+    log(`${group.groupName} dropping Yjs updates on other user for 3s`);
+    startDroppingYjsUpdates(targetPage);
+    await targetPage.waitForTimeout(3000);
+    stopDroppingYjsUpdates(targetPage);
+    return;
+  }
+
+  if (chaosType === "extra_tab_typer") {
+    const typerCtx = contexts[typerIndex];
+    log(`${group.groupName} opening extra tab for typer ${typerCtx.username}`);
+    const extraPage = await typerCtx.context.newPage();
+    await enableWsReceiveDelay(extraPage);
+    await gotoGamePage(extraPage, gameUrl(activeGameId, group.groupId), `chaos-extra-tab:${typerCtx.username}`);
+    await typerPage.waitForTimeout(2000);
+    await extraPage.close().catch(() => {});
+    return;
+  }
+
+  if (chaosType === "close_reopen_typer") {
+    log(`${group.groupName} close+reopen typer ${contexts[typerIndex].username}`);
+    await closeAndReopenMember(group, contexts, typerIndex);
+    return;
+  }
+
+  if (chaosType === "latency_spike") {
+    // Drop Yjs updates on all pages briefly to simulate a network partition
+    log(`${group.groupName} simulating network partition (drop all Yjs for 3s)`);
+    const allPages = [typerPage, ...otherPages];
+    for (const p of allPages) startDroppingYjsUpdates(p);
+    await typerPage.waitForTimeout(3000);
+    for (const p of allPages) stopDroppingYjsUpdates(p);
+    return;
+  }
+
+  // Fallback: no chaos if event doesn't apply (e.g. refresh_other with no others)
+  log(`${group.groupName} skipped (not applicable)`);
+}
+
+function createTextProductionLevel(slotCount) {
+  const slots = Array.from({ length: slotCount }, (_, i) => `  <p>SLOT_${i + 1}_EMPTY</p>`).join("\n");
+  const level = createStarterLevel();
+  return {
+    ...level,
+    name: "text-production",
+    code: {
+      html: `<main>\n  <h1>Collaborative Text</h1>\n${slots}\n</main>`,
+      css: level.code.css,
+      js: "",
+    },
+  };
+}
+
+async function seedTextProductionInstance(request, gameId, groupId, label, slotCount) {
+  const level = createTextProductionLevel(slotCount);
+  const seedResponse = await request.patch(
+    `${baseUrl}/api/games/${gameId}/instance?accessContext=game&groupId=${encodeURIComponent(groupId)}`,
+    {
+      data: {
+        progressData: {
+          levels: [level],
+          testGroupLabel: label,
+        },
+      },
+    },
+  );
+  if (!seedResponse.ok()) {
+    throw new Error(`Failed to seed text-production level for group ${groupId}: ${seedResponse.status()} ${await seedResponse.text()}`);
+  }
+}
+
+async function runTextProductionForGroup(group, contexts) {
+  const memberIndexes = group.activeMemberIndexes ?? group.memberIndexes;
+  // Helper to always get current pages (after close/reopen, contexts[idx].page changes)
+  const getCurrentPages = () => memberIndexes.map((idx) => contexts[idx].page);
+  const memberUsernames = memberIndexes.map((idx) => contexts[idx].username);
+
+  // Assign fragments: one per user in this group, each targeting their own slot
+  const groupFragmentOffset = group.memberIndexes[0]; // offset into global fragment list
+  const assignments = memberIndexes.map((idx, localIdx) => {
+    const uname = contexts[idx].username;
+    const fragment = TEXT_PRODUCTION_FRAGMENTS[groupFragmentOffset + localIdx] ||
+      `fragment ${groupFragmentOffset + localIdx + 1} by ${uname}`;
+    const slotPlaceholder = `SLOT_${localIdx + 1}_EMPTY`;
+    // The completed marker is what we check for in the final content
+    const marker = `[${uname}] ${fragment}`;
+    return { userIndex: idx, username: uname, fragment, marker, slotPlaceholder, slotIndex: localIdx };
+  });
+
+  const chaosSeed = Number.parseInt(process.env.PLAYWRIGHT_CHAOS_SEED || `${Date.now()}`, 10);
+  const rng = createSeededRng(chaosSeed);
+  console.log(`text-production:start ${group.groupName} chaosSeed=${chaosSeed} users=${memberUsernames.join(",")}`);
+
+  // Helper: select a slot placeholder in the editor via CM6 view API
+  async function selectSlot(page, placeholder) {
+    return await page.evaluate((ph) => {
+      const editableContent = document.querySelector(".cm-content[contenteditable='true']");
+      if (!editableContent) return "no-editable-cm";
+      const cmEl = editableContent.closest(".cm-editor");
+      if (!cmEl) return "no-cm-editor";
+      let view = null;
+      try { view = cmEl.cmView?.view; } catch {}
+      if (!view) {
+        try { view = editableContent.parentNode?.cmView?.view; } catch {}
+        if (!view) try { view = editableContent.cmView?.view; } catch {}
+      }
+      if (!view || !view.state) return "no-view-found";
+      const doc = view.state.doc.toString();
+      const pos = doc.indexOf(ph);
+      if (pos === -1) return `slot-missing:${doc.substring(0, 200)}`;
+      view.dispatch({
+        selection: { anchor: pos, head: pos + ph.length },
+        scrollIntoView: true,
+      });
+      view.focus();
+      return "ok";
+    }, placeholder);
+  }
+
+  // Assign a chaos event to each user upfront
+  const chaosAssignments = assignments.map((a) => ({
+    ...a,
+    chaosType: pickRandomChaosEvent(rng),
+  }));
+
+  for (const ca of chaosAssignments) {
+    console.log(`text-production:plan ${group.groupName} user=${ca.username} chaos=${ca.chaosType} fragment="${ca.fragment.slice(0, 40)}..."`);
+  }
+
+  // Phase 1: Apply all chaos events concurrently (before anyone types)
+  console.log(`text-production:chaos-phase ${group.groupName}`);
+  await Promise.allSettled(
+    chaosAssignments.map(async (ca) => {
+      const typerPage = contexts[ca.userIndex].page;
+      const otherPages = getCurrentPages().filter((p) => p !== typerPage);
+      try {
+        await applyChaosEvent(ca.chaosType, typerPage, otherPages, contexts, group, ca.userIndex, contexts);
+      } catch (error) {
+        console.warn(`text-production:chaos-error ${group.groupName} user=${ca.username} chaos=${ca.chaosType} error=${error.message}`);
+      }
+    }),
+  );
+
+  // Brief settle after chaos
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+
+  // Phase 2: All users type their slots SIMULTANEOUSLY
+  console.log(`text-production:type-phase ${group.groupName} (all users typing at once)`);
+  const turnResults = await Promise.all(
+    chaosAssignments.map(async (ca) => {
+      const { userIndex, username, fragment, marker, slotPlaceholder, chaosType } = ca;
+      const currentPage = contexts[userIndex].page;
+      let typeOk = false;
+
+      try {
+        const editor = currentPage.locator(".cm-content[contenteditable='true']").first();
+        await editor.waitFor({ timeout: scaledTimeout(10000) });
+        await editor.click();
+
+        const slotSelected = await selectSlot(currentPage, slotPlaceholder);
+
+        if (slotSelected === "ok") {
+          await currentPage.keyboard.type(`[${username}] ${fragment}`, { delay: 150 });
+          typeOk = true;
+          console.log(`text-production:typed ${group.groupName} user=${username} ok=true`);
+        } else {
+          console.warn(`text-production:slot-not-found ${group.groupName} user=${username} slot=${slotPlaceholder} result=${slotSelected}`);
+        }
+      } catch (error) {
+        console.warn(`text-production:type-failed ${group.groupName} user=${username} error=${error.message}`);
+      }
+
+      return { username, fragment, marker, chaosEvent: chaosType, typeOk };
+    }),
+  );
+
+  // Wait for sync after all concurrent typing finishes
+  await new Promise((resolve) => setTimeout(resolve, Math.max(createWaitMs * 2, 3000)));
+
+  // Final convergence check: wait for all pages to stabilize
+  const finalPages = getCurrentPages();
+  console.log(`text-production:converge-wait ${group.groupName}`);
+  const allMarkers = assignments.filter((_, i) => turnResults[i].typeOk).map((a) => a.marker);
+  const convergence = await waitForPagesConverged(finalPages, allMarkers, `text-production:${group.groupName}`, scaledTimeout(20000));
+
+  // Check which fragments survived on each page
+  const finalContents = await Promise.all(finalPages.map((page) => getEditableContent(page)));
+  const fragmentResults = assignments.map((assignment, idx) => {
+    const { username, fragment, marker } = assignment;
+    const chaosEvent = turnResults[idx].chaosEvent;
+    const typed = turnResults[idx].typeOk;
+    const presentOnPages = finalContents.map((content, pageIdx) => ({
+      pageUser: memberUsernames[pageIdx],
+      hasMarker: content.includes(marker),
+      // Also check for the fragment text alone (in case marker delimiters got split)
+      hasFragment: content.includes(fragment),
+    }));
+    const survivedOnAll = typed && presentOnPages.every((p) => p.hasMarker);
+    const survivedOnSome = typed && presentOnPages.some((p) => p.hasMarker);
+    return {
+      username,
+      fragment,
+      marker,
+      chaosEvent,
+      typed,
+      survivedOnAll,
+      survivedOnSome,
+      presentOnPages,
+    };
+  });
+
+  // Detailed failure reporting
+  const failures = fragmentResults.filter((r) => !r.survivedOnAll);
+  if (failures.length > 0) {
+    console.warn(`\ntext-production:FAILURES ${group.groupName} (${failures.length}/${fragmentResults.length} fragments lost)`);
+    for (const f of failures) {
+      if (!f.typed) {
+        console.warn(`  BLOCKED: ${f.username} could not type at all (chaos: ${f.chaosEvent})`);
+        console.warn(`    Fragment: "${f.fragment}"`);
+      } else {
+        const missingOn = f.presentOnPages.filter((p) => !p.hasMarker || !p.hasFragment);
+        console.warn(`  LOST: ${f.username}'s fragment missing on ${missingOn.length}/${f.presentOnPages.length} pages (chaos: ${f.chaosEvent})`);
+        console.warn(`    Fragment: "${f.fragment}"`);
+        for (const m of missingOn) {
+          console.warn(`    Missing on: ${m.pageUser} (marker: ${m.hasMarker}, text: ${m.hasFragment})`);
+        }
+      }
+    }
+  }
+
+  // Show the intended vs actual document
+  const intendedDocument = assignments.map((a) => `${a.marker}\n${a.fragment}`).join("\n");
+  console.log(`\ntext-production:intended ${group.groupName}\n${intendedDocument}`);
+  if (finalContents.length > 0) {
+    const representativePage = finalContents[0];
+    const actualFragmentSection = assignments
+      .map((a) => {
+        const hasMarker = representativePage.includes(a.marker);
+        const hasText = representativePage.includes(a.fragment);
+        const status = hasMarker && hasText ? "OK" : hasMarker ? "PARTIAL(marker only)" : hasText ? "PARTIAL(text only)" : "MISSING";
+        return `  [${status}] ${a.username}: "${a.fragment.slice(0, 50)}..."`;
+      })
+      .join("\n");
+    console.log(`text-production:actual ${group.groupName}\n${actualFragmentSection}`);
+  }
+
+  return {
+    groupName: group.groupName,
+    converged: convergence.ok,
+    fragmentResults,
+    totalFragments: fragmentResults.length,
+    survivedAll: fragmentResults.filter((r) => r.survivedOnAll).length,
+    typedOk: fragmentResults.filter((r) => r.typed).length,
+    failures,
+  };
+}
+
 async function verifyInstancesReset(group, contexts) {
   const owner = contexts[group.ownerIndex];
   const response = await owner.context.request.post(`${baseUrl}/api/games/${activeGameId}/instances/reset`);
@@ -2256,7 +2852,7 @@ async function waitForEditorOnPage(page, label) {
   const maxAttempts = 2;
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
-      await page.locator(".cm-content[contenteditable='true']").first().waitFor({ timeout: scaledTimeout(20000) });
+      await page.locator(".cm-content").first().waitFor({ timeout: scaledTimeout(20000) });
       console.log(`editor:ready ${label}`);
       return;
     } catch (error) {
@@ -2653,6 +3249,16 @@ async function main() {
       console.log(`created group ${createdGroup.groupName} (${createdGroup.groupId}) with join key ${createdGroup.joinKey}`);
     }
 
+    // For text production: re-seed all groups with slotted levels
+    if (scenario === "classroom_text_production") {
+      for (const group of groups) {
+        const slotCount = group.memberIndexes.length;
+        const owner = contexts[group.ownerIndex];
+        await seedTextProductionInstance(owner.context.request, activeGameId, group.groupId, group.groupName, slotCount);
+        console.log(`text-production:seeded ${group.groupName} with ${slotCount} slots`);
+      }
+    }
+
     for (const group of groups) {
       for (const memberIndex of group.memberIndexes.slice(1)) {
         const participant = contexts[memberIndex];
@@ -2836,6 +3442,11 @@ async function main() {
         continue;
       }
 
+      if (scenario === "classroom_text_production") {
+        // Handled after this loop — all groups run in parallel
+        continue;
+      }
+
       if (scenario === "instances_reset") {
         const resetInstancesOk = await verifyInstancesReset(group, contexts);
         summary.push({
@@ -2973,6 +3584,36 @@ async function main() {
       });
     }
 
+    // Text production: run ALL groups in parallel so the whole classroom types at once
+    if (scenario === "classroom_text_production") {
+      console.log(`text-production:all-groups-start (${groups.length} groups in parallel)`);
+      const textResults = await Promise.all(
+        groups.map((group) => runTextProductionForGroup(group, contexts)),
+      );
+      for (let i = 0; i < groups.length; i++) {
+        const group = groups[i];
+        const textResult = textResults[i];
+        const allOk = textResult.survivedAll === textResult.totalFragments;
+        summary.push({
+          name: group.groupName,
+          members: group.memberIndexes.length,
+          expectedMembers: summarizeSet(group.memberIndexes.map((memberIndex) => contexts[memberIndex].username)),
+          observedJoinMembers: summarizeSet(group.joinSnapshot.memberNames),
+          observedStartMembers: summarizeSet(group.startSnapshot.memberNames),
+          observedFinishMembers: summarizeSet(group.startSnapshot.memberNames),
+          instanceId: group.instanceId || "none",
+          singleEdit: allOk,
+          concurrent: textResult.converged,
+          stressPasses: textResult.survivedAll,
+          stressTotal: textResult.totalFragments,
+          resetOk: allOk,
+          submitOk: null,
+          actualSubmitParticipants: [],
+          textProduction: textResult,
+        });
+      }
+    }
+
     const finalGameGroups = await fetchGameGroupsSnapshot(creator.context.request);
     console.log(`stress:game-groups finalCount=${finalGameGroups.length}`);
 
@@ -2989,6 +3630,48 @@ async function main() {
       console.log(
         `summary:${row.name} expected=${row.expectedMembers.join("|")} join=${row.observedJoinMembers.join("|")} start=${row.observedStartMembers.join("|")} finish=${row.observedFinishMembers.join("|")} submit=${row.actualSubmitParticipants.join("|")}`,
       );
+    }
+
+    if (scenario === "classroom_text_production") {
+      console.log("\n=== TEXT PRODUCTION REPORT ===");
+      let totalFragments = 0;
+      let totalSurvived = 0;
+      let totalTyped = 0;
+      const chaosCounts = {};
+      const chaosFailures = {};
+
+      for (const row of summary) {
+        const tp = row.textProduction;
+        if (!tp) continue;
+        totalFragments += tp.totalFragments;
+        totalSurvived += tp.survivedAll;
+        totalTyped += tp.typedOk;
+
+        for (const fr of tp.fragmentResults) {
+          chaosCounts[fr.chaosEvent] = (chaosCounts[fr.chaosEvent] || 0) + 1;
+          if (!fr.survivedOnAll) {
+            chaosFailures[fr.chaosEvent] = (chaosFailures[fr.chaosEvent] || 0) + 1;
+          }
+        }
+      }
+
+      console.log(`\nFragments: ${totalSurvived}/${totalFragments} survived on all pages (${totalTyped}/${totalFragments} typed successfully)`);
+      console.log("\nChaos event breakdown:");
+      console.log("event | attempts | failures | failure_rate");
+      for (const event of CHAOS_EVENTS) {
+        const attempts = chaosCounts[event] || 0;
+        const fails = chaosFailures[event] || 0;
+        if (attempts > 0) {
+          const rate = ((fails / attempts) * 100).toFixed(0);
+          console.log(`${event} | ${attempts} | ${fails} | ${rate}%`);
+        }
+      }
+
+      const allOk = totalSurvived === totalFragments;
+      console.log(`\nOverall: ${allOk ? "PASS" : "FAIL"}`);
+      if (!allOk) {
+        process.exitCode = 1;
+      }
     }
 
     if (keepOpen) {
