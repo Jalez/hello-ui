@@ -15,7 +15,7 @@ export interface Game {
   access_key_required: boolean;
   access_key: string | null;
   collaboration_mode: "individual" | "group";
-  allow_duplicate_group_users: boolean;
+  allow_duplicate_users: boolean;
   is_owner?: boolean;
   is_collaborator?: boolean;
   can_edit?: boolean;
@@ -46,7 +46,7 @@ export interface UpdateGameOptions {
   accessKeyRequired?: boolean;
   accessKey?: string | null;
   collaborationMode?: "individual" | "group";
-  allowDuplicateGroupUsers?: boolean;
+  allowDuplicateUsers?: boolean;
 }
 
 export interface GameCollaborator {

@@ -1549,7 +1549,7 @@ async function createGroupModeGame(request, creatorUsername) {
     data: {
       collaborationMode: "group",
       ...((scenario === "same_user_duplicate" || flags.openExtraTabCount > 0)
-        ? { allowDuplicateUsersInGroup: true }
+        ? { allowDuplicateUsers: true }
         : {}),
       isPublic: true,
       title,

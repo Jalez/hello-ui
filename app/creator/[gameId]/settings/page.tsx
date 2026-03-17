@@ -48,7 +48,7 @@ type SettingsDraft = {
   description: string;
   isPublic: boolean;
   collaborationMode: "individual" | "group";
-  allowDuplicateUsersInGroup: boolean;
+  allowDuplicateUsers: boolean;
   thumbnailUrl: string;
   hideSidebar: boolean;
   accessWindowEnabled: boolean;
@@ -86,7 +86,7 @@ function createDraft(game: {
   description?: string | null;
   isPublic: boolean;
   collaborationMode: "individual" | "group";
-  allowDuplicateUsersInGroup?: boolean;
+  allowDuplicateUsers?: boolean;
   thumbnailUrl: string | null;
   hideSidebar: boolean;
   accessWindowEnabled: boolean;
@@ -99,7 +99,7 @@ function createDraft(game: {
     description: game.description ?? "",
     isPublic: game.isPublic,
     collaborationMode: game.collaborationMode,
-    allowDuplicateUsersInGroup: game.allowDuplicateUsersInGroup === true,
+    allowDuplicateUsers: game.allowDuplicateUsers !== false,
     thumbnailUrl: game.thumbnailUrl ?? "",
     hideSidebar: game.hideSidebar,
     accessWindowEnabled: game.accessWindowEnabled,
@@ -242,7 +242,7 @@ export default function CreatorSettingsPage({ params }: CreatorSettingsPageProps
         description: draft.description.trim() || null,
         isPublic: draft.isPublic,
         collaborationMode: draft.collaborationMode,
-        allowDuplicateUsersInGroup: draft.allowDuplicateUsersInGroup,
+        allowDuplicateUsers: draft.allowDuplicateUsers,
         thumbnailUrl: draft.thumbnailUrl.trim() || null,
         hideSidebar: draft.hideSidebar,
         accessWindowEnabled: draft.accessWindowEnabled,
@@ -488,29 +488,29 @@ export default function CreatorSettingsPage({ params }: CreatorSettingsPageProps
                   Group
                 </Button>
               </div>
-              {draft.collaborationMode === "group" && (
-                <div className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 space-y-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-medium">Allow duplicate users in group mode</p>
-                      <p className="text-xs text-muted-foreground">
-                        Off by default. Keep this off unless you explicitly need multiple sessions for the same account.
-                      </p>
-                    </div>
-                    <Switch
-                      checked={draft.allowDuplicateUsersInGroup}
-                      onCheckedChange={(checked) => {
-                        setDraft((current) => (current ? { ...current, allowDuplicateUsersInGroup: checked } : current));
-                        setSaveSuccess(null);
-                      }}
-                    />
+              <div className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium">Allow duplicate users</p>
+                    <p className="text-xs text-muted-foreground">
+                      On by default. Allows multiple browser sessions for the same account.
+                    </p>
                   </div>
-                  <p className="text-xs text-amber-700">
-                    Warning: enabling duplicate users can cause unstable collaboration behavior and desyncs. If duplicates are blocked,
-                    players should turn group submission off in A+ and launch individually.
-                  </p>
+                  <Switch
+                    checked={draft.allowDuplicateUsers}
+                    onCheckedChange={(checked) => {
+                      setDraft((current) => (current ? { ...current, allowDuplicateUsers: checked } : current));
+                      setSaveSuccess(null);
+                    }}
+                  />
                 </div>
-              )}
+                {!draft.allowDuplicateUsers && (
+                  <p className="text-xs text-amber-700">
+                    Duplicate sessions are blocked. Players opening a second browser tab or window will be disconnected.
+                    {draft.collaborationMode === "group" && " In group mode, this also blocks the same account from joining multiple group rooms."}
+                  </p>
+                )}
+              </div>
             </CardContent>
           </Card>
 

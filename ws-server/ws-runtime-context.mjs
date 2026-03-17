@@ -15,7 +15,7 @@
  * @property {(roomId: string, state: any) => object} serializeRoomStateSync
  * @property {(roomId: string, state: any) => (object | null)} serializeGroupStartSync
  * @property {(gameId: string, baseUserData: any, targetRoomId: string) => Array<any>} findDuplicateUsersInGame
- * @property {(gameId: string) => Promise<boolean>} isDuplicateGroupUserAllowed
+ * @property {(gameId: string) => Promise<boolean>} isDuplicateUserAllowed
  * @property {(roomId: string, userData: any) => { effectiveUserId: string, effectiveUserName?: string, duplicateIndex: number }} resolveDuplicateIdentity
  * @property {(roomId: string, type: string, payload: any, excludeSocket?: import("ws").WebSocket | null) => void} broadcastToRoom
  * @property {(reason: string, roomId: string, extra?: object) => void} logRoomSnapshot

@@ -37,7 +37,7 @@ async function handleJoinGame({ socket, data, socketId, resolveRoomId, ctx }) {
     accountUserEmail: data.userEmail || "",
   };
   const existingDuplicates = ctx.findDuplicateUsersInGame(gameId, baseUserData, roomId);
-  if (gameId && existingDuplicates.length > 0 && !await ctx.isDuplicateGroupUserAllowed(gameId)) {
+  if (gameId && existingDuplicates.length > 0 && !await ctx.isDuplicateUserAllowed(gameId)) {
     const conflictingUser = existingDuplicates[0];
     const attemptedLabel = baseUserData.userName || baseUserData.userEmail || "this account";
     const attemptedEmail = baseUserData.userEmail ? ` (${baseUserData.userEmail})` : "";
@@ -52,8 +52,8 @@ async function handleJoinGame({ socket, data, socketId, resolveRoomId, ctx }) {
     const duplicateError =
       `This browser is being identified as ${JSON.stringify(`${attemptedLabel}${attemptedEmail}`)}, ` +
       `but ${JSON.stringify(`${conflictingLabel}${conflictingEmail}`)} is already connected in this game. ` +
-      `Turn group submission off from the A+ navbar setting, or ask the creator to enable duplicate users in Game Settings. ` +
-      `Allowing duplicates may cause instability and desyncs.`;
+      `Ask the creator to enable duplicate users in Game Settings, or turn group submission off from the A+ navbar setting. ` +
+      `Allowing duplicates may cause instability and desyncs in group mode.`;
     const duplicateCloseReason =
       `Identified as ${attemptedSummary}; ${conflictingSummary} is already connected.`;
     ctx.sendMessage(socket, "error", {

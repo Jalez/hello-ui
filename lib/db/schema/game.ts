@@ -73,7 +73,7 @@ export const projects = pgTable(
     accessKeyRequired: boolean("access_key_required").default(false).notNull(),
     accessKey: text("access_key"),
     collaborationMode: text("collaboration_mode").default("individual").notNull(),
-    allowDuplicateGroupUsers: boolean("allow_duplicate_group_users").default(false).notNull(),
+    allowDuplicateUsers: boolean("allow_duplicate_users").default(true).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },

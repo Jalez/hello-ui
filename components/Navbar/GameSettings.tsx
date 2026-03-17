@@ -180,7 +180,7 @@ export const GameSettingsButton = ({ displayMode = "icon" }: GameSettingsButtonP
 
   const handleToggleDuplicateUsers = useCallback(async () => {
     if (!game) return;
-    await updateGame(game.id, { allowDuplicateUsersInGroup: !game.allowDuplicateUsersInGroup });
+    await updateGame(game.id, { allowDuplicateUsers: !game.allowDuplicateUsers });
   }, [game, updateGame]);
 
   const handleToggleSidebar = useCallback(async () => {
@@ -408,26 +408,25 @@ export const GameSettingsButton = ({ displayMode = "icon" }: GameSettingsButtonP
             <p className="text-xs text-muted-foreground">
               Group mode routes users with a group to a shared multiplayer workspace. Individual mode keeps everyone in their own instance.
             </p>
-            {game.collaborationMode === "group" && (
-              <div className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 space-y-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-medium">Allow duplicate users</p>
-                    <p className="text-xs text-muted-foreground">
-                      Off by default. Only enable this if you need multiple sessions for the same account.
-                    </p>
-                  </div>
-                  <Switch
-                    checked={game.allowDuplicateUsersInGroup}
-                    onCheckedChange={handleToggleDuplicateUsers}
-                  />
+            <div className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium">Allow duplicate users</p>
+                  <p className="text-xs text-muted-foreground">
+                    On by default. Allows multiple browser sessions for the same account.
+                  </p>
                 </div>
-                <p className="text-xs text-amber-700">
-                  Warning: allowing duplicate users may cause unstable collaboration behavior and desyncs. If duplicates are blocked,
-                  advise players to turn group submission off in A+.
-                </p>
+                <Switch
+                  checked={game.allowDuplicateUsers}
+                  onCheckedChange={handleToggleDuplicateUsers}
+                />
               </div>
-            )}
+              {!game.allowDuplicateUsers && (
+                <p className="text-xs text-amber-700">
+                  Duplicate sessions are blocked. Players opening a second browser tab or window will be disconnected.
+                </p>
+              )}
+            </div>
           </div>
 
           <div className="space-y-1">

@@ -11,9 +11,9 @@ export function createDuplicateIdentityService({
     return name || email || userId || "Anonymous";
   }
 
-  async function isDuplicateGroupUserAllowed(gameId) {
+  async function isDuplicateUserAllowed(gameId) {
     if (!gameId) {
-      return false;
+      return true;
     }
 
     const now = Date.now();
@@ -23,23 +23,23 @@ export function createDuplicateIdentityService({
     }
 
     if (!dbPool) {
-      return false;
+      return true;
     }
 
     try {
       const result = await dbPool.query(
-        "SELECT allow_duplicate_group_users FROM projects WHERE id = $1 LIMIT 1",
+        "SELECT allow_duplicate_users FROM projects WHERE id = $1 LIMIT 1",
         [gameId],
       );
-      const value = result.rows[0]?.allow_duplicate_group_users === true;
+      const value = result.rows[0]?.allow_duplicate_users !== false;
       gameDuplicateSettingsCache.set(gameId, {
         value,
         expiresAt: now + gameDuplicateSettingsTtlMs,
       });
       return value;
     } catch (error) {
-      console.error("[duplicate-group-users:lookup-error]", error);
-      return false;
+      console.error("[duplicate-users:lookup-error]", error);
+      return true;
     }
   }
 
@@ -132,7 +132,7 @@ export function createDuplicateIdentityService({
   }
 
   return {
-    isDuplicateGroupUserAllowed,
+    isDuplicateUserAllowed,
     resolveDuplicateIdentity,
     findDuplicateUsersInGame,
   };

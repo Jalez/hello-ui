@@ -130,7 +130,7 @@ const {
 });
 
 const {
-  isDuplicateGroupUserAllowed,
+  isDuplicateUserAllowed,
   resolveDuplicateIdentity,
   findDuplicateUsersInGame,
 } = createDuplicateIdentityService({
@@ -720,7 +720,7 @@ const wsRuntimeContext = {
   serializeRoomStateSync,
   serializeGroupStartSync,
   findDuplicateUsersInGame,
-  isDuplicateGroupUserAllowed,
+  isDuplicateUserAllowed,
   resolveDuplicateIdentity,
   broadcastToRoom,
   logRoomSnapshot,

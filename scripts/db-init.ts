@@ -35,6 +35,7 @@ const WEBHOOK_SCHEMA = resolve(SCRIPT_DIR, "sql/webhook-schema.sql");
 const AI_SCHEMA = resolve(SCRIPT_DIR, "sql/ai-schema.sql");
 const LTI_CREDENTIALS_SCHEMA = resolve(SCRIPT_DIR, "sql/lti-credentials-schema.sql");
 const DROP_MAP_LEVEL_POINTS_MIGRATION = resolve(SCRIPT_DIR, "sql/drop-map-level-points.sql");
+const DUPLICATE_USERS_MIGRATION = resolve(SCRIPT_DIR, "sql/duplicate-users-migration.sql");
 
 // Extract database name from DATABASE_URL for creation check
 const dbUrlMatch = DATABASE_URL.match(/\/([^/?]+)(\?|$)/);
@@ -123,6 +124,9 @@ async function initializeDatabase() {
 
     console.log("");
     console.log("🗂️  Step 5/9: Applying projects schema (projects table)...");
+    const duplicateUsersMigrationSQL = readFileSync(DUPLICATE_USERS_MIGRATION, "utf-8");
+    // Run column rename migration before projects-schema.sql so ADD COLUMN IF NOT EXISTS is a no-op
+    try { await client.query(duplicateUsersMigrationSQL); } catch { /* table may not exist yet */ }
     const projectsSQL = readFileSync(PROJECTS_SCHEMA, "utf-8");
     await client.query(projectsSQL);
 

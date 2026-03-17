@@ -43,6 +43,26 @@ async function main() {
 
   const sqlDir = path.join(__dirname, "scripts", "sql");
 
+  // Pre-migrations: run before main schemas to handle column renames
+  // so that ADD COLUMN IF NOT EXISTS in the schema files is a no-op.
+  const preMigrations = [
+    "duplicate-users-migration.sql",
+  ];
+
+  for (const file of preMigrations) {
+    const filePath = path.join(sqlDir, file);
+    if (fs.existsSync(filePath)) {
+      try {
+        const sql = fs.readFileSync(filePath, "utf8");
+        await pool.query(sql);
+        console.log(`  [ok]    ${file} (pre-migration)`);
+      } catch {
+        // Table may not exist yet on fresh install — that's fine
+        console.log(`  [skip]  ${file} (pre-migration, table not ready)`);
+      }
+    }
+  }
+
   const required = [
     "users-schema.sql",
     "credits-schema.sql",
