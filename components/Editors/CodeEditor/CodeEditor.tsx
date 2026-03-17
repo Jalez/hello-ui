@@ -13,6 +13,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTheme } from "next-themes";
 
 import EditorMagicButton from "@/components/CreatorControls/EditorMagicButton";
+import { logCollaborationStep } from "@/lib/collaboration/logCollaborationStep";
 import { useAppSelector } from "@/store/hooks/hooks";
 import { useGameplayTelemetry } from "@/components/General/useGameplayTelemetry";
 import { useOptionalCollaboration } from "@/lib/collaboration/CollaborationProvider";
@@ -34,6 +35,11 @@ import { titleToEditorType } from "./utils";
 
 const lineNumberCompartment = new Compartment();
 
+/**
+ * COLLABORATION STEP 3.3:
+ * Minimal host component that mounts a CodeMirror instance against the shared
+ * Yjs-backed editor state prepared by the collaboration hook.
+ */
 function YjsEditorSurface({
   editorProps,
   editorKey,
@@ -45,6 +51,7 @@ function YjsEditorSurface({
   editorInitialState: { json: unknown };
   style: React.CSSProperties;
 }) {
+  logCollaborationStep("3.3", "YjsEditorSurface render", { editorKey });
   const hostRef = useRef<HTMLDivElement | null>(null);
   const { setContainer } = useCodeMirror({
     ...editorProps,
@@ -60,6 +67,12 @@ function YjsEditorSurface({
   return <div key={editorKey} ref={hostRef} style={style} />;
 }
 
+/**
+ * COLLABORATION STEP 3.4:
+ * Top-level code editor component. In collaboration mode it delegates shared
+ * editing to the Yjs hook while still handling review UI, telemetry, and the
+ * local-to-Redux bridge used elsewhere in the app.
+ */
 export default function CodeEditor({
   lang = html(),
   title = "HTML",
@@ -69,6 +82,12 @@ export default function CodeEditor({
   type = "Template",
   levelIdentifier,
 }: CodeEditorProps) {
+  logCollaborationStep("3.4", "CodeEditor render", {
+    title,
+    type,
+    levelIdentifier,
+    locked,
+  });
   const [code, setCode] = useState(template);
   const currentLevel = useAppSelector((state) => state.currentLevel.currentLevel);
   const options = useAppSelector((state) => state.options);
@@ -129,6 +148,8 @@ export default function CodeEditor({
       : undefined,
   });
   const editorType = titleToEditorType(title);
+  const collaborationReady = !isYjsManaged || collaboration?.yjsReady !== false;
+  const showCollaborationRecoveryOverlay = isYjsManaged && !locked && !collaborationReady;
 
   useEffect(() => {
     const view = editorViewRef.current;
@@ -230,8 +251,8 @@ export default function CodeEditor({
   const editableEditorProps: ReactCodeMirrorProps = {
     extensions: [
       lang,
-      EditorState.readOnly.of(locked),
-      EditorView.editable.of(!locked),
+      EditorState.readOnly.of(locked || !collaborationReady),
+      EditorView.editable.of(!locked && collaborationReady),
       EditorView.lineWrapping,
       EditorView.domEventHandlers({
         paste: (event) => {
@@ -353,6 +374,17 @@ export default function CodeEditor({
             />
           )}
           {isConnected && <RemoteCaretsOverlay carets={remoteCarets} />}
+          {showCollaborationRecoveryOverlay && (
+            <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-background/45 backdrop-blur-sm">
+              <div className="flex items-center gap-3 rounded-full border border-border/70 bg-background/90 px-4 py-2 text-sm text-foreground shadow-lg shadow-black/10">
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary/25 border-t-primary" />
+                <div className="flex flex-col leading-tight">
+                  <span className="font-medium">Resyncing shared editor</span>
+                  <span className="text-xs text-muted-foreground">Changes will be ready in a moment</span>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {title === "HTML" && (
