@@ -23,9 +23,11 @@
  * @property {(value: string) => Uint8Array} decodeBase64Update
  * @property {(socket: import("ws").WebSocket, roomId: string, channel: "sync" | "awareness", encoder: any) => void} sendYjsProtocol
  * @property {(roomId: string, state: any, update: Uint8Array, socket: import("ws").WebSocket) => void} applyYjsAwarenessUpdate
+ * @property {(roomId: string, socket: import("ws").WebSocket) => void} cleanupSocketAwareness
  * @property {(socket: import("ws").WebSocket, roomId: string, state: any) => void} sendFullAwarenessState
  * @property {string[]} editorTypes
  * @property {(roomId: string) => Map<string, any>} getRoomClientHashes
+ * @property {(roomId: string, clientId: string) => void} removeClientStateHash
  * @property {(roomId: string, report: any) => Promise<void>} evaluateClientStateHashes
  * @property {Map<string, Map<import("ws").WebSocket, any>>} rooms
  * @property {(roomId: string, ctx: any) => void} markRoomDirty
@@ -39,6 +41,7 @@
  * @property {Map<string, any>} roomEditorState
  * @property {(roomId: string, state: any, generation: number) => any} createRoomYDoc
  * @property {(roomId: string) => number} getRoomYDocGeneration
+ * @property {(roomId: string) => number} advanceRoomYDocGeneration
  * @property {Map<string, { ctx: any, timer?: NodeJS.Timeout | null }>} roomWriteBuffer
  * @property {(ctx: any, levels: Array<any>) => Promise<{ ok: boolean, permanentFailure?: boolean }>} saveProgressToDB
  * @property {(roomId: string, state: any) => Array<any>} serializeCodeLevels

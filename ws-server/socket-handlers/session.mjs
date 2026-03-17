@@ -1,12 +1,23 @@
 import * as encoding from "lib0/encoding";
 import * as syncProtocol from "y-protocols/sync";
+import { logCollaborationStep } from "../log-collaboration-step.mjs";
 import { extractGameIdFromRoomId, isLobbyRoom, parseRoomContext } from "../room-context.mjs";
 
 /**
  * @typedef {import("../ws-runtime-context.mjs").WsRuntimeContext} WsRuntimeContext
  */
 
+/**
+ * COLLABORATION STEP 8.12:
+ * Admit a websocket client into the room. This server step validates identity,
+ * prevents forbidden duplicate sessions, loads the room snapshot, and sends back
+ * the first state and Yjs handshake packets that boot the collaborative session.
+ */
 async function handleJoinGame({ socket, data, socketId, resolveRoomId, ctx }) {
+  logCollaborationStep("8.12", "handleJoinGame", {
+    socketId,
+    requestedRoomId: data?.roomId ?? data?.groupId ?? null,
+  });
   const roomId = resolveRoomId(socket, data);
   if (!roomId) {
     return;
@@ -121,7 +132,16 @@ async function handleJoinGame({ socket, data, socketId, resolveRoomId, ctx }) {
   ctx.logRoomSnapshot("join", roomId, { by: socketId });
 }
 
+/**
+ * COLLABORATION STEP 19.5:
+ * Remove a socket from the room and clean up everything tied to that session,
+ * including awareness state and client hash tracking.
+ */
 async function handleLeaveGame({ socket, data, socketId, resolveRoomId, ctx }) {
+  logCollaborationStep("19.5", "handleLeaveGame", {
+    socketId,
+    requestedRoomId: data?.roomId ?? data?.groupId ?? null,
+  });
   const roomId = resolveRoomId(socket, data);
   if (!roomId) {
     return;
@@ -131,10 +151,13 @@ async function handleLeaveGame({ socket, data, socketId, resolveRoomId, ctx }) {
   ctx.setConnectionState(socket, { roomId: null });
 
   if (userData) {
+    ctx.cleanupSocketAwareness(roomId, socket);
+    ctx.removeClientStateHash(roomId, userData.clientId);
     ctx.broadcastToRoom(
       roomId,
       "user-left",
       {
+        clientId: userData.clientId,
         userId: userData.userId,
         userEmail: userData.userEmail,
         userName: userData.userName,

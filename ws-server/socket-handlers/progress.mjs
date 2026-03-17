@@ -1,10 +1,20 @@
+import { logCollaborationStep } from "../log-collaboration-step.mjs";
 import { extractGroupIdFromRoomId, parseRoomContext } from "../room-context.mjs";
 
 /**
  * @typedef {import("../ws-runtime-context.mjs").WsRuntimeContext} WsRuntimeContext
  */
 
+/**
+ * COLLABORATION STEP 18.8:
+ * Send one client a fresh room snapshot when it asks for recovery or suspects it
+ * missed authoritative room metadata.
+ */
 async function handleRequestRoomStateSync({ socket, data, socketId, resolveRoomId, ctx }) {
+  logCollaborationStep("18.8", "handleRequestRoomStateSync", {
+    socketId,
+    reason: data?.reason ?? null,
+  });
   const roomId = resolveRoomId(socket, data);
   if (!roomId) {
     return;
@@ -27,7 +37,16 @@ async function handleRequestRoomStateSync({ socket, data, socketId, resolveRoomI
   );
 }
 
+/**
+ * COLLABORATION STEP 18.9:
+ * Merge shared non-code progress data into the room state and rebroadcast it to
+ * the rest of the group so room metadata stays aligned with the shared code.
+ */
 async function handleProgressSync({ socket, data, socketId, resolveRoomId, ctx }) {
+  logCollaborationStep("18.9", "handleProgressSync", {
+    socketId,
+    keys: Object.keys(data?.progressData ?? {}),
+  });
   const roomId = resolveRoomId(socket, data);
   if (!roomId) {
     return;
@@ -77,7 +96,17 @@ async function handleProgressSync({ socket, data, socketId, resolveRoomId, ctx }
   }
 }
 
+/**
+ * COLLABORATION STEP 18.10:
+ * Coordinate the "everyone is ready" gate for group play. This is adjacent to
+ * code sync because it changes shared room state and can trigger a room resync.
+ */
 async function handleGroupStart({ socket, data, envelope, socketId, resolveRoomId, ctx }) {
+  logCollaborationStep("18.10", "handleGroupStart", {
+    socketId,
+    messageType: envelope.type,
+    userId: data?.userId ?? null,
+  });
   const roomId = resolveRoomId(socket, data);
   if (!roomId) {
     return;
@@ -167,7 +196,17 @@ async function handleGroupStart({ socket, data, envelope, socketId, resolveRoomI
   });
 }
 
+/**
+ * COLLABORATION STEP 18.11:
+ * Perform a hard reset of one level or the full game, rebuild the room's shared
+ * Yjs document, persist the new baseline, and broadcast the reset to the room.
+ */
 async function handleResetRoomState({ socket, data, socketId, resolveRoomId, ctx }) {
+  logCollaborationStep("18.11", "handleResetRoomState", {
+    socketId,
+    scope: data?.scope ?? null,
+    levelIndex: data?.levelIndex ?? null,
+  });
   const roomId = resolveRoomId(socket, data);
   if (!roomId) {
     return;

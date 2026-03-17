@@ -10,6 +10,7 @@ import * as awarenessProtocol from "y-protocols/awareness";
 import pg from "pg";
 import dotenv from "dotenv";
 import { createWsApiClient } from "./api-client.mjs";
+import { logCollaborationStep } from "./log-collaboration-step.mjs";
 import {
   createLevelState,
   createRoomState,
@@ -52,6 +53,7 @@ const API_BASE_URL = process.env.API_BASE_URL || "http://localhost:3000";
 const WS_SERVICE_TOKEN = process.env.WS_SERVICE_TOKEN || (process.env.NODE_ENV !== "production" ? "ws-service-secret" : "");
 const WRITE_BUFFER_FLUSH_MS = 5000;
 const WRITE_BUFFER_QUIET_MS = WRITE_BUFFER_FLUSH_MS;
+const WRITE_DIRTY_WARN_THRESHOLD = 25;
 const EDITOR_TYPES = ["html", "css", "js"];
 const GROUP_START_MIN_READY_COUNT = 2;
 const WS_ARTIFICIAL_DELAY_MS = parseInt(process.env.WS_ARTIFICIAL_DELAY_MS || "0", 10);
@@ -60,7 +62,7 @@ const GAME_DUPLICATE_SETTINGS_TTL_MS = 10000;
 const CLIENT_HASH_TTL_MS = 10000;
 const DIVERGENCE_PERSIST_MS = 1500;
 const DIVERGENCE_REPEAT_THRESHOLD = 2;
-const DIVERGENCE_RESYNC_COOLDOWN_MS = 5000;
+const DIVERGENCE_RESYNC_COOLDOWN_MS = 2000;
 const DATABASE_URL = process.env.DATABASE_URL || process.env.POSTGRES_URL || "";
 const dbPool = DATABASE_URL ? new pg.Pool({ connectionString: DATABASE_URL }) : null;
 const {
@@ -91,6 +93,7 @@ const roomWriteBuffer = new Map();
 const roomClientStateHashes = new Map();
 const roomDivergenceState = new Map();
 const roomLastSavedSnapshots = new Map();
+const roomStateLoadPromises = new Map();
 
 const {
   getRoomUsers,
@@ -143,6 +146,7 @@ const {
   isYjsEnabled,
   decodeBase64Update,
   getRoomYDocGeneration,
+  advanceRoomYDocGeneration,
   sendYjsProtocol,
   broadcastYjsProtocol,
   createRoomYDoc,
@@ -202,11 +206,25 @@ const serializeCodeLevels = (roomId, state) => serializeCodeLevelsForRoom(
   },
 );
 
+/**
+ * COLLABORATION STEP 7.1:
+ * Small delay helper used only when intentionally simulating lag during debugging.
+ */
 function sleep(ms) {
+  logCollaborationStep("7.1", "sleep", { ms });
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * COLLABORATION STEP 7.2:
+ * Optionally slow down message handling to reproduce race conditions and desyncs
+ * under controlled artificial latency.
+ */
 async function maybeDelaySocketHandling() {
+  logCollaborationStep("7.2", "maybeDelaySocketHandling", {
+    artificialDelayMs: WS_ARTIFICIAL_DELAY_MS,
+    artificialJitterMs: WS_ARTIFICIAL_JITTER_MS,
+  });
   if (WS_ARTIFICIAL_DELAY_MS <= 0 && WS_ARTIFICIAL_JITTER_MS <= 0) {
     return;
   }
@@ -230,6 +248,8 @@ const {
   ensureRoomState,
   parseRoomContext,
   serializeRoomStateSync,
+  serializeCodeLevels,
+  advanceRoomYDocGeneration,
   getOrCreateYDoc,
   broadcastYjsProtocol,
   syncProtocol,
@@ -278,76 +298,114 @@ function invalidateGameInstanceRooms(gameId, payload = {}) {
   return { roomIds, invalidatedRoomCount: matchingRooms.length, disconnectedSocketCount: socketsToClose.length };
 }
 
+/**
+ * COLLABORATION STEP 8.13:
+ * Load or create the authoritative server-side room state for this collaboration
+ * session. This is where persisted progress, template levels, and the room's Yjs
+ * document are aligned before edits are processed.
+ */
 async function ensureRoomState(roomId, ctx) {
+  logCollaborationStep("8.13", "ensureRoomState", {
+    roomId,
+    kind: ctx.kind,
+  });
   const existing = roomEditorState.get(roomId);
   if (existing) {
     existing.ctx = ctx;
     return existing;
   }
 
-  if (ctx.kind === "creator") {
-    const creatorLevels = await fetchCreatorLevels(ctx);
-    const nextState = createRoomState(ctx, { levels: creatorLevels }, {
-      templateLevels: creatorLevels,
-      mapName: ctx.mapName,
-      instanceId: null,
-    });
+  const pendingLoad = roomStateLoadPromises.get(roomId);
+  if (pendingLoad) {
+    return pendingLoad;
+  }
+
+  const loadPromise = (async () => {
+    const latestExisting = roomEditorState.get(roomId);
+    if (latestExisting) {
+      latestExisting.ctx = ctx;
+      return latestExisting;
+    }
+
+    if (ctx.kind === "creator") {
+      const creatorLevels = await fetchCreatorLevels(ctx);
+      const nextState = createRoomState(ctx, { levels: creatorLevels }, {
+        templateLevels: creatorLevels,
+        mapName: ctx.mapName,
+        instanceId: null,
+      });
+      roomEditorState.set(roomId, nextState);
+      getOrCreateYDoc(roomId, nextState);
+      return nextState;
+    }
+
+    const instanceSnapshot = await fetchInstanceSnapshotFromDB(ctx);
+    const progressData =
+      instanceSnapshot?.progressData && typeof instanceSnapshot.progressData === "object" && !Array.isArray(instanceSnapshot.progressData)
+        ? instanceSnapshot.progressData
+        : {};
+    const mapName = typeof instanceSnapshot?.mapName === "string" ? instanceSnapshot.mapName : "";
+    const templateLevels = mapName ? await fetchLevelsForMapName(mapName) : [];
+    const progressLevels = Array.isArray(progressData.levels) ? progressData.levels : [];
+
+    const normalizedLevels =
+      templateLevels.length > 0
+        ? mergeTemplateAndProgressLevels(templateLevels, progressLevels)
+        : progressLevels;
+
+    const finalLevels =
+      normalizedLevels.length > 0
+        ? normalizedLevels
+        : [createStarterLevel(mapName)];
+
+    const nextState = createRoomState(
+      ctx,
+      {
+        ...progressData,
+        levels: finalLevels,
+      },
+      {
+        templateLevels,
+        mapName,
+        instanceId: instanceSnapshot?.instanceId ?? null,
+      }
+    );
+    ensureGroupStartGate(nextState);
+    applyStartedGateToLevels(nextState);
+
     roomEditorState.set(roomId, nextState);
     getOrCreateYDoc(roomId, nextState);
+
+    const shouldPersistNormalizedLevels =
+      JSON.stringify(progressLevels) !== JSON.stringify(finalLevels);
+    roomLastSavedSnapshots.set(roomId, cloneSerializedLevelsPayload(serializeCodeLevels(roomId, nextState)));
+    if (shouldPersistNormalizedLevels && finalLevels.length > 0) {
+      const result = await saveProgressToDB(ctx, serializeCodeLevels(roomId, nextState));
+      if (!result.ok && !result.permanentFailure) {
+        markRoomDirty(roomId, ctx);
+      }
+    }
+
     return nextState;
-  }
+  })();
 
-  const instanceSnapshot = await fetchInstanceSnapshotFromDB(ctx);
-  const progressData =
-    instanceSnapshot?.progressData && typeof instanceSnapshot.progressData === "object" && !Array.isArray(instanceSnapshot.progressData)
-      ? instanceSnapshot.progressData
-      : {};
-  const mapName = typeof instanceSnapshot?.mapName === "string" ? instanceSnapshot.mapName : "";
-  const templateLevels = mapName ? await fetchLevelsForMapName(mapName) : [];
-  const progressLevels = Array.isArray(progressData.levels) ? progressData.levels : [];
-
-  const normalizedLevels =
-    templateLevels.length > 0
-      ? mergeTemplateAndProgressLevels(templateLevels, progressLevels)
-      : progressLevels;
-
-  const finalLevels =
-    normalizedLevels.length > 0
-      ? normalizedLevels
-      : [createStarterLevel(mapName)];
-
-  const nextState = createRoomState(
-    ctx,
-    {
-      ...progressData,
-      levels: finalLevels,
-    },
-    {
-      templateLevels,
-      mapName,
-      instanceId: instanceSnapshot?.instanceId ?? null,
-    }
-  );
-  ensureGroupStartGate(nextState);
-  applyStartedGateToLevels(nextState);
-
-  roomEditorState.set(roomId, nextState);
-  getOrCreateYDoc(roomId, nextState);
-
-  const shouldPersistNormalizedLevels =
-    JSON.stringify(progressLevels) !== JSON.stringify(finalLevels);
-  roomLastSavedSnapshots.set(roomId, cloneSerializedLevelsPayload(serializeCodeLevels(roomId, nextState)));
-  if (shouldPersistNormalizedLevels && finalLevels.length > 0) {
-    const result = await saveProgressToDB(ctx, serializeCodeLevels(roomId, nextState));
-    if (!result.ok && !result.permanentFailure) {
-      markRoomDirty(roomId, ctx);
+  roomStateLoadPromises.set(roomId, loadPromise);
+  try {
+    return await loadPromise;
+  } finally {
+    if (roomStateLoadPromises.get(roomId) === loadPromise) {
+      roomStateLoadPromises.delete(roomId);
     }
   }
-
-  return nextState;
 }
 
+/**
+ * COLLABORATION STEP 11.3:
+ * Start or restart the delayed save timer so rapid bursts of edits collapse into
+ * one quieter persistence write instead of hammering the database.
+ */
 function scheduleFlush(roomId) {
+  logCollaborationStep("11.3", "scheduleFlush", { roomId });
   const buffer = roomWriteBuffer.get(roomId);
   if (!buffer) {
     return;
@@ -364,7 +422,14 @@ function scheduleFlush(roomId) {
   }, WRITE_BUFFER_QUIET_MS);
 }
 
+/**
+ * COLLABORATION STEP 11.4:
+ * Hash persisted code so save logs can describe large snapshots compactly.
+ */
 function hashContent(content) {
+  logCollaborationStep("11.4", "hashContent", {
+    contentLength: content.length,
+  });
   let hash = 0x811c9dc5;
   for (let index = 0; index < content.length; index += 1) {
     hash ^= content.charCodeAt(index);
@@ -373,7 +438,15 @@ function hashContent(content) {
   return (hash >>> 0).toString(16).padStart(8, "0");
 }
 
+/**
+ * COLLABORATION STEP 11.5:
+ * Summarize each level's saved code shape for debugging persistence without
+ * dumping the full code contents into logs.
+ */
 function summarizePersistedLevels(levels = []) {
+  logCollaborationStep("11.5", "summarizePersistedLevels", {
+    levelsCount: levels.length,
+  });
   return levels.map((level, levelIndex) => {
     const html = typeof level?.code?.html === "string" ? level.code.html : "";
     const css = typeof level?.code?.css === "string" ? level.code.css : "";
@@ -391,11 +464,24 @@ function summarizePersistedLevels(levels = []) {
   });
 }
 
+/**
+ * COLLABORATION STEP 11.6:
+ * Deep-clone a serialized save payload so guarded persistence can safely keep a
+ * previous known-good snapshot around.
+ */
 function cloneSerializedLevelsPayload(payload) {
+  logCollaborationStep("11.6", "cloneSerializedLevelsPayload", {
+    levelsCount: Array.isArray(payload?.levels) ? payload.levels.length : null,
+  });
   return JSON.parse(JSON.stringify(payload));
 }
 
+/**
+ * COLLABORATION STEP 17.3:
+ * Check whether the server currently believes any editor in this room is diverged.
+ */
 function hasRoomDivergence(roomId) {
+  logCollaborationStep("17.3", "hasRoomDivergence", { roomId });
   for (const key of roomDivergenceState.keys()) {
     if (key.startsWith(`${roomId}:`)) {
       return true;
@@ -404,7 +490,16 @@ function hasRoomDivergence(roomId) {
   return false;
 }
 
+/**
+ * COLLABORATION STEP 11.7:
+ * Detect suspicious save regressions, such as a large drop to empty code, so the
+ * server can avoid persisting obviously bad collaborative snapshots.
+ */
 function hasSevereSnapshotRegression(previousPayload, nextPayload) {
+  logCollaborationStep("11.7", "hasSevereSnapshotRegression", {
+    previousLevels: Array.isArray(previousPayload?.levels) ? previousPayload.levels.length : null,
+    nextLevels: Array.isArray(nextPayload?.levels) ? nextPayload.levels.length : null,
+  });
   const previousLevels = Array.isArray(previousPayload?.levels) ? previousPayload.levels : [];
   const nextLevels = Array.isArray(nextPayload?.levels) ? nextPayload.levels : [];
   const levelCount = Math.max(previousLevels.length, nextLevels.length);
@@ -435,27 +530,67 @@ function hasSevereSnapshotRegression(previousPayload, nextPayload) {
   return zeroedEditorCount > 0 || totalDropRatio >= 0.5;
 }
 
+/**
+ * COLLABORATION STEP 10.4:
+ * Mark a room as changed after Yjs updates land. In plain terms, this tells the
+ * persistence layer that the shared code moved and needs to be saved soon.
+ */
 function markRoomDirty(roomId, ctx) {
+  logCollaborationStep("10.4", "markRoomDirty", {
+    roomId,
+    gameId: ctx.gameId,
+  });
   if (!roomWriteBuffer.has(roomId)) {
-    roomWriteBuffer.set(roomId, { ctx, timer: null, lastDirtyAt: 0 });
+    roomWriteBuffer.set(roomId, {
+      ctx,
+      timer: null,
+      lastDirtyAt: 0,
+      firstDirtyAt: 0,
+      dirtyCount: 0,
+      lastWarnedDirtyCount: 0,
+    });
   }
   const buffer = roomWriteBuffer.get(roomId);
+  const now = Date.now();
   buffer.ctx = ctx;
-  buffer.lastDirtyAt = Date.now();
+  buffer.lastDirtyAt = now;
+  if (!Number.isFinite(buffer.firstDirtyAt) || buffer.firstDirtyAt === 0) {
+    buffer.firstDirtyAt = now;
+    buffer.dirtyCount = 0;
+    buffer.lastWarnedDirtyCount = 0;
+  }
+  buffer.dirtyCount += 1;
   const state = roomEditorState.get(roomId);
-  if (state) {
+  if (state && buffer.dirtyCount === 1) {
     const serialized = serializeCodeLevels(roomId, state);
     console.log(
-      `[db-save:dirty] room=${roomId} gameId=${ctx.gameId} groupId=${ctx.groupId || "none"} ` +
+      `[db-save:dirty-start] room=${roomId} gameId=${ctx.gameId} groupId=${ctx.groupId || "none"} ` +
       `instanceId=${state.instanceId || "none"} levels=${JSON.stringify(summarizePersistedLevels(serialized.levels))}`
     );
-  } else {
-    console.log(`[db-save:dirty] room=${roomId} gameId=${ctx.gameId} groupId=${ctx.groupId || "none"} state=missing`);
+  } else if (!state && buffer.dirtyCount === 1) {
+    console.log(`[db-save:dirty-start] room=${roomId} gameId=${ctx.gameId} groupId=${ctx.groupId || "none"} state=missing`);
+  }
+  if (buffer.dirtyCount >= WRITE_DIRTY_WARN_THRESHOLD && buffer.dirtyCount - buffer.lastWarnedDirtyCount >= WRITE_DIRTY_WARN_THRESHOLD) {
+    buffer.lastWarnedDirtyCount = buffer.dirtyCount;
+    console.warn(
+      `[db-save:dirty-churn] room=${roomId} gameId=${ctx.gameId} groupId=${ctx.groupId || "none"} ` +
+      `dirtyCount=${buffer.dirtyCount} windowMs=${now - buffer.firstDirtyAt}`
+    );
   }
   scheduleFlush(roomId);
 }
 
+/**
+ * COLLABORATION STEP 11.8:
+ * Persist the room's latest collaborative code to storage once the debounce window
+ * is quiet enough, with extra guards against saving obviously regressed snapshots.
+ */
 async function flushWriteBuffer(roomId, options = {}) {
+  logCollaborationStep("11.8", "flushWriteBuffer", {
+    roomId,
+    reason: typeof options.reason === "string" ? options.reason : "unknown",
+    force: options.force === true,
+  });
   const buffer = roomWriteBuffer.get(roomId);
   const state = roomEditorState.get(roomId);
   const force = options.force === true;
@@ -512,6 +647,7 @@ async function flushWriteBuffer(roomId, options = {}) {
   console.log(
     `[db-save:flush-start] room=${roomId} gameId=${state.ctx.gameId} groupId=${state.ctx.groupId || "none"} ` +
     `instanceId=${state.instanceId || "none"} connectedUsers=${rooms.get(roomId)?.size || 0} reason=${reason} ` +
+    `dirtyCount=${buffer.dirtyCount || 0} dirtyWindowMs=${buffer.firstDirtyAt ? Date.now() - buffer.firstDirtyAt : 0} ` +
     `levels=${JSON.stringify(summarizePersistedLevels(payloadToSave.levels))}`
   );
   const result = await saveProgressToDB(state.ctx, payloadToSave);
@@ -590,9 +726,11 @@ const wsRuntimeContext = {
   decodeBase64Update,
   sendYjsProtocol,
   applyYjsAwarenessUpdate,
+  cleanupSocketAwareness,
   sendFullAwarenessState,
   editorTypes: EDITOR_TYPES,
   getRoomClientHashes,
+  removeClientStateHash,
   evaluateClientStateHashes,
   rooms,
   markRoomDirty,
@@ -606,6 +744,7 @@ const wsRuntimeContext = {
   roomEditorState,
   createRoomYDoc,
   getRoomYDocGeneration,
+    advanceRoomYDocGeneration,
   roomWriteBuffer,
   saveProgressToDB,
   serializeCodeLevels,
@@ -651,6 +790,7 @@ wsServer.on("connection", (socket, request) => {
           cleanupSocketAwareness(roomId, socket);
           removeClientStateHash(roomId, userData.clientId);
           broadcastToRoom(roomId, "user-left", {
+            clientId: userData.clientId,
             userId: userData.userId,
             userEmail: userData.userEmail,
             userName: userData.userName,
@@ -659,10 +799,19 @@ wsServer.on("connection", (socket, request) => {
         }
       }
     }
+    setConnectionState(socket, { roomId: null });
   });
 });
 
+/**
+ * COLLABORATION STEP 19.11:
+ * Force-save every dirty collaboration room during shutdown so recent edits are
+ * not lost when the websocket server exits.
+ */
 async function flushAllBuffers() {
+  logCollaborationStep("19.11", "flushAllBuffers", {
+    bufferCount: roomWriteBuffer.size,
+  });
   const promises = [];
   for (const roomId of roomWriteBuffer.keys()) {
     promises.push(flushWriteBuffer(roomId, { force: true, reason: "shutdown" }));

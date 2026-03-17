@@ -1,13 +1,27 @@
 import * as decoding from "lib0/decoding";
 import * as encoding from "lib0/encoding";
+import { logCollaborationStep } from "../log-collaboration-step.mjs";
 import * as syncProtocol from "y-protocols/sync";
 import { extractGroupIdFromRoomId, parseRoomContext } from "../room-context.mjs";
+import { createYjsTrafficMonitor } from "../yjs-traffic-monitor.mjs";
 
 /**
  * @typedef {import("../ws-runtime-context.mjs").WsRuntimeContext} WsRuntimeContext
  */
 
+const yjsTrafficMonitor = createYjsTrafficMonitor();
+
+/**
+ * COLLABORATION STEP 9.2:
+ * Accept an incoming Yjs packet from one browser and apply it to the shared room
+ * state. In plain language, this is where one user's edit or awareness update
+ * becomes part of the room's canonical collaboration session.
+ */
 async function handleYjsProtocol({ socket, data, socketId, resolveRoomId, ctx }) {
+  logCollaborationStep("9.2", "handleYjsProtocol", {
+    socketId,
+    channel: data?.channel ?? null,
+  });
   if (!ctx.isYjsEnabled()) {
     return;
   }
@@ -28,14 +42,27 @@ async function handleYjsProtocol({ socket, data, socketId, resolveRoomId, ctx })
   }
 
   const state = await ctx.ensureRoomState(roomId, roomCtx);
+  const messageGeneration = Number.isInteger(data.yjsDocGeneration) ? data.yjsDocGeneration : null;
+  const currentGeneration = ctx.getRoomYDocGeneration(roomId);
+  if (messageGeneration != null && messageGeneration !== currentGeneration) {
+    console.warn(
+      `[yjs-protocol:drop] room=${roomId} socket=${socketId} channel=${data.channel} messageGeneration=${messageGeneration} currentGeneration=${currentGeneration}`
+    );
+    return;
+  }
   const payload = ctx.decodeBase64Update(data.payloadBase64);
+  const connectedUsers = ctx.getRoomUsers(roomId).size;
   if (data.channel === "awareness") {
     const awarenessDecoder = decoding.createDecoder(payload);
     const awarenessUpdate = decoding.readVarUint8Array(awarenessDecoder);
     ctx.applyYjsAwarenessUpdate(roomId, state, awarenessUpdate, socket);
-    console.log(
-      `[yjs-protocol:recv] room=${roomId} socket=${socketId} channel=awareness payloadLen=${data.payloadBase64.length}`
-    );
+    yjsTrafficMonitor.recordAwareness({
+      roomId,
+      socketId,
+      payloadBase64: data.payloadBase64,
+      payloadLen: data.payloadBase64.length,
+      connectedUsers,
+    });
     return;
   }
 
@@ -43,15 +70,29 @@ async function handleYjsProtocol({ socket, data, socketId, resolveRoomId, ctx })
   const decoder = decoding.createDecoder(payload);
   const encoder = encoding.createEncoder();
   const syncMessageType = syncProtocol.readSyncMessage(decoder, encoder, doc, socket);
-  console.log(
-    `[yjs-protocol:recv] room=${roomId} socket=${socketId} channel=sync messageType=${syncMessageType} payloadLen=${data.payloadBase64.length}`
-  );
+  yjsTrafficMonitor.recordSync({
+    roomId,
+    socketId,
+    messageType: syncMessageType,
+    payloadLen: data.payloadBase64.length,
+    connectedUsers,
+  });
   if (encoding.length(encoder) > 0) {
     ctx.sendYjsProtocol(socket, roomId, "sync", encoder);
   }
 }
 
+/**
+ * COLLABORATION STEP 17.1:
+ * Store one client's content fingerprint so the server can compare collaborators
+ * and detect when two supposedly shared editors have silently drifted apart.
+ */
 async function handleClientStateHash({ socket, data, resolveRoomId, ctx }) {
+  logCollaborationStep("17.1", "handleClientStateHash", {
+    clientId: data?.clientId ?? null,
+    editorType: data?.editorType ?? null,
+    levelIndex: data?.levelIndex ?? null,
+  });
   const roomId = resolveRoomId(socket, data);
   if (
     !roomId
@@ -87,7 +128,16 @@ async function handleClientStateHash({ socket, data, resolveRoomId, ctx }) {
   await ctx.evaluateClientStateHashes(roomId, report);
 }
 
+/**
+ * COLLABORATION STEP 17.2:
+ * Record client-side health warnings that help explain stalls, blocked editors,
+ * and other collaboration problems beyond raw content mismatches.
+ */
 async function handleClientHealthEvent({ socket, data, resolveRoomId }) {
+  logCollaborationStep("17.2", "handleClientHealthEvent", {
+    clientId: data?.clientId ?? null,
+    eventType: data?.eventType ?? null,
+  });
   const roomId = resolveRoomId(socket, data);
   if (!roomId || typeof data.eventType !== "string" || !data.clientId || !data.userId) {
     return;
