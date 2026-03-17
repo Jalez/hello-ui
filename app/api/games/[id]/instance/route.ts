@@ -513,15 +513,19 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     const mode = game.collaboration_mode === "group" ? "group" : "individual";
-    const actorUserId = session?.user?.email
+    const ownUserId = session?.user?.email
       ? (await getOrCreateUserByEmail(session.user.email)).id
       : request.nextUrl.searchParams.get("guestId");
-    if (!actorUserId) {
+    if (!ownUserId) {
       return NextResponse.json({ error: "guestId is required for public individual games" }, { status: 400 });
     }
     if (!session?.user?.email && game.collaboration_mode === "group") {
       return NextResponse.json({ error: "Authentication required for group games" }, { status: 401 });
     }
+
+    // Allow creators to view another user's individual instance via ?userId=
+    const targetUserId = request.nextUrl.searchParams.get("userId");
+    const actorUserId = (targetUserId && game.can_edit && mode === "individual") ? targetUserId : ownUserId;
 
     const resolved = await resolveInstance(request, id, actorUserId, mode, Boolean(game.can_edit));
     if ("error" in resolved) {
@@ -554,12 +558,16 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   }
 
   const mode = game.collaboration_mode === "group" ? "group" : "individual";
-  const actorUserId = session?.user?.email
+  const ownUserId = session?.user?.email
     ? (await getOrCreateUserByEmail(session.user.email)).id
     : request.nextUrl.searchParams.get("guestId");
-  if (!actorUserId) {
+  if (!ownUserId) {
     return NextResponse.json({ error: "guestId is required for public individual games" }, { status: 400 });
   }
+
+  // Allow creators to view another user's individual instance via ?userId=
+  const targetUserId = request.nextUrl.searchParams.get("userId");
+  const actorUserId = (targetUserId && game.can_edit && mode === "individual") ? targetUserId : ownUserId;
 
   const resolved = await resolveInstance(request, id, actorUserId, mode, Boolean(game.can_edit));
   if ("error" in resolved) {
