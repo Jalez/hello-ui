@@ -1,4 +1,4 @@
-# UI Designer
+# Hello UI!
 
 A gamified platform for learning CSS, HTML, and UI design through interactive challenges with real-time collaboration, pixel-perfect feedback, and AI-powered assistance.
 
@@ -53,8 +53,8 @@ A live instance is running at [tie-lukioplus.rd.tuni.fi/css-artist](https://tie-
 ### Installation
 
 ```bash
-git clone https://github.com/Jalez/ui-designer.git
-cd ui-designer
+git clone https://github.com/Jalez/hello-ui.git
+cd hello-ui
 pnpm install
 cp .env.local.example .env.local
 # Edit .env.local with your credentials
@@ -102,7 +102,7 @@ docker compose down -v             # Stop and wipe database
 ## Project Structure
 
 ```
-ui-designer/
+hello-ui/
 ├── app/                       # Next.js App Router
 │   ├── api/                   # API routes (games, groups, LTI, admin)
 │   ├── game/[gameId]/         # Player game page
