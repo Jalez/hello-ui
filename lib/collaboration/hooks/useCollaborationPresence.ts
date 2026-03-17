@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState, useMemo } from "react";
+import { logCollaborationStep } from "../logCollaborationStep";
 import { ActiveUser, EditorType } from "../types";
 import { generateUserColor } from "../utils";
 
@@ -13,7 +14,7 @@ interface UseCollaborationPresenceReturn {
   activeUsers: ActiveUser[];
   usersByTab: Record<EditorType, ActiveUser[]>;
   addUser: (user: ActiveUser) => void;
-  removeUser: (userId: string) => void;
+  removeUser: (identity: { clientId?: string; userId?: string }) => void;
   setUsers: (users: ActiveUser[]) => void;
   clearUsers: () => void;
   getUserByClientId: (clientId: string) => ActiveUser | undefined;
@@ -22,15 +23,31 @@ interface UseCollaborationPresenceReturn {
   clearUserTyping: (clientId: string) => void;
 }
 
+/**
+ * COLLABORATION STEP 15.1:
+ * This hook keeps the frontend's in-memory roster of collaborators up to date.
+ * In plain language, it is the shared "who is here and what editor are they in"
+ * store that the UI uses for avatars, tabs, typing badges, and carets.
+ */
 export function useCollaborationPresence(
   options: UseCollaborationPresenceOptions = {}
 ): UseCollaborationPresenceReturn {
+  logCollaborationStep("15.1", "useCollaborationPresence");
   const { onUserJoined, onUserLeft } = options;
 
   const [activeUsers, setActiveUsers] = useState<ActiveUser[]>([]);
 
+  /**
+   * COLLABORATION STEP 15.2:
+   * Add a newly seen collaborator into local presence state once the room tells
+   * us they joined or awareness reveals them for the first time.
+   */
   const addUser = useCallback(
     (user: ActiveUser) => {
+      logCollaborationStep("15.2", "addUser", {
+        clientId: user.clientId,
+        userId: user.userId,
+      });
       setActiveUsers((prev) => {
         const existing = prev.find((u) => u.clientId === user.clientId);
         if (existing) {
@@ -47,12 +64,29 @@ export function useCollaborationPresence(
     [onUserJoined]
   );
 
+  /**
+   * COLLABORATION STEP 19.3:
+   * Remove a collaborator from local presence state when their socket leaves or
+   * disconnects so stale avatars and carets do not linger on screen.
+   */
   const removeUser = useCallback(
-    (userId: string) => {
+    ({ clientId, userId }: { clientId?: string; userId?: string }) => {
+      logCollaborationStep("19.3", "removeUser", {
+        clientId: clientId ?? null,
+        userId: userId ?? null,
+      });
       setActiveUsers((prev) => {
-        const filtered = prev.filter((u) => u.userId !== userId);
+        const filtered = prev.filter((u) => {
+          if (clientId) {
+            return u.clientId !== clientId;
+          }
+          if (userId) {
+            return u.userId !== userId;
+          }
+          return true;
+        });
         if (filtered.length !== prev.length) {
-          onUserLeft?.(userId);
+          onUserLeft?.(userId || clientId || "");
         }
         return filtered;
       });
@@ -60,7 +94,15 @@ export function useCollaborationPresence(
     [onUserLeft]
   );
 
+  /**
+   * COLLABORATION STEP 15.3:
+   * Replace the full collaborator list from an authoritative snapshot, while
+   * deduplicating sessions so the frontend has one clean record per client.
+   */
   const setUsers = useCallback((users: ActiveUser[]) => {
+    logCollaborationStep("15.3", "setUsers", {
+      userCount: users.length,
+    });
     const uniqueUsers = new Map<string, ActiveUser>();
     for (const user of users) {
       const dedupeKey = user.clientId;
@@ -75,18 +117,40 @@ export function useCollaborationPresence(
     setActiveUsers(Array.from(uniqueUsers.values()));
   }, []);
 
+  /**
+   * COLLABORATION STEP 19.4:
+   * Clear all cached presence when the room changes or the socket drops so the
+   * next session starts from a clean slate.
+   */
   const clearUsers = useCallback(() => {
+    logCollaborationStep("19.4", "clearUsers");
     setActiveUsers([]);
   }, []);
 
+  /**
+   * COLLABORATION STEP 15.4:
+   * Look up one collaborator by their session id when another part of the UI
+   * needs to decorate that specific user's cursor or status.
+   */
   const getUserByClientId = useCallback(
     (clientId: string): ActiveUser | undefined => {
+      logCollaborationStep("15.4", "getUserByClientId", { clientId });
       return activeUsers.find((u) => u.clientId === clientId);
     },
     [activeUsers]
   );
 
+  /**
+   * COLLABORATION STEP 15.5:
+   * Update which editor tab and level a collaborator is currently focused on so
+   * the UI can show where attention has moved.
+   */
   const updateUserTab = useCallback((clientId: string, editorType: EditorType, levelIndex: number) => {
+    logCollaborationStep("15.5", "updateUserTab", {
+      clientId,
+      editorType,
+      levelIndex,
+    });
     setActiveUsers((prev) => {
       let changed = false;
       const next = prev.map((u) => {
@@ -103,8 +167,19 @@ export function useCollaborationPresence(
     });
   }, []);
 
+  /**
+   * COLLABORATION STEP 15.6:
+   * Update the typing badge for a collaborator when awareness says they started
+   * or stopped actively editing in a specific editor.
+   */
   const updateUserTyping = useCallback(
     (clientId: string, editorType: EditorType, levelIndex: number, isTyping: boolean) => {
+      logCollaborationStep("15.6", "updateUserTyping", {
+        clientId,
+        editorType,
+        levelIndex,
+        isTyping,
+      });
       setActiveUsers((prev) => {
         let changed = false;
         const next = prev.map((u) => {
@@ -127,7 +202,13 @@ export function useCollaborationPresence(
     []
   );
 
+  /**
+   * COLLABORATION STEP 15.7:
+   * Force-clear typing state for one collaborator when we need a defensive reset,
+   * for example after leaving a tab or ending a typing burst.
+   */
   const clearUserTyping = useCallback((clientId: string) => {
+    logCollaborationStep("15.7", "clearUserTyping", { clientId });
     setActiveUsers((prev) =>
       prev.map((u) =>
         u.clientId === clientId ? { ...u, isTyping: false } : u

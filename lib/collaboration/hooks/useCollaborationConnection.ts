@@ -18,9 +18,12 @@ import {
   YjsProtocolMessage,
   GameInstancesResetMessage,
 } from "../types";
+import { logCollaborationStep } from "../logCollaborationStep";
 import { extractGroupIdFromRoomId, generateClientId, generateUserColor, getWebSocketUrl } from "../utils";
 import { RECONNECT_DELAY_MS, MAX_RECONNECT_ATTEMPTS } from "../constants";
 import { logDebugClient } from "@/lib/debug-logger";
+
+const INITIAL_CONNECT_DELAY_MS = 25;
 
 interface UseCollaborationConnectionOptions {
   roomId: string | null;
@@ -29,7 +32,7 @@ interface UseCollaborationConnectionOptions {
   onDisconnected?: () => void;
   onError?: (error: string) => void;
   onUserJoined?: (user: ActiveUser) => void;
-  onUserLeft?: (user: { userId: string; userEmail: string; userName?: string }) => void;
+  onUserLeft?: (user: { clientId?: string; userId: string; userEmail: string; userName?: string }) => void;
   onCanvasCursor?: (cursor: CanvasCursor) => void;
   onCurrentUsers?: (users: ActiveUser[]) => void;
   onRoomStateSync?: (roomState: RoomStateSyncMessage) => void;
@@ -73,7 +76,16 @@ interface WebSocketEnvelope<T = unknown> {
   ts?: number;
 }
 
+/**
+ * COLLABORATION STEP 1.1:
+ * Every websocket message arrives as raw text. This helper unwraps that text into
+ * a typed envelope so the rest of the collaboration flow can reason about the
+ * message safely instead of working with untrusted raw strings.
+ */
 function parseEnvelope(data: string): WebSocketEnvelope | null {
+  logCollaborationStep("1.1", "parseEnvelope", {
+    payloadLength: data.length,
+  });
   try {
     const parsed = JSON.parse(data);
     if (!parsed || typeof parsed !== "object" || typeof parsed.type !== "string") {
@@ -85,9 +97,19 @@ function parseEnvelope(data: string): WebSocketEnvelope | null {
   }
 }
 
+/**
+ * COLLABORATION STEP 1.2:
+ * This hook owns the browser's websocket session for collaboration. In plain
+ * terms, it connects the player to the group room, translates app actions into
+ * socket messages, and fans incoming server messages back out to the provider.
+ */
 export function useCollaborationConnection(
   options: UseCollaborationConnectionOptions
 ): UseCollaborationConnectionReturn {
+  logCollaborationStep("1.2", "useCollaborationConnection", {
+    roomId: options.roomId,
+    hasUser: Boolean(options.user),
+  });
   const { roomId, user } = options;
   const parsedGroupId = extractGroupIdFromRoomId(roomId);
 
@@ -101,6 +123,7 @@ export function useCollaborationConnection(
   const userColorRef = useRef<string | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const initialConnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isConnectedRef = useRef(false);
   const reconnectFnRef = useRef<(() => void) | null>(null);
   const manualDisconnectRef = useRef(false);
@@ -122,7 +145,17 @@ export function useCollaborationConnection(
     terminalErrorRef.current = null;
   }, [userIdentity, user]);
 
+  /**
+   * COLLABORATION STEP 6.1:
+   * This is the one generic "put a collaboration packet on the wire" helper.
+   * Everything from room join to Yjs sync and health reports eventually funnels
+   * through this serializer before it leaves the browser.
+   */
   const sendMessage = useCallback((type: string, payload: Record<string, unknown>) => {
+    logCollaborationStep("6.1", "sendMessage", {
+      type,
+      roomId,
+    });
     const socket = socketRef.current;
     if (!socket || socket.readyState !== WebSocket.OPEN) {
       return;
@@ -170,8 +203,16 @@ export function useCollaborationConnection(
       }
     };
 
+    const clearInitialConnectTimeout = () => {
+      if (initialConnectTimeoutRef.current) {
+        clearTimeout(initialConnectTimeoutRef.current);
+        initialConnectTimeoutRef.current = null;
+      }
+    };
+
     const cleanupSocket = () => {
       clearReconnectTimeout();
+      clearInitialConnectTimeout();
       const socket = socketRef.current;
       if (socket) {
         socket.onopen = null;
@@ -187,7 +228,16 @@ export function useCollaborationConnection(
       isConnectedRef.current = false;
     };
 
+    /**
+     * COLLABORATION STEP 1.3:
+     * Open the websocket, join the room, and wire all message handlers. This is
+     * where the browser actually steps into the shared collaboration session.
+     */
     const connectSocket = () => {
+      logCollaborationStep("1.3", "connectSocket", {
+        roomId,
+        userId: currentUser.id,
+      });
       if (disposed || socketRef.current) {
         return;
       }
@@ -245,7 +295,17 @@ export function useCollaborationConnection(
         optionsRef.current.onConnected?.();
       };
 
+      /**
+       * COLLABORATION STEP 12.1:
+       * Incoming collaboration traffic lands here first. This switch turns generic
+       * server packets into specific callbacks so the provider can update room
+       * state, Yjs state, presence, health signals, and recovery logic.
+       */
       socket.onmessage = (event) => {
+        logCollaborationStep("12.1", "socket.onmessage", {
+          roomId,
+          dataType: typeof event.data,
+        });
         if (typeof event.data !== "string") {
           return;
         }
@@ -311,7 +371,7 @@ export function useCollaborationConnection(
             return;
           }
           case "user-left": {
-            const data = payload as { userId: string; userEmail: string; userName?: string };
+            const data = payload as { clientId?: string; userId: string; userEmail: string; userName?: string };
             optionsRef.current.onUserLeft?.(data);
             return;
           }
@@ -493,7 +553,10 @@ export function useCollaborationConnection(
 
     reconnectFnRef.current = connectSocket;
     manualDisconnectRef.current = false;
-    connectSocket();
+    initialConnectTimeoutRef.current = setTimeout(() => {
+      initialConnectTimeoutRef.current = null;
+      connectSocket();
+    }, INITIAL_CONNECT_DELAY_MS);
 
     return () => {
       disposed = true;
@@ -502,8 +565,20 @@ export function useCollaborationConnection(
     };
   }, [roomId, parsedGroupId, userIdentity]);
 
+  /**
+   * COLLABORATION STEP 19.1:
+   * Tear down the local websocket session and clear reconnect machinery so this
+   * browser stops participating in the room cleanly.
+   */
   const disconnect = useCallback(() => {
+    logCollaborationStep("19.1", "disconnect", {
+      roomId,
+    });
     manualDisconnectRef.current = true;
+    if (initialConnectTimeoutRef.current) {
+      clearTimeout(initialConnectTimeoutRef.current);
+      initialConnectTimeoutRef.current = null;
+    }
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = null;
@@ -527,7 +602,15 @@ export function useCollaborationConnection(
     clientIdRef.current = null;
   }, []);
 
+  /**
+   * COLLABORATION STEP 19.2:
+   * Tell the server this client is leaving the room and then close the local
+   * socket so presence, awareness, and duplicate-session tracking are cleaned up.
+   */
   const leaveGame = useCallback(() => {
+    logCollaborationStep("19.2", "leaveGame", {
+      roomId,
+    });
     if (roomId) {
       sendMessage("leave-game", {
         roomId,
@@ -553,7 +636,16 @@ export function useCollaborationConnection(
     }
   }, [effectiveIdentity, parsedGroupId, roomId, sendMessage]);
 
+  /**
+   * COLLABORATION STEP 18.1:
+   * Ask the server for a fresh authoritative room snapshot when the client thinks
+   * it may have missed something or needs to recover from a suspicious state.
+   */
   const requestRoomStateSync = useCallback((reason = "client_request") => {
+    logCollaborationStep("18.1", "requestRoomStateSync", {
+      roomId,
+      reason,
+    });
     if (!roomId) {
       return;
     }
@@ -569,7 +661,16 @@ export function useCollaborationConnection(
     });
   }, [parsedGroupId, roomId, sendMessage]);
 
+  /**
+   * COLLABORATION STEP 6.2:
+   * Ship a Yjs sync or awareness payload to the websocket backend. This is the
+   * transport bridge between local CRDT state and the shared room on the server.
+   */
   const sendYjsProtocol = useCallback((message: Omit<YjsProtocolMessage, "roomId" | "groupId" | "ts">) => {
+    logCollaborationStep("6.2", "sendYjsProtocol", {
+      roomId,
+      channel: message.channel,
+    });
     if (!roomId || !message.payloadBase64) {
       return;
     }
@@ -680,7 +781,17 @@ export function useCollaborationConnection(
     });
   }, [effectiveIdentity, roomId, sendMessage]);
 
+  /**
+   * COLLABORATION STEP 16.1:
+   * Periodically report a compact fingerprint of the current editor contents so
+   * the server can detect when two collaborators silently drift apart.
+   */
   const sendClientStateHash = useCallback((message: Omit<ClientStateHashMessage, "roomId" | "groupId" | "clientId" | "userId" | "userEmail" | "engine" | "ts">) => {
+    logCollaborationStep("16.1", "sendClientStateHash", {
+      roomId,
+      editorType: message.editorType,
+      levelIndex: message.levelIndex,
+    });
     if (!roomId || !effectiveIdentity || !clientIdRef.current) {
       return;
     }
@@ -696,7 +807,17 @@ export function useCollaborationConnection(
     } satisfies ClientStateHashMessage);
   }, [effectiveIdentity, parsedGroupId, roomId, sendMessage]);
 
+  /**
+   * COLLABORATION STEP 16.2:
+   * Send diagnostic breadcrumbs about stalls, blocked editors, or long tasks so
+   * the server has extra evidence when collaboration feels unhealthy.
+   */
   const sendClientHealthEvent = useCallback((message: Omit<ClientHealthEventMessage, "roomId" | "groupId" | "clientId" | "userId" | "userEmail" | "engine" | "ts">) => {
+    logCollaborationStep("16.2", "sendClientHealthEvent", {
+      roomId,
+      eventType: message.eventType,
+      severity: message.severity,
+    });
     if (!roomId || !effectiveIdentity || !clientIdRef.current) {
       return;
     }
@@ -712,8 +833,19 @@ export function useCollaborationConnection(
     } satisfies ClientHealthEventMessage);
   }, [effectiveIdentity, parsedGroupId, roomId, sendMessage]);
 
+  /**
+   * COLLABORATION STEP 18.2:
+   * Re-open the socket on demand after a manual retry or recovery flow.
+   */
   const connect = useCallback(() => {
+    logCollaborationStep("18.2", "connect", {
+      roomId,
+    });
     manualDisconnectRef.current = false;
+    if (initialConnectTimeoutRef.current) {
+      clearTimeout(initialConnectTimeoutRef.current);
+      initialConnectTimeoutRef.current = null;
+    }
     if (!socketRef.current) {
       reconnectFnRef.current?.();
     }
