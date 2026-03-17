@@ -1,5 +1,11 @@
 import { CURSOR_COLORS } from "./constants";
 
+declare global {
+  interface Window {
+    __PLAYWRIGHT_WEBSOCKET_URL__?: string;
+  }
+}
+
 export function generateClientId(): string {
   const random = Math.random().toString(36).substring(2, 9);
   const timestamp = Date.now().toString(36);
@@ -63,6 +69,14 @@ export function getWebSocketUrl(): string {
   }
 
   if (typeof window !== "undefined") {
+    const playwrightOverride =
+      window.__PLAYWRIGHT_WEBSOCKET_URL__
+      || window.sessionStorage.getItem("__PLAYWRIGHT_WEBSOCKET_URL__")
+      || "";
+    if (playwrightOverride) {
+      return normalizeSocketUrl(playwrightOverride);
+    }
+
     const { protocol, hostname, origin } = window.location;
     const isLocalhost =
       hostname === "localhost" ||
@@ -90,4 +104,8 @@ export function extractGroupIdFromRoomId(roomId: string | null | undefined): str
   }
   const groupId = afterPrefix.slice(0, gameSeparatorIndex);
   return groupId || null;
+}
+
+export function isLobbyRoom(roomId: string | null | undefined): boolean {
+  return typeof roomId === "string" && roomId.startsWith("lobby:");
 }

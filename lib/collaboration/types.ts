@@ -41,6 +41,8 @@ export interface RoomStateSyncMessage {
   levels: RoomStateSyncLevel[];
   groupStartGate?: GroupStartGateState;
   yjsDocGeneration?: number;
+  forceReplaceYDoc?: boolean;
+  forceReplaceYjsSyncPayloadBase64?: string;
   ts: number;
 }
 
@@ -213,6 +215,7 @@ export interface YjsProtocolMessage {
   groupId?: string;
   channel: "sync" | "awareness";
   payloadBase64: string;
+  yjsDocGeneration?: number;
   ts: number;
 }
 
