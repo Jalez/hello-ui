@@ -149,7 +149,18 @@ export default function CodeEditor({
   });
   const editorType = titleToEditorType(title);
   const collaborationReady = !isYjsManaged || collaboration?.yjsReady !== false;
-  const showCollaborationRecoveryOverlay = isYjsManaged && !locked && !collaborationReady;
+  const collaborationRecoveryNeeded = isYjsManaged && !locked && !collaborationReady;
+
+  // Delay showing the recovery overlay so quick resyncs are invisible to users.
+  const [showCollaborationRecoveryOverlay, setShowCollaborationRecoveryOverlay] = useState(false);
+  useEffect(() => {
+    if (!collaborationRecoveryNeeded) {
+      setShowCollaborationRecoveryOverlay(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setShowCollaborationRecoveryOverlay(true), 600);
+    return () => window.clearTimeout(timer);
+  }, [collaborationRecoveryNeeded]);
 
   useEffect(() => {
     const view = editorViewRef.current;
@@ -375,7 +386,7 @@ export default function CodeEditor({
           )}
           {isConnected && <RemoteCaretsOverlay carets={remoteCarets} />}
           {showCollaborationRecoveryOverlay && (
-            <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-background/45 backdrop-blur-sm">
+            <div className="pointer-events-none absolute inset-0 z-20 flex animate-in fade-in duration-300 items-center justify-center bg-background/45 backdrop-blur-sm">
               <div className="flex items-center gap-3 rounded-full border border-border/70 bg-background/90 px-4 py-2 text-sm text-foreground shadow-lg shadow-black/10">
                 <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary/25 border-t-primary" />
                 <div className="flex flex-col leading-tight">
