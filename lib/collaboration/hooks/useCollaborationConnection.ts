@@ -353,6 +353,13 @@ export function useCollaborationConnection(
             if (data.userId === current.id) {
               return;
             }
+            // Filter duplicate sessions of the same account (e.g. after page refresh)
+            if (data.accountUserId && data.accountUserId === current.id) {
+              return;
+            }
+            if (data.accountUserEmail && data.accountUserEmail === current.email) {
+              return;
+            }
             const joinedClientId = data.clientId ?? "";
             if (joinedClientId) {
               queueMicrotask(() => optionsRef.current.onUserJoined?.({
@@ -402,6 +409,15 @@ export function useCollaborationConnection(
                   }
 
                   if (entry.userId && entry.userId === selfIdentity.id) {
+                    return false;
+                  }
+
+                  // Also filter by accountUserId/accountUserEmail to catch duplicate sessions
+                  // (e.g. after page refresh, the new session gets a renamed userId like "id::session-2")
+                  if (entry.accountUserId && entry.accountUserId === selfIdentity.id) {
+                    return false;
+                  }
+                  if (entry.accountUserEmail && entry.accountUserEmail === selfIdentity.email) {
                     return false;
                   }
 
