@@ -9,8 +9,7 @@ import { HelpModal } from "@/components/Help/HelpModal";
 import { useAppSelector } from "@/store/hooks/hooks";
 import { useGameStore } from "@/components/default/games";
 import Info, { LevelFooterMenu, TimeFooterMenu } from "../InfoBoard/Info";
-import { fetchGroupDetailsCached } from "@/lib/group-details-client";
-import { apiUrl } from "@/lib/apiUrl";
+import { fetchActiveGameGroupsCached, fetchGroupDetailsCached } from "@/lib/group-details-client";
 import { HelpCircle, Info as InfoIcon, KeyRound, Loader2, Users } from "lucide-react";
 import { ActiveGroupInstance, CreatorGroupDetailsDialog } from "@/components/groups/CreatorGroupDetailsDialog";
 import { CompactMenuButton } from "@/components/General/CompactMenuButton";
@@ -149,6 +148,7 @@ export const Footer = () => {
   const pathname = usePathname();
   const normalizedPathname = stripBasePath(pathname);
   const currentGame = useGameStore((state) => state.getCurrentGame());
+  const isCurrentGameResolved = currentGame?.id != null;
   const groupId = searchParams.get("groupId");
 
   const [groupName, setGroupName] = useState<string | null>(null);
@@ -167,7 +167,7 @@ export const Footer = () => {
     !options.creator;
 
   useEffect(() => {
-    if (!isGroupGameplay || !groupId) {
+    if (!isGroupGameplay || !groupId || !isCurrentGameResolved) {
       setGroupName(null);
       setGroupJoinKey(null);
       setIsLoadingGroup(false);
@@ -179,7 +179,10 @@ export const Footer = () => {
     const loadGroupDetails = async () => {
       try {
         setIsLoadingGroup(true);
-        const data = await fetchGroupDetailsCached(groupId);
+        const data = await fetchGroupDetailsCached(groupId, {
+          gameId: currentGame?.id,
+          preferCreatorAccess: showCreatorGroupInstances,
+        });
         if (!cancelled) {
           setGroupName(data.group?.name ?? null);
           setGroupJoinKey(data.group?.joinKey ?? null);
@@ -200,7 +203,7 @@ export const Footer = () => {
     return () => {
       cancelled = true;
     };
-  }, [groupId, isGroupGameplay]);
+  }, [currentGame?.id, groupId, isCurrentGameResolved, isGroupGameplay, showCreatorGroupInstances]);
 
   useEffect(() => {
     if (!showCreatorGroupInstances || !currentGame?.id) {
@@ -214,15 +217,9 @@ export const Footer = () => {
     const loadActiveGroups = async () => {
       try {
         setIsLoadingActiveGroups(true);
-        const response = await fetch(apiUrl(`/api/games/${currentGame.id}/groups`));
-        const payload = await response.json().catch(() => ({}));
-
-        if (!response.ok) {
-          throw new Error(payload.error || "Failed to load active groups");
-        }
-
+        const groups = await fetchActiveGameGroupsCached(currentGame.id);
         if (!cancelled) {
-          setActiveGroups(Array.isArray(payload.groups) ? payload.groups : []);
+          setActiveGroups(groups as ActiveGroupInstance[]);
         }
       } catch {
         if (!cancelled) {

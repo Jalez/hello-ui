@@ -1,6 +1,7 @@
 import { useEffect, useState, type MutableRefObject } from "react";
 import type { EditorView } from "@codemirror/view";
 
+import { logCollaborationStep } from "@/lib/collaboration/logCollaborationStep";
 import type { EditorCursor } from "@/lib/collaboration/types";
 
 import type { RemoteEditorCaret } from "./types";
@@ -17,6 +18,12 @@ interface UseRemoteCaretsOptions {
   code: string;
 }
 
+/**
+ * COLLABORATION STEP 15.9:
+ * This hook converts shared presence data into visible remote carets on screen.
+ * Said simply, it takes "where other people say they are editing" and redraws
+ * that information in the current editor viewport.
+ */
 export function useRemoteCarets({
   editorViewRef,
   editorViewportRef,
@@ -26,6 +33,12 @@ export function useRemoteCarets({
   isConnected,
   code,
 }: UseRemoteCaretsOptions) {
+  logCollaborationStep("15.9", "useRemoteCarets", {
+    editorType,
+    levelIndex,
+    isConnected,
+    codeLength: code.length,
+  });
   const [remoteCarets, setRemoteCarets] = useState<RemoteEditorCaret[]>([]);
 
   useEffect(() => {
@@ -38,7 +51,17 @@ export function useRemoteCarets({
 
     let rafId: number | null = null;
 
+    /**
+     * COLLABORATION STEP 15.10:
+     * Rebuild the remote caret overlay from the latest awareness data and the
+     * current scroll position so collaborator cursors stay visually accurate.
+     */
     const recomputeCarets = () => {
+      logCollaborationStep("15.10", "recomputeCarets", {
+        editorType,
+        levelIndex,
+        remoteCursorCount: editorCursors.size,
+      });
       const view = editorViewRef.current;
       const viewport = editorViewportRef.current;
       if (!view || !viewport) {
@@ -50,7 +73,16 @@ export function useRemoteCarets({
       setRemoteCarets((prev) => (areRemoteCaretsEqual(prev, nextCarets) ? prev : nextCarets));
     };
 
+    /**
+     * COLLABORATION STEP 15.11:
+     * Batch caret recalculation onto the next animation frame so the UI updates
+     * smoothly even when collaboration presence changes rapidly.
+     */
     const scheduleRecompute = () => {
+      logCollaborationStep("15.11", "scheduleRecompute", {
+        editorType,
+        levelIndex,
+      });
       if (rafId !== null) {
         cancelAnimationFrame(rafId);
       }

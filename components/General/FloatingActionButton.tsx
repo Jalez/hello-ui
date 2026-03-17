@@ -204,10 +204,10 @@ export const FloatingActionButton = ({
         onMouseUp={handleMouseUp}
       >
   
-            <div className="bg-black/80 backdrop-blur-sm rounded-lg p-3 border border-white/20 shadow-lg hover:bg-black/90 transition-colors">
+            <div className="rounded-lg border border-border/60 bg-background/85 p-3 text-foreground shadow-lg backdrop-blur-sm transition-colors hover:bg-background/95">
               <div className="flex flex-row items-center gap-3">
                 <Label
-                  className="select-none text-sm font-medium cursor-pointer"
+                  className="cursor-pointer select-none text-sm font-medium text-foreground"
                   onClick={handleLabelClick}
                 >
                   {leftLabel}
@@ -217,7 +217,7 @@ export const FloatingActionButton = ({
                   onCheckedChange={handleSwitchChange}
                 />
                 <Label
-                  className="select-none text-sm font-medium cursor-pointer"
+                  className="cursor-pointer select-none text-sm font-medium text-foreground"
                   onClick={handleLabelClick}
                 >
                   {rightLabel}

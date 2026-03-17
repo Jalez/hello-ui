@@ -145,7 +145,7 @@ function App() {
         })
       : null;
     const shouldUseWsCodeSource =
-      currentMode === "game" &&
+      isGameContextRoute &&
       Boolean(collaboration?.roomId);
 
     if (shouldUseWsCodeSource && (!collaboration?.codeSyncReady || !collaboration?.initialRoomState)) {
@@ -157,9 +157,13 @@ function App() {
     const gameChanged = lastGameIdRef.current !== currentGameId;
     const modeChanged = lastModeRef.current !== currentMode;
     const roomChanged = lastRoomIdRef.current !== (collaboration?.roomId || null);
-    // Room state changes only matter in game mode where WS is the code source.
-    // In creator mode, re-running applyLevels would overwrite in-progress solution edits.
-    const roomStateChanged = shouldUseWsCodeSource && lastRoomStateSignatureRef.current !== roomStateSignature;
+    // Room state changes only matter in gameplay mode where the websocket room
+    // is the authoritative source. In creator mode we only use the initial
+    // room-state snapshot to bootstrap the editors, then let Yjs drive changes.
+    const roomStateChanged =
+      shouldUseWsCodeSource
+      && currentMode === "game"
+      && lastRoomStateSignatureRef.current !== roomStateSignature;
 
     // If nothing affecting the data source changed and we already fetched, skip
     if (hasFetchedRef.current && !gameChanged && !modeChanged && !roomChanged && !roomStateChanged) {

@@ -249,6 +249,7 @@ export default function GamePage({ params }: GamePageProps) {
   const searchParams = useSearchParams();
   const selectedGroupId = searchParams.get("groupId");
   const requestedMode = searchParams.get("mode") === "lobby" ? "lobby" : "game";
+  const requestedSkipWaiting = searchParams.get("skipWaiting") === "1";
   const router = useRouter();
   const pathname = usePathname();
   const [isLoading, setIsLoading] = useState(true);
@@ -279,6 +280,9 @@ export default function GamePage({ params }: GamePageProps) {
   const [guestId, setGuestId] = useState<string>("");
   const isReplayView = searchParams.get("view") === "play";
   const currentGame = useGameStore((s) => s.getCurrentGame());
+  const isCurrentGameResolved = currentGame?.id === gameId;
+  const isGroupWorkMode = currentGame?.collaborationMode === "group";
+  const canEditCurrentGame = Boolean(currentGame?.canEdit ?? currentGame?.isOwner);
   const isFinished =
     currentGame?.progressData &&
     typeof currentGame.progressData === "object" &&
@@ -559,6 +563,7 @@ export default function GamePage({ params }: GamePageProps) {
     if (!groupId) {
       const normalizedParams = new URLSearchParams(searchParams.toString());
       normalizedParams.delete("groupId");
+      normalizedParams.delete("skipWaiting");
       normalizedParams.set("mode", "lobby");
       router.push(`${pathname}?${normalizedParams.toString()}`);
       setCurrentGroupName(null);
@@ -584,7 +589,10 @@ export default function GamePage({ params }: GamePageProps) {
     }
 
     try {
-      const data = await fetchGroupDetailsCached(groupId);
+      const data = await fetchGroupDetailsCached(groupId, {
+        gameId,
+        preferCreatorAccess: canEditCurrentGame,
+      });
       setCurrentGroupName(data.group?.name ?? null);
       setCurrentGroupJoinKey(data.group?.joinKey ?? null);
       setCurrentGroupMembers(Array.isArray(data.members) ? data.members : []);
@@ -606,20 +614,35 @@ export default function GamePage({ params }: GamePageProps) {
     const normalizedParams = new URLSearchParams(searchParams.toString());
     normalizedParams.set("mode", "game");
     normalizedParams.set("groupId", groupId);
+    normalizedParams.delete("skipWaiting");
     router.push(`${pathname}?${normalizedParams.toString()}`);
     setRequiresGroup(false);
   };
 
+  const handleCreatorSkipWaiting = () => {
+    if (!selectedGroupId) {
+      return;
+    }
+    const normalizedParams = new URLSearchParams(searchParams.toString());
+    normalizedParams.set("mode", "game");
+    normalizedParams.set("groupId", selectedGroupId);
+    normalizedParams.set("skipWaiting", "1");
+    router.push(`${pathname}?${normalizedParams.toString()}`);
+  };
+
   useEffect(() => {
     const groupId = searchParams.get("groupId");
-    if (!groupId || !hasUser) {
+    if (!groupId || !hasUser || !isCurrentGameResolved) {
       return;
     }
 
     let cancelled = false;
     const loadGroupDetails = async () => {
       try {
-        const data = await fetchGroupDetailsCached(groupId);
+        const data = await fetchGroupDetailsCached(groupId, {
+          gameId,
+          preferCreatorAccess: canEditCurrentGame,
+        });
         if (cancelled) {
           return;
         }
@@ -639,7 +662,7 @@ export default function GamePage({ params }: GamePageProps) {
     return () => {
       cancelled = true;
     };
-  }, [hasUser, searchParams]);
+  }, [canEditCurrentGame, gameId, hasUser, isCurrentGameResolved, searchParams]);
 
   if (isLoading) {
     return (
@@ -766,11 +789,11 @@ export default function GamePage({ params }: GamePageProps) {
 
   const gate = currentGame?.progressData?.groupStartGate as Record<string, unknown> | undefined;
   const isStarted = gate?.status === "started";
-  const isGroupWorkMode = currentGame?.collaborationMode === "group";
-  const canEditCurrentGame = Boolean(currentGame?.canEdit ?? currentGame?.isOwner);
   const isCreatorPreviewWithoutGroup = isGroupWorkMode && canEditCurrentGame && !selectedGroupId && requestedMode !== "lobby";
+  const canSkipWaitingAsCreator = isGroupWorkMode && canEditCurrentGame && Boolean(selectedGroupId);
+  const shouldBypassWaitingRoom = canSkipWaitingAsCreator && requestedMode !== "lobby" && requestedSkipWaiting;
 
-  if (isGroupWorkMode && user && !isStarted && !isCreatorPreviewWithoutGroup) {
+  if (isGroupWorkMode && user && !isStarted && !isCreatorPreviewWithoutGroup && !shouldBypassWaitingRoom) {
     // Determine the stable lobby room ID. If we resolved a specific LTI context earlier, use it.
     const lobbyRoomId = publicLobby?.roomId || `lobby:all:game:${gameId}`;
     
@@ -785,6 +808,8 @@ export default function GamePage({ params }: GamePageProps) {
             courseName={publicLobby?.courseName || null}
             currentUser={user}
             onGroupSelect={handleGroupSelect}
+            onSkipWaiting={handleCreatorSkipWaiting}
+            canSkipWaiting={canSkipWaitingAsCreator}
           />
         </CollaborationNotice>
       </CollaborationProvider>
@@ -816,7 +841,7 @@ export default function GamePage({ params }: GamePageProps) {
     <CollaborationProvider roomId={roomId} user={user}>
       <CollaborationNotice>
         <GameInstancesResetWatcher gameId={gameId} />
-        {user && currentGame?.collaborationMode === "group" && roomId?.startsWith("group:") ? (
+        {user && currentGame?.collaborationMode === "group" && roomId?.startsWith("group:") && !shouldBypassWaitingRoom ? (
           <GroupWaitingRoom
             gameTitle={currentGame.title}
             groupId={searchParams.get("groupId") || roomId.split(":")[1] || ""}
@@ -824,6 +849,8 @@ export default function GamePage({ params }: GamePageProps) {
             joinKey={currentGroupJoinKey}
             currentUser={user}
             groupMembers={currentGroupMembers}
+            onSkipWaiting={handleCreatorSkipWaiting}
+            canSkipWaiting={canSkipWaitingAsCreator}
           />
         ) : (
           <App />

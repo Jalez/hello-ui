@@ -162,6 +162,7 @@ export function useEditorPatchOutbound({
   const handleLocalEditorUpdate = useCallback((viewUpdate: ViewUpdate) => {
     const selection = viewUpdate.state.selection.main;
     const shouldSuppressDocChange = viewUpdate.docChanged && suppressCollaborationUpdateRef.current;
+    const shouldSendSelectionPresence = viewUpdate.selectionSet && viewUpdate.view.hasFocus;
     pendingSelectionRef.current = {
       from: selection.from,
       to: selection.to,
@@ -177,7 +178,7 @@ export function useEditorPatchOutbound({
 
     if (
       isConnected &&
-      (viewUpdate.selectionSet || (viewUpdate.docChanged && !shouldSuppressDocChange)) &&
+      (shouldSendSelectionPresence || (viewUpdate.docChanged && !shouldSuppressDocChange)) &&
       !inflightChangeSetRef.current
     ) {
       scheduleDebouncedSync();

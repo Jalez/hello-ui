@@ -58,6 +58,8 @@ interface GroupWaitingRoomProps {
   currentUser: UserIdentity;
   groupMembers: ClientGroupMember[];
   onBack?: () => void;
+  onSkipWaiting?: () => void;
+  canSkipWaiting?: boolean;
   isNested?: boolean;
 }
 
@@ -69,6 +71,8 @@ export function GroupWaitingRoom({
   currentUser,
   groupMembers,
   onBack,
+  onSkipWaiting,
+  canSkipWaiting = false,
   isNested,
 }: GroupWaitingRoomProps) {
   const collaboration = useCollaboration();
@@ -274,6 +278,15 @@ export function GroupWaitingRoom({
               "Ready! Starting..."
             )}
           </Button>
+          {canSkipWaiting && onSkipWaiting && !isStarted ? (
+            <Button
+              className="min-w-[200px]"
+              variant="secondary"
+              onClick={onSkipWaiting}
+            >
+              Open Group Instance
+            </Button>
+          ) : null}
         </div>
         <p className="max-w-xl text-sm text-muted-foreground">
           The game starts as soon as at least two members are ready. Share the key with teammates so they can join!
