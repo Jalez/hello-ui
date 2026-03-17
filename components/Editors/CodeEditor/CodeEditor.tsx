@@ -362,7 +362,7 @@ export default function CodeEditor({
 
         {title === "HTML" && (
           <HtmlFrameLine
-            value={"<div id='root'>"}
+            value={"<div id='root'><kbd>"}
             props={htmlFrameLineProps}
           />
         )}
@@ -400,7 +400,7 @@ export default function CodeEditor({
 
         {title === "HTML" && (
           <HtmlFrameLine
-            value={"</div>"}
+            value={"</kbd></div>"}
             props={htmlFrameLineProps}
           />
         )}
