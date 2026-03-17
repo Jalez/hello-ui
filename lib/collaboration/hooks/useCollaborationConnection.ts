@@ -519,6 +519,13 @@ export function useCollaborationConnection(
           return;
         }
 
+        // 4009 = "Replaced by new session" — the server evicted this socket because
+        // a newer connection from the same account joined. Do not reconnect.
+        if (event.code === 4009) {
+          manualDisconnectRef.current = true;
+          return;
+        }
+
         if (disposed || manualDisconnectRef.current) {
           if (terminalErrorRef.current) {
             setError(terminalErrorRef.current);
