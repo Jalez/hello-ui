@@ -59,10 +59,11 @@ const GROUP_START_MIN_READY_COUNT = 2;
 const WS_ARTIFICIAL_DELAY_MS = parseInt(process.env.WS_ARTIFICIAL_DELAY_MS || "0", 10);
 const WS_ARTIFICIAL_JITTER_MS = parseInt(process.env.WS_ARTIFICIAL_JITTER_MS || "0", 10);
 const GAME_DUPLICATE_SETTINGS_TTL_MS = 10000;
-const CLIENT_HASH_TTL_MS = 10000;
-const DIVERGENCE_PERSIST_MS = 1500;
-const DIVERGENCE_REPEAT_THRESHOLD = 2;
-const DIVERGENCE_RESYNC_COOLDOWN_MS = 2000;
+const CLIENT_HASH_TTL_MS = 15000;
+const DIVERGENCE_PERSIST_MS = 8000;
+const DIVERGENCE_REPEAT_THRESHOLD = 5;
+const DIVERGENCE_RESYNC_COOLDOWN_MS = 30000;
+const DIVERGENCE_SOFT_RESYNC_ESCALATION = 3;
 const DATABASE_URL = process.env.DATABASE_URL || process.env.POSTGRES_URL || "";
 const dbPool = DATABASE_URL ? new pg.Pool({ connectionString: DATABASE_URL }) : null;
 const {
@@ -244,6 +245,7 @@ const {
   divergencePersistMs: DIVERGENCE_PERSIST_MS,
   divergenceRepeatThreshold: DIVERGENCE_REPEAT_THRESHOLD,
   divergenceResyncCooldownMs: DIVERGENCE_RESYNC_COOLDOWN_MS,
+  softResyncEscalation: DIVERGENCE_SOFT_RESYNC_ESCALATION,
   broadcastToRoom,
   ensureRoomState,
   parseRoomContext,
