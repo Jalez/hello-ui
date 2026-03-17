@@ -10,22 +10,18 @@ export async function initializeUserCredits(userId: string, initialCredits: numb
 
   try {
     await client.query("BEGIN");
+    const creditsId = crypto.randomUUID();
+    const insertedCredits = await client.query(
+      `INSERT INTO user_credits (id, user_id, current_credits, total_credits_earned, total_credits_used)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (user_id) DO NOTHING
+       RETURNING id`,
+      [creditsId, userId, initialCredits, initialCredits, 0],
+    );
+    const insertedCreditsRows = extractRows(insertedCredits);
 
-    // Check if user credits already exist
-    const existingCredits = await client.query("SELECT 1 FROM user_credits WHERE user_id = $1", [userId]);
-    const existingCreditsRows = extractRows(existingCredits);
-
-    if (existingCreditsRows.length === 0) {
-      const creditsId = crypto.randomUUID();
-
-      // Create user credits
-      await client.query(
-        `INSERT INTO user_credits (id, user_id, current_credits, total_credits_earned, total_credits_used)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [creditsId, userId, initialCredits, initialCredits, 0],
-      );
-
-      // Log initial credit allocation transaction
+    if (insertedCreditsRows.length > 0) {
+      // Only the caller that won the insert race should log the initial allocation.
       await logInitialCreditTransaction(client, userId, initialCredits);
     }
 

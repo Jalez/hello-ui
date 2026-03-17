@@ -3,8 +3,14 @@ import { Level, MapDetails } from "@/types";
 import { makeRequest } from "./makeRequest";
 
 const url = mapUrl;
+const MAP_LEVELS_CACHE_TTL_MS = 1500;
+const mapLevelsCache = new Map<string, {
+  data?: Level[];
+  expiresAt: number;
+  promise?: Promise<Level[]>;
+}>();
 
-type getMapLevels = (mapName: string) => Promise<Level[]>;
+type getMapLevels = (mapName: string, options?: { forceFresh?: boolean }) => Promise<Level[]>;
 type getMapNames = () => Promise<string[]>;
 type getMapByName = (name: string) => Promise<MapDetails>;
 type createMap = (map: MapDetails) => Promise<MapDetails>;
@@ -19,10 +25,47 @@ type removeLevelFromMap = (mapName: string, levelId: string) => Promise<void>;
  * @param mapName  - the name of the map
  * @returns Promise<Level[]>
  */
-export const getMapLevels: getMapLevels = async (mapName) => {
-  const url = `${mapUrl}/levels/${mapName}`;
-  return makeRequest<Level[]>(url);
+export const getMapLevels: getMapLevels = async (mapName, options = {}) => {
+  const cacheKey = mapName;
+  const now = Date.now();
+  const cached = mapLevelsCache.get(cacheKey);
+
+  if (!options.forceFresh && cached) {
+    if (cached.data && cached.expiresAt > now) {
+      return cached.data;
+    }
+    if (cached.promise) {
+      return cached.promise;
+    }
+  }
+
+  const requestUrl = `${mapUrl}/levels/${mapName}`;
+  const request = makeRequest<Level[]>(requestUrl).then((levels) => {
+    mapLevelsCache.set(cacheKey, {
+      data: levels,
+      expiresAt: Date.now() + MAP_LEVELS_CACHE_TTL_MS,
+    });
+    return levels;
+  }).catch((error) => {
+    const active = mapLevelsCache.get(cacheKey);
+    if (active?.promise === request) {
+      mapLevelsCache.delete(cacheKey);
+    }
+    throw error;
+  });
+
+  mapLevelsCache.set(cacheKey, {
+    data: options.forceFresh ? undefined : cached?.data,
+    expiresAt: cached?.expiresAt ?? 0,
+    promise: request,
+  });
+
+  return request;
 };
+
+function invalidateMapLevelsCache(mapName: string) {
+  mapLevelsCache.delete(mapName);
+}
 
 /**
  * @description Get the names of all maps from the server
@@ -74,7 +117,9 @@ export const updateMap: updateMap = async (name, map) => {
     },
     body: JSON.stringify(map),
   };
-  return makeRequest<MapDetails>(url, options);
+  const updated = await makeRequest<MapDetails>(url, options);
+  invalidateMapLevelsCache(name);
+  return updated;
 };
 
 /**
@@ -87,7 +132,9 @@ export const deleteMap: deleteMap = async (name) => {
   const options: RequestInit = {
     method: "DELETE",
   };
-  return makeRequest<MapDetails>(url, options);
+  const deleted = await makeRequest<MapDetails>(url, options);
+  invalidateMapLevelsCache(name);
+  return deleted;
 };
 
 /**
@@ -110,6 +157,7 @@ export const addLevelsToMap: addLevelsToMap = async (mapName, levelIds) => {
     },
     body: JSON.stringify({ levels: levelIds }),
   });
+  invalidateMapLevelsCache(mapName);
 };
 
 /**
@@ -121,4 +169,5 @@ export const removeLevelFromMap: removeLevelFromMap = async (mapName, levelId) =
   if (!response.ok) {
     throw new Error(`${response.status} ${response.statusText}`);
   }
+  invalidateMapLevelsCache(mapName);
 };

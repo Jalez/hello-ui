@@ -15,6 +15,8 @@ interface GroupTabProps {
   currentUser: UserIdentity;
   selectedGroupId: string | null;
   onGroupSelect: (groupId: string | null) => void;
+  onSkipWaiting?: () => void;
+  canSkipWaiting?: boolean;
   collaboration?: any;
 }
 
@@ -25,6 +27,8 @@ export function GroupTab({
   currentUser,
   selectedGroupId,
   onGroupSelect,
+  onSkipWaiting,
+  canSkipWaiting = false,
   collaboration,
 }: GroupTabProps) {
   const [currentGroupName, setCurrentGroupName] = useState<string | null>(null);
@@ -44,7 +48,10 @@ export function GroupTab({
     const loadGroupDetails = async () => {
       setIsLoading(true);
       try {
-        const data = await fetchGroupDetailsCached(selectedGroupId);
+        const data = await fetchGroupDetailsCached(selectedGroupId, {
+          gameId,
+          preferCreatorAccess: canSkipWaiting,
+        });
         if (cancelled) return;
         setCurrentGroupName(data.group?.name ?? null);
         setCurrentGroupJoinKey(data.group?.joinKey ?? null);
@@ -64,7 +71,7 @@ export function GroupTab({
     return () => {
       cancelled = true;
     };
-  }, [selectedGroupId]);
+  }, [canSkipWaiting, gameId, selectedGroupId]);
 
   return (
     <div className="rounded-lg border p-4 min-h-[400px]">
@@ -82,6 +89,8 @@ export function GroupTab({
           currentUser={currentUser}
           groupMembers={currentGroupMembers}
           onBack={() => onGroupSelect(null)}
+          onSkipWaiting={onSkipWaiting}
+          canSkipWaiting={canSkipWaiting}
           isNested={true}
         />
       ) : (

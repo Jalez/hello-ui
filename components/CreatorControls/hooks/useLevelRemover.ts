@@ -26,7 +26,7 @@ export const useLevelRemover = () => {
   const refreshCurrentMapLevels = useCallback(async () => {
     if (!currentGame?.id || !currentGame.mapName) return;
 
-    const freshLevels = await getMapLevels(currentGame.mapName);
+    const freshLevels = await getMapLevels(currentGame.mapName, { forceFresh: true });
     const solutions = freshLevels.reduce<Record<string, { html: string; css: string; js: string }>>(
       (acc, level: Level) => {
         acc[level.name] = {

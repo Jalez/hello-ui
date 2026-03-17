@@ -88,6 +88,30 @@ async function resolveAplusAppGroup(params: {
   };
 }
 
+function isDuplicateUserEmailError(error: unknown): error is { code?: string } {
+  return !!error && typeof error === "object" && "code" in error && error.code === "23505";
+}
+
+async function hydrateLtiUserName(
+  sql: Awaited<ReturnType<typeof getSql>>,
+  row: { id: string; email: string; name: string | null },
+  name?: string,
+) {
+  if (!name || row.name) {
+    return row;
+  }
+
+  const updatedResult = await sql.query(
+    `UPDATE users
+     SET name = $2, updated_at = NOW()
+     WHERE id = $1
+     RETURNING id, email, name`,
+    [row.id, name],
+  );
+  const updatedRows = extractRows(updatedResult) as Array<{ id: string; email: string; name: string | null }>;
+  return updatedRows[0] ?? row;
+}
+
 async function getOrCreateLtiUser(params: {
   sql: Awaited<ReturnType<typeof getSql>>;
   email: string;
@@ -103,18 +127,7 @@ async function getOrCreateLtiUser(params: {
   );
   const existingRows = extractRows(existingResult) as Array<{ id: string; email: string; name: string | null }>;
   if (existingRows[0]) {
-    if (params.name && !existingRows[0].name) {
-      const updatedResult = await params.sql.query(
-        `UPDATE users
-         SET name = $2, updated_at = NOW()
-         WHERE id = $1
-         RETURNING id, email, name`,
-        [existingRows[0].id, params.name],
-      );
-      const updatedRows = extractRows(updatedResult) as Array<{ id: string; email: string; name: string | null }>;
-      return updatedRows[0];
-    }
-    return existingRows[0];
+    return hydrateLtiUserName(params.sql, existingRows[0], params.name);
   }
 
   if (params.fallbackEmail && params.fallbackEmail !== params.email) {
@@ -139,14 +152,33 @@ async function getOrCreateLtiUser(params: {
     }
   }
 
-  const createdResult = await params.sql.query(
-    `INSERT INTO users (email, name)
-     VALUES ($1, $2)
-     RETURNING id, email, name`,
-    [params.email, params.name ?? null],
-  );
-  const createdRows = extractRows(createdResult) as Array<{ id: string; email: string; name: string | null }>;
-  return createdRows[0];
+  try {
+    const createdResult = await params.sql.query(
+      `INSERT INTO users (email, name)
+       VALUES ($1, $2)
+       RETURNING id, email, name`,
+      [params.email, params.name ?? null],
+    );
+    const createdRows = extractRows(createdResult) as Array<{ id: string; email: string; name: string | null }>;
+    return createdRows[0];
+  } catch (error) {
+    if (!isDuplicateUserEmailError(error)) {
+      throw error;
+    }
+
+    const racedResult = await params.sql.query(
+      `SELECT id, email, name
+       FROM users
+       WHERE email = $1
+       LIMIT 1`,
+      [params.email],
+    );
+    const racedRows = extractRows(racedResult) as Array<{ id: string; email: string; name: string | null }>;
+    if (!racedRows[0]) {
+      throw error;
+    }
+    return hydrateLtiUserName(params.sql, racedRows[0], params.name);
+  }
 }
 
 // POST /api/lti/game/[gameId]

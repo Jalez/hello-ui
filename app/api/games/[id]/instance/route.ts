@@ -250,83 +250,122 @@ async function updateInstanceProgressData(
   };
 }
 
-async function resolveGroupInstance(sql: Awaited<ReturnType<typeof getSql>>, gameId: string, groupId: string) {
-  const existingResult = await sql.query(
-    "SELECT id, progress_data FROM game_instances WHERE game_id = $1 AND scope = 'group' AND group_id = $2 LIMIT 1",
-    [gameId, groupId],
-  );
-  const existingRows = getRows(existingResult);
-  if (existingRows.length) {
-    const progressData = ensureGroupStartGateProgressData(
-      normalizeProgressData(existingRows[0].progress_data),
-      "group",
-    );
-    return {
-      instance: {
-        id: existingRows[0].id,
-        scope: "group" as const,
-        groupId,
-        userId: null,
-        progressData,
-      },
-    } as const;
-  }
 
-  const createdResult = await sql.query(
-    `INSERT INTO game_instances (game_id, scope, group_id, progress_data)
-     VALUES ($1, 'group', $2, $3)
-     RETURNING id, progress_data`,
-    [gameId, groupId, ensureGroupStartGateProgressData({}, "group")],
-  );
-  const createdRows = getRows(createdResult);
+function buildGroupInstanceResponse(groupId: string, row: Record<string, unknown>) {
   return {
     instance: {
-      id: createdRows[0].id,
+      id: row.id,
       scope: "group" as const,
       groupId,
       userId: null,
       progressData: ensureGroupStartGateProgressData(
-        normalizeProgressData(createdRows[0].progress_data),
+        normalizeProgressData(row.progress_data),
         "group",
       ),
     },
   } as const;
 }
 
-async function resolveIndividualInstance(sql: Awaited<ReturnType<typeof getSql>>, gameId: string, actorUserId: string) {
+function buildIndividualInstanceResponse(userId: string, row: Record<string, unknown>) {
+  return {
+    instance: {
+      id: row.id,
+      scope: "individual" as const,
+      groupId: null,
+      userId,
+      progressData: row.progress_data ?? {},
+    },
+  } as const;
+}
+
+function isDuplicateGroupInstanceError(error: unknown): error is { code?: string; constraint?: string } {
+  return (
+    !!error
+    && typeof error === "object"
+    && "code" in error
+    && (error.code === "23505" || ("constraint" in error && error.constraint === "idx_game_instances_group_unique"))
+  );
+}
+
+function isDuplicateIndividualInstanceError(error: unknown): error is { code?: string; constraint?: string } {
+  return (
+    !!error
+    && typeof error === "object"
+    && "code" in error
+    && (error.code === "23505" || ("constraint" in error && error.constraint === "idx_game_instances_individual_unique"))
+  );
+}
+
+export async function resolveGroupInstance(sql: Awaited<ReturnType<typeof getSql>>, gameId: string, groupId: string) {
+  const existingResult = await sql.query(
+    "SELECT id, progress_data FROM game_instances WHERE game_id = $1 AND scope = 'group' AND group_id = $2 LIMIT 1",
+    [gameId, groupId],
+  );
+  const existingRows = getRows(existingResult);
+  if (existingRows.length) {
+    return buildGroupInstanceResponse(groupId, existingRows[0]);
+  }
+
+  try {
+    const createdResult = await sql.query(
+      `INSERT INTO game_instances (game_id, scope, group_id, progress_data)
+       VALUES ($1, 'group', $2, $3)
+       RETURNING id, progress_data`,
+      [gameId, groupId, ensureGroupStartGateProgressData({}, "group")],
+    );
+    const createdRows = getRows(createdResult);
+    return buildGroupInstanceResponse(groupId, createdRows[0]);
+  } catch (error) {
+    if (!isDuplicateGroupInstanceError(error)) {
+      throw error;
+    }
+
+    const racedResult = await sql.query(
+      "SELECT id, progress_data FROM game_instances WHERE game_id = $1 AND scope = 'group' AND group_id = $2 LIMIT 1",
+      [gameId, groupId],
+    );
+    const racedRows = getRows(racedResult);
+    if (!racedRows.length) {
+      throw error;
+    }
+    return buildGroupInstanceResponse(groupId, racedRows[0]);
+  }
+}
+
+export async function resolveIndividualInstance(sql: Awaited<ReturnType<typeof getSql>>, gameId: string, actorUserId: string) {
   const existingResult = await sql.query(
     "SELECT id, progress_data FROM game_instances WHERE game_id = $1 AND scope = 'individual' AND user_id = $2 LIMIT 1",
     [gameId, actorUserId],
   );
   const existingRows = getRows(existingResult);
   if (existingRows.length) {
-    return {
-      instance: {
-        id: existingRows[0].id,
-        scope: "individual" as const,
-        groupId: null,
-        userId: actorUserId,
-        progressData: existingRows[0].progress_data ?? {},
-      },
-    } as const;
+    return buildIndividualInstanceResponse(actorUserId, existingRows[0]);
   }
 
-  const createdResult = await sql.query(
-    `INSERT INTO game_instances (game_id, scope, user_id, progress_data)
-     VALUES ($1, 'individual', $2, '{}')
-     RETURNING id, progress_data`,
-    [gameId, actorUserId],
-  );
-  const createdRows = getRows(createdResult);
-  return {
-    instance: {
-      id: createdRows[0].id,
-      scope: "individual" as const,
-      groupId: null,
-      userId: actorUserId,
-      progressData: createdRows[0].progress_data ?? {},
-    },
-  } as const;
+  try {
+    const createdResult = await sql.query(
+      `INSERT INTO game_instances (game_id, scope, user_id, progress_data)
+       VALUES ($1, 'individual', $2, '{}')
+       RETURNING id, progress_data`,
+      [gameId, actorUserId],
+    );
+    const createdRows = getRows(createdResult);
+    return buildIndividualInstanceResponse(actorUserId, createdRows[0]);
+  } catch (error) {
+    if (!isDuplicateIndividualInstanceError(error)) {
+      throw error;
+    }
+
+    const racedResult = await sql.query(
+      "SELECT id, progress_data FROM game_instances WHERE game_id = $1 AND scope = 'individual' AND user_id = $2 LIMIT 1",
+      [gameId, actorUserId],
+    );
+    const racedRows = getRows(racedResult);
+    if (!racedRows.length) {
+      throw error;
+    }
+    return buildIndividualInstanceResponse(actorUserId, racedRows[0]);
+  }
 }
 
 export async function resolveInstance(
@@ -405,45 +444,9 @@ async function resolveServiceTokenAuth(request: NextRequest, gameId: string) {
       }
       return { error: "groupId is required for group mode", status: 400 } as const;
     }
-    const existingResult = await sql.query(
-      "SELECT id, progress_data FROM game_instances WHERE game_id = $1 AND scope = 'group' AND group_id = $2 LIMIT 1",
-      [gameId, groupId],
-    );
-    const existingRows = getRows(existingResult);
-    if (existingRows.length) {
-      return {
-        instance: {
-          id: existingRows[0].id,
-          scope: "group" as const,
-          groupId,
-          userId: null,
-          progressData: ensureGroupStartGateProgressData(
-            normalizeProgressData(existingRows[0].progress_data),
-            "group",
-          ),
-        },
-        collaborationMode: mode,
-        mapName: (gameRows[0].map_name as string) || "",
-      } as const;
-    }
-    const createdResult = await sql.query(
-      `INSERT INTO game_instances (game_id, scope, group_id, progress_data)
-       VALUES ($1, 'group', $2, $3)
-       RETURNING id, progress_data`,
-      [gameId, groupId, ensureGroupStartGateProgressData({}, "group")],
-    );
-    const createdRows = getRows(createdResult);
+    const groupInstance = await resolveGroupInstance(sql, gameId, groupId);
     return {
-      instance: {
-        id: createdRows[0].id,
-        scope: "group" as const,
-        groupId,
-        userId: null,
-        progressData: ensureGroupStartGateProgressData(
-          normalizeProgressData(createdRows[0].progress_data),
-          "group",
-        ),
-      },
+      instance: groupInstance.instance,
       collaborationMode: mode,
       mapName: (gameRows[0].map_name as string) || "",
     } as const;
@@ -453,39 +456,9 @@ async function resolveServiceTokenAuth(request: NextRequest, gameId: string) {
   if (!userId) {
     return { error: "userId is required for individual mode", status: 400 } as const;
   }
-  const existingResult = await sql.query(
-    "SELECT id, progress_data FROM game_instances WHERE game_id = $1 AND scope = 'individual' AND user_id = $2 LIMIT 1",
-    [gameId, userId],
-  );
-  const existingRows = getRows(existingResult);
-  if (existingRows.length) {
-    return {
-      instance: {
-        id: existingRows[0].id,
-        scope: "individual" as const,
-        groupId: null,
-        userId,
-        progressData: existingRows[0].progress_data ?? {},
-      },
-      collaborationMode: mode,
-      mapName: (gameRows[0].map_name as string) || "",
-    } as const;
-  }
-  const createdResult = await sql.query(
-    `INSERT INTO game_instances (game_id, scope, user_id, progress_data)
-     VALUES ($1, 'individual', $2, '{}')
-     RETURNING id, progress_data`,
-    [gameId, userId],
-  );
-  const createdRows = getRows(createdResult);
+  const individualInstance = await resolveIndividualInstance(sql, gameId, userId);
   return {
-    instance: {
-      id: createdRows[0].id,
-      scope: "individual" as const,
-      groupId: null,
-      userId,
-      progressData: createdRows[0].progress_data ?? {},
-    },
+    instance: individualInstance.instance,
     collaborationMode: mode,
     mapName: (gameRows[0].map_name as string) || "",
   } as const;

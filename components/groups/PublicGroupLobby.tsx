@@ -18,6 +18,8 @@ interface PublicGroupLobbyProps {
   courseName: string | null;
   currentUser: UserIdentity;
   onGroupSelect: (groupId: string | null) => void | Promise<void>;
+  onSkipWaiting?: () => void;
+  canSkipWaiting?: boolean;
 }
 
 export function PublicGroupLobby({
@@ -27,6 +29,8 @@ export function PublicGroupLobby({
   courseName,
   currentUser,
   onGroupSelect,
+  onSkipWaiting,
+  canSkipWaiting = false,
 }: PublicGroupLobbyProps) {
   const lobbyCollaboration = useCollaboration();
   const [chatMode, setChatMode] = useState<"lobby" | "group">("lobby");
@@ -128,6 +132,8 @@ export function PublicGroupLobby({
                 currentUser={currentUser}
                 selectedGroupId={groupId}
                 onGroupSelect={onGroupSelect}
+                onSkipWaiting={onSkipWaiting}
+                canSkipWaiting={canSkipWaiting}
               />
             </TabsContent>
 
