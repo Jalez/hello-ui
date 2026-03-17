@@ -106,11 +106,6 @@ export function createDuplicateIdentityService({
     const isTargetLobby = isLobbyRoom(targetRoomId);
     const duplicates = [];
     for (const [candidateRoomId, roomUsers] of rooms.entries()) {
-      // Don't count yourself in the same room as a duplicate
-      if (candidateRoomId === targetRoomId) {
-        continue;
-      }
-
       if (extractGameIdFromRoomId(candidateRoomId) !== gameId) {
         continue;
       }
