@@ -497,6 +497,11 @@ export default function GamePage({ params }: GamePageProps) {
           if (submittedAccessKey) {
             instanceParams.set("key", submittedAccessKey);
           }
+          // Allow creators to view another user's individual instance
+          const viewUserId = searchParams.get("userId");
+          if (viewUserId && game.canEdit) {
+            instanceParams.set("userId", viewUserId);
+          }
           setLoadingMessage("Opening game...");
           const instanceRes = await fetch(apiUrl(`/api/games/${gameId}/instance${instanceParams.toString() ? `?${instanceParams.toString()}` : ""}`));
           if (instanceRes.ok) {
