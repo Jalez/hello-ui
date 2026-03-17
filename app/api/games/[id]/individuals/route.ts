@@ -36,7 +36,7 @@ export async function GET(
        COALESCE(NULLIF(TRIM(u.name), ''), u.email) AS display_name,
        u.email AS user_email
      FROM game_instances gi
-     LEFT JOIN users u ON u.id = gi.user_id
+     LEFT JOIN users u ON u.id::text = gi.user_id
      WHERE gi.game_id = $1
        AND gi.scope = 'individual'
        AND gi.user_id IS NOT NULL
