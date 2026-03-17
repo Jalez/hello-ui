@@ -36,6 +36,35 @@ async function handleJoinGame({ socket, data, socketId, resolveRoomId, ctx }) {
     accountUserId: data.userId || "",
     accountUserEmail: data.userEmail || "",
   };
+  // Evict stale sockets from the same account in the same room (e.g. page refresh).
+  // This must happen before duplicate detection so the old session doesn't block or
+  // rename the new one. Collect first to avoid mutating the Map during iteration.
+  const staleSockets = [];
+  for (const [existingSocket, existingUser] of ctx.getRoomUsers(roomId).entries()) {
+    if (existingSocket === socket) continue;
+    const sameAccount =
+      (baseUserData.userId && existingUser.accountUserId && existingUser.accountUserId === baseUserData.userId) ||
+      (baseUserData.userEmail && existingUser.accountUserEmail && existingUser.accountUserEmail === baseUserData.userEmail);
+    if (sameAccount) {
+      staleSockets.push(existingSocket);
+    }
+  }
+  for (const staleSocket of staleSockets) {
+    const evictedData = ctx.removeUserFromRoom(roomId, staleSocket);
+    if (evictedData) {
+      ctx.cleanupSocketAwareness(roomId, staleSocket);
+      ctx.removeClientStateHash(roomId, evictedData.clientId);
+      ctx.broadcastToRoom(roomId, "user-left", {
+        clientId: evictedData.clientId,
+        userId: evictedData.userId,
+        userEmail: evictedData.userEmail,
+        userName: evictedData.userName,
+      }, staleSocket);
+      console.log(`[join-game:evict-stale] user=${evictedData.userEmail} room=${roomId} reason=same-account-rejoin`);
+    }
+    try { staleSocket.close(4009, "Replaced by new session"); } catch { /* already closed */ }
+  }
+
   const existingDuplicates = ctx.findDuplicateUsersInGame(gameId, baseUserData, roomId);
   if (gameId && existingDuplicates.length > 0 && !await ctx.isDuplicateUserAllowed(gameId)) {
     const conflictingUser = existingDuplicates[0];
