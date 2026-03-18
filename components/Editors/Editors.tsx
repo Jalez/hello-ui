@@ -14,6 +14,7 @@ import { store } from "@/store/store";
 import { LOCAL_REDUX_UPDATE_DEBOUNCE_MS } from "./CodeEditor/constants";
 
 const Editors = (): React.ReactNode => {
+  console.log("[collab-loop] Editors render");
   const dispatch = useAppDispatch();
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const levels = useAppSelector((state) => state.levels);

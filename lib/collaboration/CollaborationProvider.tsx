@@ -266,6 +266,7 @@ interface CollaborationProviderProps {
 }
 
 export function CollaborationProvider({ children, roomId, groupId, user }: CollaborationProviderProps) {
+  console.log(`[collab-loop] CollaborationProvider render roomId=${roomId} groupId=${groupId}`);
   const collabEngine = "yjs" as const;
   const resolvedRoomId = roomId ?? groupId ?? null;
   const isLobbyRoomId = isLobbyRoom(resolvedRoomId);
@@ -430,6 +431,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
    * shared notebook, prefilled from the last known room snapshot to avoid flashing blank.
    */
   const replaceLocalYDoc = useCallback((reason: string, nextServerGeneration?: number | null, hydrateFrom?: RoomStateSync) => {
+    console.log(`[collab-loop] replaceLocalYDoc reason=${reason} nextGen=${nextServerGeneration ?? "null"} hydratedLevels=${hydrateFrom?.levels?.length ?? 0}`);
     logCollaborationStep("2.3", "replaceLocalYDoc", {
       reason,
       nextServerGeneration: nextServerGeneration ?? null,
@@ -650,6 +652,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
    * gate information, and swaps the local Yjs document if the server generation changed.
    */
   const handleRoomStateSync = useCallback((roomState: RoomStateSyncMessage) => {
+    console.log(`[collab-loop] handleRoomStateSync levelsCount=${roomState?.levels?.length ?? 0} forceReplace=${roomState?.forceReplaceYDoc === true}`);
     logCollaborationStep("2.4", "handleRoomStateSync", {
       yjsDocGeneration: roomState?.yjsDocGeneration ?? null,
       levelsCount: roomState?.levels?.length ?? 0,
@@ -928,6 +931,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
     const decoder = decoding.createDecoder(decodeBase64ToUint8Array(message.payloadBase64));
     const encoder = encoding.createEncoder();
     const syncMessageType = syncProtocol.readSyncMessage(decoder, encoder, doc, "remote-yjs");
+    console.log(`[collab-loop] handleYjsProtocol syncMessageType=${syncMessageType} encoderLen=${encoding.length(encoder)} room=${resolvedRoomId}`);
     if (encoding.length(encoder) > 0) {
       sendYjsProtocolRef.current?.({
         channel: "sync",
@@ -1061,6 +1065,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
    * "tell me what I am missing" without destroying local unsynced edits.
    */
   const sendYjsSyncStep1 = useCallback((reason: string) => {
+    console.log(`[collab-loop] sendYjsSyncStep1 reason=${reason} room=${resolvedRoomId} connected=${isConnected}`);
     logCollaborationStep("18.4", "sendYjsSyncStep1", {
       reason,
       roomId: resolvedRoomId,
@@ -1752,6 +1757,7 @@ export function useYjsLevelCodeSnapshot(
      * component state so non-editor consumers stay in sync with the CRDT document.
      */
     const sync = () => {
+      console.log(`[collab-loop] useYjsLevelCodeSnapshot.sync levelIndex=${levelIndex}`);
       logCollaborationStep("14.4", "useYjsLevelCodeSnapshot.sync", {
         levelIndex,
       });

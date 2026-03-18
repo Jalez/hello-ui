@@ -126,6 +126,7 @@ export function useYjsCodeEditorCollaboration({
      * This is the "make the screen reflect the shared document" step.
      */
     const syncReactCode = (nextValue: string, markExternal = false, origin: string = "yjs") => {
+      console.log(`[collab-loop] syncReactCode editor=${editorType} level=${levelIndex} origin=${origin} len=${nextValue.length}`);
       logCollaborationStep("14.2", "syncReactCode", {
         editorType,
         levelIndex,
