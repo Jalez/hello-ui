@@ -1,11 +1,50 @@
 import * as encoding from "lib0/encoding";
 import * as syncProtocol from "y-protocols/sync";
 import { logCollaborationStep } from "../log-collaboration-step.mjs";
-import { extractGameIdFromRoomId, isLobbyRoom, parseRoomContext } from "../room-context.mjs";
+import { isLobbyRoom, parseRoomContext } from "../room-context.mjs";
 
 /**
  * @typedef {import("../ws-runtime-context.mjs").WsRuntimeContext} WsRuntimeContext
  */
+
+function buildUserLeftPayload(userData) {
+  return {
+    clientId: userData.clientId,
+    userId: userData.userId,
+    userEmail: userData.userEmail,
+    userName: userData.userName,
+  };
+}
+
+export function removeSocketSession({
+  socket,
+  roomId,
+  socketId = null,
+  ctx,
+  excludeSocket = socket,
+  snapshotReason = null,
+  snapshotExtra = {},
+}) {
+  const userData = ctx.removeUserFromRoom(roomId, socket);
+  ctx.setConnectionState(socket, { roomId: null });
+
+  if (!userData) {
+    return null;
+  }
+
+  ctx.cleanupSocketAwareness(roomId, socket);
+  ctx.removeClientStateHash(roomId, userData.clientId);
+  ctx.broadcastToRoom(roomId, "user-left", buildUserLeftPayload(userData), excludeSocket);
+
+  if (snapshotReason) {
+    ctx.logRoomSnapshot(snapshotReason, roomId, {
+      ...(socketId ? { by: socketId } : {}),
+      ...snapshotExtra,
+    });
+  }
+
+  return userData;
+}
 
 /**
  * COLLABORATION STEP 8.12:
@@ -24,7 +63,6 @@ async function handleJoinGame({ socket, data, socketId, resolveRoomId, ctx }) {
   }
 
   const roomCtx = parseRoomContext(roomId);
-  const gameId = extractGameIdFromRoomId(roomId);
 
   ctx.setConnectionState(socket, { roomId });
   const sessionRole = data.sessionRole === "readonly" ? "readonly" : "active";
@@ -52,22 +90,18 @@ async function handleJoinGame({ socket, data, socketId, resolveRoomId, ctx }) {
     }
   }
   for (const staleSocket of staleSockets) {
-    const evictedData = ctx.removeUserFromRoom(roomId, staleSocket);
+    const evictedData = removeSocketSession({
+      socket: staleSocket,
+      roomId,
+      ctx,
+      excludeSocket: staleSocket,
+    });
     if (evictedData) {
-      ctx.cleanupSocketAwareness(roomId, staleSocket);
-      ctx.removeClientStateHash(roomId, evictedData.clientId);
-      ctx.broadcastToRoom(roomId, "user-left", {
-        clientId: evictedData.clientId,
-        userId: evictedData.userId,
-        userEmail: evictedData.userEmail,
-        userName: evictedData.userName,
-      }, staleSocket);
       console.log(`[join-game:evict] user=${evictedData.userEmail} room=${roomId} reason=same-account-active-rejoin`);
     }
     try { staleSocket.close(4009, "Replaced by new session"); } catch { /* already closed */ }
   }
 
-  const existingDuplicates = ctx.findDuplicateUsersInGame(gameId, baseUserData, roomId);
   // Duplicates are always allowed; we assign a distinct identity per room when needed.
   const resolvedIdentity = ctx.resolveDuplicateIdentity(roomId, baseUserData);
   const userData = {
@@ -145,25 +179,15 @@ async function handleLeaveGame({ socket, data, socketId, resolveRoomId, ctx }) {
     return;
   }
 
-  const userData = ctx.removeUserFromRoom(roomId, socket);
-  ctx.setConnectionState(socket, { roomId: null });
-
+  const userData = removeSocketSession({
+    socket,
+    roomId,
+    socketId,
+    ctx,
+    snapshotReason: "leave",
+  });
   if (userData) {
-    ctx.cleanupSocketAwareness(roomId, socket);
-    ctx.removeClientStateHash(roomId, userData.clientId);
-    ctx.broadcastToRoom(
-      roomId,
-      "user-left",
-      {
-        clientId: userData.clientId,
-        userId: userData.userId,
-        userEmail: userData.userEmail,
-        userName: userData.userName,
-      },
-      socket
-    );
     console.log(`[leave-game] user=${userData.userEmail} room=${roomId}`);
-    ctx.logRoomSnapshot("leave", roomId, { by: socketId });
   }
 }
 

@@ -1,6 +1,40 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { sessionHandlers } from "./session.mjs";
+import { removeSocketSession, sessionHandlers } from "./session.mjs";
+
+test("removeSocketSession clears connection state even when socket is already missing", () => {
+  const socket = {};
+  const calls = {
+    setConnectionState: [],
+    cleanupSocketAwareness: [],
+    removeClientStateHash: [],
+    broadcastToRoom: [],
+    logRoomSnapshot: [],
+  };
+
+  const result = removeSocketSession({
+    socket,
+    roomId: "room-1",
+    socketId: "socket-1",
+    ctx: {
+      removeUserFromRoom: () => null,
+      setConnectionState: (...args) => calls.setConnectionState.push(args),
+      cleanupSocketAwareness: (...args) => calls.cleanupSocketAwareness.push(args),
+      removeClientStateHash: (...args) => calls.removeClientStateHash.push(args),
+      broadcastToRoom: (...args) => calls.broadcastToRoom.push(args),
+      logRoomSnapshot: (...args) => calls.logRoomSnapshot.push(args),
+    },
+    snapshotReason: "disconnect",
+    snapshotExtra: { reason: "1001" },
+  });
+
+  assert.equal(result, null);
+  assert.deepEqual(calls.setConnectionState, [[socket, { roomId: null }]]);
+  assert.deepEqual(calls.cleanupSocketAwareness, []);
+  assert.deepEqual(calls.removeClientStateHash, []);
+  assert.deepEqual(calls.broadcastToRoom, []);
+  assert.deepEqual(calls.logRoomSnapshot, []);
+});
 
 test("leave-game cleans awareness and broadcasts exact client session", async () => {
   const socket = {};
