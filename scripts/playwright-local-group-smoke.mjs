@@ -1617,6 +1617,28 @@ async function verifyDuplicateBlockedModal(page, label) {
   console.log(`duplicate-blocked-modal ${label}`);
 }
 
+async function verifyEvictionModal(page, label) {
+  const heading = page.getByRole("heading", { name: "Duplicate session detected" });
+  await heading.waitFor({ timeout: scaledTimeout(20000) });
+  await page.getByText("Session conflict").waitFor({ timeout: scaledTimeout(10000) });
+  const continueButton = page.getByRole("button", { name: "Continue in this session" });
+  const readOnlyButton = page.getByRole("button", { name: "View read-only" });
+  await expect(continueButton).toBeVisible({ timeout: scaledTimeout(5000) });
+  await expect(readOnlyButton).toBeVisible({ timeout: scaledTimeout(5000) });
+  // Verify the modal cannot be dismissed by Escape or clicking outside
+  await page.keyboard.press("Escape");
+  await expect(heading).toBeVisible();
+  await page.mouse.click(8, 8);
+  await expect(heading).toBeVisible();
+  console.log(`eviction-modal ${label}`);
+}
+
+async function dismissEvictionModalReadOnly(page, label) {
+  const readOnlyButton = page.getByRole("button", { name: "View read-only" });
+  await readOnlyButton.click();
+  console.log(`eviction-modal:read-only ${label}`);
+}
+
 async function startGroupGame(pages) {
   if (routeKind === "prototype-yjs") {
     return;
@@ -1754,7 +1776,8 @@ async function verifyLevelReset(group, contexts) {
   if (routeKind === "prototype-yjs") {
     return true;
   }
-  const memberPages = group.memberIndexes.map((memberIndex) => contexts[memberIndex].page);
+  const indexes = group.activeMemberIndexes ?? group.memberIndexes;
+  const memberPages = indexes.map((memberIndex) => contexts[memberIndex].page);
   const templateHtml = createStarterLevel().code.html.replace(/\n/g, "");
   const resetMarker = `pw-reset-${Date.now().toString(36)}`;
   const sourceEditor = memberPages[0].locator(".cm-content[contenteditable='true']").first();
@@ -2392,6 +2415,14 @@ async function applyChaosEvent(chaosType, typerPage, otherPages, allContexts, gr
     await gotoGamePage(extraPage, gameUrl(activeGameId, group.groupId), `chaos-extra-tab:${typerCtx.username}`);
     await typerPage.waitForTimeout(2000);
     await extraPage.close().catch(() => {});
+    // The extra tab may have evicted the typer's main page. Reclaim if needed.
+    const evictionHeading = typerPage.getByRole("heading", { name: "Duplicate session detected" });
+    const isEvicted = await evictionHeading.isVisible().catch(() => false);
+    if (isEvicted) {
+      await typerPage.keyboard.press("Enter");
+      log(`${group.groupName} reclaimed typer ${typerCtx.username} after extra tab`);
+      await typerPage.locator(".cm-content").first().waitFor({ timeout: scaledTimeout(10000) });
+    }
     return;
   }
 
@@ -3295,6 +3326,7 @@ async function main() {
         ? group.memberIndexes.slice(-flags.lateOpenCount)
         : [];
       group.lateOpenIndexes = lateOpenIndexes;
+      group.evictedOriginalIndexes = [];
       for (const memberIndex of group.memberIndexes) {
         if (lateOpenIndexes.includes(memberIndex)) {
           continue;
@@ -3302,6 +3334,30 @@ async function main() {
         const participant = contexts[memberIndex];
         await gotoGamePage(participant.page, gameUrl(activeGameId, group.groupId), `group-open:${participant.username}`);
         console.log(`opened group route for ${participant.username} -> ${group.groupName}`);
+      }
+      // After all initial pages open, detect eviction modals caused by duplicate usernames.
+      // Due to WS connection timing, either the earlier or later duplicate might get evicted.
+      const initialNonLateIndexes = group.memberIndexes.filter((idx) => !lateOpenIndexes.includes(idx));
+      const duplicateUsernames = new Set();
+      const seenUsernames = new Set();
+      for (const idx of initialNonLateIndexes) {
+        const u = contexts[idx].username;
+        if (seenUsernames.has(u)) duplicateUsernames.add(u);
+        seenUsernames.add(u);
+      }
+      if (duplicateUsernames.size > 0) {
+        // Give WS connections time to establish and eviction to propagate
+        await contexts[initialNonLateIndexes[0]].page.waitForTimeout(2000);
+        for (const idx of initialNonLateIndexes) {
+          if (!duplicateUsernames.has(contexts[idx].username)) continue;
+          const evictionHeading = contexts[idx].page.getByRole("heading", { name: "Duplicate session detected" });
+          const isEvicted = await evictionHeading.isVisible().catch(() => false);
+          if (isEvicted) {
+            console.log(`eviction:initial-open ${group.groupName} user=${contexts[idx].username} idx=${idx}`);
+            await dismissEvictionModalReadOnly(contexts[idx].page, `${group.groupName}:${contexts[idx].username}:initial`);
+            group.evictedOriginalIndexes.push(idx);
+          }
+        }
       }
     }
 
@@ -3370,7 +3426,7 @@ async function main() {
 
     for (const group of groups) {
       const activePages = group.memberIndexes
-        .filter((memberIndex) => !group.lateOpenIndexes.includes(memberIndex))
+        .filter((memberIndex) => !group.lateOpenIndexes.includes(memberIndex) && !(group.evictedOriginalIndexes || []).includes(memberIndex))
         .map((memberIndex) => contexts[memberIndex].page);
       await startGroupGame(activePages);
       if ((scenario === "same_user_duplicate" || scenario === "same_user_blocked") && group.lateOpenIndexes.length > 0) {
@@ -3380,14 +3436,33 @@ async function main() {
       group.duplicateBlockedModalOk = true;
       for (const lateIndex of group.lateOpenIndexes) {
         const participant = contexts[lateIndex];
+        // Find the original (already-open) page with the same username
+        // that will be evicted when the late duplicate connects.
+        const originalIndex = (scenario === "same_user_blocked" || scenario === "same_user_duplicate")
+          ? group.memberIndexes.find((idx) =>
+              idx !== lateIndex &&
+              !group.lateOpenIndexes.includes(idx) &&
+              contexts[idx].username === participant.username)
+          : undefined;
         await gotoGamePage(participant.page, gameUrl(activeGameId, group.groupId), `late-open:${participant.username}`);
         console.log(`stress:late-open ${group.groupName} user=${participant.username}`);
-        if (scenario === "same_user_blocked") {
-          await verifyDuplicateBlockedModal(participant.page, `${group.groupName}:${participant.username}`);
-          group.blockedLateIndexes.push(lateIndex);
+        if (scenario === "same_user_blocked" && originalIndex !== undefined) {
+          // The server evicts the ORIGINAL socket, so check the original page for the eviction modal
+          await verifyEvictionModal(contexts[originalIndex].page, `${group.groupName}:${contexts[originalIndex].username}:evicted`);
+          await dismissEvictionModalReadOnly(contexts[originalIndex].page, `${group.groupName}:${contexts[originalIndex].username}`);
+          group.evictedOriginalIndexes.push(originalIndex);
+        } else if (scenario === "same_user_duplicate" && originalIndex !== undefined) {
+          // The server evicts the ORIGINAL socket; send it to read-only so the late opener is active
+          await verifyEvictionModal(contexts[originalIndex].page, `${group.groupName}:${contexts[originalIndex].username}:evicted`);
+          await dismissEvictionModalReadOnly(contexts[originalIndex].page, `${group.groupName}:${contexts[originalIndex].username}`);
+          group.evictedOriginalIndexes.push(originalIndex);
         }
       }
-      group.activeMemberIndexes = group.memberIndexes.filter((memberIndex) => !group.blockedLateIndexes.includes(memberIndex));
+      // For same_user_blocked: evicted originals are now read-only, late openers are active.
+      // Active members exclude the evicted originals.
+      group.activeMemberIndexes = group.memberIndexes.filter(
+        (memberIndex) => !group.blockedLateIndexes.includes(memberIndex) && !group.evictedOriginalIndexes.includes(memberIndex)
+      );
       await waitForEditorOnPages(group.activeMemberIndexes.map((memberIndex) => contexts[memberIndex].page));
       group.startSnapshot = await fetchGroupSnapshot(contexts[group.ownerIndex].context.request, group);
       console.log(`stress:start-snapshot ${group.groupName} memberCount=${group.startSnapshot.memberCount} members=${group.startSnapshot.memberNames.join("|")}`);
@@ -3414,6 +3489,17 @@ async function main() {
       }
       participant.extraPages.push(extraPage);
       console.log(`stress:extra-tab ${group.groupName} user=${participant.username}`);
+      // Opening the extra tab evicts the main page. Reclaim the main page so it stays active.
+      const mainEvictionHeading = participant.page.getByRole("heading", { name: "Duplicate session detected" });
+      try {
+        await mainEvictionHeading.waitFor({ timeout: scaledTimeout(5000) });
+        await participant.page.keyboard.press("Enter");
+        console.log(`stress:extra-tab:reclaimed-main ${group.groupName} user=${participant.username}`);
+        // Wait for the main page editor to be ready again after reclaim
+        await participant.page.locator(".cm-content").first().waitFor({ timeout: scaledTimeout(10000) });
+      } catch {
+        // No eviction on main page — might already be handled
+      }
     }
 
     for (const group of groups) {
