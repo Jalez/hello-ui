@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react";
 import App from "@/components/App";
 import { useGameStore } from "@/components/default/games";
 import { CollaborationProvider } from "@/lib/collaboration";
-import { CollaborationNotice } from "@/components/Collaboration/CollaborationNotice";
+import { CollaborationNotice } from "@/components/collaboration/CollaborationNotice";
 
 interface CreatorPageProps {
   params: Promise<{

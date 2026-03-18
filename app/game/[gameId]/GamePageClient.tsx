@@ -16,7 +16,7 @@ import { logDebugClient } from "@/lib/debug-logger";
 import { fetchGroupDetailsCached } from "@/lib/group-details-client";
 import type { ClientGroupMember } from "@/lib/group-details-client";
 import { toast } from "sonner";
-import { CollaborationNotice } from "@/components/Collaboration/CollaborationNotice";
+import { CollaborationNotice } from "@/components/collaboration/CollaborationNotice";
 
 interface GamePageProps {
   params: Promise<{
