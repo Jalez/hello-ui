@@ -1695,7 +1695,55 @@ function isInGameFocusedScenario() {
 }
 
 async function getEditableContent(page) {
-  return (await page.locator(".cm-content[contenteditable='true']").first().textContent()) || "";
+  return await page.evaluate(() => {
+    const editableContent = document.querySelector(".cm-content[contenteditable='true']");
+    if (!editableContent) {
+      return "";
+    }
+    const cmEl = editableContent.closest(".cm-editor");
+    let view = null;
+    try { view = cmEl?.cmView?.view; } catch {}
+    if (!view) {
+      try { view = editableContent.parentNode?.cmView?.view; } catch {}
+      if (!view) try { view = editableContent.cmView?.view; } catch {}
+    }
+    if (view?.state?.doc) {
+      return view.state.doc.toString();
+    }
+    return editableContent.textContent || "";
+  });
+}
+
+async function setEditorSelection(page, placement = "end", offset = 0) {
+  const positioned = await page.evaluate(({ nextPlacement, nextOffset }) => {
+    const editableContent = document.querySelector(".cm-content[contenteditable='true']");
+    if (!editableContent) {
+      return false;
+    }
+    const cmEl = editableContent.closest(".cm-editor");
+    let view = null;
+    try { view = cmEl?.cmView?.view; } catch {}
+    if (!view) {
+      try { view = editableContent.parentNode?.cmView?.view; } catch {}
+      if (!view) try { view = editableContent.cmView?.view; } catch {}
+    }
+    if (!view?.state?.doc) {
+      return false;
+    }
+    const docLength = view.state.doc.length;
+    const basePosition = nextPlacement === "start" ? 0 : docLength;
+    const anchor = Math.max(0, Math.min(docLength, basePosition + nextOffset));
+    view.dispatch({
+      selection: { anchor, head: anchor },
+      scrollIntoView: true,
+    });
+    view.focus();
+    return true;
+  }, { nextPlacement: placement, nextOffset: offset });
+
+  if (!positioned) {
+    throw new Error(`Failed to position CodeMirror selection at ${placement}:${offset}`);
+  }
 }
 
 async function logPageEditorState(page, label) {
@@ -1782,7 +1830,7 @@ async function verifyLevelReset(group, contexts) {
   const resetMarker = `pw-reset-${Date.now().toString(36)}`;
   const sourceEditor = memberPages[0].locator(".cm-content[contenteditable='true']").first();
   await sourceEditor.click();
-  await sourceEditor.press("End");
+  await setEditorSelection(memberPages[0], "end");
   await memberPages[0].keyboard.type(`\n<!-- ${resetMarker} -->`);
   await memberPages[0].waitForTimeout(Math.max(createWaitMs * 2, 2000));
   await triggerLevelReset(memberPages[0]);
@@ -1811,12 +1859,12 @@ async function trySharedEdit(pages, marker) {
   const editor = pages[0].locator(".cm-content[contenteditable='true']").first();
   await editor.waitFor({ timeout: scaledTimeout(10000) });
   await editor.click();
-  await editor.press("End");
+  await setEditorSelection(pages[0], "end");
   await pages[0].keyboard.type(`\n<!-- ${marker} -->`);
   await pages[0].waitForTimeout(createWaitMs);
   const target = pages[pages.length - 1].locator(".cm-content[contenteditable='true']").first();
   await target.waitFor({ timeout: scaledTimeout(10000) });
-  const observed = (await target.textContent()) || "";
+  const observed = await getEditableContent(pages[pages.length - 1]);
   return observed.includes(marker);
 }
 
@@ -1867,7 +1915,7 @@ async function waitForEditorsSettled(pages, label, timeoutMs = scaledTimeout(100
   while (Date.now() - startedAt < timeoutMs) {
     const states = await Promise.all(pages.map(async (page) => {
       const editable = (await page.locator(".cm-content[contenteditable='true']").count().catch(() => 0)) > 0;
-      const content = (await page.locator(".cm-content").first().textContent().catch(() => "")) || "";
+      const content = await getEditableContent(page).catch(() => "");
       return { editable, content };
     }));
     const allEditable = states.every((state) => state.editable);
@@ -1889,7 +1937,7 @@ async function waitForEditorsSettled(pages, label, timeoutMs = scaledTimeout(100
 async function typeMarkerSlowly(page, marker) {
   const editor = page.locator(".cm-content[contenteditable='true']").first();
   await editor.click();
-  await editor.press("End");
+  await setEditorSelection(page, "end");
   await page.keyboard.type(`\n<!-- ${marker} -->`, { delay: 35 });
 }
 
@@ -1907,19 +1955,14 @@ async function tryConcurrentSharedEdit(pages, groupName) {
       const editor = pages[index].locator(".cm-content[contenteditable='true']").first();
       await editor.click();
       const placement = placements[index];
-      if (placement === "start" || placement === "start-offset") {
-        await editor.press("Home");
-      } else {
-        await editor.press("End");
-      }
-      if (placement === "start-offset") {
-        await pages[index].keyboard.press("ArrowRight");
-        await pages[index].keyboard.press("ArrowRight");
-      }
-      if (placement === "end-offset") {
-        await pages[index].keyboard.press("ArrowLeft");
-        await pages[index].keyboard.press("ArrowLeft");
-      }
+      const selectionPlacement = placement.startsWith("start") ? "start" : "end";
+      const selectionOffset =
+        placement === "start-offset"
+          ? 2
+          : placement === "end-offset"
+            ? -2
+            : 0;
+      await setEditorSelection(pages[index], selectionPlacement, selectionOffset);
       await pages[index].keyboard.type(`\n<!-- ${markers[index]} -->`);
     })()),
   );
@@ -1975,7 +2018,7 @@ async function trySamePositionConcurrentEdit(pages, groupName) {
     Array.from({ length: activeEditors }, (_, index) => (async () => {
       const editor = pages[index].locator(".cm-content[contenteditable='true']").first();
       await editor.click();
-      await editor.press("End");
+      await setEditorSelection(pages[index], "end");
       await pages[index].keyboard.type(payloads[index]);
     })()),
   );
@@ -2052,7 +2095,7 @@ async function tryEditStability(targetPage, allPages, groupName, opts = {}) {
   // Type the marker on the target page
   const editor = targetPage.locator(".cm-content[contenteditable='true']").first();
   await editor.click();
-  await editor.press("End");
+  await setEditorSelection(targetPage, "end");
   await targetPage.keyboard.type(`\n<!-- ${marker} -->`, { delay: 30 });
 
   // Wait for the marker to first appear on the target page
@@ -2081,7 +2124,7 @@ async function tryEditStability(targetPage, allPages, groupName, opts = {}) {
       try {
         const otherEditor = bgPage.locator(".cm-content[contenteditable='true']").first();
         await otherEditor.click();
-        await otherEditor.press("End");
+        await setEditorSelection(bgPage, "end");
         await bgPage.keyboard.type(`\n<!-- bg-${round} -->`, { delay: 40 });
       } catch {
         // page may have navigated or closed
@@ -2147,7 +2190,7 @@ async function switchToLevel(page, levelName) {
 async function appendMarker(page, marker, commentStyle = "html") {
   const editor = page.locator(".cm-content[contenteditable='true']").first();
   await editor.click();
-  await editor.press("End");
+  await setEditorSelection(page, "end");
   const wrapped =
     commentStyle === "css"
       ? `\n/* ${marker} */`
