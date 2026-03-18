@@ -182,6 +182,7 @@ export function useCollaborationConnection(
       return;
     }
 
+    console.log(`[ws-lifecycle] effect-run room=${roomId} userIdentity=${userIdentity}`);
     logDebugClient("ws_connection_start", {
       roomId,
       userId: currentUser.id,
@@ -239,6 +240,7 @@ export function useCollaborationConnection(
         roomId,
         userId: currentUser.id,
       });
+      console.log(`[ws-lifecycle] connectSocket room=${roomId} attempt=${reconnectAttemptsRef.current} disposed=${disposed} hasSocket=${!!socketRef.current}`);
       if (disposed || socketRef.current) {
         return;
       }
@@ -255,6 +257,7 @@ export function useCollaborationConnection(
           return;
         }
 
+        console.log(`[ws-lifecycle] onopen room=${roomId} clientId=${newClientId} reconnectAttempts=${reconnectAttemptsRef.current}`);
         isConnectedRef.current = true;
         setIsConnected(true);
         setIsConnecting(false);
@@ -492,6 +495,10 @@ export function useCollaborationConnection(
 
       socket.onclose = (event) => {
         const wasConnected = isConnectedRef.current;
+        const connectionDurationSec = lastConnectedAtRef.current > 0
+          ? ((Date.now() - lastConnectedAtRef.current) / 1000).toFixed(1)
+          : "N/A";
+        console.log(`[ws-lifecycle] onclose room=${roomId} code=${event.code} reason=${JSON.stringify(event.reason)} wasConnected=${wasConnected} connDuration=${connectionDurationSec}s attempt=${reconnectAttemptsRef.current} disposed=${disposed} manualDisconnect=${manualDisconnectRef.current}`);
         logDebugClient("ws_socket_close", {
           roomId,
           clientId: clientIdRef.current,
@@ -557,12 +564,14 @@ export function useCollaborationConnection(
 
         if (reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
           reconnectAttemptsRef.current += 1;
+          console.log(`[ws-lifecycle] scheduling reconnect #${reconnectAttemptsRef.current}/${MAX_RECONNECT_ATTEMPTS} in ${RECONNECT_DELAY_MS}ms room=${roomId}`);
           reconnectTimeoutRef.current = setTimeout(() => {
             if (!disposed && !manualDisconnectRef.current) {
               connectSocket();
             }
           }, RECONNECT_DELAY_MS);
         } else {
+          console.log(`[ws-lifecycle] giving up after ${MAX_RECONNECT_ATTEMPTS} attempts room=${roomId}`);
           setError("Failed to reconnect after multiple attempts");
           optionsRef.current.onError?.("Failed to reconnect after multiple attempts");
         }
@@ -577,6 +586,7 @@ export function useCollaborationConnection(
     }, INITIAL_CONNECT_DELAY_MS);
 
     return () => {
+      console.log(`[ws-lifecycle] effect-cleanup room=${roomId} userIdentity=${userIdentity}`);
       disposed = true;
       reconnectFnRef.current = null;
       cleanupSocket();
