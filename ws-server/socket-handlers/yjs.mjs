@@ -14,7 +14,6 @@ const recentSyncUpdateFingerprintBySocket = new WeakMap();
 const DUPLICATE_UPDATE_WINDOW_MS = 2000;
 const yjsHandshakeStateBySocket = new WeakMap();
 
-console.log("test again and again and again console log ol ok ok")
 /**
  * COLLABORATION STEP 9.2:
  * Accept an incoming Yjs packet from one browser and apply it to the shared room

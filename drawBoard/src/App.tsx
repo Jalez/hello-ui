@@ -184,8 +184,6 @@ function App() {
     <>
       {error ? (
         <ErrorFallback error={error} />
-      ) : imgUrl && !interactive ? (
-        <img src={imgUrl} alt="screenshot" />
       ) : (
         html
       )}
