@@ -8,7 +8,7 @@ import { createYjsTrafficMonitor } from "../yjs-traffic-monitor.mjs";
 /**
  * @typedef {import("../ws-runtime-context.mjs").WsRuntimeContext} WsRuntimeContext
  */
-
+console.log("test again and again and again console log ")
 const yjsTrafficMonitor = createYjsTrafficMonitor();
 const recentSyncUpdateFingerprintBySocket = new WeakMap();
 const DUPLICATE_UPDATE_WINDOW_MS = 2000;
@@ -77,11 +77,15 @@ async function handleYjsProtocol({ socket, data, socketId, resolveRoomId, ctx })
   const syncMessageType = syncProtocol.readSyncMessage(decoder, encoder, doc, socket);
 
   const handshakeState = yjsHandshakeStateBySocket.get(socket) || { isReady: false };
-  // Treat SyncStep1 as the handshake boundary: after we've seen SyncStep1 from this socket
-  // (and respond with SyncStep2), it is safe to accept document updates. Updates that arrive
-  // before this point are often caused by mount/reconnect races and can produce duplicated
-  // content even without explicit human edits.
-  if (syncMessageType === syncProtocol.messageYjsSyncStep1) {
+  // Treat either side of the initial sync handshake as the boundary: once the
+  // socket has participated in SyncStep1 or SyncStep2, it is safe to accept
+  // document updates. During reconnects the client often answers the server's
+  // SyncStep1 with SyncStep2 before sending its own SyncStep1, so gating only on
+  // SyncStep1 can incorrectly drop valid edits for an otherwise healthy session.
+  if (
+    syncMessageType === syncProtocol.messageYjsSyncStep1
+    || syncMessageType === syncProtocol.messageYjsSyncStep2
+  ) {
     handshakeState.isReady = true;
     yjsHandshakeStateBySocket.set(socket, handshakeState);
   }
