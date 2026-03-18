@@ -100,11 +100,6 @@ function EditorTabs({
   };
 
   const handleLockUnlock = async (language: 'html' | 'css' | 'js') => {
-    console.log('handleLockUnlock called with language:', language);
-    console.log('Current level:', currentLevel);
-    // The reducer expects 'js', not 'javascript'
-    const lockType = language;
-    console.log('Dispatching handleLocking with type:', lockType);
     dispatch(
       handleLocking({
         levelId: currentLevel,
@@ -173,9 +168,8 @@ function EditorTabs({
     }
   };
 
-  const handleCodeUpdate = (data: { html?: string; css?: string; js?: string }, type: string) => {
+  const handleCodeUpdate = React.useCallback((data: { html?: string; css?: string; js?: string }, type: string) => {
     const isSolution = type === 'Solution' || type === 'solution';
-    console.log('handleCodeUpdate called with data:', data, 'type:', type, 'isSolution:', isSolution);
     const updatedLanguage = (Object.keys(data).find(
       (key) => key === 'html' || key === 'css' || key === 'js'
     ) || activeLanguage) as 'html' | 'css' | 'js';
@@ -184,7 +178,7 @@ function EditorTabs({
     if (code !== undefined) {
       codeUpdater(updatedLanguage, code, isSolution);
     }
-  };
+  }, [activeLanguage, codeUpdater]);
 
   const languageTabs = [
     { value: 'html', label: 'HTML' },
@@ -289,16 +283,11 @@ function EditorTabs({
                         variant="ghost"
                         className="h-full w-6 p-0 px-2 flex items-center justify-center relative z-10 rounded-none"
                         onClick={(e) => {
-                          console.log('Lock button clicked for tab:', tab.value, 'language:', tabLanguage);
-                          console.log('Event target:', e.target);
-                          console.log('Event currentTarget:', e.currentTarget);
                           e.stopPropagation();
                           e.preventDefault();
-                          console.log('Calling handleLockUnlock with:', tabLanguage);
                           handleLockUnlock(tabLanguage);
                         }}
                         onMouseDown={(e) => {
-                          console.log('Lock button mouseDown for tab:', tab.value, 'language:', tabLanguage);
                           e.stopPropagation();
                         }}
                         title={tabLocked ? "Unlock" : "Lock"}

@@ -928,11 +928,6 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
     const decoder = decoding.createDecoder(decodeBase64ToUint8Array(message.payloadBase64));
     const encoder = encoding.createEncoder();
     const syncMessageType = syncProtocol.readSyncMessage(decoder, encoder, doc, "remote-yjs");
-    console.log("[yjs-protocol:apply]", {
-      roomId: resolvedRoomId,
-      messageType: syncMessageType,
-      payloadLength: message.payloadBase64.length,
-    });
     if (encoding.length(encoder) > 0) {
       sendYjsProtocolRef.current?.({
         channel: "sync",
@@ -1760,10 +1755,14 @@ export function useYjsLevelCodeSnapshot(
       logCollaborationStep("14.4", "useYjsLevelCodeSnapshot.sync", {
         levelIndex,
       });
-      setCode({
-        html: getYText("html", levelIndex)?.toString() ?? fallbackCode.html,
-        css: getYText("css", levelIndex)?.toString() ?? fallbackCode.css,
-        js: getYText("js", levelIndex)?.toString() ?? fallbackCode.js,
+      const nextHtml = getYText("html", levelIndex)?.toString() ?? fallbackCode.html;
+      const nextCss = getYText("css", levelIndex)?.toString() ?? fallbackCode.css;
+      const nextJs = getYText("js", levelIndex)?.toString() ?? fallbackCode.js;
+      setCode((prev) => {
+        if (prev.html === nextHtml && prev.css === nextCss && prev.js === nextJs) {
+          return prev;
+        }
+        return { html: nextHtml, css: nextCss, js: nextJs };
       });
     };
 

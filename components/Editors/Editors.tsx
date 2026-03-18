@@ -22,29 +22,33 @@ const Editors = (): React.ReactNode => {
   const yjsDocGeneration = collaboration?.yjsDocGeneration ?? 0;
   const remoteSyncTimeoutsRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
 
+  const levelsRef = useRef(levels);
+  levelsRef.current = levels;
+
   const codeUpdater = useCallback(
     (language: "html" | "css" | "js", code: string, isSolution: boolean) => {
-      if (!levels[currentLevel - 1]) return;
+      const lvl = levelsRef.current[currentLevel - 1];
+      if (!lvl) return;
 
       if (isSolution) {
-        if (levels[currentLevel - 1].solution?.[language] === code) return;
+        if (lvl.solution?.[language] === code) return;
         dispatch(
           updateSolutionCode({
             id: currentLevel,
-            code: { ...levels[currentLevel - 1].solution, [language]: code },
+            code: { ...lvl.solution, [language]: code },
           })
         );
       } else {
-        if (levels[currentLevel - 1].code?.[language] === code) return;
+        if (lvl.code?.[language] === code) return;
         dispatch(
           updateCode({
             id: currentLevel,
-            code: { ...levels[currentLevel - 1].code, [language]: code },
+            code: { ...lvl.code, [language]: code },
           })
         );
       }
     },
-    [levels, currentLevel, dispatch]
+    [currentLevel, dispatch]
   );
 
   useEffect(() => {

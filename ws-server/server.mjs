@@ -694,7 +694,10 @@ const httpServer = createServer(createHttpRequestHandler({
   invalidateGameInstanceRooms,
 }));
 
-const wsServer = new WebSocketServer({ server: httpServer });
+const wsServer = new WebSocketServer({
+  server: httpServer,
+  perMessageDeflate: true,
+});
 
 wsServer.on("error", (error) => {
   console.error("[ws-server:error]", error);

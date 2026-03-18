@@ -136,13 +136,6 @@ export function useYjsCodeEditorCollaboration({
       lastObservedYTextValueRef.current = nextValue;
       codeRef.current = nextValue;
       codeUpdateOriginRef.current = "yjs";
-      console.log("[yjs-editor:sync-react]", {
-        editorType,
-        levelIndex,
-        origin,
-        nextLen: nextValue.length,
-        viewLen: editorViewRef.current?.state.doc.length ?? null,
-      });
       setCode((prev) => (prev === nextValue ? prev : nextValue));
       reportEditorWatchState?.({
         editorType,
@@ -177,14 +170,6 @@ export function useYjsCodeEditorCollaboration({
         transactionOrigin: String(transaction.origin),
       });
       const nextValue = event.target.toString();
-      console.log("[yjs-editor:ytext-observe]", {
-        editorType,
-        levelIndex,
-        txOrigin: String(transaction.origin),
-        nextLen: nextValue.length,
-        viewLen: editorViewRef.current?.state.doc.length ?? null,
-        reactLen: codeRef.current.length,
-      });
       if (transaction.origin === "external-code-state") {
         syncReactCode(nextValue, false, "external-code-state");
         return;
@@ -266,16 +251,6 @@ export function useYjsCodeEditorCollaboration({
           transaction.isUserEvent("move") ||
           transaction.isUserEvent("select"))
     );
-    console.log("[yjs-editor:view-update]", {
-      editorType,
-      levelIndex,
-      docChanged: viewUpdate.docChanged,
-      nextLen: nextValue.length,
-      prevReactLen: codeRef.current.length,
-      yTextLen: yText?.toString().length ?? null,
-      local: isLocalUserInput,
-      applyingExternal: applyingExternalUpdateRef.current,
-    });
     codeRef.current = nextValue;
     codeUpdateOriginRef.current = "editor";
     setCode((prev) => (prev === nextValue ? prev : nextValue));

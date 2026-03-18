@@ -129,6 +129,7 @@ export function useCollaborationConnection(
   const manualDisconnectRef = useRef(false);
   const effectiveIdentityRef = useRef<UserIdentity | null>(user);
   const terminalErrorRef = useRef<string | null>(null);
+  const lastConnectedAtRef = useRef<number>(0);
 
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
@@ -260,7 +261,7 @@ export function useCollaborationConnection(
         setError(null);
         terminalErrorRef.current = null;
         setClientId(newClientId);
-        reconnectAttemptsRef.current = 0;
+        lastConnectedAtRef.current = Date.now();
 
         logDebugClient("ws_socket_connect", {
           clientId: newClientId,
@@ -542,6 +543,16 @@ export function useCollaborationConnection(
           setError(terminalErrorRef.current);
           optionsRef.current.onError?.(terminalErrorRef.current);
           return;
+        }
+
+        // Only reset the reconnect counter if the connection was stable
+        // (lasted more than 30s). This prevents infinite rapid reconnect
+        // cycles where each connection opens briefly then dies.
+        const connectionDurationMs = lastConnectedAtRef.current > 0
+          ? Date.now() - lastConnectedAtRef.current
+          : 0;
+        if (connectionDurationMs > 30_000) {
+          reconnectAttemptsRef.current = 0;
         }
 
         if (reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
