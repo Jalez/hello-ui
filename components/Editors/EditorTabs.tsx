@@ -103,7 +103,7 @@ function EditorTabs({
     dispatch(
       handleLocking({
         levelId: currentLevel,
-        type: lockType,
+        type: language,
       })
     );
 
