@@ -11,8 +11,10 @@ import type { ReactCodeMirrorProps } from "@uiw/react-codemirror";
 import { useCodeMirror } from "@uiw/react-codemirror";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTheme } from "next-themes";
+import { PencilOff } from "lucide-react";
 
 import EditorMagicButton from "@/components/CreatorControls/EditorMagicButton";
+import { Button } from "@/components/ui/button";
 import { logCollaborationStep } from "@/lib/collaboration/logCollaborationStep";
 import { useAppSelector } from "@/store/hooks/hooks";
 import { useGameplayTelemetry } from "@/components/General/useGameplayTelemetry";
@@ -338,18 +340,6 @@ export default function CodeEditor({
 
   return (
     <div className="codeEditorContainer relative flex h-full min-h-0 w-full flex-1 flex-col">
-      {options.creator && (
-        <div className="absolute bottom-0 right-0 z-[100]">
-          <EditorMagicButton
-            buttonColor="primary"
-            EditorCode={code}
-            editorType={title}
-            onSuggestion={handleAiSuggestion}
-            disabled={locked || readOnlySession}
-          />
-        </div>
-      )}
-
       {options.creator && review && (
         <AiReviewPanel
           review={review}
@@ -369,6 +359,33 @@ export default function CodeEditor({
         className="codeEditor relative min-h-0 flex-[1_1_20px] overflow-auto"
         title={locked ? "You can't edit this code" : " Click on the code to edit it"}
       >
+        {(options.creator || readOnlySession) && (
+          <div className="absolute bottom-1 right-1 z-[100] flex items-center gap-1">
+            {options.creator && (
+              <EditorMagicButton
+                buttonColor="primary"
+                EditorCode={code}
+                editorType={title}
+                onSuggestion={handleAiSuggestion}
+                disabled={locked || readOnlySession}
+              />
+            )}
+
+            {readOnlySession && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="text-amber-500"
+                onClick={() => window.dispatchEvent(new CustomEvent("collab:open-readonly-status"))}
+                title="Read-only session (click for details)"
+              >
+                <PencilOff className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+        )}
+
         {locked && (
           <h3
             id="title"

@@ -40,6 +40,20 @@ export function CollaborationNotice({ children }: { children: ReactNode }) {
 
   const shouldShowSessionStatus = collaboration.sessionRole === "readonly";
 
+  useEffect(() => {
+    const onOpenReadOnlyStatus = () => {
+      if (collaboration.isSessionEvicted) {
+        return;
+      }
+      if (!shouldShowSessionStatus) {
+        return;
+      }
+      setIsSessionStatusOpen(true);
+    };
+    window.addEventListener("collab:open-readonly-status", onOpenReadOnlyStatus);
+    return () => window.removeEventListener("collab:open-readonly-status", onOpenReadOnlyStatus);
+  }, [collaboration.isSessionEvicted, shouldShowSessionStatus]);
+
   if (!collaboration.isSessionEvicted && !collaboration.error && !latchedDuplicateError && !shouldShowSessionStatus) {
     return <>{children}</>;
   }
@@ -134,17 +148,6 @@ export function CollaborationNotice({ children }: { children: ReactNode }) {
 
   return (
     <>
-      {shouldShowSessionStatus && (
-        <button
-          type="button"
-          className="fixed bottom-4 right-4 z-[90] inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/95 px-3 py-2 text-xs font-semibold text-foreground shadow-lg shadow-black/10 backdrop-blur transition hover:bg-muted"
-          onClick={() => setIsSessionStatusOpen(true)}
-          title="Read-only session (click for details)"
-        >
-          <span className="h-2 w-2 rounded-full bg-amber-500" />
-          Read-only
-        </button>
-      )}
       {children}
     </>
   );
