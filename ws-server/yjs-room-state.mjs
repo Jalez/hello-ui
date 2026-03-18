@@ -148,6 +148,14 @@ export function createYjsRoomStateService({
     return `level:${levelIndex}:${editorType}`;
   }
 
+  function getYSolutionTextKey(editorType, levelIndex) {
+    logCollaborationStep("8.8", "getYSolutionTextKey", {
+      editorType,
+      levelIndex,
+    });
+    return `level:${levelIndex}:solution:${editorType}`;
+  }
+
   /**
    * COLLABORATION STEP 8.9:
    * Copy the persisted room code into a fresh Yjs document so the CRDT starts from
@@ -167,6 +175,23 @@ export function createYjsRoomStateService({
           }
           text.delete(0, text.length);
           text.insert(0, nextValue);
+        }
+
+        // Creator rooms: hydrate solution editors from persisted level.solution.
+        if (state?.ctx?.kind === "creator") {
+          const metaSolution =
+            level?.meta?.solution && typeof level.meta.solution === "object" && !Array.isArray(level.meta.solution)
+              ? level.meta.solution
+              : null;
+          for (const editorType of editorTypes) {
+            const text = doc.getText(getYSolutionTextKey(editorType, levelIndex));
+            const nextValue = metaSolution && typeof metaSolution?.[editorType] === "string" ? metaSolution[editorType] : "";
+            if (text.toString() === nextValue) {
+              continue;
+            }
+            text.delete(0, text.length);
+            text.insert(0, nextValue);
+          }
         }
       });
     }, "hydrate-room-state");

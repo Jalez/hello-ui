@@ -18,6 +18,7 @@ interface UseYjsCodeEditorCollaborationOptions {
   setCode: Dispatch<SetStateAction<string>>;
   template: string;
   enabled?: boolean;
+  docKind?: "template" | "solution";
   locked: boolean;
   levelIdentifier: string;
   currentLevel: number;
@@ -38,6 +39,7 @@ export function useYjsCodeEditorCollaboration({
   setCode,
   template,
   enabled = true,
+  docKind = "template",
   locked,
   levelIdentifier,
   currentLevel,
@@ -58,11 +60,16 @@ export function useYjsCodeEditorCollaboration({
   const updateEditorSelection = collaboration?.updateEditorSelection;
   const editorCursors = enabled ? (collaboration?.editorCursors ?? EMPTY_EDITOR_CURSORS) : EMPTY_EDITOR_CURSORS;
   const getYText = collaboration?.getYText;
+  const getYSolutionText = collaboration?.getYSolutionText;
   const reportEditorWatchState = collaboration?.reportEditorWatchState;
   const editorType: EditorType = titleToEditorType(title);
   const levelIndex = currentLevel - 1;
   const yjsDocGeneration = collaboration?.yjsDocGeneration ?? 0;
-  const yText = enabled ? getYText?.(editorType, levelIndex) ?? null : null;
+  const yText = enabled
+    ? (docKind === "solution"
+      ? (getYSolutionText?.(editorType, levelIndex) ?? null)
+      : (getYText?.(editorType, levelIndex) ?? null))
+    : null;
 
   const editorViewRef = useRef<EditorView | null>(null);
   const editorViewportRef = useRef<HTMLDivElement | null>(null);
@@ -72,7 +79,7 @@ export function useYjsCodeEditorCollaboration({
   const lastObservedYTextValueRef = useRef<string | null>(null);
   const codeUpdateOriginRef = useRef<"editor" | "yjs" | null>(null);
 
-  const editorKey = `${levelIdentifier}:${editorType}:${levelIndex}`;
+  const editorKey = `${levelIdentifier}:${docKind}:${editorType}:${levelIndex}`;
   const [editorMountValue] = useState(() => {
     // IMPORTANT: Keep the Yjs editor doc empty until yjsReady.
     // Visual fallbacks are handled outside the Yjs surface to avoid accidentally

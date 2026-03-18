@@ -256,6 +256,8 @@ export interface CollaborationContextValue {
   ) => void;
   getYText: (editorType: EditorType, levelIndex: number) => Y.Text | null;
   getYCodeSnapshot: (editorType: EditorType, levelIndex: number) => string | null;
+  getYSolutionText: (editorType: EditorType, levelIndex: number) => Y.Text | null;
+  getYSolutionSnapshot: (editorType: EditorType, levelIndex: number) => string | null;
   connect: () => void;
   disconnect: () => void;
 }
@@ -352,6 +354,14 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
     return `level:${levelIndex}:${editorType}`;
   }, []);
 
+  const getYSolutionTextKey = useCallback((editorType: EditorType, levelIndex: number) => {
+    logCollaborationStep("3.1", "getYSolutionTextKey", {
+      editorType,
+      levelIndex,
+    });
+    return `level:${levelIndex}:solution:${editorType}`;
+  }, []);
+
   /**
    * COLLABORATION STEP 3.2:
    * Fetch the live shared Yjs text object that backs a specific editor tab.
@@ -370,6 +380,19 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
     return doc.getText(getYTextKey(editorType, levelIndex));
   }, [getYTextKey]);
 
+  const getYSolutionText = useCallback((editorType: EditorType, levelIndex: number) => {
+    logCollaborationStep("3.2", "getYSolutionText", {
+      editorType,
+      levelIndex,
+      hasDoc: Boolean(yDocRef.current),
+    });
+    const doc = yDocRef.current;
+    if (!doc) {
+      return null;
+    }
+    return doc.getText(getYSolutionTextKey(editorType, levelIndex));
+  }, [getYSolutionTextKey]);
+
   /**
    * COLLABORATION STEP 14.1:
    * Read the current shared text as a plain string when something outside the
@@ -382,6 +405,14 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
     });
     return getYText(editorType, levelIndex)?.toString() ?? null;
   }, [getYText]);
+
+  const getYSolutionSnapshot = useCallback((editorType: EditorType, levelIndex: number) => {
+    logCollaborationStep("14.1", "getYSolutionSnapshot", {
+      editorType,
+      levelIndex,
+    });
+    return getYSolutionText(editorType, levelIndex)?.toString() ?? null;
+  }, [getYSolutionText]);
 
   /**
    * COLLABORATION STEP 5.2:
@@ -1666,6 +1697,8 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       reportCollaborationHealthEvent,
       getYText,
       getYCodeSnapshot,
+      getYSolutionText,
+      getYSolutionSnapshot,
       connect,
       disconnect,
     }),
@@ -1713,6 +1746,8 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       reportCollaborationHealthEvent,
       getYText,
       getYCodeSnapshot,
+      getYSolutionText,
+      getYSolutionSnapshot,
       connect,
       disconnect,
     ]

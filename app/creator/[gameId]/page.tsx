@@ -2,6 +2,7 @@
 
 import { use, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import App from "@/components/App";
 import { useGameStore } from "@/components/default/games";
 import { CollaborationProvider } from "@/lib/collaboration";
@@ -16,6 +17,7 @@ interface CreatorPageProps {
 export default function CreatorPage({ params }: CreatorPageProps) {
   const { gameId } = use(params);
   const { data: session } = useSession();
+  const router = useRouter();
   const hasUser = Boolean(session?.user);
   const { loadGameById, setCurrentGameId } = useGameStore();
   const [isLoading, setIsLoading] = useState(true);
@@ -45,6 +47,13 @@ export default function CreatorPage({ params }: CreatorPageProps) {
           return;
         }
 
+        const canEdit = Boolean(game.canEdit || game.isOwner);
+        if (!canEdit) {
+          router.replace(`/game/${gameId}?mode=game`);
+          setIsLoading(false);
+          return;
+        }
+
         initializedGameIdRef.current = gameId;
         setCurrentGameId(gameId);
         setRoomId(`creator:${gameId}:map:${encodeURIComponent(game.mapName)}`);
@@ -57,7 +66,7 @@ export default function CreatorPage({ params }: CreatorPageProps) {
     };
 
     initializeGame();
-  }, [gameId, hasUser, loadGameById, setCurrentGameId]);
+  }, [gameId, hasUser, loadGameById, router, setCurrentGameId]);
 
   if (isLoading) {
     return (

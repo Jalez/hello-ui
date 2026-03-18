@@ -820,6 +820,7 @@ export function useCollaborationConnection(
     });
   }, [effectiveIdentity, roomId, sendMessage]);
 
+
   /**
    * COLLABORATION STEP 16.1:
    * Periodically report a compact fingerprint of the current editor contents so
