@@ -16,6 +16,7 @@ export function createRoomMembership(deps) {
     randomUUID,
     WebSocket,
   } = deps;
+  const logger = deps.logger || console;
 
   function getRoomUsers(roomId) {
     return rooms.get(roomId) || new Map();
@@ -109,6 +110,84 @@ export function createRoomMembership(deps) {
 
   const outDelayMs = deps.artificialDelayMs ?? 0;
   const outJitterMs = deps.artificialJitterMs ?? 0;
+  const maxBufferedAmountBytes = deps.maxBufferedAmountBytes ?? (2 * 1024 * 1024);
+  const transportStats = deps.transportStats || null;
+
+  function guardSlowConsumer(socket) {
+    const bufferedAmount = Number.isFinite(socket?.bufferedAmount) ? socket.bufferedAmount : 0;
+    transportStats?.recordPeakBufferedAmount(bufferedAmount);
+    if (bufferedAmount <= maxBufferedAmountBytes) {
+      return false;
+    }
+    if (transportStats) {
+      transportStats.recordSlowConsumer({
+        socketId: getConnectionId(socket),
+        roomId: getConnectionState(socket)?.roomId || null,
+        bufferedAmount,
+        limit: maxBufferedAmountBytes,
+      });
+    } else {
+      logger.warn(
+        `[slow-consumer] socket=${getConnectionId(socket)} room=${getConnectionState(socket)?.roomId || "none"} bufferedAmount=${bufferedAmount} limit=${maxBufferedAmountBytes}`
+      );
+    }
+    try {
+      socket.close(1013, "Slow consumer");
+    } catch {
+      // Ignore close races if the socket is already gone.
+    }
+    return true;
+  }
+
+  function sendSerialized(socket, data) {
+    if (socket.readyState !== WebSocket.OPEN) {
+      return;
+    }
+    if (guardSlowConsumer(socket)) {
+      return;
+    }
+
+    try {
+      socket.send(data, (error) => {
+        if (!error) {
+          return;
+        }
+        if (transportStats) {
+          transportStats.recordSendError({
+            socketId: getConnectionId(socket),
+            roomId: getConnectionState(socket)?.roomId || null,
+            error,
+          });
+        } else {
+          logger.warn(
+            `[socket:send-error] socket=${getConnectionId(socket)} room=${getConnectionState(socket)?.roomId || "none"} message=${error?.message || String(error)}`
+          );
+        }
+        try {
+          socket.close(1011, "Send error");
+        } catch {
+          // Ignore close races if the socket is already gone.
+        }
+      });
+    } catch (error) {
+      if (transportStats) {
+        transportStats.recordSendThrow({
+          socketId: getConnectionId(socket),
+          roomId: getConnectionState(socket)?.roomId || null,
+          error,
+        });
+      } else {
+        logger.warn(
+          `[socket:send-throw] socket=${getConnectionId(socket)} room=${getConnectionState(socket)?.roomId || "none"} message=${error?.message || String(error)}`
+        );
+      }
+      try {
+        socket.close(1011, "Send error");
+      } catch {
+        // Ignore close races if the socket is already gone.
+      }
+    }
+  }
 
   function sendMessage(socket, type, payload) {
     if (socket.readyState !== WebSocket.OPEN) {
@@ -117,14 +196,12 @@ export function createRoomMembership(deps) {
 
     const data = JSON.stringify({ type, payload, ts: Date.now() });
     if (outDelayMs <= 0 && outJitterMs <= 0) {
-      socket.send(data);
+      sendSerialized(socket, data);
       return;
     }
     const jitter = outJitterMs > 0 ? Math.floor(Math.random() * outJitterMs) : 0;
     setTimeout(() => {
-      if (socket.readyState === WebSocket.OPEN) {
-        socket.send(data);
-      }
+      sendSerialized(socket, data);
     }, outDelayMs + jitter);
   }
 

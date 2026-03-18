@@ -11,10 +11,12 @@
   "dependencies": {
     "@codemirror/state": "^6.5.2",
     "dotenv": "^16.6.1",
+    "jsonwebtoken": "^9.0.2",
     "pg": "^8.16.3",
     "ws": "^8.19.0",
     "y-protocols": "^1.0.6",
-    "yjs": "^13.6.29"
+    "yjs": "^13.6.29",
+    "zod": "^4.1.13"
   },
   "engines": {
     "node": ">=20"

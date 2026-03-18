@@ -8,7 +8,6 @@ import { createYjsTrafficMonitor } from "../yjs-traffic-monitor.mjs";
 /**
  * @typedef {import("../ws-runtime-context.mjs").WsRuntimeContext} WsRuntimeContext
  */
-console.log("test again and again and again console log ")
 const yjsTrafficMonitor = createYjsTrafficMonitor();
 const recentSyncUpdateFingerprintBySocket = new WeakMap();
 const DUPLICATE_UPDATE_WINDOW_MS = 2000;
@@ -156,8 +155,8 @@ async function handleClientStateHash({ socket, data, resolveRoomId, ctx }) {
     roomId,
     groupId: extractGroupIdFromRoomId(roomId),
     clientId: data.clientId,
-    userId: data.userId,
-    userEmail: typeof data.userEmail === "string" ? data.userEmail : "",
+    userId: ctx.getRoomUsers(roomId).get(socket)?.userId || data.userId,
+    userEmail: ctx.getRoomUsers(roomId).get(socket)?.userEmail || (typeof data.userEmail === "string" ? data.userEmail : ""),
     engine: "yjs",
     editorType: data.editorType,
     levelIndex: data.levelIndex,

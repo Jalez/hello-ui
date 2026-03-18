@@ -43,6 +43,8 @@
  * @property {Map<string, { ctx: any, timer?: NodeJS.Timeout | null }>} roomWriteBuffer
  * @property {(ctx: any, levels: Array<any>) => Promise<{ ok: boolean, permanentFailure?: boolean }>} saveProgressToDB
  * @property {(roomId: string, state: any) => Array<any>} serializeCodeLevels
+ * @property {(token: string, options?: { roomId?: string }) => any} verifyWsAuthToken
+ * @property {{ recordInvalidInboundMessage: Function, recordUnknownInboundMessage: Function }} [transportStats]
  */
 
 /**
@@ -101,6 +103,8 @@ export function createWsRuntimeContext(deps) {
     roomWriteBuffer: deps.roomWriteBuffer,
     saveProgressToDB: deps.saveProgressToDB,
     serializeCodeLevels: deps.serializeCodeLevels,
+    verifyWsAuthToken: deps.verifyWsAuthToken,
+    transportStats: deps.transportStats,
   };
 }
 

@@ -43,6 +43,10 @@ import {
 import { createDuplicateIdentityService } from "./duplicate-identity.mjs";
 import { createYjsRoomStateService } from "./yjs-room-state.mjs";
 import { createCollabHealthService } from "./collab-health.mjs";
+import { createSocketLivenessMonitor } from "./socket-liveness.mjs";
+import { verifyWsAuthToken } from "./ws-auth-token.mjs";
+import { readWsConfig } from "./ws-config.mjs";
+import { createWsTransportStats } from "./ws-transport-stats.mjs";
 
 const serverDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(serverDir, "..");
@@ -65,6 +69,13 @@ const DIVERGENCE_PERSIST_MS = 8000;
 const DIVERGENCE_REPEAT_THRESHOLD = 5;
 const DIVERGENCE_RESYNC_COOLDOWN_MS = 30000;
 const DIVERGENCE_SOFT_RESYNC_ESCALATION = 3;
+const {
+  wsHeartbeatIntervalMs: WS_HEARTBEAT_INTERVAL_MS,
+  wsMaxBufferedAmountBytes: WS_MAX_BUFFERED_AMOUNT_BYTES,
+  wsMaxPayloadBytes: WS_MAX_PAYLOAD_BYTES,
+  wsUnknownMessageLogCooldownMs: WS_UNKNOWN_MESSAGE_LOG_COOLDOWN_MS,
+  wsPerMessageDeflate: WS_PERMESSAGE_DEFLATE,
+} = readWsConfig(process.env);
 const {
   fetchInstanceSnapshotFromDB,
   fetchCreatorLevels,
@@ -91,6 +102,10 @@ const roomAwarenessConnections = new Map();
 const roomWriteBuffer = new Map();
 const roomClientStateHashes = new Map();
 const roomDivergenceState = new Map();
+const wsTransportStats = createWsTransportStats({
+  logger: console,
+  unknownMessageLogCooldownMs: WS_UNKNOWN_MESSAGE_LOG_COOLDOWN_MS,
+});
 
 let roomStateService = null;
 const ensureRoomState = (...args) => roomStateService.ensureRoomState(...args);
@@ -128,6 +143,8 @@ const {
   WebSocket,
   artificialDelayMs: WS_ARTIFICIAL_DELAY_MS,
   artificialJitterMs: WS_ARTIFICIAL_JITTER_MS,
+  maxBufferedAmountBytes: WS_MAX_BUFFERED_AMOUNT_BYTES,
+  transportStats: wsTransportStats,
 });
 
 const {
@@ -322,11 +339,31 @@ const httpServer = createServer(createHttpRequestHandler({
   readJsonBody,
   summarizeRoomMembers,
   invalidateGameInstanceRooms,
+  getWsStats: () => ({
+    rooms: rooms.size,
+    sockets: Array.from(rooms.values()).reduce((total, room) => total + room.size, 0),
+    transport: wsTransportStats.getSnapshot(),
+    config: {
+      perMessageDeflate: WS_PERMESSAGE_DEFLATE,
+      maxBufferedAmountBytes: WS_MAX_BUFFERED_AMOUNT_BYTES,
+      maxPayloadBytes: WS_MAX_PAYLOAD_BYTES,
+      unknownMessageLogCooldownMs: WS_UNKNOWN_MESSAGE_LOG_COOLDOWN_MS,
+    },
+  }),
 }));
 
 const wsServer = new WebSocketServer({
   server: httpServer,
-  perMessageDeflate: true,
+  perMessageDeflate: WS_PERMESSAGE_DEFLATE,
+  maxPayload: WS_MAX_PAYLOAD_BYTES,
+});
+
+const socketLivenessMonitor = createSocketLivenessMonitor({
+  wsServer,
+  WebSocket,
+  getConnectionId,
+  getConnectionState,
+  intervalMs: WS_HEARTBEAT_INTERVAL_MS,
 });
 
 wsServer.on("error", (error) => {
@@ -381,12 +418,15 @@ const wsRuntimeContext = createWsRuntimeContext({
   roomWriteBuffer,
   saveProgressToDB,
   serializeCodeLevels,
+  verifyWsAuthToken,
+  transportStats: wsTransportStats,
 });
 
 const handleSocketMessage = createSocketMessageRouter(wsRuntimeContext);
 
 wsServer.on("connection", (socket, request) => {
   setConnectionState(socket, { id: randomUUID(), roomId: null });
+  socketLivenessMonitor.trackSocket(socket);
   const remoteAddress = request?.socket?.remoteAddress || "unknown";
   const userAgent = request?.headers?.["user-agent"] || "unknown";
   console.log(`[connect] socket=${getConnectionId(socket)} remote=${remoteAddress} ua=${JSON.stringify(userAgent)}`);
@@ -440,12 +480,14 @@ wsServer.on("connection", (socket, request) => {
  */
 process.on("SIGTERM", async () => {
   console.log("[shutdown] SIGTERM received, flushing buffers...");
+  socketLivenessMonitor.stop();
   await roomStateService.flushAllBuffers();
   process.exit(0);
 });
 
 process.on("SIGINT", async () => {
   console.log("[shutdown] SIGINT received, flushing buffers...");
+  socketLivenessMonitor.stop();
   await roomStateService.flushAllBuffers();
   process.exit(0);
 });

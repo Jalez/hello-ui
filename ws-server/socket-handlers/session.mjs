@@ -63,19 +63,25 @@ async function handleJoinGame({ socket, data, socketId, resolveRoomId, ctx }) {
   }
 
   const roomCtx = parseRoomContext(roomId);
+  const verifiedIdentity = ctx.verifyWsAuthToken(data.authToken, { roomId });
+  if (!verifiedIdentity) {
+    ctx.sendMessage(socket, "error", { error: "Authentication required", code: "auth_failed" });
+    try { socket.close(4401, "Authentication required"); } catch { /* already closed */ }
+    return;
+  }
 
-  ctx.setConnectionState(socket, { roomId });
   const sessionRole = data.sessionRole === "readonly" ? "readonly" : "active";
   const baseUserData = {
     clientId: data.clientId || socketId,
-    userId: data.userId || "",
-    userEmail: data.userEmail || "",
-    userName: data.userName || undefined,
-    userImage: data.userImage || undefined,
-    accountUserId: data.userId || "",
-    accountUserEmail: data.userEmail || "",
+    userId: verifiedIdentity.userId,
+    userEmail: verifiedIdentity.userEmail,
+    userName: verifiedIdentity.userName,
+    userImage: verifiedIdentity.userImage,
+    accountUserId: verifiedIdentity.accountUserId,
+    accountUserEmail: verifiedIdentity.accountUserEmail,
     sessionRole,
   };
+  ctx.setConnectionState(socket, { roomId });
   // Only one ACTIVE session per account is allowed per room.
   // Read-only sessions may coexist so users can observe changes without taking control.
   const staleSockets = [];

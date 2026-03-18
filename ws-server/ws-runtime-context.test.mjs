@@ -51,6 +51,8 @@ test("createWsRuntimeContext preserves the handler-facing surface", () => {
     roomWriteBuffer: new Map(),
     saveProgressToDB: async () => ({ ok: true }),
     serializeCodeLevels: () => ({ levels: [] }),
+    verifyWsAuthToken: () => null,
+    transportStats: null,
   };
 
   const ctx = createWsRuntimeContext(deps);

@@ -117,7 +117,8 @@ async function handleGroupStart({ socket, data, envelope, socketId, resolveRoomI
     return;
   }
 
-  const userId = typeof data.userId === "string" ? data.userId : "";
+  const roomUser = ctx.getRoomUsers(roomId).get(socket);
+  const userId = typeof roomUser?.userId === "string" ? roomUser.userId : "";
   if (!userId) {
     return;
   }
@@ -144,9 +145,9 @@ async function handleGroupStart({ socket, data, envelope, socketId, resolveRoomI
       ...gate.readyUsers,
       [userId]: {
         userId,
-        ...(typeof data.userName === "string" ? { userName: data.userName } : {}),
-        ...(typeof data.userEmail === "string" ? { userEmail: data.userEmail } : {}),
-        ...(typeof data.userImage === "string" ? { userImage: data.userImage } : {}),
+        ...(typeof roomUser?.userName === "string" ? { userName: roomUser.userName } : {}),
+        ...(typeof roomUser?.userEmail === "string" ? { userEmail: roomUser.userEmail } : {}),
+        ...(typeof roomUser?.userImage === "string" ? { userImage: roomUser.userImage } : {}),
         readyAt: new Date().toISOString(),
       },
     };

@@ -82,3 +82,27 @@ test("leave-game cleans awareness and broadcasts exact client session", async ()
     socket,
   ]]);
 });
+
+test("join-game rejects an invalid auth token", async () => {
+  const socket = {
+    closeArgs: null,
+    close(...args) {
+      this.closeArgs = args;
+    },
+  };
+  const sent = [];
+
+  await sessionHandlers["join-game"]({
+    socket,
+    data: { roomId: "group:group-1:game:game-1", clientId: "client-1", authToken: "bad-token" },
+    socketId: "socket-1",
+    resolveRoomId: () => "group:group-1:game:game-1",
+    ctx: {
+      verifyWsAuthToken: () => null,
+      sendMessage: (...args) => sent.push(args),
+    },
+  });
+
+  assert.deepEqual(sent, [[socket, "error", { error: "Authentication required", code: "auth_failed" }]]);
+  assert.deepEqual(socket.closeArgs, [4401, "Authentication required"]);
+});
