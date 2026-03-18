@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode, use, useEffect, useRef, useState } from "react";
+import { use, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import App from "@/components/App";
 import { useGameStore } from "@/components/default/games";
@@ -16,6 +16,7 @@ import { logDebugClient } from "@/lib/debug-logger";
 import { fetchGroupDetailsCached } from "@/lib/group-details-client";
 import type { ClientGroupMember } from "@/lib/group-details-client";
 import { toast } from "sonner";
+import { CollaborationNotice } from "@/components/Collaboration/CollaborationNotice";
 
 interface GamePageProps {
   params: Promise<{
@@ -146,56 +147,6 @@ function hasSharedStartTime(initialRoomState: { levels?: Array<Record<string, un
   return Number(timeData?.startTime ?? 0) > 0;
 }
 
-// Shared UI helpers moved to components/groups/PresenceStack.tsx
-
-function CollaborationNotice({ children }: { children: ReactNode }) {
-  const collaboration = useCollaboration();
-  const [latchedDuplicateError, setLatchedDuplicateError] = useState<string | null>(null);
-  const isDuplicateBlocked = collaboration.error?.toLowerCase().includes("already connected in this game")
-    || collaboration.error?.toLowerCase().includes("duplicate users are blocked")
-    || collaboration.error?.toLowerCase().includes("is already connected.");
-
-  useEffect(() => {
-    if (isDuplicateBlocked && collaboration.error) {
-      setLatchedDuplicateError(collaboration.error);
-    }
-  }, [collaboration.error, isDuplicateBlocked]);
-
-  if (!collaboration.error && !latchedDuplicateError) {
-    return <>{children}</>;
-  }
-
-  if (latchedDuplicateError || isDuplicateBlocked) {
-    return (
-      <>
-        {children}
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-xl rounded-2xl border border-amber-400/40 bg-background p-6 shadow-2xl">
-            <div className="space-y-4">
-              <div className="space-y-1">
-                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-amber-600">Connection blocked</p>
-                <h2 className="text-2xl font-semibold text-foreground">Duplicate login detected</h2>
-              </div>
-              <p className="text-sm leading-6 text-muted-foreground">
-                {latchedDuplicateError || collaboration.error}
-              </p>
-            </div>
-          </div>
-        </div>
-      </>
-    );
-  }
-
-  return (
-    <>
-      <div className="border-b border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-900">
-        {collaboration.error}
-      </div>
-      {children}
-    </>
-  );
-}
-
 // PresenceStack moved to components/groups/PresenceStack.tsx
 
 
@@ -255,6 +206,7 @@ export default function GamePage({ params }: GamePageProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [loadingMessage, setLoadingMessage] = useState("Loading game...");
   const [error, setError] = useState<string | null>(null);
+  const hasInitializedRef = useRef(false);
   const [requiresGroup, setRequiresGroup] = useState(false);
   const [publicLobby, setPublicLobby] = useState<{ roomId: string; courseName: string | null; contextId: string | null } | null>(null);
   const [currentGroupName, setCurrentGroupName] = useState<string | null>(null);
@@ -322,7 +274,11 @@ export default function GamePage({ params }: GamePageProps) {
 
       try {
         const isSwitchingGroup = Boolean(currentGame && searchParams.get("groupId") !== currentGame.progressData?.groupId);
-        if (!isSwitchingGroup || !currentGame) {
+        // Only show loading spinner on first init or explicit group switch.
+        // Re-runs from dep changes (session refetch, store updates) must NOT
+        // set isLoading=true — that unmounts CollaborationProvider and kills
+        // the WebSocket connection, creating an infinite reconnect loop.
+        if (!hasInitializedRef.current && (!isSwitchingGroup || !currentGame)) {
           setIsLoading(true);
           setLoadingMessage("Loading game...");
         }
@@ -552,6 +508,7 @@ export default function GamePage({ params }: GamePageProps) {
           }
         }
 
+        hasInitializedRef.current = true;
         setCurrentGameId(gameId);
         setIsLoading(false);
       } catch (err) {

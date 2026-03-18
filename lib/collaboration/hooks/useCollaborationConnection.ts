@@ -52,6 +52,10 @@ interface UseCollaborationConnectionReturn {
   isConnected: boolean;
   isConnecting: boolean;
   error: string | null;
+  isSessionEvicted: boolean;
+  sessionRole: "active" | "readonly";
+  reclaimSession: () => void;
+  connectReadOnly: () => void;
   clientId: string | null;
   connect: () => void;
   disconnect: () => void;
@@ -130,10 +134,13 @@ export function useCollaborationConnection(
   const effectiveIdentityRef = useRef<UserIdentity | null>(user);
   const terminalErrorRef = useRef<string | null>(null);
   const lastConnectedAtRef = useRef<number>(0);
+  const sessionRoleRef = useRef<"active" | "readonly">("active");
 
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isSessionEvicted, setIsSessionEvicted] = useState(false);
+  const [sessionRole, setSessionRole] = useState<"active" | "readonly">("active");
   const [clientId, setClientId] = useState<string | null>(null);
   const [socketState, setSocketState] = useState<WebSocket | null>(null);
   const [effectiveIdentity, setEffectiveIdentity] = useState<UserIdentity | null>(user);
@@ -285,6 +292,7 @@ export function useCollaborationConnection(
               userEmail: currentUser.email,
               userName: currentUser.name,
               userImage: currentUser.image,
+              sessionRole: sessionRoleRef.current,
             },
             ts: Date.now(),
           } satisfies WebSocketEnvelope<Record<string, unknown>>)
@@ -527,10 +535,13 @@ export function useCollaborationConnection(
           return;
         }
 
-        // 4009 = "Replaced by new session" — the server evicted this socket because
-        // a newer connection from the same account joined. Do not reconnect.
+        // 4009 = "Replaced by new session" — another tab from the same account
+        // joined this room and the server evicted us. Show a modal so the user
+        // can choose to reclaim the session in this tab.
         if (event.code === 4009) {
+          console.log(`[ws-lifecycle] 4009 evicted by duplicate session room=${roomId}`);
           manualDisconnectRef.current = true;
+          setIsSessionEvicted(true);
           return;
         }
 
@@ -879,11 +890,39 @@ export function useCollaborationConnection(
     }
   }, []);
 
+  const reconnectWithRole = useCallback((nextRole: "active" | "readonly") => {
+    console.log(`[ws-lifecycle] reconnectWithRole room=${roomId} role=${nextRole}`);
+    sessionRoleRef.current = nextRole;
+    setSessionRole(nextRole);
+    setIsSessionEvicted(false);
+    manualDisconnectRef.current = false;
+    reconnectAttemptsRef.current = 0;
+    // Clean up any lingering socket before reconnecting
+    if (socketRef.current) {
+      try { socketRef.current.close(); } catch { /* ignore */ }
+      socketRef.current = null;
+      setSocketState(null);
+    }
+    reconnectFnRef.current?.();
+  }, [roomId]);
+
+  const reclaimSession = useCallback(() => {
+    reconnectWithRole("active");
+  }, [reconnectWithRole]);
+
+  const connectReadOnly = useCallback(() => {
+    reconnectWithRole("readonly");
+  }, [reconnectWithRole]);
+
   return {
     socket: socketState,
     isConnected,
     isConnecting,
     error,
+    isSessionEvicted,
+    sessionRole,
+    reclaimSession,
+    connectReadOnly,
     clientId,
     connect,
     disconnect,

@@ -148,7 +148,8 @@ export default function CodeEditor({
       : undefined,
   });
   const editorType = titleToEditorType(title);
-  const collaborationReady = !isYjsManaged || collaboration?.yjsReady !== false;
+  const collaborationReady = !isYjsManaged || (collaboration?.isConnected === true && collaboration?.yjsReady === true);
+  const readOnlySession = collaboration?.sessionRole === "readonly";
   const collaborationRecoveryNeeded = isYjsManaged && !locked && !collaborationReady;
 
   // Delay showing the recovery overlay so quick resyncs are invisible to users.
@@ -259,11 +260,13 @@ export default function CodeEditor({
     tooltips({ parent: typeof document !== "undefined" ? document.body : undefined }),
   ];
 
+  const canMountYjsSurface = isYjsManaged && collaboration?.isConnected === true && collaboration?.yjsReady === true;
+
   const editableEditorProps: ReactCodeMirrorProps = {
     extensions: [
       lang,
-      EditorState.readOnly.of(locked || !collaborationReady),
-      EditorView.editable.of(!locked && collaborationReady),
+      EditorState.readOnly.of(locked || !collaborationReady || readOnlySession),
+      EditorView.editable.of(!locked && collaborationReady && !readOnlySession),
       EditorView.lineWrapping,
       EditorView.domEventHandlers({
         paste: (event) => {
@@ -299,6 +302,20 @@ export default function CodeEditor({
     onUpdate: handleEditorUpdate,
   };
 
+  const fallbackReadOnlyProps: ReactCodeMirrorProps = {
+    extensions: [
+      lang,
+      EditorState.readOnly.of(true),
+      EditorView.editable.of(false),
+      EditorView.lineWrapping,
+      ...sharedExtensions,
+      commentKeymapCompartment.of(keymap.of(getCommentKeymap(title))),
+      reviewDecorationsCompartment.of([]),
+    ],
+    theme,
+    placeholder: `Write your ${title} here...`,
+  };
+
   const htmlFrameLineProps: ReactCodeMirrorProps = {
     extensions: [
       EditorState.readOnly.of(true),
@@ -327,7 +344,7 @@ export default function CodeEditor({
             EditorCode={code}
             editorType={title}
             onSuggestion={handleAiSuggestion}
-            disabled={locked}
+            disabled={locked || readOnlySession}
           />
         </div>
       )}
@@ -369,6 +386,7 @@ export default function CodeEditor({
 
         <div ref={editorViewportRef} className="relative">
           {isYjsManaged ? (
+            canMountYjsSurface ? (
             <YjsEditorSurface
               key={editorKey}
               editorProps={editableEditorProps}
@@ -376,6 +394,14 @@ export default function CodeEditor({
               editorInitialState={editorInitialState}
               style={editorStyle}
             />
+            ) : (
+              <CodeMirror
+                {...fallbackReadOnlyProps}
+                key={`${editorKey}:fallback`}
+                value={code}
+                style={editorStyle}
+              />
+            )
           ) : (
             <CodeMirror
               {...editableEditorProps}

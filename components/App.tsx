@@ -149,7 +149,10 @@ function App() {
       Boolean(collaboration?.roomId);
 
     if (shouldUseWsCodeSource && (!collaboration?.codeSyncReady || !collaboration?.initialRoomState)) {
-      setIsLoadingAsync(true);
+      // IMPORTANT: Don't flip the global levels loader on/off based on transient
+      // websocket readiness. The UI already shows "Syncing shared code..." via
+      // isWaitingForSharedCode, and toggling isLoading here can leave the app
+      // stuck after backend restarts until a full refresh.
       return;
     }
 
@@ -323,6 +326,7 @@ function App() {
     options.mode === "game" &&
     Boolean(collaboration?.roomId) &&
     (
+      !collaboration.isSessionEvicted &&
       !collaboration.codeSyncReady ||
       !collaboration.initialRoomState
     );

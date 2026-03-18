@@ -53,6 +53,7 @@ export function useYjsCodeEditorCollaboration({
   });
   const collaboration = useOptionalCollaboration();
   const isConnected = enabled && (collaboration?.isConnected ?? false);
+  const yjsReady = collaboration?.yjsReady === true;
   const setTyping = collaboration?.setTyping;
   const updateEditorSelection = collaboration?.updateEditorSelection;
   const editorCursors = enabled ? (collaboration?.editorCursors ?? EMPTY_EDITOR_CURSORS) : EMPTY_EDITOR_CURSORS;
@@ -73,23 +74,27 @@ export function useYjsCodeEditorCollaboration({
 
   const editorKey = `${levelIdentifier}:${editorType}:${levelIndex}`;
   const [editorMountValue] = useState(() => {
-    return yText?.toString() ?? code ?? template;
+    // IMPORTANT: Keep the Yjs editor doc empty until yjsReady.
+    // Visual fallbacks are handled outside the Yjs surface to avoid accidentally
+    // pushing local content into the shared Y.Text during handshake/reconnect.
+    return "";
   });
 
   const editorExtensions = useMemo<Extension[]>(() => {
-    if (!enabled || !yText) {
+    if (!enabled || !yText || !yjsReady) {
       return [];
     }
     return [yCollab(yText, null, { undoManager: false })];
-  }, [enabled, yText]);
+  }, [enabled, yText, yjsReady]);
 
   const editorInitialState = useMemo(() => {
+    const doc = enabled && yText && yjsReady ? yText.toString() : editorMountValue;
     return {
       json: EditorState.create({
-        doc: enabled && yText ? yText.toString() : editorMountValue,
+        doc,
       }).toJSON(),
     };
-  }, [editorMountValue, enabled, yText]);
+  }, [editorMountValue, enabled, yText, yjsReady]);
 
   useEffect(() => {
     if (lastObservedYTextValueRef.current == null) {
@@ -115,7 +120,7 @@ export function useYjsCodeEditorCollaboration({
       return;
     }
 
-    if (!isConnected || !yText) {
+    if (!isConnected || !yText || !yjsReady) {
       return;
     }
 

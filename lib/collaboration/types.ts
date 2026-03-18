@@ -20,6 +20,7 @@ export interface EditorCursor {
   userId: string;
   userName?: string;
   color: string;
+  sessionRole?: "active" | "readonly";
   selection: { from: number; to: number };
   ts: number;
 }
@@ -134,6 +135,7 @@ export interface ActiveUser {
   userName?: string;
   userImage?: string;
   color?: string;
+  sessionRole?: "active" | "readonly";
   cursor?: { x: number; y: number };
   activeTab?: EditorType;
   activeLevelIndex?: number;

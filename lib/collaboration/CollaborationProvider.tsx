@@ -207,6 +207,10 @@ export interface CollaborationContextValue {
   isConnected: boolean;
   isConnecting: boolean;
   error: string | null;
+  isSessionEvicted: boolean;
+  reclaimSession: () => void;
+  connectReadOnly: () => void;
+  sessionRole: "active" | "readonly";
   roomId: string | null;
   groupId: string | null;
   clientId: string | null;
@@ -458,27 +462,10 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       serverYjsDocGenerationRef.current = nextServerGeneration;
     }
 
-    // Pre-hydrate from the last known room state so the editor does not flash
-    // empty content while waiting for the server SyncStep2 response.
-    // Use "hydrate-local" origin so the update listener does NOT broadcast
-    // this hydration to the server — it's local-only scaffolding that the
-    // incoming SyncStep2 will authoratively replace.
-    const canHydrateFromRoomState = Array.isArray(hydrateFrom?.levels)
-      && hydrateFrom.levels.some((level) => Boolean(level?.code) && typeof level.code === "object");
-    if (canHydrateFromRoomState) {
-      const editorTypes: EditorType[] = ["html", "css", "js"];
-      doc.transact(() => {
-        hydrateFrom!.levels.forEach((level: Record<string, unknown>, levelIndex: number) => {
-          const code = level?.code && typeof level.code === "object" ? (level.code as Record<string, string>) : {};
-          for (const editorType of editorTypes) {
-            const value = typeof code[editorType] === "string" ? code[editorType] : "";
-            if (value) {
-              doc.getText(`level:${levelIndex}:${editorType}`).insert(0, value);
-            }
-          }
-        });
-      }, "hydrate-local");
-    }
+    // IMPORTANT: Do NOT pre-hydrate the local Y.Doc with plain-text inserts.
+    // Doing so creates local Yjs items that can later merge with the server's
+    // canonical items during SyncStep2, producing duplicated/interleaved content.
+    // We instead keep the doc empty until the first authoritative server sync lands.
 
     doc.on("update", (update: Uint8Array, origin: unknown) => {
       if (origin === "remote-yjs" || origin === "hydrate-local") {
@@ -796,7 +783,13 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
   const handleSocketConnected = useCallback(() => {
     hasDisconnectedUnexpectedlyRef.current = false;
     lastTransportMessageAtRef.current = Date.now();
-  }, []);
+    // Defensive: reset the local Y.Doc on (re)connect to avoid merging divergent local items
+    // with the server's canonical doc, which can manifest as duplicated/interleaved content.
+    // The authoritative state will arrive via SyncStep2.
+    if (isYjsEnabled && resolvedRoomId) {
+      replaceLocalYDoc("socket_connected_reset", serverYjsDocGenerationRef.current);
+    }
+  }, [isYjsEnabled, replaceLocalYDoc, resolvedRoomId]);
 
   const handleSocketDisconnected = useCallback(() => {
     hasDisconnectedUnexpectedlyRef.current = true;
@@ -834,6 +827,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       const userState = rawState.user && typeof rawState.user === "object" ? rawState.user : null;
       const editor = rawState.editor && typeof rawState.editor === "object" ? rawState.editor : null;
       const awarenessClientId = typeof session?.clientId === "string" ? session.clientId : "";
+      const awarenessRole = typeof session?.role === "string" && session.role === "readonly" ? "readonly" : "active";
       const userId = typeof userState?.id === "string" ? userState.id : "";
       if (!awarenessClientId || !userId) {
         continue;
@@ -850,6 +844,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
         userEmail: typeof userState?.email === "string" ? userState.email : "",
         userName: typeof userState?.name === "string" ? userState.name : undefined,
         userImage: typeof userState?.image === "string" ? userState.image : undefined,
+        sessionRole: awarenessRole,
         activeTab: editorType === "html" || editorType === "css" || editorType === "js" ? editorType : undefined,
         activeLevelIndex: levelIndex,
         isTyping,
@@ -871,6 +866,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
           userId,
           userName: typeof userState?.name === "string" ? userState.name : undefined,
           color: generateUserColor(typeof userState?.email === "string" ? userState.email : awarenessClientId),
+          sessionRole: awarenessRole,
           selection: {
             from: editor.selection.from,
             to: editor.selection.to,
@@ -949,6 +945,10 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
     isConnected,
     isConnecting,
     error,
+    isSessionEvicted,
+    sessionRole,
+    reclaimSession,
+    connectReadOnly,
     clientId,
     connect,
     disconnect,
@@ -1001,14 +1001,14 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
     }
     const existing = (getQueuedOrCurrentLocalAwarenessState() || {}) as {
       user?: { id?: string; name?: string; email?: string; image?: string };
-      session?: { clientId?: string };
+      session?: { clientId?: string; role?: string };
     };
     const userChanged =
       existing.user?.id !== effectiveIdentity.id
       || existing.user?.name !== effectiveIdentity.name
       || existing.user?.email !== effectiveIdentity.email
       || existing.user?.image !== effectiveIdentity.image;
-    const sessionChanged = existing.session?.clientId !== clientId;
+    const sessionChanged = existing.session?.clientId !== clientId || existing.session?.role !== sessionRole;
     if (!userChanged && !sessionChanged) {
       return;
     }
@@ -1022,9 +1022,10 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       },
       session: {
         clientId,
+        role: sessionRole,
       },
     });
-  }, [clientId, effectiveIdentity, getQueuedOrCurrentLocalAwarenessState, isConnected, isYjsEnabled, queueLocalAwarenessState]);
+  }, [clientId, effectiveIdentity, getQueuedOrCurrentLocalAwarenessState, isConnected, isYjsEnabled, queueLocalAwarenessState, sessionRole]);
 
   /**
    * COLLABORATION STEP 16.6:
@@ -1184,7 +1185,9 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       return;
     }
 
-    replaceLocalYDoc("room_mount", 0);
+    // Start at generation 1 so early awareness/sync packets are not rejected by the server
+    // (server generation is always >= 1 for Yjs-enabled rooms).
+    replaceLocalYDoc("room_mount", 1);
     return () => {
       const doc = yDocRef.current;
       if (doc) {
@@ -1196,7 +1199,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
         awareness.destroy();
       }
       yAwarenessRef.current = null;
-      serverYjsDocGenerationRef.current = 0;
+      serverYjsDocGenerationRef.current = 1;
     };
   }, [isYjsEnabled, replaceLocalYDoc, resolvedRoomId]);
 
@@ -1432,7 +1435,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
     localActiveEditorRef.current = null;
     lastHealthEventAtRef.current.clear();
     divergenceRecoveryRef.current.clear();
-    serverYjsDocGenerationRef.current = 0;
+    serverYjsDocGenerationRef.current = 1;
   }, [resolvedRoomId]);
 
   const updateCanvasCursor = useCallback(
@@ -1625,6 +1628,10 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       isConnected,
       isConnecting,
       error,
+      isSessionEvicted,
+      reclaimSession,
+      connectReadOnly,
+      sessionRole,
       roomId: resolvedRoomId,
       groupId: resolvedGroupId,
       clientId,
@@ -1668,6 +1675,10 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       isConnected,
       isConnecting,
       error,
+      isSessionEvicted,
+      sessionRole,
+      reclaimSession,
+      connectReadOnly,
       resolvedRoomId,
       resolvedGroupId,
       clientId,

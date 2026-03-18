@@ -27,6 +27,7 @@ async function handleJoinGame({ socket, data, socketId, resolveRoomId, ctx }) {
   const gameId = extractGameIdFromRoomId(roomId);
 
   ctx.setConnectionState(socket, { roomId });
+  const sessionRole = data.sessionRole === "readonly" ? "readonly" : "active";
   const baseUserData = {
     clientId: data.clientId || socketId,
     userId: data.userId || "",
@@ -35,17 +36,18 @@ async function handleJoinGame({ socket, data, socketId, resolveRoomId, ctx }) {
     userImage: data.userImage || undefined,
     accountUserId: data.userId || "",
     accountUserEmail: data.userEmail || "",
+    sessionRole,
   };
-  // Evict stale sockets from the same account in the same room (e.g. page refresh).
-  // This must happen before duplicate detection so the old session doesn't block or
-  // rename the new one. Collect first to avoid mutating the Map during iteration.
+  // Only one ACTIVE session per account is allowed per room.
+  // Read-only sessions may coexist so users can observe changes without taking control.
   const staleSockets = [];
   for (const [existingSocket, existingUser] of ctx.getRoomUsers(roomId).entries()) {
     if (existingSocket === socket) continue;
     const sameAccount =
       (baseUserData.userId && existingUser.accountUserId && existingUser.accountUserId === baseUserData.userId) ||
       (baseUserData.userEmail && existingUser.accountUserEmail && existingUser.accountUserEmail === baseUserData.userEmail);
-    if (sameAccount) {
+    const existingRole = existingUser?.sessionRole === "readonly" ? "readonly" : "active";
+    if (sameAccount && sessionRole === "active" && existingRole === "active") {
       staleSockets.push(existingSocket);
     }
   }
@@ -60,46 +62,13 @@ async function handleJoinGame({ socket, data, socketId, resolveRoomId, ctx }) {
         userEmail: evictedData.userEmail,
         userName: evictedData.userName,
       }, staleSocket);
-      console.log(`[join-game:evict-stale] user=${evictedData.userEmail} room=${roomId} reason=same-account-rejoin`);
+      console.log(`[join-game:evict] user=${evictedData.userEmail} room=${roomId} reason=same-account-active-rejoin`);
     }
     try { staleSocket.close(4009, "Replaced by new session"); } catch { /* already closed */ }
   }
 
   const existingDuplicates = ctx.findDuplicateUsersInGame(gameId, baseUserData, roomId);
-  if (gameId && existingDuplicates.length > 0 && !await ctx.isDuplicateUserAllowed(gameId)) {
-    const conflictingUser = existingDuplicates[0];
-    const attemptedLabel = baseUserData.userName || baseUserData.userEmail || "this account";
-    const attemptedEmail = baseUserData.userEmail ? ` (${baseUserData.userEmail})` : "";
-    const conflictingLabel = conflictingUser.userName || conflictingUser.userEmail || "this account";
-    const conflictingEmail = conflictingUser.userEmail ? ` (${conflictingUser.userEmail})` : "";
-    const summarizeIdentity = (label, email) => {
-      const combined = `${label}${email}`;
-      return combined.length > 40 ? `${combined.slice(0, 37)}...` : combined;
-    };
-    const attemptedSummary = summarizeIdentity(attemptedLabel, attemptedEmail);
-    const conflictingSummary = summarizeIdentity(conflictingLabel, conflictingEmail);
-    const duplicateError =
-      `This browser is being identified as ${JSON.stringify(`${attemptedLabel}${attemptedEmail}`)}, ` +
-      `but ${JSON.stringify(`${conflictingLabel}${conflictingEmail}`)} is already connected in this game. ` +
-      `Ask the creator to enable duplicate users in Game Settings, or turn group submission off from the A+ navbar setting. ` +
-      `Allowing duplicates may cause instability and desyncs in group mode.`;
-    const duplicateCloseReason =
-      `Identified as ${attemptedSummary}; ${conflictingSummary} is already connected.`;
-    ctx.sendMessage(socket, "error", {
-      error: duplicateError,
-      code: "duplicate_users_blocked",
-      roomId,
-      ts: Date.now(),
-    });
-    setTimeout(() => {
-      try {
-        socket.close(4008, duplicateCloseReason);
-      } catch {
-        // Ignore close races if the socket is already gone.
-      }
-    }, 50);
-    return;
-  }
+  // Duplicates are always allowed; we assign a distinct identity per room when needed.
   const resolvedIdentity = ctx.resolveDuplicateIdentity(roomId, baseUserData);
   const userData = {
     ...baseUserData,

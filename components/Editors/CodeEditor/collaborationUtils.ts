@@ -91,13 +91,56 @@ export function buildRemoteCarets(
   const docLen = view.state.doc.length;
   const nextCarets: RemoteEditorCaret[] = [];
 
+  const clampPos = (value: number) => Math.max(0, Math.min(value, docLen));
+
+  const buildSelectionRects = (fromRaw: number, toRaw: number) => {
+    const from = clampPos(fromRaw);
+    const to = clampPos(toRaw);
+    if (from === to) {
+      return [] as Array<{ x: number; y: number; width: number; height: number }>;
+    }
+    const start = Math.min(from, to);
+    const end = Math.max(from, to);
+
+    const startLine = view.state.doc.lineAt(start);
+    const endLine = view.state.doc.lineAt(end);
+    const rects: Array<{ x: number; y: number; width: number; height: number }> = [];
+
+    const maxLines = 20;
+    let line = startLine;
+    let lineCount = 0;
+    while (lineCount < maxLines) {
+      const lineStart = line.number === startLine.number ? start : line.from;
+      const lineEnd = line.number === endLine.number ? end : line.to;
+      const a = view.coordsAtPos(lineStart);
+      const b = view.coordsAtPos(lineEnd);
+      if (a && b) {
+        const left = Math.min(a.left, b.left) - viewportRect.left;
+        const right = Math.max(a.left, b.left) - viewportRect.left;
+        const top = Math.min(a.top, b.top) - viewportRect.top;
+        const bottom = Math.max(a.bottom, b.bottom) - viewportRect.top;
+        const width = Math.max(2, right - left);
+        const height = Math.max(2, bottom - top);
+        rects.push({ x: left, y: top, width, height });
+      }
+
+      if (line.number >= endLine.number) {
+        break;
+      }
+      lineCount += 1;
+      line = view.state.doc.line(line.number + 1);
+    }
+
+    return rects;
+  };
+
   for (const [id, cursor] of editorCursors.entries()) {
     if (cursor.editorType !== editorType || cursor.levelIndex !== levelIndex) {
       continue;
     }
 
     const rawPos = cursor.selection?.to ?? cursor.selection?.from ?? 0;
-    const pos = Math.max(0, Math.min(rawPos, docLen));
+    const pos = clampPos(rawPos);
     const coords = view.coordsAtPos(pos);
     if (!coords) {
       continue;
@@ -108,6 +151,8 @@ export function buildRemoteCarets(
       x: coords.left - viewportRect.left,
       y: coords.top - viewportRect.top,
       color: cursor.color,
+      showCaret: cursor.sessionRole !== "readonly",
+      selectionRects: buildSelectionRects(cursor.selection?.from ?? pos, cursor.selection?.to ?? pos),
     });
   }
 
