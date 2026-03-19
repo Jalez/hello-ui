@@ -14,13 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 
 interface InviteToGroupDialogProps {
   groupId: string;
@@ -42,6 +36,11 @@ export function InviteToGroupDialog({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+
+  const roleOptions: ComboboxOption[] = [
+    { value: "member", label: "Member", keywords: ["member", "student"] },
+    { value: "instructor", label: "Instructor", keywords: ["instructor", "teacher"] },
+  ];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -112,19 +111,17 @@ export function InviteToGroupDialog({
               <Label htmlFor="role" className="text-right">
                 Role
               </Label>
-              <Select
-                value={role}
-                onValueChange={(v) => setRole(v as "instructor" | "member")}
-                disabled={isLoading}
-              >
-                <SelectTrigger className="col-span-3">
-                  <SelectValue placeholder="Select role" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="member">Member</SelectItem>
-                  <SelectItem value="instructor">Instructor</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="col-span-3">
+                <Combobox
+                  value={role}
+                  onValueChange={(value) => setRole(value as "instructor" | "member")}
+                  options={roleOptions}
+                  disabled={isLoading}
+                  placeholder="Select role"
+                  searchPlaceholder="Search role..."
+                  emptyText="No role found."
+                />
+              </div>
             </div>
             {error && (
               <p className="col-span-4 text-center text-sm text-destructive">{error}</p>

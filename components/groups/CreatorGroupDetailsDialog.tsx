@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { Mail, Loader2, Trash2, UserPlus, Wifi, WifiOff } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { apiUrl } from "@/lib/apiUrl";
 
@@ -80,7 +80,15 @@ export function CreatorGroupDetailsDialog({
   const [detailsError, setDetailsError] = useState<string | null>(null);
   const [memberIdentifier, setMemberIdentifier] = useState("");
   const [memberSuggestions, setMemberSuggestions] = useState<Array<{ userId: string; email: string; name: string | null; label: string }>>([]);
+  const [loadingMemberSuggestions, setLoadingMemberSuggestions] = useState(false);
   const [memberActionLoading, setMemberActionLoading] = useState(false);
+
+  const memberOptions: ComboboxOption[] = memberSuggestions.map((suggestion) => ({
+    value: suggestion.email,
+    label: suggestion.label,
+    keywords: [suggestion.email, suggestion.name || "", suggestion.label],
+  }));
+  const selectedMemberOption = memberOptions.find((option) => option.value === memberIdentifier);
 
   const fetchGroupDetails = useCallback(async (targetGroup: ActiveGroupInstance) => {
     try {
@@ -114,11 +122,13 @@ export function CreatorGroupDetailsDialog({
   useEffect(() => {
     if (!group || memberIdentifier.trim().length < 2) {
       setMemberSuggestions([]);
+      setLoadingMemberSuggestions(false);
       return;
     }
 
     const timer = setTimeout(async () => {
       try {
+        setLoadingMemberSuggestions(true);
         const response = await fetch(
           apiUrl(`/api/games/${gameId}/groups/${group.groupId}/members?q=${encodeURIComponent(memberIdentifier.trim())}`),
         );
@@ -130,6 +140,8 @@ export function CreatorGroupDetailsDialog({
         setMemberSuggestions(Array.isArray(payload.suggestions) ? payload.suggestions : []);
       } catch {
         setMemberSuggestions([]);
+      } finally {
+        setLoadingMemberSuggestions(false);
       }
     }, 180);
 
@@ -207,21 +219,21 @@ export function CreatorGroupDetailsDialog({
 
           <div className="space-y-2">
             <div className="flex gap-2">
-              <Input
-                value={memberIdentifier}
-                onChange={(event) => setMemberIdentifier(event.target.value)}
-                list="creator-group-member-suggestions"
-                autoComplete="off"
-                placeholder="Enter email or exact name"
-                disabled={memberActionLoading}
-              />
-              <datalist id="creator-group-member-suggestions">
-                {memberSuggestions.map((suggestion) => (
-                  <option key={suggestion.userId} value={suggestion.email}>
-                    {suggestion.label}
-                  </option>
-                ))}
-              </datalist>
+              <div className="flex-1">
+                <Combobox
+                  value={selectedMemberOption?.value}
+                  inputValue={memberIdentifier}
+                  onInputChange={setMemberIdentifier}
+                  onValueChange={setMemberIdentifier}
+                  options={memberOptions}
+                  isLoading={loadingMemberSuggestions}
+                  loadingText="Loading users..."
+                  placeholder="Enter email or exact name"
+                  searchPlaceholder="Search users..."
+                  emptyText="No users found"
+                  disabled={memberActionLoading}
+                />
+              </div>
               <Button variant="outline" onClick={handleAddOrMoveMember} disabled={memberActionLoading || !memberIdentifier.trim()}>
                 <UserPlus className="mr-1 h-4 w-4" />
                 Add / Move
