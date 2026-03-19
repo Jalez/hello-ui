@@ -23,6 +23,7 @@ import {
   UsersRound,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -215,6 +216,20 @@ export default function CreatorSettingsPage({ params }: CreatorSettingsPageProps
           }];
         }),
     [levels, solutionUrls],
+  );
+
+  const collaboratorOptions: ComboboxOption[] = useMemo(
+    () =>
+      collaboratorSuggestions.map((suggestion) => ({
+        value: suggestion.email,
+        label: suggestion.name ? `${suggestion.name} (${suggestion.email})` : suggestion.email,
+        keywords: [suggestion.email, suggestion.name || ""],
+      })),
+    [collaboratorSuggestions],
+  );
+
+  const selectedCollaboratorOption = collaboratorOptions.find(
+    (option) => option.value === collaboratorEmail,
   );
 
   const scenarioLabel = (scenarioId: string) => {
@@ -674,20 +689,21 @@ export default function CreatorSettingsPage({ params }: CreatorSettingsPageProps
             <CardContent className="space-y-3">
               {canManageCollaborators ? (
                 <div className="flex gap-2">
-                  <Input
-                    value={collaboratorEmail}
-                    onChange={(event) => setCollaboratorEmail(event.target.value)}
-                    list="collaborator-email-suggestions"
-                    autoComplete="off"
-                    placeholder="creator@example.com"
-                  />
-                  <datalist id="collaborator-email-suggestions">
-                    {collaboratorSuggestions.map((s) => (
-                      <option key={s.email} value={s.email}>
-                        {s.name ? `${s.name} (${s.email})` : s.email}
-                      </option>
-                    ))}
-                  </datalist>
+                  <div className="flex-1">
+                    <Combobox
+                      value={selectedCollaboratorOption?.value}
+                      inputValue={collaboratorEmail}
+                      onInputChange={setCollaboratorEmail}
+                      onValueChange={setCollaboratorEmail}
+                      options={collaboratorOptions}
+                      isLoading={loadingSuggestions}
+                      loadingText="Loading collaborators..."
+                      placeholder="Select collaborator"
+                      searchPlaceholder="Type name or email..."
+                      emptyText="No users found"
+                      renderValue={(selected) => selected?.label || "Select collaborator"}
+                    />
+                  </div>
                   <Button variant="outline" onClick={handleAddCollaborator}>
                     <UserPlus className="h-4 w-4 mr-1" /> Add
                   </Button>
@@ -701,7 +717,7 @@ export default function CreatorSettingsPage({ params }: CreatorSettingsPageProps
                   {loadingSuggestions
                     ? "Searching users..."
                     : collaboratorSuggestions.length > 0
-                      ? "Suggestions available in the email input dropdown."
+                      ? "Suggestions available in the collaborator dropdown."
                       : "No matching users found."}
                 </p>
               )}
