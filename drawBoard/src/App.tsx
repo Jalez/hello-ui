@@ -10,6 +10,8 @@ const urlName = params.get("name") || "";
 const scenarioId = params.get("scenarioId") || "";
 const scenarioWidth = parseInt(params.get("width") || "0", 10);
 const scenarioHeight = parseInt(params.get("height") || "0", 10);
+const defaultCaptureWidth = scenarioWidth || 300;
+const defaultCaptureHeight = scenarioHeight || 300;
 
 
 function App() {
@@ -72,11 +74,25 @@ function App() {
           document.body.addEventListener(evt, () => {
             const board = document.getElementById("root") as HTMLElement;
             if (!board) return;
-            domToPng(board).then((dataURL: string) => {
+
+            const options = {
+              width: defaultCaptureWidth,
+              height: defaultCaptureHeight,
+              // Capture at 2x and render down to logical size for sharper output.
+              scale: 2,
+              maximumCanvasSize: 8192,
+              backgroundColor: "transparent",
+            };
+
+            domToPng(board, options).then((dataURL: string) => {
               const img = new Image();
               img.src = dataURL;
               img.onload = () => {
-                const imgData = getPixelData(img);
+                const imgData = getPixelData(
+                  img,
+                  defaultCaptureWidth,
+                  defaultCaptureHeight
+                );
                 sendToParent(
                   imgData as unknown as string,
                   urlName,
@@ -160,11 +176,24 @@ function App() {
   useEffect(() => {
     const board = document.getElementById("root");
     if (stylesCorrect && jsCorrect && board) {
-      domToPng(board).then((dataURL: string) => {
+      const options = {
+        width: defaultCaptureWidth,
+        height: defaultCaptureHeight,
+        // Capture at 2x and render down to logical size for sharper output.
+        scale: 2,
+        maximumCanvasSize: 8192,
+        backgroundColor: "transparent",
+      };
+
+      domToPng(board, options).then((dataURL: string) => {
         const img = new Image();
         img.src = dataURL;
         img.onload = () => {
-          const imgData = getPixelData(img);
+          const imgData = getPixelData(
+            img,
+            defaultCaptureWidth,
+            defaultCaptureHeight
+          );
           sendToParent(
             imgData as unknown as string,
             urlName,
@@ -184,6 +213,13 @@ function App() {
     <>
       {error ? (
         <ErrorFallback error={error} />
+      ) : imgUrl && !interactive ? (
+        <img
+          src={imgUrl}
+          alt="screenshot"
+          width={defaultCaptureWidth}
+          height={defaultCaptureHeight}
+        />
       ) : (
         html
       )}

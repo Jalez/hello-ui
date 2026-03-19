@@ -1,10 +1,20 @@
-export const getPixelData = (img = new Image()) => {
+export const getPixelData = (
+  img = new Image(),
+  targetWidth?: number,
+  targetHeight?: number
+) => {
   const canvas = document.createElement("canvas");
-  canvas.width = img.width;
-  canvas.height = img.height;
+  const width = targetWidth || img.width;
+  const height = targetHeight || img.height;
+  canvas.width = width;
+  canvas.height = height;
   const ctx = canvas.getContext("2d");
-  ctx?.drawImage(img, 0, 0);
-  const imgData = ctx?.getImageData(0, 0, img.width, img.height);
+  if (ctx) {
+    // Keep comparisons stable when capture is downsampled to scenario size.
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(img, 0, 0, width, height);
+  }
+  const imgData = ctx?.getImageData(0, 0, width, height);
   // Release GPU surface immediately (critical for Firefox)
   canvas.width = 0;
   canvas.height = 0;

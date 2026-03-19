@@ -14,7 +14,11 @@ addEventListener("message", ({ data }) => {
     diff,
     width,
     height,
-    { threshold: 0 }
+    {
+      // Avoid over-penalizing tiny anti-aliasing differences between renders.
+      threshold: 0.08,
+      
+    }
   );
 
   const percentage = 100 - (numDiffPixels / (width * height)) * 100;
