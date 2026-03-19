@@ -32,6 +32,27 @@ function scaledTimeout(ms) {
   return Math.round(ms * timeoutMultiplier);
 }
 
+function printRunSummary(scenarioName, passed, checks = {}, params = {}) {
+  console.log("");
+  console.log("=".repeat(60));
+  console.log(`Scenario: ${scenarioName}`);
+  console.log(`Result: ${passed ? "PASS" : "FAIL"}`);
+  const entries = Object.entries(checks);
+  if (entries.length > 0) {
+    for (const [name, ok] of entries) {
+      console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}`);
+    }
+  }
+  const paramEntries = Object.entries(params);
+  if (paramEntries.length > 0) {
+    console.log(`Params: ${paramEntries.map(([k, v]) => `${k}=${v}`).join(" ")}`);
+  }
+  console.log("=".repeat(60));
+  if (!passed) {
+    process.exitCode = 1;
+  }
+}
+
 function generateUsernames(count) {
   return Array.from({ length: count }, (_, index) => `user${String(index + 1).padStart(2, "0")}`);
 }
@@ -658,6 +679,12 @@ async function runInvalidRsv1Scenario() {
   console.log(`Playwright scenario: ${scenario}`);
   console.log(`Summary`);
   console.log(`ws-invalid-frame | ${expectCrash ? "EXPECT_CRASH" : "EXPECT_SURVIVE"} | ${healthAfter ? "HEALTHY" : "DOWN"}`);
+
+  const passed = expectCrash ? !healthAfter : healthAfter;
+  printRunSummary(scenario, passed, {
+    "handshake-complete": result.handshakeComplete,
+    [`health-${expectCrash ? "down" : "up"}`]: passed,
+  });
 }
 
 async function applyPlaywrightWebSocketOverride(context, wsUrl) {
@@ -1004,6 +1031,9 @@ async function runWsRecoveryScenario(browser) {
     console.log(
       `ws-recovery | ${recovered ? "RECOVERED" : "FAILED"} | restartDelayMs=${restartDelayMs} postStressRounds=${postStressRounds} extraReload=${extraReload} verifyStability=${verifyStability}`
     );
+    printRunSummary(scenario, recovered, {
+      "ws-recovered": recovered,
+    }, { restartDelayMs, postStressRounds, extraReload, verifyStability });
   } finally {
     await stopManagedWsServer(managedWsChild);
     if (shouldRestoreDetachedWs) {
@@ -1134,6 +1164,13 @@ async function runRefreshDesyncScenario(browser) {
       `refresh-desync | ${convergence.ok ? "PASS" : "FAIL"} | ` +
       `baseline=${baselineOk} duringReload=${reloadedCaughtDuringReload} originalToReloaded=${originalToReloadedOk} reloadedToOriginal=${reloadedToOriginalOk}`,
     );
+    const allPassed = baselineOk && originalToReloadedOk && reloadedToOriginalOk && convergence.ok;
+    printRunSummary(scenario, allPassed, {
+      baseline: baselineOk,
+      "original-to-reloaded": originalToReloadedOk,
+      "reloaded-to-original": reloadedToOriginalOk,
+      convergence: convergence.ok,
+    });
   } finally {
     await Promise.all(contexts.flatMap(({ extraPages = [] }) => extraPages).map(async (page) => page.close().catch(() => {})));
     await Promise.all(contexts.map(async ({ context }) => context.close().catch(() => {})));
@@ -3176,6 +3213,10 @@ async function runLtiAplusGroupScenario(browser) {
         `summary:${row.name} expected=${row.expectedMembers.join("|")} join=${row.observedJoinMembers.join("|")} visible=${row.observedVisibleNames.join("|")} avatars=${row.observedAvatarNames.join("|")}`,
       );
     }
+    const allPassed = summary.every((row) => row.namesPreserved);
+    printRunSummary(scenario, allPassed, Object.fromEntries(
+      summary.map((row) => [`${row.name}-names`, row.namesPreserved])
+    ));
   } finally {
     await Promise.all(contexts.map(async ({ context }) => context.close().catch(() => {})));
     await creatorContext.close().catch(() => {});
@@ -3464,6 +3505,16 @@ async function main() {
           `summary:${row.name} expected=${row.expectedMembers.join("|")} join=${row.observedJoinMembers.join("|")} start=${row.observedStartMembers.join("|")} finish=${row.observedFinishMembers.join("|")} submit=${row.actualSubmitParticipants.join("|")}`,
         );
       }
+      const allPassed = summary.every((row) =>
+        row.singleEdit && row.concurrent && row.resetOk && (row.submitOk == null || row.submitOk)
+      );
+      printRunSummary(scenario, allPassed, Object.fromEntries(
+        summary.flatMap((row) => [
+          [`${row.name}-single`, row.singleEdit],
+          [`${row.name}-concurrent`, row.concurrent],
+          [`${row.name}-reset`, row.resetOk],
+        ])
+      ));
       return;
     }
 
@@ -3761,6 +3812,24 @@ async function main() {
       );
     }
 
+    if (scenario !== "classroom_text_production") {
+      const allPassed = summary.every((row) =>
+        row.singleEdit && row.concurrent &&
+        row.stressPasses === row.stressTotal &&
+        row.resetOk &&
+        (row.editStable == null || row.editStable) &&
+        (row.submitOk == null || row.submitOk)
+      );
+      printRunSummary(scenario, allPassed, Object.fromEntries(
+        summary.flatMap((row) => [
+          [`${row.name}-single`, row.singleEdit],
+          [`${row.name}-concurrent`, row.concurrent],
+          [`${row.name}-stress`, row.stressPasses === row.stressTotal],
+          [`${row.name}-reset`, row.resetOk],
+        ])
+      ));
+    }
+
     if (scenario === "classroom_text_production") {
       console.log("\n=== TEXT PRODUCTION REPORT ===");
       let totalFragments = 0;
@@ -3797,10 +3866,10 @@ async function main() {
       }
 
       const allOk = totalSurvived === totalFragments;
-      console.log(`\nOverall: ${allOk ? "PASS" : "FAIL"}`);
-      if (!allOk) {
-        process.exitCode = 1;
-      }
+      printRunSummary(scenario, allOk, {
+        "fragments-survived": totalSurvived === totalFragments,
+        "fragments-typed": totalTyped === totalFragments,
+      });
     }
 
     if (keepOpen) {
@@ -3816,5 +3885,11 @@ async function main() {
 
 main().catch((error) => {
   console.error(error);
+  console.log("");
+  console.log("=".repeat(60));
+  console.log(`Scenario: ${scenario}`);
+  console.log(`Result: FAIL (unhandled error)`);
+  console.log(`Error: ${error.message || error}`);
+  console.log("=".repeat(60));
   process.exit(1);
 });
