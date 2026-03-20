@@ -16,7 +16,8 @@ import { ThresholdsEditor } from "./ThresholdsEditor";
 import { NextThreshold } from "./NextThreshold";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { BarChart3, Clock3, RotateCcw, Skull } from "lucide-react";
+import { BarChart3, Clock3, RotateCcw } from "lucide-react";
+import { LevelDifficultySkulls } from "./Difficulty";
 import { numberTimeToMinutesAndSeconds } from "@/lib/utils/numberTimeToMinutesAndSeconds";
 import { resetLevel } from "@/store/slices/levels.slice";
 import { useOptionalCollaboration } from "@/lib/collaboration/CollaborationProvider";
@@ -59,7 +60,6 @@ export function LevelFooterMenu() {
   const levelPoints = points.levels[level.name]?.points ?? level.points;
   const levelMaxPoints = level.maxPoints;
   const levelAccuracy = points.levels[level.name]?.accuracy ?? 0;
-  const difficultyValue = level.difficulty === "hard" ? 3 : level.difficulty === "medium" ? 2 : 1;
   const sortedThresholds = [...(level.pointsThresholds ?? [])].sort((a, b) => a.accuracy - b.accuracy);
   const reachedThresholdCount = sortedThresholds.filter((threshold) => levelAccuracy >= threshold.accuracy).length;
   const nextThreshold = sortedThresholds.find((threshold) => levelAccuracy < threshold.accuracy) ?? null;
@@ -108,14 +108,7 @@ export function LevelFooterMenu() {
               </div>
             </CompactMenuItem>
             <CompactMenuItem label="Difficulty">
-              <div className="flex items-center justify-center gap-1">
-                {Array.from({ length: 3 }).map((_, index) => (
-                  <Skull
-                    key={index}
-                    className={index < difficultyValue ? "h-4 w-4 text-red-500" : "h-4 w-4 text-primary/45"}
-                  />
-                ))}
-              </div>
+              <LevelDifficultySkulls iconClassName="h-4 w-4" />
             </CompactMenuItem>
             {hasAccuracy && (
               <CompactMenuItem label="Accuracy">
