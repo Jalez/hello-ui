@@ -1,9 +1,20 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useAppDispatch } from "@/store/hooks/hooks";
+import { useAppDispatch, useAppStore } from "@/store/hooks/hooks";
 import { useOptionalCollaboration } from "@/lib/collaboration/CollaborationProvider";
 import { mergeRemoteLevelMeta } from "@/store/slices/levels.slice";
+
+function levelMetaValueEqual(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true;
+  if (a == null || b == null) return a === b;
+  if (typeof a !== "object" || typeof b !== "object") return false;
+  try {
+    return JSON.stringify(a) === JSON.stringify(b);
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Applies incoming level-meta-update messages from collaborators to local
@@ -12,6 +23,7 @@ import { mergeRemoteLevelMeta } from "@/store/slices/levels.slice";
  */
 export function LevelMetaSync() {
   const dispatch = useAppDispatch();
+  const store = useAppStore();
   const collaboration = useOptionalCollaboration();
   const lastAppliedTsRef = useRef<number | null>(null);
 
@@ -22,11 +34,20 @@ export function LevelMetaSync() {
     lastAppliedTsRef.current = update.ts;
 
     if (update.operation === "update-level-meta" && update.levelIndex != null && update.fields) {
-      console.log("[LevelMetaSync] applying remote update", {
-        operation: update.operation,
-        levelIndex: update.levelIndex,
-        keys: Object.keys(update.fields),
-      });
+      const level = store.getState().levels[update.levelIndex];
+      if (!level) return;
+
+      let hasChange = false;
+      for (const [key, value] of Object.entries(update.fields)) {
+        if (key === "code" || key === "versions") continue;
+        const current = (level as unknown as Record<string, unknown>)[key];
+        if (!levelMetaValueEqual(current, value)) {
+          hasChange = true;
+          break;
+        }
+      }
+      if (!hasChange) return;
+
       dispatch(
         mergeRemoteLevelMeta({
           levelIndex: update.levelIndex,
@@ -36,7 +57,7 @@ export function LevelMetaSync() {
     }
     // add-level and remove-level trigger a room-state-sync from the server,
     // which is handled by the existing App.tsx room state sync path.
-  }, [collaboration?.lastLevelMetaUpdate, dispatch]);
+  }, [collaboration?.lastLevelMetaUpdate, dispatch, store]);
 
   return null;
 }
