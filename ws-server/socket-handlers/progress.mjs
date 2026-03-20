@@ -302,10 +302,112 @@ async function handleResetRoomState({ socket, data, socketId, resolveRoomId, ctx
   console.log(`[room-state-sync:emit] room=${roomId} by=${socketId} reason=reset scope=${scope} levelIndex=${levelIndex}`);
 }
 
+/**
+ * COLLABORATION STEP 18.12:
+ * Apply a level metadata mutation (add/remove level, update meta fields) to the
+ * authoritative room state and broadcast the change to all other collaborators.
+ */
+async function handleLevelMetaUpdate({ socket, data, socketId, resolveRoomId, ctx }) {
+  logCollaborationStep("18.12", "handleLevelMetaUpdate", {
+    socketId,
+    operation: data?.operation ?? null,
+    levelIndex: data?.levelIndex ?? null,
+  });
+  const roomId = resolveRoomId(socket, data);
+  if (!roomId) {
+    return;
+  }
+
+  const roomCtx = parseRoomContext(roomId);
+  if (!roomCtx) {
+    return;
+  }
+
+  const state = await ctx.ensureRoomState(roomId, roomCtx);
+  const operation = data?.operation;
+
+  if (operation === "add-level") {
+    const levelData = data?.level && typeof data.level === "object" ? data.level : {};
+    const newLevel = ctx.createLevelState(levelData);
+    state.levels.push(newLevel);
+    console.log(
+      `[level-meta-update:add-level] room=${roomId} from=${socketId} newLevelCount=${state.levels.length}`
+    );
+  } else if (operation === "remove-level") {
+    const levelIndex = Number.isInteger(data?.levelIndex) ? data.levelIndex : -1;
+    if (levelIndex >= 0 && levelIndex < state.levels.length) {
+      state.levels.splice(levelIndex, 1);
+      console.log(
+        `[level-meta-update:remove-level] room=${roomId} from=${socketId} removedIndex=${levelIndex} newLevelCount=${state.levels.length}`
+      );
+    } else {
+      console.log(
+        `[level-meta-update:remove-level:skip] room=${roomId} from=${socketId} invalidIndex=${levelIndex} levelCount=${state.levels.length}`
+      );
+      return;
+    }
+  } else if (operation === "update-level-meta") {
+    const levelIndex = Number.isInteger(data?.levelIndex) ? data.levelIndex : -1;
+    if (levelIndex < 0 || levelIndex >= state.levels.length) {
+      console.log(
+        `[level-meta-update:update-meta:skip] room=${roomId} from=${socketId} invalidIndex=${levelIndex} levelCount=${state.levels.length}`
+      );
+      return;
+    }
+    const fields = data?.fields && typeof data.fields === "object" ? data.fields : {};
+    const level = state.levels[levelIndex];
+    // Update the level name if included in the fields
+    if (typeof fields.name === "string") {
+      level.name = fields.name;
+    }
+    // Merge remaining fields into level.meta (the serialized non-code properties)
+    for (const [key, value] of Object.entries(fields)) {
+      if (key === "name" || key === "code" || key === "versions") {
+        continue; // Skip code/versions — those are managed by Yjs
+      }
+      level.meta[key] = value;
+    }
+    console.log(
+      `[level-meta-update:update-meta] room=${roomId} from=${socketId} levelIndex=${levelIndex} keys=${Object.keys(fields).join(",")}`
+    );
+  } else {
+    console.log(
+      `[level-meta-update:unknown-op] room=${roomId} from=${socketId} operation=${operation}`
+    );
+    return;
+  }
+
+  // Rebuild Yjs doc if level structure changed (add/remove)
+  if ((operation === "add-level" || operation === "remove-level") && ctx.isYjsEnabled()) {
+    const nextGeneration = Math.max(ctx.getRoomYDocGeneration(roomId) + 1, 1);
+    ctx.createRoomYDoc(roomId, state, nextGeneration);
+  }
+
+  // Broadcast the update to all other clients
+  ctx.broadcastToRoom(roomId, "level-meta-update", {
+    operation,
+    levelIndex: data?.levelIndex ?? null,
+    fields: data?.fields ?? null,
+    level: data?.level ?? null,
+    ts: Date.now(),
+  }, socket);
+
+  // For structural changes, also send a full room-state-sync so all clients
+  // reconcile their level arrays with the server's canonical state.
+  if (operation === "add-level" || operation === "remove-level") {
+    ctx.broadcastToRoom(roomId, "room-state-sync", ctx.serializeRoomStateSync(roomId, state));
+    ctx.sendMessage(socket, "room-state-sync", ctx.serializeRoomStateSync(roomId, state));
+  }
+
+  // Mark dirty for persistence (instance rooms will save to DB)
+  ctx.markRoomDirty(roomId, roomCtx);
+}
+
 export const progressHandlers = {
   "request-room-state-sync": handleRequestRoomStateSync,
   "progress-sync": handleProgressSync,
   "group-start-ready": handleGroupStart,
   "group-start-unready": handleGroupStart,
   "reset-room-state": handleResetRoomState,
+  "level-meta-update": handleLevelMetaUpdate,
 };

@@ -93,6 +93,19 @@ const clientStateHashPayloadSchema = withRequiredRoomLocator({
   remoteApplyAgeMs: z.number().int().nonnegative().nullable().optional(),
 });
 
+const levelMetaUpdatePayloadSchema = withRequiredRoomLocator({
+  clientId: requiredString(128),
+  userId: requiredString(),
+  operation: z.enum([
+    "update-level-meta",
+    "add-level",
+    "remove-level",
+  ]),
+  levelIndex: z.number().int().nonnegative().optional(),
+  fields: z.record(z.string(), z.unknown()).optional(),
+  level: z.record(z.string(), z.unknown()).optional(),
+});
+
 const clientHealthEventPayloadSchema = withRequiredRoomLocator({
   clientId: requiredString(128),
   userId: requiredString(),
@@ -122,6 +135,7 @@ export const inboundPayloadSchemas = {
   "group-start-ready": groupStartPayloadSchema,
   "group-start-unready": groupStartPayloadSchema,
   "lobby-chat-send": lobbyChatPayloadSchema,
+  "level-meta-update": levelMetaUpdatePayloadSchema,
   "client-state-hash": clientStateHashPayloadSchema,
   "client-health-event": clientHealthEventPayloadSchema,
 };

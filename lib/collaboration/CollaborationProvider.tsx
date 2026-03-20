@@ -22,6 +22,8 @@ import {
   UserIdentity,
   EditorType,
   GameInstancesResetMessage,
+  LevelMetaUpdateMessage,
+  LevelMetaOperation,
 } from "./types";
 import { useCollaborationConnection } from "./hooks/useCollaborationConnection";
 import { useCollaborationCursor } from "./hooks/useCollaborationCursor";
@@ -228,6 +230,7 @@ export interface CollaborationContextValue {
   lobbyMessages: LobbyChatEntry[];
   initialRoomState: RoomStateSync;
   lastHealthMessage: CollaborationHealthMessage | null;
+  lastLevelMetaUpdate: LevelMetaUpdateMessage | null;
   codeSyncReady: boolean;
   yjsReady: boolean;
   yjsDocGeneration: number;
@@ -247,6 +250,7 @@ export interface CollaborationContextValue {
   syncProgressData: (progressData: Record<string, unknown>) => void;
   setGroupReady: (isReady: boolean) => void;
   sendLobbyChat: (text: string) => void;
+  sendLevelMetaUpdate: (operation: LevelMetaOperation, opts?: { levelIndex?: number; fields?: Record<string, unknown>; level?: Record<string, unknown> }) => void;
   reportEditorWatchState: (snapshot: EditorWatchdogSnapshot) => void;
   reportCollaborationHealthEvent: (
     eventType: string,
@@ -289,6 +293,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
   const [lobbyMessages, setLobbyMessages] = useState<LobbyChatEntry[]>([]);
   const [initialRoomState, setInitialRoomState] = useState<RoomStateSync>(null);
   const [lastHealthMessage, setLastHealthMessage] = useState<CollaborationHealthMessage | null>(null);
+  const [lastLevelMetaUpdate, setLastLevelMetaUpdate] = useState<LevelMetaUpdateMessage | null>(null);
   const [codeSyncReady, setCodeSyncReady] = useState(false);
   const [yjsReady, setYjsReady] = useState(false);
   const [yjsDocGeneration, setYjsDocGeneration] = useState(0);
@@ -811,6 +816,10 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
     setLastHealthMessage(message);
   }, []);
 
+  const handleLevelMetaUpdate = useCallback((message: LevelMetaUpdateMessage) => {
+    setLastLevelMetaUpdate(message);
+  }, []);
+
   const handleSocketConnected = useCallback(() => {
     hasDisconnectedUnexpectedlyRef.current = false;
     lastTransportMessageAtRef.current = Date.now();
@@ -993,6 +1002,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
     sendLobbyChat,
     sendClientStateHash,
     sendClientHealthEvent,
+    sendLevelMetaUpdate,
     effectiveIdentity,
   } = useCollaborationConnection({
     roomId: resolvedRoomId,
@@ -1011,6 +1021,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
     onLobbyChatMessage: handleLobbyChatMessage,
     onYjsProtocol: handleYjsProtocol,
     onCollaborationHealth: handleCollaborationHealth,
+    onLevelMetaUpdate: handleLevelMetaUpdate,
     onTransportMessage: handleTransportMessage,
   });
 
@@ -1680,6 +1691,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       lobbyMessages,
       initialRoomState,
       lastHealthMessage,
+      lastLevelMetaUpdate,
       codeSyncReady: resolvedCodeSyncReady,
       yjsReady,
       yjsDocGeneration,
@@ -1693,6 +1705,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       syncProgressData,
       setGroupReady,
       sendLobbyChat,
+      sendLevelMetaUpdate,
       reportEditorWatchState,
       reportCollaborationHealthEvent,
       getYText,
@@ -1742,6 +1755,8 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       syncProgressData,
       setGroupReady,
       sendLobbyChat,
+      sendLevelMetaUpdate,
+      lastLevelMetaUpdate,
       reportEditorWatchState,
       reportCollaborationHealthEvent,
       getYText,

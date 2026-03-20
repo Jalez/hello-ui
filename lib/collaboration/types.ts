@@ -282,6 +282,16 @@ export interface ClientHealthEventMessage {
   ts: number;
 }
 
+export type LevelMetaOperation = "update-level-meta" | "add-level" | "remove-level";
+
+export interface LevelMetaUpdateMessage {
+  operation: LevelMetaOperation;
+  levelIndex: number | null;
+  fields: Record<string, unknown> | null;
+  level: Record<string, unknown> | null;
+  ts: number;
+}
+
 export interface EditorWatchdogSnapshot {
   editorType: EditorType;
   levelIndex: number;

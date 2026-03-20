@@ -382,7 +382,10 @@ const levelsSlice = createSlice({
         accuracy: 0,
         js: "",
       };
-      level.scenarios?.push(newScenario);
+      if (!level.scenarios) {
+        level.scenarios = [];
+      }
+      level.scenarios.push(newScenario);
       storage?.setItem(storage.key, JSON.stringify(state));
     },
     removeScenario(
@@ -533,6 +536,18 @@ const levelsSlice = createSlice({
       level.identifier = identifier;
       storage?.setItem(storage.key, JSON.stringify(state));
     },
+    mergeRemoteLevelMeta(
+      state,
+      action: { payload: { levelIndex: number; fields: Record<string, unknown> } }
+    ) {
+      const { levelIndex, fields } = action.payload;
+      const level = state[levelIndex];
+      if (!level || !fields) return;
+      for (const [key, value] of Object.entries(fields)) {
+        if (key === "code" || key === "versions") continue;
+        (level as Record<string, unknown>)[key] = value;
+      }
+    },
   },
 });
 
@@ -574,6 +589,7 @@ export const {
   updateLevelColors,
   updateLevelIdentifier,
   setGuideSections,
+  mergeRemoteLevelMeta,
 } = levelsSlice.actions;
 
 export default levelsSlice.reducer;

@@ -17,6 +17,8 @@ import {
   EditorType,
   YjsProtocolMessage,
   GameInstancesResetMessage,
+  LevelMetaUpdateMessage,
+  LevelMetaOperation,
 } from "../types";
 import { logCollaborationStep } from "../logCollaborationStep";
 import { extractGroupIdFromRoomId, generateClientId, generateUserColor, getWebSocketUrl } from "../utils";
@@ -45,6 +47,7 @@ interface UseCollaborationConnectionOptions {
   onGameInstancesReset?: (message: GameInstancesResetMessage) => void;
   onIdentityAssigned?: (message: IdentityAssignedMessage) => void;
   onCollaborationHealth?: (message: CollaborationHealthMessage) => void;
+  onLevelMetaUpdate?: (message: LevelMetaUpdateMessage) => void;
   onTransportMessage?: (type: string) => void;
 }
 
@@ -72,6 +75,7 @@ interface UseCollaborationConnectionReturn {
   sendLobbyChat: (text: string) => void;
   sendClientStateHash: (message: Omit<ClientStateHashMessage, "roomId" | "groupId" | "clientId" | "userId" | "userEmail" | "engine" | "ts">) => void;
   sendClientHealthEvent: (message: Omit<ClientHealthEventMessage, "roomId" | "groupId" | "clientId" | "userId" | "userEmail" | "engine" | "ts">) => void;
+  sendLevelMetaUpdate: (operation: LevelMetaOperation, opts?: { levelIndex?: number; fields?: Record<string, unknown>; level?: Record<string, unknown> }) => void;
   effectiveIdentity: UserIdentity | null;
 }
 
@@ -554,6 +558,9 @@ export function useCollaborationConnection(
           case "collaboration-health":
             optionsRef.current.onCollaborationHealth?.(payload as CollaborationHealthMessage);
             return;
+          case "level-meta-update":
+            optionsRef.current.onLevelMetaUpdate?.(payload as LevelMetaUpdateMessage);
+            return;
           default:
             return;
         }
@@ -842,6 +849,25 @@ export function useCollaborationConnection(
     }
   }, [effectiveIdentity, parsedGroupId, roomId, sendMessage]);
 
+  const sendLevelMetaUpdate = useCallback((
+    operation: LevelMetaOperation,
+    opts?: { levelIndex?: number; fields?: Record<string, unknown>; level?: Record<string, unknown> }
+  ) => {
+    if (roomId && effectiveIdentity && clientIdRef.current) {
+      sendMessage("level-meta-update", {
+        roomId,
+        groupId: parsedGroupId ?? undefined,
+        clientId: clientIdRef.current,
+        userId: effectiveIdentity.id,
+        operation,
+        ...(Number.isInteger(opts?.levelIndex) ? { levelIndex: opts!.levelIndex } : {}),
+        ...(opts?.fields ? { fields: opts.fields } : {}),
+        ...(opts?.level ? { level: opts.level } : {}),
+        ts: Date.now(),
+      });
+    }
+  }, [effectiveIdentity, parsedGroupId, roomId, sendMessage]);
+
   const sendGroupStartReady = useCallback(() => {
     if (roomId && effectiveIdentity && clientIdRef.current) {
       sendMessage("group-start-ready", {
@@ -1008,6 +1034,7 @@ export function useCollaborationConnection(
     sendLobbyChat,
     sendClientStateHash,
     sendClientHealthEvent,
+    sendLevelMetaUpdate,
     effectiveIdentity,
   };
 }
