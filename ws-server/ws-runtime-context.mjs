@@ -45,6 +45,8 @@
  * @property {(roomId: string, state: any) => Array<any>} serializeCodeLevels
  * @property {(token: string, options?: { roomId?: string }) => any} verifyWsAuthToken
  * @property {{ recordInvalidInboundMessage: Function, recordUnknownInboundMessage: Function }} [transportStats]
+ * @property {(socket: import("ws").WebSocket, durationMs?: number) => void} setHandshakeGrace
+ * @property {(socket: import("ws").WebSocket) => void} clearHandshakeGrace
  */
 
 /**
@@ -105,6 +107,8 @@ export function createWsRuntimeContext(deps) {
     serializeCodeLevels: deps.serializeCodeLevels,
     verifyWsAuthToken: deps.verifyWsAuthToken,
     transportStats: deps.transportStats,
+    setHandshakeGrace: deps.setHandshakeGrace,
+    clearHandshakeGrace: deps.clearHandshakeGrace,
   };
 }
 

@@ -27,11 +27,13 @@ async function handleRequestRoomStateSync({ socket, data, socketId, resolveRoomI
   }
 
   const state = await ctx.ensureRoomState(roomId, roomCtx);
+  ctx.setHandshakeGrace(socket);
   ctx.sendMessage(socket, "room-state-sync", ctx.serializeRoomStateSync(roomId, state));
   const groupStartSync = ctx.serializeGroupStartSync(roomId, state);
   if (groupStartSync) {
     ctx.sendMessage(socket, "group-start-sync", groupStartSync);
   }
+  ctx.clearHandshakeGrace(socket);
   console.log(
     `[room-state-sync:emit] room=${roomId} target=${socketId} reason=request levelsCount=${state.levels.length}`
   );

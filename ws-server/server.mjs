@@ -125,6 +125,8 @@ const {
   logRoomSnapshot,
   sendMessage,
   broadcastToRoom,
+  setHandshakeGrace,
+  clearHandshakeGrace,
 } = createRoomMembership({
   rooms,
   connectionState,
@@ -420,6 +422,8 @@ const wsRuntimeContext = createWsRuntimeContext({
   serializeCodeLevels,
   verifyWsAuthToken,
   transportStats: wsTransportStats,
+  setHandshakeGrace,
+  clearHandshakeGrace,
 });
 
 const handleSocketMessage = createSocketMessageRouter(wsRuntimeContext);

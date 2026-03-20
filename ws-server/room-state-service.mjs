@@ -152,8 +152,13 @@ export function createRoomStateService({
 
       if (ctx.kind === "creator") {
         const creatorLevels = await fetchCreatorLevels(ctx);
-        const nextState = createRoomState(ctx, { levels: creatorLevels }, {
-          templateLevels: creatorLevels,
+        // New games have no map/levels yet — seed with a starter level so the
+        // creator UI has something to render and edit.
+        const effectiveLevels = creatorLevels.length > 0
+          ? creatorLevels
+          : [createStarterLevel(ctx.mapName)];
+        const nextState = createRoomState(ctx, { levels: effectiveLevels }, {
+          templateLevels: effectiveLevels,
           mapName: ctx.mapName,
           instanceId: null,
         });

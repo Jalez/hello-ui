@@ -53,6 +53,8 @@ test("createWsRuntimeContext preserves the handler-facing surface", () => {
     serializeCodeLevels: () => ({ levels: [] }),
     verifyWsAuthToken: () => null,
     transportStats: null,
+    setHandshakeGrace: () => {},
+    clearHandshakeGrace: () => {},
   };
 
   const ctx = createWsRuntimeContext(deps);

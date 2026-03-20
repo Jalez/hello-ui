@@ -135,8 +135,12 @@ async function handleJoinGame({ socket, data, socketId, resolveRoomId, ctx }) {
   });
 
   if (roomCtx) {
+    // Allow large initial payloads without triggering slow-consumer disconnects.
+    ctx.setHandshakeGrace(socket);
+
     const state = await ctx.ensureRoomState(roomId, roomCtx);
-    ctx.sendMessage(socket, "room-state-sync", ctx.serializeRoomStateSync(roomId, state));
+    const roomStateSyncPayload = ctx.serializeRoomStateSync(roomId, state);
+    ctx.sendMessage(socket, "room-state-sync", roomStateSyncPayload);
     const groupStartSync = ctx.serializeGroupStartSync(roomId, state);
     if (groupStartSync) {
       ctx.sendMessage(socket, "group-start-sync", groupStartSync);
@@ -153,6 +157,21 @@ async function handleJoinGame({ socket, data, socketId, resolveRoomId, ctx }) {
 
       // Send current awareness states so the joining client sees existing users immediately
       ctx.sendFullAwarenessState(socket, roomId, state);
+    }
+
+    ctx.clearHandshakeGrace(socket);
+
+    // Log payload sizes to diagnose large room states
+    const payloadJson = JSON.stringify(roomStateSyncPayload);
+    const payloadSizeKB = Math.round(payloadJson.length / 1024);
+    if (payloadSizeKB > 512) {
+      const levelSizes = (roomStateSyncPayload.levels || []).map((l, i) => {
+        const s = JSON.stringify(l);
+        return `L${i}:${Math.round(s.length / 1024)}KB`;
+      });
+      console.warn(
+        `[room-state-sync:large] room=${roomId} target=${socketId} totalKB=${payloadSizeKB} levels=[${levelSizes.join(",")}]`
+      );
     }
     console.log(`[room-state-sync:emit] room=${roomId} target=${socketId} levelsCount=${state.levels.length}`);
   } else if (isLobbyRoom(roomId)) {

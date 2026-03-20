@@ -113,10 +113,38 @@ export function createRoomMembership(deps) {
   const maxBufferedAmountBytes = deps.maxBufferedAmountBytes ?? (2 * 1024 * 1024);
   const transportStats = deps.transportStats || null;
 
+  function setHandshakeGrace(socket, durationMs = 30_000) {
+    const state = connectionState.get(socket);
+    if (state) {
+      state.handshakeUntil = Date.now() + durationMs;
+    }
+  }
+
+  function clearHandshakeGrace(socket) {
+    const state = connectionState.get(socket);
+    if (state) {
+      delete state.handshakeUntil;
+    }
+  }
+
   function guardSlowConsumer(socket) {
     const bufferedAmount = Number.isFinite(socket?.bufferedAmount) ? socket.bufferedAmount : 0;
     transportStats?.recordPeakBufferedAmount(bufferedAmount);
     if (bufferedAmount <= maxBufferedAmountBytes) {
+      return false;
+    }
+
+    // During the initial join handshake, allow large payloads to be sent
+    // without triggering slow-consumer disconnects.
+    const state = connectionState.get(socket);
+    if (state?.handshakeUntil && Date.now() < state.handshakeUntil) {
+      if (bufferedAmount > maxBufferedAmountBytes) {
+        const socketId = getConnectionId(socket);
+        const roomId = state.roomId || "none";
+        logger.warn(
+          `[slow-consumer:grace] socket=${socketId} room=${roomId} bufferedAmount=${bufferedAmount} limit=${maxBufferedAmountBytes} (handshake grace active)`
+        );
+      }
       return false;
     }
     if (transportStats) {
@@ -232,5 +260,7 @@ export function createRoomMembership(deps) {
     logRoomSnapshot,
     sendMessage,
     broadcastToRoom,
+    setHandshakeGrace,
+    clearHandshakeGrace,
   };
 }
