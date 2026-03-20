@@ -356,98 +356,102 @@ export default function CodeEditor({
       )}
 
       <div
-        className="codeEditor relative min-h-0 flex-[1_1_20px] overflow-auto"
+        className="codeEditor relative flex min-h-0 flex-[1_1_20px] flex-col overflow-hidden"
         title={locked ? "You can't edit this code" : " Click on the code to edit it"}
       >
         {(options.creator || readOnlySession) && (
-          <div className="absolute bottom-1 right-1 z-[100] flex items-center gap-1">
-            {options.creator && (
-              <EditorMagicButton
-                buttonColor="primary"
-                EditorCode={code}
-                editorType={title}
-                onSuggestion={handleAiSuggestion}
-                disabled={locked || readOnlySession}
-              />
-            )}
+          <div className="pointer-events-none absolute bottom-1 right-1 z-[100] flex items-center gap-1">
+            <div className="pointer-events-auto flex items-center gap-1">
+              {options.creator && (
+                <EditorMagicButton
+                  buttonColor="primary"
+                  EditorCode={code}
+                  editorType={title}
+                  onSuggestion={handleAiSuggestion}
+                  disabled={locked || readOnlySession}
+                />
+              )}
 
-            {readOnlySession && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="text-amber-500"
-                onClick={() => window.dispatchEvent(new CustomEvent("collab:open-readonly-status"))}
-                title="Read-only session (click for details)"
-              >
-                <PencilOff className="h-4 w-4" />
-              </Button>
-            )}
+              {readOnlySession && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="text-amber-500"
+                  onClick={() => window.dispatchEvent(new CustomEvent("collab:open-readonly-status"))}
+                  title="Read-only session (click for details)"
+                >
+                  <PencilOff className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
           </div>
         )}
 
         {locked && (
           <h3
             id="title"
-            className="absolute left-1/2 top-[20%] z-[1] -translate-x-1/2 -translate-y-1/2 -rotate-45 select-none overflow-hidden text-5xl text-red-500 opacity-20 drop-shadow-[2px_2px_2px_#000]"
+            className="pointer-events-none absolute left-1/2 top-[20%] z-[1] -translate-x-1/2 -translate-y-1/2 -rotate-45 select-none overflow-hidden text-5xl text-red-500 opacity-20 drop-shadow-[2px_2px_2px_#000]"
           >
             Locked
           </h3>
         )}
 
-        {title === "HTML" && (
-          <HtmlFrameLine
-            value={"<div id='root'><kbd>"}
-            props={htmlFrameLineProps}
-          />
-        )}
-
-        <div ref={editorViewportRef} className="relative">
-          {isYjsManaged ? (
-            canMountYjsSurface ? (
-            <YjsEditorSurface
-              key={editorKey}
-              editorProps={editableEditorProps}
-              editorKey={editorKey}
-              editorInitialState={editorInitialState}
-              style={editorStyle}
+        <div className="flex min-h-0 flex-1 flex-col overflow-auto">
+          {title === "HTML" && (
+            <HtmlFrameLine
+              value={"<div id='root'><kbd>"}
+              props={htmlFrameLineProps}
             />
+          )}
+
+          <div ref={editorViewportRef} className="relative min-h-0 flex-1">
+            {isYjsManaged ? (
+              canMountYjsSurface ? (
+                <YjsEditorSurface
+                  key={editorKey}
+                  editorProps={editableEditorProps}
+                  editorKey={editorKey}
+                  editorInitialState={editorInitialState}
+                  style={editorStyle}
+                />
+              ) : (
+                <CodeMirror
+                  {...fallbackReadOnlyProps}
+                  key={`${editorKey}:fallback`}
+                  value={code}
+                  style={editorStyle}
+                />
+              )
             ) : (
               <CodeMirror
-                {...fallbackReadOnlyProps}
-                key={`${editorKey}:fallback`}
+                {...editableEditorProps}
+                key={editorKey}
                 value={code}
                 style={editorStyle}
               />
-            )
-          ) : (
-            <CodeMirror
-              {...editableEditorProps}
-              key={editorKey}
-              value={code}
-              style={editorStyle}
-            />
-          )}
-          {isConnected && <RemoteCaretsOverlay carets={remoteCarets} />}
-          {showCollaborationRecoveryOverlay && (
-            <div className="pointer-events-none absolute inset-0 z-20 flex animate-in fade-in duration-300 items-center justify-center bg-background/45 backdrop-blur-sm">
-              <div className="flex items-center gap-3 rounded-full border border-border/70 bg-background/90 px-4 py-2 text-sm text-foreground shadow-lg shadow-black/10">
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary/25 border-t-primary" />
-                <div className="flex flex-col leading-tight">
-                  <span className="font-medium">Resyncing shared editor</span>
-                  <span className="text-xs text-muted-foreground">Changes will be ready in a moment</span>
+            )}
+            {isConnected && <RemoteCaretsOverlay carets={remoteCarets} />}
+            {showCollaborationRecoveryOverlay && (
+              <div className="pointer-events-none absolute inset-0 z-20 flex animate-in fade-in duration-300 items-center justify-center bg-background/45 backdrop-blur-sm">
+                <div className="flex items-center gap-3 rounded-full border border-border/70 bg-background/90 px-4 py-2 text-sm text-foreground shadow-lg shadow-black/10">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary/25 border-t-primary" />
+                  <div className="flex flex-col leading-tight">
+                    <span className="font-medium">Resyncing shared editor</span>
+                    <span className="text-xs text-muted-foreground">Changes will be ready in a moment</span>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
+          </div>
+
+          {title === "HTML" && (
+            <HtmlFrameLine
+              value={"</kbd></div>"}
+              props={htmlFrameLineProps}
+            />
           )}
         </div>
-
-        {title === "HTML" && (
-          <HtmlFrameLine
-            value={"</kbd></div>"}
-            props={htmlFrameLineProps}
-          />
-        )}
       </div>
     </div>
   );
