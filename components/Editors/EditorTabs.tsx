@@ -8,6 +8,7 @@ import CodeEditor from "./CodeEditor/CodeEditor";
 import { Lock, LockOpen, Menu } from "lucide-react";
 import { handleLocking } from "@/store/slices/levels.slice";
 import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
+import { useLevelMetaSync } from "@/lib/collaboration/hooks/useLevelMetaSync";
 import { html } from "@codemirror/lang-html";
 import { css } from "@codemirror/lang-css";
 import { javascript } from "@codemirror/lang-javascript";
@@ -56,6 +57,7 @@ function EditorTabs({
   const options = useAppSelector((state) => state.options);
   const isCreator = options.creator;
   const dispatch = useAppDispatch();
+  const { syncLevelFields } = useLevelMetaSync();
 
   const [activeLanguage, setActiveLanguage] = React.useState<'html' | 'css' | 'js'>('html');
   const [isTemplateMode, setIsTemplateMode] = React.useState<boolean>(true);
@@ -106,6 +108,8 @@ function EditorTabs({
         type: language,
       })
     );
+    const lockKey = `lock${language.toUpperCase()}`;
+    syncLevelFields(currentLevel - 1, [lockKey]);
 
     if (!identifier || !UUID_REGEX.test(identifier)) {
       return;

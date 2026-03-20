@@ -20,6 +20,7 @@ import { Trash2, MousePointer, ImageIcon } from "lucide-react";
 import PoppingTitle from "@/components/General/PoppingTitle";
 import { ScenarioDimensionsWrapper } from "./ScenarioDimensionsWrapper";
 import { ScenarioHoverContainer } from "./ScenarioHoverContainer";
+import { useLevelMetaSync } from "@/lib/collaboration/hooks/useLevelMetaSync";
 
 type ScenarioDrawingProps = {
   scenario: scenario;
@@ -33,6 +34,7 @@ export const ScenarioDrawing = ({
   const solutionUrls = useAppSelector((state: any) => state.solutionUrls);
   const solutionUrl = solutionUrls[scenario.scenarioId];
   const dispatch = useAppDispatch();
+  const { syncLevelFields } = useLevelMetaSync();
   const options = useAppSelector((state) => state.options);
   const isCreator = options.creator;
   const [drawWithSolution, setDrawWithSolution] = useState(false);
@@ -60,14 +62,16 @@ export const ScenarioDrawing = ({
       setDrawWithSolution(!drawWithSolution);
     } else {
       dispatch(toggleImageInteractivity(currentLevel));
+      syncLevelFields(currentLevel - 1, ["interactive"]);
     }
-  }, [currentLevel, dispatch, drawWithSolution, isCreator]);
+  }, [currentLevel, dispatch, drawWithSolution, isCreator, syncLevelFields]);
   const interactive = level.interactive;
 
   const handleRemoveScenario = () => {
     dispatch(
       removeScenario({ levelId: currentLevel, scenarioId: scenario.scenarioId })
     );
+    syncLevelFields(currentLevel - 1, ["scenarios"]);
   };
   return (
     <div className="relative flex justify-center">

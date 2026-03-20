@@ -11,6 +11,7 @@ import { resetSolutionUrls } from "@/store/slices/solutionUrls.slice";
 import { setSolutions } from "@/store/slices/solutions.slice";
 import { Level } from "@/types";
 import { toast } from "sonner";
+import { useLevelMetaSync } from "@/lib/collaboration/hooks/useLevelMetaSync";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -22,6 +23,7 @@ export const useLevelRemover = () => {
   const options = useAppSelector((state) => state.options);
   const dispatch = useAppDispatch();
   const currentGame = useGameStore((state) => state.getCurrentGame());
+  const { syncLevelOp } = useLevelMetaSync();
 
   const refreshCurrentMapLevels = useCallback(async () => {
     if (!currentGame?.id || !currentGame.mapName) return;
@@ -74,6 +76,7 @@ export const useLevelRemover = () => {
         dispatch(setCurrentLevel(Math.max(1, currentLevel - 1)));
       }
       dispatch(removeLevel(currentLevel));
+      syncLevelOp("remove-level", { levelIndex: currentLevel - 1 });
       toast.success("Unsaved level removed");
       return;
     }
@@ -91,7 +94,7 @@ export const useLevelRemover = () => {
       console.error("Failed to remove level from map", error);
       toast.error("Failed to remove level");
     }
-  }, [levels, currentLevel, currentGame?.mapName, refreshCurrentMapLevels, dispatch]);
+  }, [levels, currentLevel, currentGame?.mapName, refreshCurrentMapLevels, dispatch, syncLevelOp]);
 
   return { handleRemove };
 };

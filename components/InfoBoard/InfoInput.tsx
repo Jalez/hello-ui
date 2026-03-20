@@ -5,12 +5,15 @@ import { Input } from "@/components/ui/input";
 import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
 import { useState } from "react";
 import { Check } from "lucide-react";
+import { useLevelMetaSync } from "@/lib/collaboration/hooks/useLevelMetaSync";
 
 interface InputProps {
   actionToDispatch: any;
   reduxState: string;
   dataType?: string;
   finishEditHandler?: () => void;
+  /** After dispatch, sync these level fields to collaborators (0-based index derived from current level). */
+  levelMetaSyncFields?: string[];
 }
 
 const InfoInput = ({
@@ -18,6 +21,7 @@ const InfoInput = ({
   actionToDispatch,
   dataType,
   finishEditHandler,
+  levelMetaSyncFields,
 }: InputProps) => {
   const currentLevel = useAppSelector(
     (state) => state.currentLevel.currentLevel
@@ -28,12 +32,16 @@ const InfoInput = ({
   const [value, setValue] = useState(detail);
 
   const dispatch = useAppDispatch();
+  const { syncLevelFields } = useLevelMetaSync();
   const handleChange = (e: any) => {
     setValue(e.target.value);
   };
 
   const handleUpdate = () => {
     dispatch(actionToDispatch({ levelId: currentLevel, text: value }));
+    if (levelMetaSyncFields?.length) {
+      syncLevelFields(currentLevel - 1, levelMetaSyncFields);
+    }
     finishEditHandler && finishEditHandler();
   };
   return (

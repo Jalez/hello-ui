@@ -10,6 +10,7 @@ import {
   removeGuideSectionItem,
   updateGuideSectionItem,
 } from "@/store/slices/levels.slice";
+import { useLevelMetaSync } from "@/lib/collaboration/hooks/useLevelMetaSync";
 const InfoGuideListItem = ({
   item,
   itemLocation,
@@ -23,6 +24,7 @@ const InfoGuideListItem = ({
     (state) => state.currentLevel.currentLevel
   );
   const dispatch = useAppDispatch();
+  const { syncLevelFields } = useLevelMetaSync();
   const [listItem, setListItem] = useState(item);
   const [edited, setEdited] = useState(false);
   const options = useAppSelector((state) => state.options);
@@ -38,6 +40,7 @@ const InfoGuideListItem = ({
         sectionIndex: sectionLocation,
       })
     );
+    syncLevelFields(currentLevel - 1, ["instructions"]);
   };
 
   const handleClickToEdit = () => {
@@ -57,6 +60,7 @@ const InfoGuideListItem = ({
         text: listItem,
       })
     );
+    syncLevelFields(currentLevel - 1, ["instructions"]);
   };
   // If user is a creator, return a list item that is clickable to edit, and has a delete button to remove it.
   if (isCreator)

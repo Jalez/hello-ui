@@ -9,6 +9,7 @@ import {
   removeGuideSection,
   setGuideSections,
 } from "@/store/slices/levels.slice";
+import { useLevelMetaSync } from "@/lib/collaboration/hooks/useLevelMetaSync";
 import InfoGuideSectionTitle from "./InfoGuideSectionTitle";
 import EditorMagicButton from "../CreatorControls/EditorMagicButton";
 import { Separator } from "@/components/tailwind/ui/separator";
@@ -25,6 +26,7 @@ const InfoGuide = ({ sections }: { sections: infoSection[] }) => {
 
   const level = levels[currentLevel - 1];
   const dispatch = useAppDispatch();
+  const { syncLevelFields } = useLevelMetaSync();
   const options = useAppSelector((state) => state.options);
   const isCreator = options.creator;
   const currentMode = options.mode;
@@ -40,10 +42,12 @@ const InfoGuide = ({ sections }: { sections: infoSection[] }) => {
         content: ["New content, click to edit"],
       })
     );
+    syncLevelFields(currentLevel - 1, ["instructions"]);
   };
 
   const handleRemoveSection = (sectionIndex: number) => {
     dispatch(removeGuideSection({ levelId: currentLevel, sectionIndex }));
+    syncLevelFields(currentLevel - 1, ["instructions"]);
   };
 
   // take all the code that is not locked in the level
@@ -86,6 +90,7 @@ const InfoGuide = ({ sections }: { sections: infoSection[] }) => {
     dispatch(
       setGuideSections({ levelId: currentLevel, sections: newSectionsArray })
     );
+    syncLevelFields(currentLevel - 1, ["instructions"]);
   };
 
   // Filter out empty or default "Getting Started" sections

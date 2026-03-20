@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
+import { useLevelMetaSync } from "@/lib/collaboration/hooks/useLevelMetaSync";
 import { updatePointsThresholds } from "@/store/slices/levels.slice";
 import { recalculateLevelPoints } from "@/store/slices/points.slice";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -70,6 +71,7 @@ function formatThresholdsJson(thresholds: PointsThreshold[]) {
 
 export const ThresholdsEditor = () => {
   const dispatch = useAppDispatch();
+  const { syncLevelFields } = useLevelMetaSync();
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const level = useAppSelector((state) => state.levels[currentLevel - 1]);
   const [open, setOpen] = useState(false);
@@ -200,6 +202,11 @@ export const ThresholdsEditor = () => {
         },
       }),
     );
+    syncLevelFields(currentLevel - 1, [
+      "pointsThresholds",
+      "percentageTreshold",
+      "percentageFullPointsTreshold",
+    ]);
     setOpen(false);
   };
 

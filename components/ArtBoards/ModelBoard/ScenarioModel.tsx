@@ -11,6 +11,7 @@ import { Image } from "@/components/General/Image/Image";
 import { FloatingActionButton } from "@/components/General/FloatingActionButton";
 import { useCallback, useState } from "react";
 import { toggleShowModelSolution } from "@/store/slices/levels.slice";
+import { useLevelMetaSync } from "@/lib/collaboration/hooks/useLevelMetaSync";
 
 type ScenarioModelProps = {
   scenario: scenario;
@@ -23,12 +24,14 @@ export const ScenarioModel = ({
   const level = useAppSelector((state) => state.levels[currentLevel - 1]);
   const showModel = level.showModelPicture;
   const dispatch = useAppDispatch();
+  const { syncLevelFields } = useLevelMetaSync();
   const solutionUrls = useAppSelector((state: any) => state.solutionUrls);
   const solutionUrl = solutionUrls[scenario.scenarioId];
 
   const handleSwitchModel = useCallback(() => {
     dispatch(toggleShowModelSolution(currentLevel));
-  }, [currentLevel, dispatch]);
+    syncLevelFields(currentLevel - 1, ["showModelPicture"]);
+  }, [currentLevel, dispatch, syncLevelFields]);
 
   return (
     <div className="relative flex justify-center">

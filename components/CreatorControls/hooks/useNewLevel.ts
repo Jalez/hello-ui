@@ -8,12 +8,14 @@ import { setCurrentLevel } from "@/store/slices/currentLevel.slice";
 import { levelUrl } from "@/constants";
 import { addLevelsToMap } from "@/lib/utils/network/maps";
 import { useGameStore } from "@/components/default/games";
+import { useLevelMetaSync } from "@/lib/collaboration/hooks/useLevelMetaSync";
 
 export const useNewLevel = () => {
   const dispatch = useAppDispatch();
   const levels = useAppSelector((state) => state.levels);
   const currentGame = useGameStore((state) => state.getCurrentGame());
   const [isCreating, setIsCreating] = useState(false);
+  const { syncLevelOp } = useLevelMetaSync();
 
   const handleNewLevelCreation = async () => {
     if (isCreating) return;
@@ -52,6 +54,9 @@ export const useNewLevel = () => {
       dispatch(addNewLevel());
       const newLevelNumber = levels.length + 1; // 1-based
       dispatch(updateLevelIdentifier({ levelId: newLevelNumber, identifier: data.identifier }));
+      syncLevelOp("add-level", {
+        level: { name: "template", identifier: data.identifier },
+      });
       dispatch(setCurrentLevel(newLevelNumber));
       dispatch(initializePointsFromLevelsStateThunk());
 
