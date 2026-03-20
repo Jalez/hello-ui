@@ -17,7 +17,7 @@ import { NextThreshold } from "./NextThreshold";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { BarChart3, Clock3, RotateCcw } from "lucide-react";
-import { LevelDifficultySkulls } from "./Difficulty";
+import Difficulty, { LevelDifficultySkulls } from "./Difficulty";
 import { numberTimeToMinutesAndSeconds } from "@/lib/utils/numberTimeToMinutesAndSeconds";
 import { resetLevel } from "@/store/slices/levels.slice";
 import { useOptionalCollaboration } from "@/lib/collaboration/CollaborationProvider";
@@ -130,7 +130,7 @@ export function LevelFooterMenu() {
             )}
             {level.buildingBlocks?.colors?.length ? (
               <CompactMenuItem label="Colors">
-                <div className="flex flex-wrap items-center justify-center gap-1">
+                <div className="flex max-w-full flex-row flex-wrap items-center justify-center gap-1.5">
                   {level.buildingBlocks.colors.map((color) => (
                     <InfoColor key={color} color={color} />
                   ))}
@@ -256,6 +256,11 @@ const Info = () => {
           </InfoBox>
         )}
         {isCreator ? <ThresholdsEditor /> : <NextThreshold />}
+        {isCreator && (
+          <InfoBox>
+            <Difficulty />
+          </InfoBox>
+        )}
         <InfoBox>
           <InfoColors />
         </InfoBox>

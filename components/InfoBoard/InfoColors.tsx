@@ -80,9 +80,9 @@ export const InfoColors = () => {
 
   return (
     <PoppingTitle topTitle="Colors" bottomTitle="Click to copy">
-      <div className="flex">
+      <div className="flex flex-row flex-wrap items-center justify-center gap-1.5">
         {level.buildingBlocks?.colors?.map((color) => (
-          <InfoColor key={Math.random() * 10000} color={color} />
+          <InfoColor key={color} color={color} />
         ))}
       </div>
     </PoppingTitle>

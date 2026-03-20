@@ -31,12 +31,12 @@ export const InfoColor = ({ color }: InfoColorProps): React.ReactNode | null => 
   };
 
   return (
-    <div className="w-full">
+    <div className="shrink-0">
       <Popover open={popUp} onOpenChange={setPopUp}>
         <PopoverTrigger asChild>
           <div
             onClick={clickHandler}
-            className="flex flex-row ml-2 items-center justify-center cursor-pointer"
+            className="flex cursor-pointer flex-row items-center justify-center"
           >
             <div
               className="color-box h-5 w-5 box-border rounded-full border-[0.1em] border-[#444] select-none"
