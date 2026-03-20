@@ -3,7 +3,7 @@
 ## Current baseline
 
 - Current branch: `ui-designer`
-- Current HEAD: `28b5bc5`
+- Current HEAD: includes combobox cherry-picks + lockfile sync (exact SHA: `git rev-parse HEAD`)
 - This branch was intentionally rebuilt on top of known-good custom Yjs commit `a895aab` plus selected safe follow-up commits.
 - This rebuilt branch passed the available collaboration Playwright checks I ran:
   - `pw:local-group`
@@ -85,13 +85,19 @@ Why it was not kept:
 - it was not stable enough to replace the known-good custom-Yjs path
 - it mixed useful investigation with cleanup and test-harness work
 
-### 3. UI work still intentionally excluded from `ui-designer`
+### 3. Shared combobox (react-select) — **restored on `ui-designer`**
 
-These still exist on the Hocuspocus branch and were intentionally **not** brought onto the rebuilt custom-Yjs `ui-designer`:
+These three commits were cherry-picked from the pre-rebuild line (same hashes):
 
-- `0a6e5b1` `feat(ui): add shared react-select combobox foundation`
-- `c0ffa1b` `refactor(pickers): migrate group and model selectors to shared combobox`
-- `f77156a` `refactor(creator-settings): use shared combobox and remove unused settings modal`
+- `0a6e5b1` `feat(ui): add shared react-select combobox foundation` → adds `components/ui/combobox.tsx`, `command.tsx`, `cmdk` + `react-select`
+- `c0ffa1b` `refactor(pickers): migrate group and model selectors to shared combobox` → `GroupSelector` (used from **game** `GamePageClient` group flow / lobby), `InviteToGroupDialog`, `CreatorGroupDetailsDialog`, `ServiceDefaultModelSelector`
+- `f77156a` `refactor(creator-settings): use shared combobox and remove unused settings modal` → `app/creator/[gameId]/settings/page.tsx`; removes unused `components/Navbar/GameSettings.tsx`
+
+If `pnpm-lock.yaml` drifts after install, run `pnpm install` and commit the lockfile.
+
+### 4. Other UI work that may still be only on the Hocuspocus branch
+
+Previously listed together with combobox; combobox is now merged as above. Remaining items if any should be re-audited against current `ui-designer`.
 
 Important correction:
 
