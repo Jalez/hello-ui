@@ -83,12 +83,15 @@ services:
     image: ui-designer-ws:latest
     ports:
       - "54323:8080"
+    env_file:
+      - .env.production
     environment:
       PORT: 8080
       API_BASE_URL: http://app:3000
       DATABASE_URL: postgresql://postgres:postgres@db:5432/ui_designer
       CORS_ORIGIN: https://tie-lukioplus.rd.tuni.fi
       TZ: Europe/Helsinki
+      NODE_ENV: production
       WS_SERVICE_TOKEN: ${WS_SERVICE_TOKEN:-ws-service-secret}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]

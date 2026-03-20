@@ -81,6 +81,8 @@ services:
       dockerfile: Dockerfile
     ports:
       - "3100:3100"
+    env_file:
+      - .env.local
     environment:
       PORT: 3100
       CORS_ORIGIN: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
