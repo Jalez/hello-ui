@@ -35,19 +35,41 @@ export function LevelMetaSync() {
 
     if (update.operation === "update-level-meta" && update.levelIndex != null && update.fields) {
       const level = store.getState().levels[update.levelIndex];
-      if (!level) return;
+      if (!level) {
+        console.warn("[LevelMetaSync] skip — no level at index", {
+          levelIndex: update.levelIndex,
+          ts: update.ts,
+          keys: Object.keys(update.fields),
+        });
+        return;
+      }
 
       let hasChange = false;
+      let firstDiffKey: string | null = null;
       for (const [key, value] of Object.entries(update.fields)) {
         if (key === "code" || key === "versions") continue;
         const current = (level as unknown as Record<string, unknown>)[key];
         if (!levelMetaValueEqual(current, value)) {
           hasChange = true;
+          firstDiffKey = key;
           break;
         }
       }
-      if (!hasChange) return;
+      if (!hasChange) {
+        console.log("[LevelMetaSync] skip no-op merge (already matches Redux)", {
+          levelIndex: update.levelIndex,
+          ts: update.ts,
+          keys: Object.keys(update.fields),
+        });
+        return;
+      }
 
+      console.log("[LevelMetaSync] applying remote update", {
+        levelIndex: update.levelIndex,
+        ts: update.ts,
+        keys: Object.keys(update.fields),
+        firstDiffKey,
+      });
       dispatch(
         mergeRemoteLevelMeta({
           levelIndex: update.levelIndex,
