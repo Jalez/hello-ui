@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Trash2 } from "lucide-react";
 import PoppingTitle from "@/components/General/PoppingTitle";
+import { useLevelMetaSync } from "@/lib/collaboration/hooks/useLevelMetaSync";
 
 type ScenarioDimensionsProps = {
   scenario: scenario;
@@ -41,6 +42,7 @@ export const ScenarioDimensions = ({
   onRemoveScenario,
 }: ScenarioDimensionsProps): React.ReactNode => {
   const dispatch = useAppDispatch();
+  const { syncLevelFields } = useLevelMetaSync();
   const options = useAppSelector((state) => state.options);
   const isCreator = options.creator;
   
@@ -147,13 +149,15 @@ export const ScenarioDimensions = ({
       })
     );
     
+    syncLevelFields(levelId - 1, ["scenarios"]);
+
     // Remember what we just saved to prevent sync from overwriting
     lastSavedValuesRef.current = {
       width: widthToSave,
       height: heightToSave,
       unit: unitToSave
     };
-    
+
     // Exit edit mode - local state already has the correct values
     setEditDimensions(false);
     

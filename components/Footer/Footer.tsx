@@ -9,8 +9,9 @@ import { HelpModal } from "@/components/Help/HelpModal";
 import { useAppSelector } from "@/store/hooks/hooks";
 import { useGameStore } from "@/components/default/games";
 import Info, { LevelFooterMenu, TimeFooterMenu } from "../InfoBoard/Info";
-import { fetchActiveGameGroupsCached, fetchGroupDetailsCached } from "@/lib/group-details-client";
-import { HelpCircle, Info as InfoIcon, KeyRound, Loader2, Users } from "lucide-react";
+import { fetchActiveGameGroupsCached, fetchActiveGameIndividualsCached, fetchGroupDetailsCached } from "@/lib/group-details-client";
+import type { ClientActiveIndividualInstance } from "@/lib/group-details-client";
+import { HelpCircle, Info as InfoIcon, KeyRound, Loader2, User, Users } from "lucide-react";
 import { ActiveGroupInstance, CreatorGroupDetailsDialog } from "@/components/groups/CreatorGroupDetailsDialog";
 import { CompactMenuButton } from "@/components/General/CompactMenuButton";
 import { stripBasePath } from "@/lib/apiUrl";
@@ -140,6 +141,60 @@ function CreatorGroupsMenu({
   );
 }
 
+function CreatorIndividualsMenu({
+  individuals,
+  isLoading,
+  currentUserId,
+  onOpenInstance,
+}: {
+  individuals: ClientActiveIndividualInstance[];
+  isLoading: boolean;
+  currentUserId: string | null;
+  onOpenInstance: (userId: string) => void;
+}) {
+  return (
+    <div className="rounded-md border bg-muted/40 p-3">
+      <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+        <User className="h-3.5 w-3.5" />
+        <span>Active Individual Instances</span>
+      </div>
+      <div className="mt-3 max-h-64 space-y-2 overflow-y-auto pr-1">
+        {isLoading ? (
+          <div className="flex items-center gap-2 rounded-md bg-background/80 px-3 py-3 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span>Loading instances...</span>
+          </div>
+        ) : individuals.length === 0 ? (
+          <div className="rounded-md bg-background/80 px-3 py-3 text-sm text-muted-foreground">
+            No individual instances yet
+          </div>
+        ) : (
+          individuals.map((individual) => (
+            <button
+              key={individual.userId}
+              type="button"
+              className="flex w-full items-center rounded-md bg-background/80 px-3 py-3 text-left"
+              onClick={() => onOpenInstance(individual.userId)}
+            >
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-semibold text-foreground">
+                  {individual.displayName || individual.userEmail || individual.userId}
+                  {individual.userId === currentUserId ? " (Current)" : ""}
+                </div>
+                {individual.userEmail && individual.displayName && individual.displayName !== individual.userEmail && (
+                  <div className="truncate text-xs text-muted-foreground">
+                    {individual.userEmail}
+                  </div>
+                )}
+              </div>
+            </button>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
 export const Footer = () => {
   const options = useAppSelector((state) => state.options);
   const lastSavedLabel = useRelativeTime(options.lastSaved);
@@ -157,10 +212,19 @@ export const Footer = () => {
   const [activeGroups, setActiveGroups] = useState<ActiveGroupInstance[]>([]);
   const [isLoadingActiveGroups, setIsLoadingActiveGroups] = useState(false);
   const [detailsGroup, setDetailsGroup] = useState<ActiveGroupInstance | null>(null);
+  const [activeIndividuals, setActiveIndividuals] = useState<ClientActiveIndividualInstance[]>([]);
+  const [isLoadingActiveIndividuals, setIsLoadingActiveIndividuals] = useState(false);
 
+  const viewUserId = searchParams.get("userId");
   const isGroupGameplay = currentGame?.collaborationMode === "group" && Boolean(groupId);
   const showCreatorGroupInstances =
     currentGame?.collaborationMode === "group" &&
+    Boolean(currentGame?.id) &&
+    Boolean(currentGame?.canEdit ?? currentGame?.isOwner) &&
+    normalizedPathname.startsWith("/game/") &&
+    !options.creator;
+  const showCreatorIndividualInstances =
+    currentGame?.collaborationMode === "individual" &&
     Boolean(currentGame?.id) &&
     Boolean(currentGame?.canEdit ?? currentGame?.isOwner) &&
     normalizedPathname.startsWith("/game/") &&
@@ -238,6 +302,39 @@ export const Footer = () => {
     };
   }, [currentGame?.id, showCreatorGroupInstances]);
 
+  useEffect(() => {
+    if (!showCreatorIndividualInstances || !currentGame?.id) {
+      setActiveIndividuals([]);
+      setIsLoadingActiveIndividuals(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadActiveIndividuals = async () => {
+      try {
+        setIsLoadingActiveIndividuals(true);
+        const individuals = await fetchActiveGameIndividualsCached(currentGame.id);
+        if (!cancelled) {
+          setActiveIndividuals(individuals);
+        }
+      } catch {
+        if (!cancelled) {
+          setActiveIndividuals([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingActiveIndividuals(false);
+        }
+      }
+    };
+
+    loadActiveIndividuals();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentGame?.id, showCreatorIndividualInstances]);
+
   const openGroupInstance = (nextGroupId: string) => {
     if (!currentGame?.id) {
       return;
@@ -246,6 +343,18 @@ export const Footer = () => {
     const params = new URLSearchParams(searchParams.toString());
     params.set("mode", "game");
     params.set("groupId", nextGroupId);
+    router.push(`/game/${currentGame.id}?${params.toString()}`);
+  };
+
+  const openIndividualInstance = (targetUserId: string) => {
+    if (!currentGame?.id) {
+      return;
+    }
+
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("mode", "game");
+    params.set("userId", targetUserId);
+    params.delete("groupId");
     router.push(`/game/${currentGame.id}?${params.toString()}`);
   };
 
@@ -284,6 +393,27 @@ export const Footer = () => {
                   currentGroupId={groupId}
                   onOpenGroup={openGroupInstance}
                   onOpenDetails={setDetailsGroup}
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+        ) : showCreatorIndividualInstances ? (
+          <div className="flex flex-1 min-w-0">
+            <Popover>
+              <PopoverTrigger asChild>
+                <CompactMenuButton
+                  icon={isLoadingActiveIndividuals ? Loader2 : User}
+                  label="Students"
+                  text="Students"
+                  className={isLoadingActiveIndividuals ? "[&_svg]:animate-spin" : undefined}
+                />
+              </PopoverTrigger>
+              <PopoverContent side="top" align="end" className="w-80 space-y-3">
+                <CreatorIndividualsMenu
+                  individuals={activeIndividuals}
+                  isLoading={isLoadingActiveIndividuals}
+                  currentUserId={viewUserId}
+                  onOpenInstance={openIndividualInstance}
                 />
               </PopoverContent>
             </Popover>
@@ -356,6 +486,26 @@ export const Footer = () => {
                   currentGroupId={groupId}
                   onOpenGroup={openGroupInstance}
                   onOpenDetails={setDetailsGroup}
+                />
+              </PopoverContent>
+            </Popover>
+          ) : showCreatorIndividualInstances ? (
+            <Popover>
+              <PopoverTrigger asChild>
+                <CompactMenuButton
+                  icon={isLoadingActiveIndividuals ? Loader2 : User}
+                  label="Students"
+                  text="Students"
+                  showText="always"
+                  className={isLoadingActiveIndividuals ? "[&_svg]:animate-spin" : undefined}
+                />
+              </PopoverTrigger>
+              <PopoverContent side="top" align="end" className="w-80 space-y-3">
+                <CreatorIndividualsMenu
+                  individuals={activeIndividuals}
+                  isLoading={isLoadingActiveIndividuals}
+                  currentUserId={viewUserId}
+                  onOpenInstance={openIndividualInstance}
                 />
               </PopoverContent>
             </Popover>

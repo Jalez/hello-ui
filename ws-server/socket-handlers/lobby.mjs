@@ -17,12 +17,13 @@ async function handleLobbyChatSend({ socket, data, resolveRoomId, ctx }) {
   }
 
   const lobbyState = ctx.ensureLobbyState(roomId);
+  const roomUser = ctx.getRoomUsers(roomId).get(socket) || {};
   const entry = {
     id: randomUUID(),
-    userId: typeof data.userId === "string" ? data.userId : "",
-    ...(typeof data.userEmail === "string" ? { userEmail: data.userEmail } : {}),
-    ...(typeof data.userName === "string" ? { userName: data.userName } : {}),
-    ...(typeof data.userImage === "string" ? { userImage: data.userImage } : {}),
+    userId: typeof roomUser.userId === "string" ? roomUser.userId : "",
+    ...(typeof roomUser.userEmail === "string" ? { userEmail: roomUser.userEmail } : {}),
+    ...(typeof roomUser.userName === "string" ? { userName: roomUser.userName } : {}),
+    ...(typeof roomUser.userImage === "string" ? { userImage: roomUser.userImage } : {}),
     text,
     createdAt: new Date().toISOString(),
   };

@@ -8,9 +8,10 @@ import { createYjsTrafficMonitor } from "../yjs-traffic-monitor.mjs";
 /**
  * @typedef {import("../ws-runtime-context.mjs").WsRuntimeContext} WsRuntimeContext
  */
-
 const yjsTrafficMonitor = createYjsTrafficMonitor();
-
+const recentSyncUpdateFingerprintBySocket = new WeakMap();
+const DUPLICATE_UPDATE_WINDOW_MS = 2000;
+const yjsHandshakeStateBySocket = new WeakMap();
 /**
  * COLLABORATION STEP 9.2:
  * Accept an incoming Yjs packet from one browser and apply it to the shared room
@@ -35,6 +36,9 @@ async function handleYjsProtocol({ socket, data, socketId, resolveRoomId, ctx })
   ) {
     return;
   }
+
+  const existingUser = ctx.getRoomUsers(roomId).get(socket);
+  const sessionRole = existingUser?.sessionRole === "readonly" ? "readonly" : "active";
 
   const roomCtx = parseRoomContext(roomId);
   if (!roomCtx) {
@@ -70,6 +74,48 @@ async function handleYjsProtocol({ socket, data, socketId, resolveRoomId, ctx })
   const decoder = decoding.createDecoder(payload);
   const encoder = encoding.createEncoder();
   const syncMessageType = syncProtocol.readSyncMessage(decoder, encoder, doc, socket);
+
+  const handshakeState = yjsHandshakeStateBySocket.get(socket) || { isReady: false };
+  // Treat either side of the initial sync handshake as the boundary: once the
+  // socket has participated in SyncStep1 or SyncStep2, it is safe to accept
+  // document updates. During reconnects the client often answers the server's
+  // SyncStep1 with SyncStep2 before sending its own SyncStep1, so gating only on
+  // SyncStep1 can incorrectly drop valid edits for an otherwise healthy session.
+  if (
+    syncMessageType === syncProtocol.messageYjsSyncStep1
+    || syncMessageType === syncProtocol.messageYjsSyncStep2
+  ) {
+    handshakeState.isReady = true;
+    yjsHandshakeStateBySocket.set(socket, handshakeState);
+  }
+
+  // Read-only sessions are allowed to complete the Yjs handshake (SyncStep1/2),
+  // but must not be able to push document updates into the canonical room state.
+  if (sessionRole === "readonly" && syncMessageType === syncProtocol.messageYjsUpdate) {
+    console.log(`[yjs-protocol:readonly-drop] room=${roomId} socket=${socketId} messageType=update`);
+    return;
+  }
+
+  // Hard guard: never accept document updates until the initial handshake completed.
+  if (syncMessageType === syncProtocol.messageYjsUpdate && handshakeState.isReady !== true) {
+    console.warn(`[yjs-protocol:prehandshake-drop] room=${roomId} socket=${socketId} messageType=update`);
+    return;
+  }
+
+  // Defensive: drop duplicate update packets from the same socket in a short window.
+  // This protects against reconnect/race conditions that can re-send the same update
+  // and manifest as duplicated content.
+  if (syncMessageType === syncProtocol.messageYjsUpdate) {
+    const now = Date.now();
+    const prev = recentSyncUpdateFingerprintBySocket.get(socket);
+    const fingerprint = `${roomId}|${data.payloadBase64}`;
+    if (prev && prev.fingerprint === fingerprint && now - prev.at < DUPLICATE_UPDATE_WINDOW_MS) {
+      console.warn(`[yjs-protocol:dedupe-drop] room=${roomId} socket=${socketId} windowMs=${DUPLICATE_UPDATE_WINDOW_MS}`);
+      return;
+    }
+    recentSyncUpdateFingerprintBySocket.set(socket, { fingerprint, at: now });
+  }
+
   yjsTrafficMonitor.recordSync({
     roomId,
     socketId,
@@ -109,8 +155,8 @@ async function handleClientStateHash({ socket, data, resolveRoomId, ctx }) {
     roomId,
     groupId: extractGroupIdFromRoomId(roomId),
     clientId: data.clientId,
-    userId: data.userId,
-    userEmail: typeof data.userEmail === "string" ? data.userEmail : "",
+    userId: ctx.getRoomUsers(roomId).get(socket)?.userId || data.userId,
+    userEmail: ctx.getRoomUsers(roomId).get(socket)?.userEmail || (typeof data.userEmail === "string" ? data.userEmail : ""),
     engine: "yjs",
     editorType: data.editorType,
     levelIndex: data.levelIndex,

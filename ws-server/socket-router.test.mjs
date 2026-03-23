@@ -1,11 +1,19 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createSocketHandlerRegistry, createSocketMessageRouter } from "./socket-router.mjs";
+import { createWsTransportStats } from "./ws-transport-stats.mjs";
 
 function createTestContext(overrides = {}) {
   const sent = [];
+  const warnings = [];
+  const transportStats = createWsTransportStats({
+    logger: { warn: (message) => warnings.push(message) },
+    unknownMessageLogCooldownMs: 0,
+  });
   const base = {
     sent,
+    warnings,
+    transportStats,
     maybeDelaySocketHandling: async () => {},
     parseEnvelope: () => ({ type: "unknown", payload: {} }),
     sendMessage: (socket, type, payload) => {
@@ -29,9 +37,36 @@ test("socket-router: invalid envelope sends invalid-message error", async () => 
   assert.equal(ctx.sent.length, 1);
   assert.equal(ctx.sent[0].type, "error");
   assert.deepEqual(ctx.sent[0].payload, { error: "Invalid message" });
+  assert.equal(ctx.transportStats.getSnapshot().invalidInboundMessages, 1);
 });
 
-test("socket-router: unknown message type is ignored", async () => {
+test("socket-router: invalid payload for a known message type returns invalid-payload error", async () => {
+  const ctx = createTestContext({
+    parseEnvelope: () => ({
+      type: "yjs-protocol",
+      payload: {
+        roomId: "group:room-1:game:game-1",
+        channel: "sync",
+        payloadBase64: "",
+      },
+    }),
+  });
+  const route = createSocketMessageRouter(ctx);
+  const socket = {};
+
+  await route(socket, Buffer.from("{}"));
+
+  assert.equal(ctx.sent.length, 1);
+  assert.equal(ctx.sent[0].type, "error");
+  assert.deepEqual(ctx.sent[0].payload, {
+    error: "Invalid payload",
+    code: "invalid_payload",
+    type: "yjs-protocol",
+  });
+  assert.equal(ctx.transportStats.getSnapshot().invalidInboundMessages, 1);
+});
+
+test("socket-router: unknown message type is ignored but tracked", async () => {
   const ctx = createTestContext({
     parseEnvelope: () => ({ type: "non-existent-event", payload: {} }),
   });
@@ -41,6 +76,9 @@ test("socket-router: unknown message type is ignored", async () => {
   await route(socket, Buffer.from("{}"));
 
   assert.equal(ctx.sent.length, 0);
+  assert.equal(ctx.transportStats.getSnapshot().unknownInboundMessages, 1);
+  assert.equal(ctx.warnings.length, 1);
+  assert.match(ctx.warnings[0], /ws-unknown-message/);
 });
 
 test("socket-router: thrown handler is caught and returns internal-server error", async () => {

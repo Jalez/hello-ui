@@ -17,11 +17,14 @@ import {
   EditorType,
   YjsProtocolMessage,
   GameInstancesResetMessage,
+  LevelMetaUpdateMessage,
+  LevelMetaOperation,
 } from "../types";
 import { logCollaborationStep } from "../logCollaborationStep";
 import { extractGroupIdFromRoomId, generateClientId, generateUserColor, getWebSocketUrl } from "../utils";
 import { RECONNECT_DELAY_MS, MAX_RECONNECT_ATTEMPTS } from "../constants";
 import { logDebugClient } from "@/lib/debug-logger";
+import { apiUrl } from "@/lib/apiUrl";
 
 const INITIAL_CONNECT_DELAY_MS = 25;
 
@@ -44,6 +47,7 @@ interface UseCollaborationConnectionOptions {
   onGameInstancesReset?: (message: GameInstancesResetMessage) => void;
   onIdentityAssigned?: (message: IdentityAssignedMessage) => void;
   onCollaborationHealth?: (message: CollaborationHealthMessage) => void;
+  onLevelMetaUpdate?: (message: LevelMetaUpdateMessage) => void;
   onTransportMessage?: (type: string) => void;
 }
 
@@ -52,6 +56,10 @@ interface UseCollaborationConnectionReturn {
   isConnected: boolean;
   isConnecting: boolean;
   error: string | null;
+  isSessionEvicted: boolean;
+  sessionRole: "active" | "readonly";
+  reclaimSession: () => void;
+  connectReadOnly: () => void;
   clientId: string | null;
   connect: () => void;
   disconnect: () => void;
@@ -67,6 +75,7 @@ interface UseCollaborationConnectionReturn {
   sendLobbyChat: (text: string) => void;
   sendClientStateHash: (message: Omit<ClientStateHashMessage, "roomId" | "groupId" | "clientId" | "userId" | "userEmail" | "engine" | "ts">) => void;
   sendClientHealthEvent: (message: Omit<ClientHealthEventMessage, "roomId" | "groupId" | "clientId" | "userId" | "userEmail" | "engine" | "ts">) => void;
+  sendLevelMetaUpdate: (operation: LevelMetaOperation, opts?: { levelIndex?: number; fields?: Record<string, unknown>; level?: Record<string, unknown> }) => void;
   effectiveIdentity: UserIdentity | null;
 }
 
@@ -126,13 +135,18 @@ export function useCollaborationConnection(
   const initialConnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isConnectedRef = useRef(false);
   const reconnectFnRef = useRef<(() => void) | null>(null);
+  const connectInFlightRef = useRef(false);
   const manualDisconnectRef = useRef(false);
   const effectiveIdentityRef = useRef<UserIdentity | null>(user);
   const terminalErrorRef = useRef<string | null>(null);
+  const lastConnectedAtRef = useRef<number>(0);
+  const sessionRoleRef = useRef<"active" | "readonly">("active");
 
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isSessionEvicted, setIsSessionEvicted] = useState(false);
+  const [sessionRole, setSessionRole] = useState<"active" | "readonly">("active");
   const [clientId, setClientId] = useState<string | null>(null);
   const [socketState, setSocketState] = useState<WebSocket | null>(null);
   const [effectiveIdentity, setEffectiveIdentity] = useState<UserIdentity | null>(user);
@@ -181,6 +195,7 @@ export function useCollaborationConnection(
       return;
     }
 
+    console.log(`[ws-lifecycle] effect-run room=${roomId} userIdentity=${userIdentity}`);
     logDebugClient("ws_connection_start", {
       roomId,
       userId: currentUser.id,
@@ -208,6 +223,45 @@ export function useCollaborationConnection(
         clearTimeout(initialConnectTimeoutRef.current);
         initialConnectTimeoutRef.current = null;
       }
+    };
+
+    const scheduleReconnect = () => {
+      if (reconnectAttemptsRef.current >= MAX_RECONNECT_ATTEMPTS) {
+        console.log(`[ws-lifecycle] giving up after ${MAX_RECONNECT_ATTEMPTS} attempts room=${roomId}`);
+        setError("Failed to reconnect after multiple attempts");
+        optionsRef.current.onError?.("Failed to reconnect after multiple attempts");
+        return;
+      }
+      reconnectAttemptsRef.current += 1;
+      console.log(`[ws-lifecycle] scheduling reconnect #${reconnectAttemptsRef.current}/${MAX_RECONNECT_ATTEMPTS} in ${RECONNECT_DELAY_MS}ms room=${roomId}`);
+      reconnectTimeoutRef.current = setTimeout(() => {
+        if (!disposed && !manualDisconnectRef.current) {
+          connectSocket();
+        }
+      }, RECONNECT_DELAY_MS);
+    };
+
+    const fetchWsAuthToken = async () => {
+      const response = await fetch(apiUrl("/api/collaboration/ws-token"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ roomId }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || typeof payload?.token !== "string" || payload.token.length === 0) {
+        const message =
+          typeof payload?.error === "string" && payload.error
+            ? payload.error
+            : "Failed to authorize collaboration session";
+        const error = new Error(message);
+        (error as Error & { status?: number }).status = response.status;
+        throw error;
+      }
+
+      return payload.token as string;
     };
 
     const cleanupSocket = () => {
@@ -238,29 +292,60 @@ export function useCollaborationConnection(
         roomId,
         userId: currentUser.id,
       });
-      if (disposed || socketRef.current) {
+      console.log(`[ws-lifecycle] connectSocket room=${roomId} attempt=${reconnectAttemptsRef.current} disposed=${disposed} hasSocket=${!!socketRef.current}`);
+      if (disposed || socketRef.current || connectInFlightRef.current) {
         return;
       }
-
-      const wsUrl = getWebSocketUrl();
-      const socket = new WebSocket(wsUrl);
-      socketRef.current = socket;
-      setSocketState(socket);
+      connectInFlightRef.current = true;
       setIsConnecting(true);
 
-      socket.onopen = () => {
-        if (disposed) {
-          socket.close();
+      void (async () => {
+        let authToken = "";
+        try {
+          authToken = await fetchWsAuthToken();
+        } catch (error) {
+          connectInFlightRef.current = false;
+          setIsConnecting(false);
+          const status = (error as Error & { status?: number })?.status;
+          const message = error instanceof Error ? error.message : "Failed to authorize collaboration session";
+          terminalErrorRef.current = message;
+          setError(message);
+          optionsRef.current.onError?.(message);
+          if (status === 401 || status === 403) {
+            manualDisconnectRef.current = true;
+            return;
+          }
+          if (!disposed && !manualDisconnectRef.current) {
+            scheduleReconnect();
+          }
           return;
         }
 
+        if (disposed || socketRef.current) {
+          connectInFlightRef.current = false;
+          return;
+        }
+
+        const wsUrl = getWebSocketUrl();
+        const socket = new WebSocket(wsUrl);
+        socketRef.current = socket;
+        setSocketState(socket);
+
+        socket.onopen = () => {
+          connectInFlightRef.current = false;
+          if (disposed) {
+            socket.close();
+            return;
+        }
+
+        console.log(`[ws-lifecycle] onopen room=${roomId} clientId=${newClientId} reconnectAttempts=${reconnectAttemptsRef.current}`);
         isConnectedRef.current = true;
         setIsConnected(true);
         setIsConnecting(false);
         setError(null);
         terminalErrorRef.current = null;
         setClientId(newClientId);
-        reconnectAttemptsRef.current = 0;
+        lastConnectedAtRef.current = Date.now();
 
         logDebugClient("ws_socket_connect", {
           clientId: newClientId,
@@ -270,21 +355,19 @@ export function useCollaborationConnection(
           wsUrl,
         });
 
-        socket.send(
+          socket.send(
           JSON.stringify({
             type: "join-game",
             payload: {
               roomId,
               groupId: parsedGroupId ?? undefined,
               clientId: newClientId,
-              userId: currentUser.id,
-              userEmail: currentUser.email,
-              userName: currentUser.name,
-              userImage: currentUser.image,
+              authToken,
+              sessionRole: sessionRoleRef.current,
             },
             ts: Date.now(),
           } satisfies WebSocketEnvelope<Record<string, unknown>>)
-        );
+          );
 
         logDebugClient("ws_join_game_emitted", {
           roomId,
@@ -293,7 +376,7 @@ export function useCollaborationConnection(
         });
 
         optionsRef.current.onConnected?.();
-      };
+        };
 
       /**
        * COLLABORATION STEP 12.1:
@@ -301,7 +384,7 @@ export function useCollaborationConnection(
        * server packets into specific callbacks so the provider can update room
        * state, Yjs state, presence, health signals, and recovery logic.
        */
-      socket.onmessage = (event) => {
+        socket.onmessage = (event) => {
         logCollaborationStep("12.1", "socket.onmessage", {
           roomId,
           dataType: typeof event.data,
@@ -325,7 +408,7 @@ export function useCollaborationConnection(
               errorPayload && typeof errorPayload === "object" && typeof errorPayload.error === "string"
                 ? errorPayload.error
                 : "Unknown error";
-            if (errorPayload && typeof errorPayload.code === "string" && errorPayload.code === "duplicate_users_blocked") {
+            if (errorPayload && typeof errorPayload.code === "string" && (errorPayload.code === "duplicate_users_blocked" || errorPayload.code === "auth_failed")) {
               terminalErrorRef.current = nextError;
               manualDisconnectRef.current = true;
             }
@@ -475,22 +558,31 @@ export function useCollaborationConnection(
           case "collaboration-health":
             optionsRef.current.onCollaborationHealth?.(payload as CollaborationHealthMessage);
             return;
+          case "level-meta-update":
+            optionsRef.current.onLevelMetaUpdate?.(payload as LevelMetaUpdateMessage);
+            return;
           default:
             return;
         }
       };
 
-      socket.onerror = () => {
-        setIsConnected(false);
-        setIsConnecting(false);
+        socket.onerror = () => {
+          connectInFlightRef.current = false;
+          setIsConnected(false);
+          setIsConnecting(false);
         if (terminalErrorRef.current) {
           setError(terminalErrorRef.current);
           optionsRef.current.onError?.(terminalErrorRef.current);
         }
       };
 
-      socket.onclose = (event) => {
-        const wasConnected = isConnectedRef.current;
+        socket.onclose = (event) => {
+          connectInFlightRef.current = false;
+          const wasConnected = isConnectedRef.current;
+        const connectionDurationSec = lastConnectedAtRef.current > 0
+          ? ((Date.now() - lastConnectedAtRef.current) / 1000).toFixed(1)
+          : "N/A";
+        console.log(`[ws-lifecycle] onclose room=${roomId} code=${event.code} reason=${JSON.stringify(event.reason)} wasConnected=${wasConnected} connDuration=${connectionDurationSec}s attempt=${reconnectAttemptsRef.current} disposed=${disposed} manualDisconnect=${manualDisconnectRef.current}`);
         logDebugClient("ws_socket_close", {
           roomId,
           clientId: clientIdRef.current,
@@ -508,7 +600,7 @@ export function useCollaborationConnection(
         setIsConnected(false);
         setIsConnecting(false);
 
-        if (event.code === 4008) {
+          if (event.code === 4008) {
           const nextError = terminalErrorRef.current
             || event.reason
             || "Duplicate users are blocked for this game. Turn group submission off in A+ or ask the creator to enable duplicate users in Game Settings.";
@@ -519,7 +611,26 @@ export function useCollaborationConnection(
           return;
         }
 
-        if (disposed || manualDisconnectRef.current) {
+        // 4009 = "Replaced by new session" — another tab from the same account
+        // joined this room and the server evicted us. Show a modal so the user
+        // can choose to reclaim the session in this tab.
+          if (event.code === 4009) {
+          console.log(`[ws-lifecycle] 4009 evicted by duplicate session room=${roomId}`);
+          manualDisconnectRef.current = true;
+          setIsSessionEvicted(true);
+          return;
+        }
+
+          if (event.code === 4401 || event.code === 4403) {
+            const nextError = terminalErrorRef.current || event.reason || "Collaboration authorization failed";
+            terminalErrorRef.current = nextError;
+            manualDisconnectRef.current = true;
+            setError(nextError);
+            optionsRef.current.onError?.(nextError);
+            return;
+          }
+
+          if (disposed || manualDisconnectRef.current) {
           if (terminalErrorRef.current) {
             setError(terminalErrorRef.current);
             optionsRef.current.onError?.(terminalErrorRef.current);
@@ -537,18 +648,19 @@ export function useCollaborationConnection(
           return;
         }
 
-        if (reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
-          reconnectAttemptsRef.current += 1;
-          reconnectTimeoutRef.current = setTimeout(() => {
-            if (!disposed && !manualDisconnectRef.current) {
-              connectSocket();
-            }
-          }, RECONNECT_DELAY_MS);
-        } else {
-          setError("Failed to reconnect after multiple attempts");
-          optionsRef.current.onError?.("Failed to reconnect after multiple attempts");
+        // Only reset the reconnect counter if the connection was stable
+        // (lasted more than 30s). This prevents infinite rapid reconnect
+        // cycles where each connection opens briefly then dies.
+        const connectionDurationMs = lastConnectedAtRef.current > 0
+          ? Date.now() - lastConnectedAtRef.current
+          : 0;
+        if (connectionDurationMs > 30_000) {
+          reconnectAttemptsRef.current = 0;
         }
-      };
+
+          scheduleReconnect();
+        };
+      })();
     };
 
     reconnectFnRef.current = connectSocket;
@@ -559,8 +671,10 @@ export function useCollaborationConnection(
     }, INITIAL_CONNECT_DELAY_MS);
 
     return () => {
+      console.log(`[ws-lifecycle] effect-cleanup room=${roomId} userIdentity=${userIdentity}`);
       disposed = true;
       reconnectFnRef.current = null;
+      connectInFlightRef.current = false;
       cleanupSocket();
     };
   }, [roomId, parsedGroupId, userIdentity]);
@@ -594,6 +708,7 @@ export function useCollaborationConnection(
       }
       socketRef.current = null;
     }
+    connectInFlightRef.current = false;
     isConnectedRef.current = false;
     setIsConnected(false);
     setIsConnecting(false);
@@ -734,6 +849,25 @@ export function useCollaborationConnection(
     }
   }, [effectiveIdentity, parsedGroupId, roomId, sendMessage]);
 
+  const sendLevelMetaUpdate = useCallback((
+    operation: LevelMetaOperation,
+    opts?: { levelIndex?: number; fields?: Record<string, unknown>; level?: Record<string, unknown> }
+  ) => {
+    if (roomId && effectiveIdentity && clientIdRef.current) {
+      sendMessage("level-meta-update", {
+        roomId,
+        groupId: parsedGroupId ?? undefined,
+        clientId: clientIdRef.current,
+        userId: effectiveIdentity.id,
+        operation,
+        ...(Number.isInteger(opts?.levelIndex) ? { levelIndex: opts!.levelIndex } : {}),
+        ...(opts?.fields ? { fields: opts.fields } : {}),
+        ...(opts?.level ? { level: opts.level } : {}),
+        ts: Date.now(),
+      });
+    }
+  }, [effectiveIdentity, parsedGroupId, roomId, sendMessage]);
+
   const sendGroupStartReady = useCallback(() => {
     if (roomId && effectiveIdentity && clientIdRef.current) {
       sendMessage("group-start-ready", {
@@ -780,6 +914,7 @@ export function useCollaborationConnection(
       ts: Date.now(),
     });
   }, [effectiveIdentity, roomId, sendMessage]);
+
 
   /**
    * COLLABORATION STEP 16.1:
@@ -851,11 +986,39 @@ export function useCollaborationConnection(
     }
   }, []);
 
+  const reconnectWithRole = useCallback((nextRole: "active" | "readonly") => {
+    console.log(`[ws-lifecycle] reconnectWithRole room=${roomId} role=${nextRole}`);
+    sessionRoleRef.current = nextRole;
+    setSessionRole(nextRole);
+    setIsSessionEvicted(false);
+    manualDisconnectRef.current = false;
+    reconnectAttemptsRef.current = 0;
+    // Clean up any lingering socket before reconnecting
+    if (socketRef.current) {
+      try { socketRef.current.close(); } catch { /* ignore */ }
+      socketRef.current = null;
+      setSocketState(null);
+    }
+    reconnectFnRef.current?.();
+  }, [roomId]);
+
+  const reclaimSession = useCallback(() => {
+    reconnectWithRole("active");
+  }, [reconnectWithRole]);
+
+  const connectReadOnly = useCallback(() => {
+    reconnectWithRole("readonly");
+  }, [reconnectWithRole]);
+
   return {
     socket: socketState,
     isConnected,
     isConnecting,
     error,
+    isSessionEvicted,
+    sessionRole,
+    reclaimSession,
+    connectReadOnly,
     clientId,
     connect,
     disconnect,
@@ -871,6 +1034,7 @@ export function useCollaborationConnection(
     sendLobbyChat,
     sendClientStateHash,
     sendClientHealthEvent,
+    sendLevelMetaUpdate,
     effectiveIdentity,
   };
 }

@@ -10,6 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import LevelOpinion from "./LevelOpinion";
 import { updateLevelName } from "@/store/slices/levels.slice";
 import { renameLevelKey } from "@/store/slices/points.slice";
+import { useLevelMetaSync } from "@/lib/collaboration/hooks/useLevelMetaSync";
 import { LevelData } from "@/components/InfoBoard/LevelData";
 import { InfoText } from "@/components/InfoBoard/InfoText";
 import {
@@ -55,6 +56,7 @@ const LevelControls = ({
   const [editName, setEditName] = useState(false);
   const isCreator = options.creator;
   const dispatch = useAppDispatch();
+  const { syncLevelFields } = useLevelMetaSync();
   const [name, setName] = React.useState(levelName || "Unnamed");
 
   // take each of the level names for the select
@@ -90,6 +92,7 @@ const LevelControls = ({
 
   const updateLevelNameHandler = (name: string) => {
     dispatch(updateLevelName({ levelId: currentlevel, text: name }));
+    syncLevelFields(currentlevel - 1, ["name"]);
   };
 
   const changeLevelName = (name: string) => {
@@ -259,6 +262,7 @@ export const LevelSelect = ({ levelHandler, compact = false, compactLabel }: Lev
   const stateOptions = useAppSelector((state) => state.options);
   const isCreator = stateOptions.creator;
   const dispatch = useAppDispatch();
+  const { syncLevelFields } = useLevelMetaSync();
   const collaboration = useOptionalCollaboration();
   const activeUsers = collaboration?.activeUsers ?? EMPTY_ACTIVE_USERS;
   const myClientId = collaboration?.clientId ?? null;
@@ -286,6 +290,7 @@ export const LevelSelect = ({ levelHandler, compact = false, compactLabel }: Lev
   const updateLevelNameHandler = (newName: string) => {
     const oldName = currentLevelData?.name || "";
     dispatch(updateLevelName({ levelId: currentLevel, text: newName }));
+    syncLevelFields(currentLevel - 1, ["name"]);
     if (oldName !== newName) {
       dispatch(renameLevelKey({ oldName, newName }));
     }

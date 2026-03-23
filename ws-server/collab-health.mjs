@@ -8,6 +8,7 @@ export function createCollabHealthService({
   divergencePersistMs,
   divergenceRepeatThreshold,
   divergenceResyncCooldownMs,
+  softResyncEscalation,
   broadcastToRoom,
   ensureRoomState,
   parseRoomContext,
@@ -230,6 +231,7 @@ export function createCollabHealthService({
       lastSignature: signature,
       repeatCount: 0,
       lastResyncAt: 0,
+      softResyncCount: 0,
     };
 
     const nextState =
@@ -245,6 +247,7 @@ export function createCollabHealthService({
             lastDetectedAt: now,
             lastSignature: signature,
             repeatCount: 1,
+            softResyncCount: 0,
           };
 
     roomDivergenceState.set(divergenceKey, nextState);
@@ -264,28 +267,47 @@ export function createCollabHealthService({
     }
 
     const summary = summarizeHashReports(reports);
-    console.warn(
-      `[divergence:detected] room=${roomId} editorType=${report.editorType} levelIndex=${report.levelIndex} hashes=${JSON.stringify(summary)}`
-    );
-    broadcastToRoom(roomId, "collaboration-health", createCollaborationHealthMessage(
-      roomId,
-      "divergence_detected",
-      "error",
-      {
-        participants: summary,
-        hashCount: uniqueHashes.length,
-        quietWindowSatisfied,
-      },
-      {
-        editorType: report.editorType,
-        levelIndex: report.levelIndex,
-      },
-    ));
 
-    if (now - nextState.lastResyncAt >= divergenceResyncCooldownMs) {
+    // Tiered escalation:
+    // Tier 1 (soft): broadcast divergence_detected so clients run a non-destructive
+    //   Yjs SyncStep1 exchange. This preserves cursor, undo history, and avoids
+    //   editor remounting. The CRDT should converge on its own in most cases.
+    // Tier 2 (hard): after softResyncEscalation failed soft attempts, force a full
+    //   Y.Doc replacement as a last resort.
+    const needsEscalation = now - nextState.lastResyncAt >= divergenceResyncCooldownMs;
+    const softAttemptsExhausted = (nextState.softResyncCount || 0) >= softResyncEscalation;
+
+    if (needsEscalation && softAttemptsExhausted) {
+      // Tier 2: hard resync — full Y.Doc replacement
+      console.warn(
+        `[divergence:detected] room=${roomId} editorType=${report.editorType} levelIndex=${report.levelIndex} tier=hard softAttempts=${nextState.softResyncCount} hashes=${JSON.stringify(summary)}`
+      );
       nextState.lastResyncAt = now;
+      nextState.softResyncCount = 0;
       roomDivergenceState.set(divergenceKey, nextState);
       await forceRoomResync(roomId, report.editorType, report.levelIndex, "client_hash_mismatch");
+    } else if (needsEscalation) {
+      // Tier 1: soft resync — clients do non-destructive Yjs sync exchange
+      nextState.softResyncCount = (nextState.softResyncCount || 0) + 1;
+      nextState.lastResyncAt = now;
+      roomDivergenceState.set(divergenceKey, nextState);
+      console.info(
+        `[divergence:detected] room=${roomId} editorType=${report.editorType} levelIndex=${report.levelIndex} tier=soft attempt=${nextState.softResyncCount}/${softResyncEscalation} hashes=${JSON.stringify(summary)}`
+      );
+      broadcastToRoom(roomId, "collaboration-health", createCollaborationHealthMessage(
+        roomId,
+        "divergence_detected",
+        "warning",
+        {
+          participants: summary,
+          hashCount: uniqueHashes.length,
+          quietWindowSatisfied,
+        },
+        {
+          editorType: report.editorType,
+          levelIndex: report.levelIndex,
+        },
+      ));
     }
   }
 

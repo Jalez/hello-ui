@@ -23,6 +23,7 @@ import {
   UsersRound,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -48,7 +49,7 @@ type SettingsDraft = {
   description: string;
   isPublic: boolean;
   collaborationMode: "individual" | "group";
-  allowDuplicateUsersInGroup: boolean;
+  allowDuplicateUsers: boolean;
   thumbnailUrl: string;
   hideSidebar: boolean;
   accessWindowEnabled: boolean;
@@ -86,7 +87,7 @@ function createDraft(game: {
   description?: string | null;
   isPublic: boolean;
   collaborationMode: "individual" | "group";
-  allowDuplicateUsersInGroup?: boolean;
+  allowDuplicateUsers?: boolean;
   thumbnailUrl: string | null;
   hideSidebar: boolean;
   accessWindowEnabled: boolean;
@@ -99,7 +100,7 @@ function createDraft(game: {
     description: game.description ?? "",
     isPublic: game.isPublic,
     collaborationMode: game.collaborationMode,
-    allowDuplicateUsersInGroup: game.allowDuplicateUsersInGroup === true,
+    allowDuplicateUsers: game.allowDuplicateUsers !== false,
     thumbnailUrl: game.thumbnailUrl ?? "",
     hideSidebar: game.hideSidebar,
     accessWindowEnabled: game.accessWindowEnabled,
@@ -217,6 +218,20 @@ export default function CreatorSettingsPage({ params }: CreatorSettingsPageProps
     [levels, solutionUrls],
   );
 
+  const collaboratorOptions: ComboboxOption[] = useMemo(
+    () =>
+      collaboratorSuggestions.map((suggestion) => ({
+        value: suggestion.email,
+        label: suggestion.name ? `${suggestion.name} (${suggestion.email})` : suggestion.email,
+        keywords: [suggestion.email, suggestion.name || ""],
+      })),
+    [collaboratorSuggestions],
+  );
+
+  const selectedCollaboratorOption = collaboratorOptions.find(
+    (option) => option.value === collaboratorEmail,
+  );
+
   const scenarioLabel = (scenarioId: string) => {
     for (const level of levels) {
       const scenario = level.scenarios?.find((s) => s.scenarioId === scenarioId);
@@ -242,7 +257,7 @@ export default function CreatorSettingsPage({ params }: CreatorSettingsPageProps
         description: draft.description.trim() || null,
         isPublic: draft.isPublic,
         collaborationMode: draft.collaborationMode,
-        allowDuplicateUsersInGroup: draft.allowDuplicateUsersInGroup,
+        allowDuplicateUsers: draft.allowDuplicateUsers,
         thumbnailUrl: draft.thumbnailUrl.trim() || null,
         hideSidebar: draft.hideSidebar,
         accessWindowEnabled: draft.accessWindowEnabled,
@@ -488,29 +503,29 @@ export default function CreatorSettingsPage({ params }: CreatorSettingsPageProps
                   Group
                 </Button>
               </div>
-              {draft.collaborationMode === "group" && (
-                <div className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 space-y-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-medium">Allow duplicate users in group mode</p>
-                      <p className="text-xs text-muted-foreground">
-                        Off by default. Keep this off unless you explicitly need multiple sessions for the same account.
-                      </p>
-                    </div>
-                    <Switch
-                      checked={draft.allowDuplicateUsersInGroup}
-                      onCheckedChange={(checked) => {
-                        setDraft((current) => (current ? { ...current, allowDuplicateUsersInGroup: checked } : current));
-                        setSaveSuccess(null);
-                      }}
-                    />
+              <div className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium">Allow duplicate users</p>
+                    <p className="text-xs text-muted-foreground">
+                      On by default. Allows multiple browser sessions for the same account.
+                    </p>
                   </div>
-                  <p className="text-xs text-amber-700">
-                    Warning: enabling duplicate users can cause unstable collaboration behavior and desyncs. If duplicates are blocked,
-                    players should turn group submission off in A+ and launch individually.
-                  </p>
+                  <Switch
+                    checked={draft.allowDuplicateUsers}
+                    onCheckedChange={(checked) => {
+                      setDraft((current) => (current ? { ...current, allowDuplicateUsers: checked } : current));
+                      setSaveSuccess(null);
+                    }}
+                  />
                 </div>
-              )}
+                {!draft.allowDuplicateUsers && (
+                  <p className="text-xs text-amber-700">
+                    Duplicate sessions are blocked. Players opening a second browser tab or window will be disconnected.
+                    {draft.collaborationMode === "group" && " In group mode, this also blocks the same account from joining multiple group rooms."}
+                  </p>
+                )}
+              </div>
             </CardContent>
           </Card>
 
@@ -674,20 +689,21 @@ export default function CreatorSettingsPage({ params }: CreatorSettingsPageProps
             <CardContent className="space-y-3">
               {canManageCollaborators ? (
                 <div className="flex gap-2">
-                  <Input
-                    value={collaboratorEmail}
-                    onChange={(event) => setCollaboratorEmail(event.target.value)}
-                    list="collaborator-email-suggestions"
-                    autoComplete="off"
-                    placeholder="creator@example.com"
-                  />
-                  <datalist id="collaborator-email-suggestions">
-                    {collaboratorSuggestions.map((s) => (
-                      <option key={s.email} value={s.email}>
-                        {s.name ? `${s.name} (${s.email})` : s.email}
-                      </option>
-                    ))}
-                  </datalist>
+                  <div className="flex-1">
+                    <Combobox
+                      value={selectedCollaboratorOption?.value}
+                      inputValue={collaboratorEmail}
+                      onInputChange={setCollaboratorEmail}
+                      onValueChange={setCollaboratorEmail}
+                      options={collaboratorOptions}
+                      isLoading={loadingSuggestions}
+                      loadingText="Loading collaborators..."
+                      placeholder="Select collaborator"
+                      searchPlaceholder="Type name or email..."
+                      emptyText="No users found"
+                      renderValue={(selected) => selected?.label || "Select collaborator"}
+                    />
+                  </div>
                   <Button variant="outline" onClick={handleAddCollaborator}>
                     <UserPlus className="h-4 w-4 mr-1" /> Add
                   </Button>
@@ -701,7 +717,7 @@ export default function CreatorSettingsPage({ params }: CreatorSettingsPageProps
                   {loadingSuggestions
                     ? "Searching users..."
                     : collaboratorSuggestions.length > 0
-                      ? "Suggestions available in the email input dropdown."
+                      ? "Suggestions available in the collaborator dropdown."
                       : "No matching users found."}
                 </p>
               )}

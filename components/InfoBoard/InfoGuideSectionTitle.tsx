@@ -6,6 +6,7 @@ import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
 import { Edit, Check } from "lucide-react";
 import { useState } from "react";
 import { updateGuideSectionTitle } from "@/store/slices/levels.slice";
+import { useLevelMetaSync } from "@/lib/collaboration/hooks/useLevelMetaSync";
 const InfoGuideSectionTitle = ({
   title,
   sectionLocation,
@@ -17,6 +18,7 @@ const InfoGuideSectionTitle = ({
     (state) => state.currentLevel.currentLevel
   );
   const dispatch = useAppDispatch();
+  const { syncLevelFields } = useLevelMetaSync();
   const [listTitle, setListTitle] = useState(title);
   const [edited, setEdited] = useState(false);
   const options = useAppSelector((state) => state.options);
@@ -39,6 +41,7 @@ const InfoGuideSectionTitle = ({
         text: listTitle,
       })
     );
+    syncLevelFields(currentLevel - 1, ["instructions"]);
   };
   // If user is a creator, return a list item that is clickable to edit, and has a delete button to remove it.
   if (isCreator)

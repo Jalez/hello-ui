@@ -18,6 +18,7 @@ interface UseYjsCodeEditorCollaborationOptions {
   setCode: Dispatch<SetStateAction<string>>;
   template: string;
   enabled?: boolean;
+  docKind?: "template" | "solution";
   locked: boolean;
   levelIdentifier: string;
   currentLevel: number;
@@ -38,6 +39,7 @@ export function useYjsCodeEditorCollaboration({
   setCode,
   template,
   enabled = true,
+  docKind = "template",
   locked,
   levelIdentifier,
   currentLevel,
@@ -53,15 +55,21 @@ export function useYjsCodeEditorCollaboration({
   });
   const collaboration = useOptionalCollaboration();
   const isConnected = enabled && (collaboration?.isConnected ?? false);
+  const yjsReady = collaboration?.yjsReady === true;
   const setTyping = collaboration?.setTyping;
   const updateEditorSelection = collaboration?.updateEditorSelection;
   const editorCursors = enabled ? (collaboration?.editorCursors ?? EMPTY_EDITOR_CURSORS) : EMPTY_EDITOR_CURSORS;
   const getYText = collaboration?.getYText;
+  const getYSolutionText = collaboration?.getYSolutionText;
   const reportEditorWatchState = collaboration?.reportEditorWatchState;
   const editorType: EditorType = titleToEditorType(title);
   const levelIndex = currentLevel - 1;
   const yjsDocGeneration = collaboration?.yjsDocGeneration ?? 0;
-  const yText = enabled ? getYText?.(editorType, levelIndex) ?? null : null;
+  const yText = enabled
+    ? (docKind === "solution"
+      ? (getYSolutionText?.(editorType, levelIndex) ?? null)
+      : (getYText?.(editorType, levelIndex) ?? null))
+    : null;
 
   const editorViewRef = useRef<EditorView | null>(null);
   const editorViewportRef = useRef<HTMLDivElement | null>(null);
@@ -71,25 +79,29 @@ export function useYjsCodeEditorCollaboration({
   const lastObservedYTextValueRef = useRef<string | null>(null);
   const codeUpdateOriginRef = useRef<"editor" | "yjs" | null>(null);
 
-  const editorKey = `${levelIdentifier}:${editorType}:${levelIndex}`;
+  const editorKey = `${levelIdentifier}:${docKind}:${editorType}:${levelIndex}`;
   const [editorMountValue] = useState(() => {
-    return yText?.toString() ?? code ?? template;
+    // IMPORTANT: Keep the Yjs editor doc empty until yjsReady.
+    // Visual fallbacks are handled outside the Yjs surface to avoid accidentally
+    // pushing local content into the shared Y.Text during handshake/reconnect.
+    return "";
   });
 
   const editorExtensions = useMemo<Extension[]>(() => {
-    if (!enabled || !yText) {
+    if (!enabled || !yText || !yjsReady) {
       return [];
     }
     return [yCollab(yText, null, { undoManager: false })];
-  }, [enabled, yText]);
+  }, [enabled, yText, yjsReady]);
 
   const editorInitialState = useMemo(() => {
+    const doc = enabled && yText && yjsReady ? yText.toString() : editorMountValue;
     return {
       json: EditorState.create({
-        doc: enabled && yText ? yText.toString() : editorMountValue,
+        doc,
       }).toJSON(),
     };
-  }, [editorMountValue, enabled, yText]);
+  }, [editorMountValue, enabled, yText, yjsReady]);
 
   useEffect(() => {
     if (lastObservedYTextValueRef.current == null) {
@@ -115,7 +127,7 @@ export function useYjsCodeEditorCollaboration({
       return;
     }
 
-    if (!isConnected || !yText) {
+    if (!isConnected || !yText || !yjsReady) {
       return;
     }
 
@@ -126,6 +138,7 @@ export function useYjsCodeEditorCollaboration({
      * This is the "make the screen reflect the shared document" step.
      */
     const syncReactCode = (nextValue: string, markExternal = false, origin: string = "yjs") => {
+      console.log(`[collab-loop] syncReactCode editor=${editorType} level=${levelIndex} origin=${origin} len=${nextValue.length}`);
       logCollaborationStep("14.2", "syncReactCode", {
         editorType,
         levelIndex,
@@ -136,13 +149,6 @@ export function useYjsCodeEditorCollaboration({
       lastObservedYTextValueRef.current = nextValue;
       codeRef.current = nextValue;
       codeUpdateOriginRef.current = "yjs";
-      console.log("[yjs-editor:sync-react]", {
-        editorType,
-        levelIndex,
-        origin,
-        nextLen: nextValue.length,
-        viewLen: editorViewRef.current?.state.doc.length ?? null,
-      });
       setCode((prev) => (prev === nextValue ? prev : nextValue));
       reportEditorWatchState?.({
         editorType,
@@ -177,14 +183,6 @@ export function useYjsCodeEditorCollaboration({
         transactionOrigin: String(transaction.origin),
       });
       const nextValue = event.target.toString();
-      console.log("[yjs-editor:ytext-observe]", {
-        editorType,
-        levelIndex,
-        txOrigin: String(transaction.origin),
-        nextLen: nextValue.length,
-        viewLen: editorViewRef.current?.state.doc.length ?? null,
-        reactLen: codeRef.current.length,
-      });
       if (transaction.origin === "external-code-state") {
         syncReactCode(nextValue, false, "external-code-state");
         return;
@@ -266,16 +264,6 @@ export function useYjsCodeEditorCollaboration({
           transaction.isUserEvent("move") ||
           transaction.isUserEvent("select"))
     );
-    console.log("[yjs-editor:view-update]", {
-      editorType,
-      levelIndex,
-      docChanged: viewUpdate.docChanged,
-      nextLen: nextValue.length,
-      prevReactLen: codeRef.current.length,
-      yTextLen: yText?.toString().length ?? null,
-      local: isLocalUserInput,
-      applyingExternal: applyingExternalUpdateRef.current,
-    });
     codeRef.current = nextValue;
     codeUpdateOriginRef.current = "editor";
     setCode((prev) => (prev === nextValue ? prev : nextValue));

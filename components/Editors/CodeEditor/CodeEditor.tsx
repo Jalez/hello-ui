@@ -11,8 +11,10 @@ import type { ReactCodeMirrorProps } from "@uiw/react-codemirror";
 import { useCodeMirror } from "@uiw/react-codemirror";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTheme } from "next-themes";
+import { PencilOff } from "lucide-react";
 
 import EditorMagicButton from "@/components/CreatorControls/EditorMagicButton";
+import { Button } from "@/components/ui/button";
 import { logCollaborationStep } from "@/lib/collaboration/logCollaborationStep";
 import { useAppSelector } from "@/store/hooks/hooks";
 import { useGameplayTelemetry } from "@/components/General/useGameplayTelemetry";
@@ -133,7 +135,8 @@ export default function CodeEditor({
     code,
     setCode,
     template,
-    enabled: type === "Template",
+    enabled: type === "Template" || (type === "Solution" && options.creator),
+    docKind: type === "Solution" ? "solution" : "template",
     locked,
     levelIdentifier,
     currentLevel,
@@ -148,8 +151,20 @@ export default function CodeEditor({
       : undefined,
   });
   const editorType = titleToEditorType(title);
-  const collaborationReady = !isYjsManaged || collaboration?.yjsReady !== false;
-  const showCollaborationRecoveryOverlay = isYjsManaged && !locked && !collaborationReady;
+  const collaborationReady = !isYjsManaged || (collaboration?.isConnected === true && collaboration?.yjsReady === true);
+  const readOnlySession = collaboration?.sessionRole === "readonly";
+  const collaborationRecoveryNeeded = isYjsManaged && !locked && !collaborationReady;
+
+  // Delay showing the recovery overlay so quick resyncs are invisible to users.
+  const [showCollaborationRecoveryOverlay, setShowCollaborationRecoveryOverlay] = useState(false);
+  useEffect(() => {
+    if (!collaborationRecoveryNeeded) {
+      setShowCollaborationRecoveryOverlay(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setShowCollaborationRecoveryOverlay(true), 600);
+    return () => window.clearTimeout(timer);
+  }, [collaborationRecoveryNeeded]);
 
   useEffect(() => {
     const view = editorViewRef.current;
@@ -248,11 +263,13 @@ export default function CodeEditor({
     tooltips({ parent: typeof document !== "undefined" ? document.body : undefined }),
   ];
 
+  const canMountYjsSurface = isYjsManaged && collaboration?.isConnected === true && collaboration?.yjsReady === true;
+
   const editableEditorProps: ReactCodeMirrorProps = {
     extensions: [
       lang,
-      EditorState.readOnly.of(locked || !collaborationReady),
-      EditorView.editable.of(!locked && collaborationReady),
+      EditorState.readOnly.of(locked || !collaborationReady || readOnlySession),
+      EditorView.editable.of(!locked && collaborationReady && !readOnlySession),
       EditorView.lineWrapping,
       EditorView.domEventHandlers({
         paste: (event) => {
@@ -288,6 +305,20 @@ export default function CodeEditor({
     onUpdate: handleEditorUpdate,
   };
 
+  const fallbackReadOnlyProps: ReactCodeMirrorProps = {
+    extensions: [
+      lang,
+      EditorState.readOnly.of(true),
+      EditorView.editable.of(false),
+      EditorView.lineWrapping,
+      ...sharedExtensions,
+      commentKeymapCompartment.of(keymap.of(getCommentKeymap(title))),
+      reviewDecorationsCompartment.of([]),
+    ],
+    theme,
+    placeholder: `Write your ${title} here...`,
+  };
+
   const htmlFrameLineProps: ReactCodeMirrorProps = {
     extensions: [
       EditorState.readOnly.of(true),
@@ -309,18 +340,6 @@ export default function CodeEditor({
 
   return (
     <div className="codeEditorContainer relative flex h-full min-h-0 w-full flex-1 flex-col">
-      {options.creator && (
-        <div className="absolute bottom-0 right-0 z-[100]">
-          <EditorMagicButton
-            buttonColor="primary"
-            EditorCode={code}
-            editorType={title}
-            onSuggestion={handleAiSuggestion}
-            disabled={locked}
-          />
-        </div>
-      )}
-
       {options.creator && review && (
         <AiReviewPanel
           review={review}
@@ -337,62 +356,102 @@ export default function CodeEditor({
       )}
 
       <div
-        className="codeEditor relative min-h-0 flex-[1_1_20px] overflow-auto"
+        className="codeEditor relative flex min-h-0 flex-[1_1_20px] flex-col overflow-hidden"
         title={locked ? "You can't edit this code" : " Click on the code to edit it"}
       >
+        {(options.creator || readOnlySession) && (
+          <div className="pointer-events-none absolute bottom-1 right-1 z-[100] flex items-center gap-1">
+            <div className="pointer-events-auto flex items-center gap-1">
+              {options.creator && (
+                <EditorMagicButton
+                  buttonColor="primary"
+                  EditorCode={code}
+                  editorType={title}
+                  onSuggestion={handleAiSuggestion}
+                  disabled={locked || readOnlySession}
+                />
+              )}
+
+              {readOnlySession && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="text-amber-500"
+                  onClick={() => window.dispatchEvent(new CustomEvent("collab:open-readonly-status"))}
+                  title="Read-only session (click for details)"
+                >
+                  <PencilOff className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+
         {locked && (
           <h3
             id="title"
-            className="absolute left-1/2 top-[20%] z-[1] -translate-x-1/2 -translate-y-1/2 -rotate-45 select-none overflow-hidden text-5xl text-red-500 opacity-20 drop-shadow-[2px_2px_2px_#000]"
+            className="pointer-events-none absolute left-1/2 top-[20%] z-[1] -translate-x-1/2 -translate-y-1/2 -rotate-45 select-none overflow-hidden text-5xl text-red-500 opacity-20 drop-shadow-[2px_2px_2px_#000]"
           >
             Locked
           </h3>
         )}
 
-        {title === "HTML" && (
-          <HtmlFrameLine
-            value={"<div id='root'>"}
-            props={htmlFrameLineProps}
-          />
-        )}
-
-        <div ref={editorViewportRef} className="relative">
-          {isYjsManaged ? (
-            <YjsEditorSurface
-              key={editorKey}
-              editorProps={editableEditorProps}
-              editorKey={editorKey}
-              editorInitialState={editorInitialState}
-              style={editorStyle}
-            />
-          ) : (
-            <CodeMirror
-              {...editableEditorProps}
-              key={editorKey}
-              value={code}
-              style={editorStyle}
+        <div className="flex min-h-0 flex-1 flex-col overflow-auto">
+          {title === "HTML" && (
+            <HtmlFrameLine
+              value={"<div id='root'><kbd>"}
+              props={htmlFrameLineProps}
             />
           )}
-          {isConnected && <RemoteCaretsOverlay carets={remoteCarets} />}
-          {showCollaborationRecoveryOverlay && (
-            <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-background/45 backdrop-blur-sm">
-              <div className="flex items-center gap-3 rounded-full border border-border/70 bg-background/90 px-4 py-2 text-sm text-foreground shadow-lg shadow-black/10">
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary/25 border-t-primary" />
-                <div className="flex flex-col leading-tight">
-                  <span className="font-medium">Resyncing shared editor</span>
-                  <span className="text-xs text-muted-foreground">Changes will be ready in a moment</span>
+
+          <div ref={editorViewportRef} className="relative min-h-0 flex-1">
+            {isYjsManaged ? (
+              canMountYjsSurface ? (
+                <YjsEditorSurface
+                  key={editorKey}
+                  editorProps={editableEditorProps}
+                  editorKey={editorKey}
+                  editorInitialState={editorInitialState}
+                  style={editorStyle}
+                />
+              ) : (
+                <CodeMirror
+                  {...fallbackReadOnlyProps}
+                  key={`${editorKey}:fallback`}
+                  value={code}
+                  style={editorStyle}
+                />
+              )
+            ) : (
+              <CodeMirror
+                {...editableEditorProps}
+                key={editorKey}
+                value={code}
+                style={editorStyle}
+              />
+            )}
+            {isConnected && <RemoteCaretsOverlay carets={remoteCarets} />}
+            {showCollaborationRecoveryOverlay && (
+              <div className="pointer-events-none absolute inset-0 z-20 flex animate-in fade-in duration-300 items-center justify-center bg-background/45 backdrop-blur-sm">
+                <div className="flex items-center gap-3 rounded-full border border-border/70 bg-background/90 px-4 py-2 text-sm text-foreground shadow-lg shadow-black/10">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary/25 border-t-primary" />
+                  <div className="flex flex-col leading-tight">
+                    <span className="font-medium">Resyncing shared editor</span>
+                    <span className="text-xs text-muted-foreground">Changes will be ready in a moment</span>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
+          </div>
+
+          {title === "HTML" && (
+            <HtmlFrameLine
+              value={"</kbd></div>"}
+              props={htmlFrameLineProps}
+            />
           )}
         </div>
-
-        {title === "HTML" && (
-          <HtmlFrameLine
-            value={"</div>"}
-            props={htmlFrameLineProps}
-          />
-        )}
       </div>
     </div>
   );

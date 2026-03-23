@@ -8,12 +8,14 @@ import { removeLevel } from "@/store/slices/levels.slice";
 import { setCurrentLevel } from "@/store/slices/currentLevel.slice";
 import { Trash2 } from "lucide-react";
 import PoppingTitle from "../General/PoppingTitle";
+import { useLevelMetaSync } from "@/lib/collaboration/hooks/useLevelMetaSync";
 const LevelRemover = () => {
   const currentLevel = useAppSelector(
     (state) => state.currentLevel.currentLevel
   );
   const levels = useAppSelector((state) => state.levels);
   const dispatch = useAppDispatch();
+  const { syncLevelOp } = useLevelMetaSync();
   const handleRemove = () => {
     //consider the number of levels
     if (levels.length === 1) {
@@ -22,15 +24,18 @@ const LevelRemover = () => {
     }
     if (currentLevel === 1) {
       dispatch(removeLevel(currentLevel));
+      syncLevelOp("remove-level", { levelIndex: currentLevel - 1 });
       return;
     }
     if (currentLevel === levels.length) {
       const oldLevel = currentLevel;
       dispatch(setCurrentLevel(currentLevel - 1));
       dispatch(removeLevel(oldLevel));
+      syncLevelOp("remove-level", { levelIndex: oldLevel - 1 });
       return;
     }
     dispatch(removeLevel(currentLevel));
+    syncLevelOp("remove-level", { levelIndex: currentLevel - 1 });
   };
   return (
     <div className="flex flex-col justify-center items-center">

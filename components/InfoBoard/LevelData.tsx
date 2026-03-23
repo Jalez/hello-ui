@@ -10,12 +10,14 @@ interface LevelDataProps {
   reduxState: string;
   actionToDispatch?: any;
   dataType?: string;
+  levelMetaSyncFields?: string[];
 }
 
 export const LevelData = ({
   reduxState,
   actionToDispatch,
   dataType,
+  levelMetaSyncFields,
 }: LevelDataProps) => {
   // get redux state
   const [editing, setEditing] = useState(false);
@@ -42,6 +44,7 @@ export const LevelData = ({
         reduxState={reduxState}
         dataType={dataType || "number"}
         finishEditHandler={finishEditHandler}
+        levelMetaSyncFields={levelMetaSyncFields}
       />
     );
   }

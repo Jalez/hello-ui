@@ -7,6 +7,7 @@ export function createHttpRequestHandler({
   readJsonBody,
   summarizeRoomMembers,
   invalidateGameInstanceRooms,
+  getWsStats,
 }) {
   return (req, res) => {
     if (req.method === "GET" && req.url === "/health") {
@@ -72,6 +73,22 @@ export function createHttpRequestHandler({
           res.end(JSON.stringify({ error: "Failed to reset active game instances" }));
         }
       })();
+      return;
+    }
+    if (req.method === "GET" && req.url === "/admin/ws-stats") {
+      const serviceToken = req.headers["x-ws-service-token"];
+      if (!wsServiceToken || serviceToken !== wsServiceToken) {
+        res.writeHead(401, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Unauthorized" }));
+        return;
+      }
+
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(typeof getWsStats === "function" ? getWsStats() : {
+        rooms: rooms.size,
+        sockets: Array.from(rooms.values()).reduce((total, room) => total + room.size, 0),
+        transport: null,
+      }));
       return;
     }
     res.writeHead(404);

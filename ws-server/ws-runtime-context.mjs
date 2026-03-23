@@ -14,8 +14,6 @@
  * @property {(roomId: string, ctx: any) => Promise<any>} ensureRoomState
  * @property {(roomId: string, state: any) => object} serializeRoomStateSync
  * @property {(roomId: string, state: any) => (object | null)} serializeGroupStartSync
- * @property {(gameId: string, baseUserData: any, targetRoomId: string) => Array<any>} findDuplicateUsersInGame
- * @property {(gameId: string) => Promise<boolean>} isDuplicateGroupUserAllowed
  * @property {(roomId: string, userData: any) => { effectiveUserId: string, effectiveUserName?: string, duplicateIndex: number }} resolveDuplicateIdentity
  * @property {(roomId: string, type: string, payload: any, excludeSocket?: import("ws").WebSocket | null) => void} broadcastToRoom
  * @property {(reason: string, roomId: string, extra?: object) => void} logRoomSnapshot
@@ -45,6 +43,73 @@
  * @property {Map<string, { ctx: any, timer?: NodeJS.Timeout | null }>} roomWriteBuffer
  * @property {(ctx: any, levels: Array<any>) => Promise<{ ok: boolean, permanentFailure?: boolean }>} saveProgressToDB
  * @property {(roomId: string, state: any) => Array<any>} serializeCodeLevels
+ * @property {(token: string, options?: { roomId?: string }) => any} verifyWsAuthToken
+ * @property {{ recordInvalidInboundMessage: Function, recordUnknownInboundMessage: Function }} [transportStats]
+ * @property {(socket: import("ws").WebSocket, durationMs?: number) => void} setHandshakeGrace
+ * @property {(socket: import("ws").WebSocket) => void} clearHandshakeGrace
  */
+
+/**
+ * Build the runtime context object that socket handlers receive. Keeping the
+ * shape construction here lets the server entrypoint stay focused on wiring.
+ *
+ * @param {WsRuntimeContext} deps
+ * @returns {WsRuntimeContext}
+ */
+export function createWsRuntimeContext(deps) {
+  return {
+    maybeDelaySocketHandling: deps.maybeDelaySocketHandling,
+    parseEnvelope: deps.parseEnvelope,
+    sendMessage: deps.sendMessage,
+    getConnectionState: deps.getConnectionState,
+    getConnectionId: deps.getConnectionId,
+    setConnectionState: deps.setConnectionState,
+    parseRoomContext: deps.parseRoomContext,
+    extractGameIdFromRoomId: deps.extractGameIdFromRoomId,
+    extractGroupIdFromRoomId: deps.extractGroupIdFromRoomId,
+    isLobbyRoom: deps.isLobbyRoom,
+    isYjsEnabled: deps.isYjsEnabled,
+    getRoomUsers: deps.getRoomUsers,
+    addUserToRoom: deps.addUserToRoom,
+    removeUserFromRoom: deps.removeUserFromRoom,
+    ensureLobbyState: deps.ensureLobbyState,
+    ensureRoomState: deps.ensureRoomState,
+    serializeRoomStateSync: deps.serializeRoomStateSync,
+    serializeGroupStartSync: deps.serializeGroupStartSync,
+    resolveDuplicateIdentity: deps.resolveDuplicateIdentity,
+    broadcastToRoom: deps.broadcastToRoom,
+    logRoomSnapshot: deps.logRoomSnapshot,
+    getOrCreateYDoc: deps.getOrCreateYDoc,
+    decodeBase64Update: deps.decodeBase64Update,
+    sendYjsProtocol: deps.sendYjsProtocol,
+    applyYjsAwarenessUpdate: deps.applyYjsAwarenessUpdate,
+    cleanupSocketAwareness: deps.cleanupSocketAwareness,
+    sendFullAwarenessState: deps.sendFullAwarenessState,
+    editorTypes: deps.editorTypes,
+    getRoomClientHashes: deps.getRoomClientHashes,
+    removeClientStateHash: deps.removeClientStateHash,
+    evaluateClientStateHashes: deps.evaluateClientStateHashes,
+    rooms: deps.rooms,
+    markRoomDirty: deps.markRoomDirty,
+    isGroupInstanceContext: deps.isGroupInstanceContext,
+    applyStartedGateToLevels: deps.applyStartedGateToLevels,
+    ensureGroupStartGate: deps.ensureGroupStartGate,
+    fetchLevelsForMapName: deps.fetchLevelsForMapName,
+    createRoomState: deps.createRoomState,
+    serializeProgressData: deps.serializeProgressData,
+    createLevelState: deps.createLevelState,
+    roomEditorState: deps.roomEditorState,
+    createRoomYDoc: deps.createRoomYDoc,
+    getRoomYDocGeneration: deps.getRoomYDocGeneration,
+    advanceRoomYDocGeneration: deps.advanceRoomYDocGeneration,
+    roomWriteBuffer: deps.roomWriteBuffer,
+    saveProgressToDB: deps.saveProgressToDB,
+    serializeCodeLevels: deps.serializeCodeLevels,
+    verifyWsAuthToken: deps.verifyWsAuthToken,
+    transportStats: deps.transportStats,
+    setHandshakeGrace: deps.setHandshakeGrace,
+    clearHandshakeGrace: deps.clearHandshakeGrace,
+  };
+}
 
 export const WS_RUNTIME_CONTEXT_DOC = true;

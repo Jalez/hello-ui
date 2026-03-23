@@ -2,15 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiUrl } from "@/lib/apiUrl";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import { Loader2 } from "lucide-react";
 import { useNotificationStore } from "@/components/default/notifications";
 
@@ -83,6 +77,20 @@ export function GroupSelector({
   const sortedGroups = useMemo(
     () => [...groups].sort((a, b) => a.name.localeCompare(b.name)),
     [groups]
+  );
+  const groupOptions = useMemo<ComboboxOption[]>(
+    () =>
+      sortedGroups.map((group) => ({
+        value: group.id,
+        label: buildGroupLabel(group),
+        keywords: [
+          group.name,
+          group.id,
+          group.ltiContextTitle || "",
+          group.id.slice(0, 8),
+        ].filter(Boolean),
+      })),
+    [sortedGroups]
   );
   const selectedGroup = sortedGroups.find((group) => group.id === pendingGroupId) ?? null;
   const requiresJoinKey = Boolean(
@@ -228,33 +236,20 @@ export function GroupSelector({
 
   return (
     <div className={`w-full space-y-2 ${className || ""}`}>
-      <Select value={pendingGroupId} onValueChange={setPendingGroupId}>
-        <SelectTrigger className="w-full min-w-0 max-w-full" disabled={isLoading && sortedGroups.length === 0}>
-          <SelectValue
-            placeholder={isLoading && sortedGroups.length === 0 ? "Loading groups..." : "Select a group"}
-            className="truncate"
-          >
-            {selectedGroup ? (
-              <span className="block truncate" title={buildGroupLabel(selectedGroup)}>
-                {buildGroupLabel(selectedGroup)}
-              </span>
-            ) : undefined}
-          </SelectValue>
-        </SelectTrigger>
-        <SelectContent>
-          {sortedGroups.length === 0 ? (
-            <SelectItem value="_none" disabled>
-              No groups available
-            </SelectItem>
-          ) : (
-            sortedGroups.map((group) => (
-              <SelectItem key={group.id} value={group.id}>
-                {buildGroupLabel(group)}
-              </SelectItem>
-            ))
-          )}
-        </SelectContent>
-      </Select>
+      <Combobox
+        value={pendingGroupId}
+        onValueChange={setPendingGroupId}
+        options={groupOptions}
+        disabled={isLoading && sortedGroups.length === 0}
+        isLoading={isLoading || isRefreshing}
+        placeholder={isLoading && sortedGroups.length === 0 ? "Loading groups..." : "Select a group"}
+        searchPlaceholder="Type to search groups..."
+        emptyText="No groups found."
+        loadingText="Loading groups..."
+        renderValue={(selected) => (
+          selected ? <span title={selected.label}>{selected.label}</span> : "Select a group"
+        )}
+      />
       {sortedGroups.length === 0 && (
         <p className="text-sm text-muted-foreground">
           You are not a member of any group yet.

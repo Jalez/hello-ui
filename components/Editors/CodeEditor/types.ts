@@ -17,6 +17,8 @@ export interface RemoteEditorCaret {
   x: number;
   y: number;
   color: string;
+  showCaret: boolean;
+  selectionRects: Array<{ x: number; y: number; width: number; height: number }>;
 }
 
 export interface AiReviewState {

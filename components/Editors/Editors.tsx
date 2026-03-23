@@ -12,43 +12,52 @@ import EditorTabs from "./EditorTabs";
 import { useOptionalCollaboration, useYjsLevelCodeSnapshot } from "@/lib/collaboration/CollaborationProvider";
 import { store } from "@/store/store";
 import { LOCAL_REDUX_UPDATE_DEBOUNCE_MS } from "./CodeEditor/constants";
+import { apiUrl } from "@/lib/apiUrl";
 
 const Editors = (): React.ReactNode => {
+  console.log("[collab-loop] Editors render");
   const dispatch = useAppDispatch();
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const levels = useAppSelector((state) => state.levels);
+  const isCreator = useAppSelector((state) => state.options.creator);
   const collaboration = useOptionalCollaboration();
   const getYText = collaboration?.getYText;
+  const getYSolutionText = collaboration?.getYSolutionText;
+  const yjsReady = collaboration?.yjsReady === true;
   const yjsDocGeneration = collaboration?.yjsDocGeneration ?? 0;
   const remoteSyncTimeoutsRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const solutionPersistTimeoutsRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+
+  const levelsRef = useRef(levels);
+  levelsRef.current = levels;
 
   const codeUpdater = useCallback(
     (language: "html" | "css" | "js", code: string, isSolution: boolean) => {
-      if (!levels[currentLevel - 1]) return;
+      const lvl = levelsRef.current[currentLevel - 1];
+      if (!lvl) return;
 
       if (isSolution) {
-        if (levels[currentLevel - 1].solution?.[language] === code) return;
-        dispatch(
-          updateSolutionCode({
-            id: currentLevel,
-            code: { ...levels[currentLevel - 1].solution, [language]: code },
-          })
-        );
+        if (lvl.solution?.[language] === code) return;
+        const nextSolution = { ...lvl.solution, [language]: code };
+        dispatch(updateSolutionCode({ id: currentLevel, code: nextSolution }));
       } else {
-        if (levels[currentLevel - 1].code?.[language] === code) return;
+        if (lvl.code?.[language] === code) return;
         dispatch(
           updateCode({
             id: currentLevel,
-            code: { ...levels[currentLevel - 1].code, [language]: code },
+            code: { ...lvl.code, [language]: code },
           })
         );
       }
     },
-    [levels, currentLevel, dispatch]
+    [currentLevel, dispatch]
   );
 
   useEffect(() => {
-    if (!getYText || levels.length === 0) {
+    // Do NOT mirror Yjs -> Redux until the doc is fully synced.
+    // During handshake/reconnect the local Y.Texts can be empty; syncing those to Redux
+    // can cause creator autosave to persist empty templates (and break game resets).
+    if (!getYText || !yjsReady || levels.length === 0) {
       return;
     }
 
@@ -123,9 +132,109 @@ const Editors = (): React.ReactNode => {
     return () => {
       remoteSyncTimeouts.forEach((timeout) => clearTimeout(timeout));
       remoteSyncTimeouts.clear();
+      solutionPersistTimeoutsRef.current.forEach((timeout) => clearTimeout(timeout));
+      solutionPersistTimeoutsRef.current.clear();
       unobserveCallbacks.forEach((unobserve) => unobserve());
     };
-  }, [dispatch, getYText, levels.length, yjsDocGeneration]);
+  }, [dispatch, getYText, levels.length, yjsDocGeneration, yjsReady]);
+
+  // Creator-only: keep solutions in sync via Yjs and persist them to DB.
+  useEffect(() => {
+    if (!isCreator || !getYSolutionText || levels.length === 0) {
+      return;
+    }
+
+    const editorTypes: Array<"html" | "css" | "js"> = ["html", "css", "js"];
+    const unobserveCallbacks: Array<() => void> = [];
+    const lastNonEmptySolutionByKey = new Map<string, { html: string; css: string; js: string }>();
+
+    const syncSolutionToReduxAndPersist = (levelIndex: number) => {
+      const yHtml = getYSolutionText("html", levelIndex);
+      const yCss = getYSolutionText("css", levelIndex);
+      const yJs = getYSolutionText("js", levelIndex);
+      if (!yHtml || !yCss || !yJs) {
+        return;
+      }
+
+      const nextSolution = {
+        html: yHtml.toString(),
+        css: yCss.toString(),
+        js: yJs.toString(),
+      };
+
+      const stateLevels = store.getState().levels;
+      const targetLevel = stateLevels[levelIndex];
+      if (!targetLevel) {
+        return;
+      }
+
+      if (
+        targetLevel.solution?.html !== nextSolution.html ||
+        targetLevel.solution?.css !== nextSolution.css ||
+        targetLevel.solution?.js !== nextSolution.js
+      ) {
+        dispatch(updateSolutionCode({ id: levelIndex + 1, code: nextSolution }));
+      }
+
+      if (!targetLevel.identifier) {
+        return;
+      }
+
+      const hasAnyContent = nextSolution.html.length > 0 || nextSolution.css.length > 0 || nextSolution.js.length > 0;
+      const hadAnyContent =
+        (targetLevel.solution?.html?.length ?? 0) > 0 ||
+        (targetLevel.solution?.css?.length ?? 0) > 0 ||
+        (targetLevel.solution?.js?.length ?? 0) > 0;
+
+      // Never persist an all-empty snapshot over a previously non-empty solution.
+      // This protects against transient empty state during reconnects/restarts.
+      if (!hasAnyContent && hadAnyContent) {
+        return;
+      }
+
+      const persistKey = `${targetLevel.identifier}:${levelIndex}`;
+      if (hasAnyContent) {
+        lastNonEmptySolutionByKey.set(persistKey, nextSolution);
+      }
+      const existingTimeout = solutionPersistTimeoutsRef.current.get(persistKey);
+      if (existingTimeout) {
+        clearTimeout(existingTimeout);
+      }
+      const timeout = setTimeout(() => {
+        solutionPersistTimeoutsRef.current.delete(persistKey);
+        const payload = hasAnyContent ? nextSolution : lastNonEmptySolutionByKey.get(persistKey);
+        if (!payload) {
+          return;
+        }
+        fetch(apiUrl(`/api/levels/${targetLevel.identifier}`), {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ solution: payload }),
+        }).catch(() => {});
+      }, 600);
+      solutionPersistTimeoutsRef.current.set(persistKey, timeout);
+    };
+
+    for (let levelIndex = 0; levelIndex < levels.length; levelIndex += 1) {
+      // Initial sync (after Yjs becomes ready)
+      syncSolutionToReduxAndPersist(levelIndex);
+      for (const editorType of editorTypes) {
+        const yText = getYSolutionText(editorType, levelIndex);
+        if (!yText) {
+          continue;
+        }
+        const observer = () => {
+          syncSolutionToReduxAndPersist(levelIndex);
+        };
+        yText.observe(observer);
+        unobserveCallbacks.push(() => yText.unobserve(observer));
+      }
+    }
+
+    return () => {
+      unobserveCallbacks.forEach((unobserve) => unobserve());
+    };
+  }, [dispatch, getYSolutionText, isCreator, levels.length, yjsDocGeneration]);
 
   const level = levels[currentLevel - 1] as Level | undefined;
   const yjsLevelCode = useYjsLevelCodeSnapshot(currentLevel - 1, level?.code ?? { html: "", css: "", js: "" });

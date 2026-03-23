@@ -38,6 +38,7 @@ export function TabPresence({ users, maxVisible = 3, size = "md", className }: T
         {visibleUsers.map((user) => {
           const initials = getInitials(user.userName || user.userEmail);
           const isTyping = user.isTyping;
+          const isReadOnly = user.sessionRole === "readonly";
 
           return (
             <Tooltip key={user.clientId}>
@@ -47,7 +48,8 @@ export function TabPresence({ users, maxVisible = 3, size = "md", className }: T
                     className={cn(
                       avatarSize,
                       "border border-background transition-transform hover:scale-110 hover:z-10",
-                      isTyping && "animate-pulse"
+                      isTyping && "animate-pulse",
+                      isReadOnly && "opacity-60"
                     )}
                     style={{ borderColor: user.color || undefined }}
                   >
@@ -65,6 +67,7 @@ export function TabPresence({ users, maxVisible = 3, size = "md", className }: T
               </TooltipTrigger>
               <TooltipContent side="bottom" className="text-xs">
                 <span className="font-medium">{user.userName || user.userEmail}</span>
+                {isReadOnly && <span className="ml-1 text-muted-foreground">read-only</span>}
                 {isTyping && <span className="ml-1 text-muted-foreground">typing...</span>}
               </TooltipContent>
             </Tooltip>

@@ -8,6 +8,7 @@ import CodeEditor from "./CodeEditor/CodeEditor";
 import { Lock, LockOpen, Menu } from "lucide-react";
 import { handleLocking } from "@/store/slices/levels.slice";
 import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
+import { useLevelMetaSync } from "@/lib/collaboration/hooks/useLevelMetaSync";
 import { html } from "@codemirror/lang-html";
 import { css } from "@codemirror/lang-css";
 import { javascript } from "@codemirror/lang-javascript";
@@ -56,6 +57,7 @@ function EditorTabs({
   const options = useAppSelector((state) => state.options);
   const isCreator = options.creator;
   const dispatch = useAppDispatch();
+  const { syncLevelFields } = useLevelMetaSync();
 
   const [activeLanguage, setActiveLanguage] = React.useState<'html' | 'css' | 'js'>('html');
   const [isTemplateMode, setIsTemplateMode] = React.useState<boolean>(true);
@@ -100,17 +102,14 @@ function EditorTabs({
   };
 
   const handleLockUnlock = async (language: 'html' | 'css' | 'js') => {
-    console.log('handleLockUnlock called with language:', language);
-    console.log('Current level:', currentLevel);
-    // The reducer expects 'js', not 'javascript'
-    const lockType = language;
-    console.log('Dispatching handleLocking with type:', lockType);
     dispatch(
       handleLocking({
         levelId: currentLevel,
-        type: lockType,
+        type: language,
       })
     );
+    const lockKey = `lock${language.toUpperCase()}`;
+    syncLevelFields(currentLevel - 1, [lockKey]);
 
     if (!identifier || !UUID_REGEX.test(identifier)) {
       return;
@@ -173,9 +172,8 @@ function EditorTabs({
     }
   };
 
-  const handleCodeUpdate = (data: { html?: string; css?: string; js?: string }, type: string) => {
+  const handleCodeUpdate = React.useCallback((data: { html?: string; css?: string; js?: string }, type: string) => {
     const isSolution = type === 'Solution' || type === 'solution';
-    console.log('handleCodeUpdate called with data:', data, 'type:', type, 'isSolution:', isSolution);
     const updatedLanguage = (Object.keys(data).find(
       (key) => key === 'html' || key === 'css' || key === 'js'
     ) || activeLanguage) as 'html' | 'css' | 'js';
@@ -184,7 +182,7 @@ function EditorTabs({
     if (code !== undefined) {
       codeUpdater(updatedLanguage, code, isSolution);
     }
-  };
+  }, [activeLanguage, codeUpdater]);
 
   const languageTabs = [
     { value: 'html', label: 'HTML' },
@@ -289,16 +287,11 @@ function EditorTabs({
                         variant="ghost"
                         className="h-full w-6 p-0 px-2 flex items-center justify-center relative z-10 rounded-none"
                         onClick={(e) => {
-                          console.log('Lock button clicked for tab:', tab.value, 'language:', tabLanguage);
-                          console.log('Event target:', e.target);
-                          console.log('Event currentTarget:', e.currentTarget);
                           e.stopPropagation();
                           e.preventDefault();
-                          console.log('Calling handleLockUnlock with:', tabLanguage);
                           handleLockUnlock(tabLanguage);
                         }}
                         onMouseDown={(e) => {
-                          console.log('Lock button mouseDown for tab:', tab.value, 'language:', tabLanguage);
                           e.stopPropagation();
                         }}
                         title={tabLocked ? "Unlock" : "Lock"}

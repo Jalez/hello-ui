@@ -26,7 +26,16 @@ export function areRemoteCaretsEqual(a: RemoteEditorCaret[], b: RemoteEditorCare
       caret.id === other.id &&
       caret.x === other.x &&
       caret.y === other.y &&
-      caret.color === other.color
+      caret.color === other.color &&
+      caret.showCaret === other.showCaret &&
+      caret.selectionRects.length === other.selectionRects.length &&
+      caret.selectionRects.every((rect, rectIndex) => {
+        const otherRect = other.selectionRects[rectIndex];
+        return rect.x === otherRect.x
+          && rect.y === otherRect.y
+          && rect.width === otherRect.width
+          && rect.height === otherRect.height;
+      })
     );
   });
 }

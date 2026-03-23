@@ -1,10 +1,12 @@
 'use client';
 
-import { use, useEffect, useState } from "react";
+import { use, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import App from "@/components/App";
 import { useGameStore } from "@/components/default/games";
 import { CollaborationProvider } from "@/lib/collaboration";
+import { CollaborationNotice } from "@/components/collaboration/CollaborationNotice";
 
 interface CreatorPageProps {
   params: Promise<{
@@ -15,22 +17,29 @@ interface CreatorPageProps {
 export default function CreatorPage({ params }: CreatorPageProps) {
   const { gameId } = use(params);
   const { data: session } = useSession();
+  const router = useRouter();
   const hasUser = Boolean(session?.user);
   const { loadGameById, setCurrentGameId } = useGameStore();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [roomId, setRoomId] = useState<string | null>(null);
+  const initializedGameIdRef = useRef<string | null>(null);
 
   useEffect(() => {
+    if (!hasUser) {
+      setIsLoading(false);
+      return;
+    }
+
+    // Only run initialization once per gameId — re-runs from dep changes
+    // (session refetch, store updates) must NOT set isLoading=true, because
+    // that unmounts CollaborationProvider and kills the WebSocket connection.
+    if (initializedGameIdRef.current === gameId) {
+      return;
+    }
+
     const initializeGame = async () => {
-      if (!hasUser) {
-        setIsLoading(false);
-        return;
-      }
-
       try {
-        setIsLoading(true);
-
         const game = await loadGameById(gameId);
         if (!game) {
           setError("Game not found");
@@ -38,6 +47,14 @@ export default function CreatorPage({ params }: CreatorPageProps) {
           return;
         }
 
+        const canEdit = Boolean(game.canEdit || game.isOwner);
+        if (!canEdit) {
+          router.replace(`/game/${gameId}?mode=game`);
+          setIsLoading(false);
+          return;
+        }
+
+        initializedGameIdRef.current = gameId;
         setCurrentGameId(gameId);
         setRoomId(`creator:${gameId}:map:${encodeURIComponent(game.mapName)}`);
         setIsLoading(false);
@@ -49,7 +66,7 @@ export default function CreatorPage({ params }: CreatorPageProps) {
     };
 
     initializeGame();
-  }, [gameId, hasUser, loadGameById, setCurrentGameId]);
+  }, [gameId, hasUser, loadGameById, router, setCurrentGameId]);
 
   if (isLoading) {
     return (
@@ -86,7 +103,9 @@ export default function CreatorPage({ params }: CreatorPageProps) {
 
   return (
     <CollaborationProvider roomId={roomId} user={user}>
-      <App />
+      <CollaborationNotice>
+        <App />
+      </CollaborationNotice>
     </CollaborationProvider>
   );
 }

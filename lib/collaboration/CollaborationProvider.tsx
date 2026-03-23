@@ -22,6 +22,8 @@ import {
   UserIdentity,
   EditorType,
   GameInstancesResetMessage,
+  LevelMetaUpdateMessage,
+  LevelMetaOperation,
 } from "./types";
 import { useCollaborationConnection } from "./hooks/useCollaborationConnection";
 import { useCollaborationCursor } from "./hooks/useCollaborationCursor";
@@ -207,6 +209,10 @@ export interface CollaborationContextValue {
   isConnected: boolean;
   isConnecting: boolean;
   error: string | null;
+  isSessionEvicted: boolean;
+  reclaimSession: () => void;
+  connectReadOnly: () => void;
+  sessionRole: "active" | "readonly";
   roomId: string | null;
   groupId: string | null;
   clientId: string | null;
@@ -224,6 +230,7 @@ export interface CollaborationContextValue {
   lobbyMessages: LobbyChatEntry[];
   initialRoomState: RoomStateSync;
   lastHealthMessage: CollaborationHealthMessage | null;
+  lastLevelMetaUpdate: LevelMetaUpdateMessage | null;
   codeSyncReady: boolean;
   yjsReady: boolean;
   yjsDocGeneration: number;
@@ -243,6 +250,7 @@ export interface CollaborationContextValue {
   syncProgressData: (progressData: Record<string, unknown>) => void;
   setGroupReady: (isReady: boolean) => void;
   sendLobbyChat: (text: string) => void;
+  sendLevelMetaUpdate: (operation: LevelMetaOperation, opts?: { levelIndex?: number; fields?: Record<string, unknown>; level?: Record<string, unknown> }) => void;
   reportEditorWatchState: (snapshot: EditorWatchdogSnapshot) => void;
   reportCollaborationHealthEvent: (
     eventType: string,
@@ -252,6 +260,8 @@ export interface CollaborationContextValue {
   ) => void;
   getYText: (editorType: EditorType, levelIndex: number) => Y.Text | null;
   getYCodeSnapshot: (editorType: EditorType, levelIndex: number) => string | null;
+  getYSolutionText: (editorType: EditorType, levelIndex: number) => Y.Text | null;
+  getYSolutionSnapshot: (editorType: EditorType, levelIndex: number) => string | null;
   connect: () => void;
   disconnect: () => void;
 }
@@ -266,6 +276,7 @@ interface CollaborationProviderProps {
 }
 
 export function CollaborationProvider({ children, roomId, groupId, user }: CollaborationProviderProps) {
+  console.log(`[collab-loop] CollaborationProvider render roomId=${roomId} groupId=${groupId}`);
   const collabEngine = "yjs" as const;
   const resolvedRoomId = roomId ?? groupId ?? null;
   const isLobbyRoomId = isLobbyRoom(resolvedRoomId);
@@ -282,6 +293,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
   const [lobbyMessages, setLobbyMessages] = useState<LobbyChatEntry[]>([]);
   const [initialRoomState, setInitialRoomState] = useState<RoomStateSync>(null);
   const [lastHealthMessage, setLastHealthMessage] = useState<CollaborationHealthMessage | null>(null);
+  const [lastLevelMetaUpdate, setLastLevelMetaUpdate] = useState<LevelMetaUpdateMessage | null>(null);
   const [codeSyncReady, setCodeSyncReady] = useState(false);
   const [yjsReady, setYjsReady] = useState(false);
   const [yjsDocGeneration, setYjsDocGeneration] = useState(0);
@@ -347,6 +359,14 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
     return `level:${levelIndex}:${editorType}`;
   }, []);
 
+  const getYSolutionTextKey = useCallback((editorType: EditorType, levelIndex: number) => {
+    logCollaborationStep("3.1", "getYSolutionTextKey", {
+      editorType,
+      levelIndex,
+    });
+    return `level:${levelIndex}:solution:${editorType}`;
+  }, []);
+
   /**
    * COLLABORATION STEP 3.2:
    * Fetch the live shared Yjs text object that backs a specific editor tab.
@@ -365,6 +385,19 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
     return doc.getText(getYTextKey(editorType, levelIndex));
   }, [getYTextKey]);
 
+  const getYSolutionText = useCallback((editorType: EditorType, levelIndex: number) => {
+    logCollaborationStep("3.2", "getYSolutionText", {
+      editorType,
+      levelIndex,
+      hasDoc: Boolean(yDocRef.current),
+    });
+    const doc = yDocRef.current;
+    if (!doc) {
+      return null;
+    }
+    return doc.getText(getYSolutionTextKey(editorType, levelIndex));
+  }, [getYSolutionTextKey]);
+
   /**
    * COLLABORATION STEP 14.1:
    * Read the current shared text as a plain string when something outside the
@@ -377,6 +410,14 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
     });
     return getYText(editorType, levelIndex)?.toString() ?? null;
   }, [getYText]);
+
+  const getYSolutionSnapshot = useCallback((editorType: EditorType, levelIndex: number) => {
+    logCollaborationStep("14.1", "getYSolutionSnapshot", {
+      editorType,
+      levelIndex,
+    });
+    return getYSolutionText(editorType, levelIndex)?.toString() ?? null;
+  }, [getYSolutionText]);
 
   /**
    * COLLABORATION STEP 5.2:
@@ -430,6 +471,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
    * shared notebook, prefilled from the last known room snapshot to avoid flashing blank.
    */
   const replaceLocalYDoc = useCallback((reason: string, nextServerGeneration?: number | null, hydrateFrom?: RoomStateSync) => {
+    console.log(`[collab-loop] replaceLocalYDoc reason=${reason} nextGen=${nextServerGeneration ?? "null"} hydratedLevels=${hydrateFrom?.levels?.length ?? 0}`);
     logCollaborationStep("2.3", "replaceLocalYDoc", {
       reason,
       nextServerGeneration: nextServerGeneration ?? null,
@@ -456,27 +498,10 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       serverYjsDocGenerationRef.current = nextServerGeneration;
     }
 
-    // Pre-hydrate from the last known room state so the editor does not flash
-    // empty content while waiting for the server SyncStep2 response.
-    // Use "hydrate-local" origin so the update listener does NOT broadcast
-    // this hydration to the server — it's local-only scaffolding that the
-    // incoming SyncStep2 will authoratively replace.
-    const canHydrateFromRoomState = Array.isArray(hydrateFrom?.levels)
-      && hydrateFrom.levels.some((level) => Boolean(level?.code) && typeof level.code === "object");
-    if (canHydrateFromRoomState) {
-      const editorTypes: EditorType[] = ["html", "css", "js"];
-      doc.transact(() => {
-        hydrateFrom!.levels.forEach((level: Record<string, unknown>, levelIndex: number) => {
-          const code = level?.code && typeof level.code === "object" ? (level.code as Record<string, string>) : {};
-          for (const editorType of editorTypes) {
-            const value = typeof code[editorType] === "string" ? code[editorType] : "";
-            if (value) {
-              doc.getText(`level:${levelIndex}:${editorType}`).insert(0, value);
-            }
-          }
-        });
-      }, "hydrate-local");
-    }
+    // IMPORTANT: Do NOT pre-hydrate the local Y.Doc with plain-text inserts.
+    // Doing so creates local Yjs items that can later merge with the server's
+    // canonical items during SyncStep2, producing duplicated/interleaved content.
+    // We instead keep the doc empty until the first authoritative server sync lands.
 
     doc.on("update", (update: Uint8Array, origin: unknown) => {
       if (origin === "remote-yjs" || origin === "hydrate-local") {
@@ -650,6 +675,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
    * gate information, and swaps the local Yjs document if the server generation changed.
    */
   const handleRoomStateSync = useCallback((roomState: RoomStateSyncMessage) => {
+    console.log(`[collab-loop] handleRoomStateSync levelsCount=${roomState?.levels?.length ?? 0} forceReplace=${roomState?.forceReplaceYDoc === true}`);
     logCollaborationStep("2.4", "handleRoomStateSync", {
       yjsDocGeneration: roomState?.yjsDocGeneration ?? null,
       levelsCount: roomState?.levels?.length ?? 0,
@@ -790,10 +816,20 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
     setLastHealthMessage(message);
   }, []);
 
+  const handleLevelMetaUpdate = useCallback((message: LevelMetaUpdateMessage) => {
+    setLastLevelMetaUpdate(message);
+  }, []);
+
   const handleSocketConnected = useCallback(() => {
     hasDisconnectedUnexpectedlyRef.current = false;
     lastTransportMessageAtRef.current = Date.now();
-  }, []);
+    // Defensive: reset the local Y.Doc on (re)connect to avoid merging divergent local items
+    // with the server's canonical doc, which can manifest as duplicated/interleaved content.
+    // The authoritative state will arrive via SyncStep2.
+    if (isYjsEnabled && resolvedRoomId) {
+      replaceLocalYDoc("socket_connected_reset", serverYjsDocGenerationRef.current);
+    }
+  }, [isYjsEnabled, replaceLocalYDoc, resolvedRoomId]);
 
   const handleSocketDisconnected = useCallback(() => {
     hasDisconnectedUnexpectedlyRef.current = true;
@@ -831,6 +867,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       const userState = rawState.user && typeof rawState.user === "object" ? rawState.user : null;
       const editor = rawState.editor && typeof rawState.editor === "object" ? rawState.editor : null;
       const awarenessClientId = typeof session?.clientId === "string" ? session.clientId : "";
+      const awarenessRole = typeof session?.role === "string" && session.role === "readonly" ? "readonly" : "active";
       const userId = typeof userState?.id === "string" ? userState.id : "";
       if (!awarenessClientId || !userId) {
         continue;
@@ -847,6 +884,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
         userEmail: typeof userState?.email === "string" ? userState.email : "",
         userName: typeof userState?.name === "string" ? userState.name : undefined,
         userImage: typeof userState?.image === "string" ? userState.image : undefined,
+        sessionRole: awarenessRole,
         activeTab: editorType === "html" || editorType === "css" || editorType === "js" ? editorType : undefined,
         activeLevelIndex: levelIndex,
         isTyping,
@@ -868,6 +906,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
           userId,
           userName: typeof userState?.name === "string" ? userState.name : undefined,
           color: generateUserColor(typeof userState?.email === "string" ? userState.email : awarenessClientId),
+          sessionRole: awarenessRole,
           selection: {
             from: editor.selection.from,
             to: editor.selection.to,
@@ -928,11 +967,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
     const decoder = decoding.createDecoder(decodeBase64ToUint8Array(message.payloadBase64));
     const encoder = encoding.createEncoder();
     const syncMessageType = syncProtocol.readSyncMessage(decoder, encoder, doc, "remote-yjs");
-    console.log("[yjs-protocol:apply]", {
-      roomId: resolvedRoomId,
-      messageType: syncMessageType,
-      payloadLength: message.payloadBase64.length,
-    });
+    console.log(`[collab-loop] handleYjsProtocol syncMessageType=${syncMessageType} encoderLen=${encoding.length(encoder)} room=${resolvedRoomId}`);
     if (encoding.length(encoder) > 0) {
       sendYjsProtocolRef.current?.({
         channel: "sync",
@@ -950,6 +985,10 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
     isConnected,
     isConnecting,
     error,
+    isSessionEvicted,
+    sessionRole,
+    reclaimSession,
+    connectReadOnly,
     clientId,
     connect,
     disconnect,
@@ -963,6 +1002,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
     sendLobbyChat,
     sendClientStateHash,
     sendClientHealthEvent,
+    sendLevelMetaUpdate,
     effectiveIdentity,
   } = useCollaborationConnection({
     roomId: resolvedRoomId,
@@ -981,6 +1021,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
     onLobbyChatMessage: handleLobbyChatMessage,
     onYjsProtocol: handleYjsProtocol,
     onCollaborationHealth: handleCollaborationHealth,
+    onLevelMetaUpdate: handleLevelMetaUpdate,
     onTransportMessage: handleTransportMessage,
   });
 
@@ -1002,14 +1043,14 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
     }
     const existing = (getQueuedOrCurrentLocalAwarenessState() || {}) as {
       user?: { id?: string; name?: string; email?: string; image?: string };
-      session?: { clientId?: string };
+      session?: { clientId?: string; role?: string };
     };
     const userChanged =
       existing.user?.id !== effectiveIdentity.id
       || existing.user?.name !== effectiveIdentity.name
       || existing.user?.email !== effectiveIdentity.email
       || existing.user?.image !== effectiveIdentity.image;
-    const sessionChanged = existing.session?.clientId !== clientId;
+    const sessionChanged = existing.session?.clientId !== clientId || existing.session?.role !== sessionRole;
     if (!userChanged && !sessionChanged) {
       return;
     }
@@ -1023,9 +1064,10 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       },
       session: {
         clientId,
+        role: sessionRole,
       },
     });
-  }, [clientId, effectiveIdentity, getQueuedOrCurrentLocalAwarenessState, isConnected, isYjsEnabled, queueLocalAwarenessState]);
+  }, [clientId, effectiveIdentity, getQueuedOrCurrentLocalAwarenessState, isConnected, isYjsEnabled, queueLocalAwarenessState, sessionRole]);
 
   /**
    * COLLABORATION STEP 16.6:
@@ -1066,6 +1108,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
    * "tell me what I am missing" without destroying local unsynced edits.
    */
   const sendYjsSyncStep1 = useCallback((reason: string) => {
+    console.log(`[collab-loop] sendYjsSyncStep1 reason=${reason} room=${resolvedRoomId} connected=${isConnected}`);
     logCollaborationStep("18.4", "sendYjsSyncStep1", {
       reason,
       roomId: resolvedRoomId,
@@ -1184,7 +1227,9 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       return;
     }
 
-    replaceLocalYDoc("room_mount", 0);
+    // Start at generation 1 so early awareness/sync packets are not rejected by the server
+    // (server generation is always >= 1 for Yjs-enabled rooms).
+    replaceLocalYDoc("room_mount", 1);
     return () => {
       const doc = yDocRef.current;
       if (doc) {
@@ -1196,7 +1241,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
         awareness.destroy();
       }
       yAwarenessRef.current = null;
-      serverYjsDocGenerationRef.current = 0;
+      serverYjsDocGenerationRef.current = 1;
     };
   }, [isYjsEnabled, replaceLocalYDoc, resolvedRoomId]);
 
@@ -1432,7 +1477,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
     localActiveEditorRef.current = null;
     lastHealthEventAtRef.current.clear();
     divergenceRecoveryRef.current.clear();
-    serverYjsDocGenerationRef.current = 0;
+    serverYjsDocGenerationRef.current = 1;
   }, [resolvedRoomId]);
 
   const updateCanvasCursor = useCallback(
@@ -1625,6 +1670,10 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       isConnected,
       isConnecting,
       error,
+      isSessionEvicted,
+      reclaimSession,
+      connectReadOnly,
+      sessionRole,
       roomId: resolvedRoomId,
       groupId: resolvedGroupId,
       clientId,
@@ -1642,6 +1691,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       lobbyMessages,
       initialRoomState,
       lastHealthMessage,
+      lastLevelMetaUpdate,
       codeSyncReady: resolvedCodeSyncReady,
       yjsReady,
       yjsDocGeneration,
@@ -1655,10 +1705,13 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       syncProgressData,
       setGroupReady,
       sendLobbyChat,
+      sendLevelMetaUpdate,
       reportEditorWatchState,
       reportCollaborationHealthEvent,
       getYText,
       getYCodeSnapshot,
+      getYSolutionText,
+      getYSolutionSnapshot,
       connect,
       disconnect,
     }),
@@ -1668,6 +1721,10 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       isConnected,
       isConnecting,
       error,
+      isSessionEvicted,
+      sessionRole,
+      reclaimSession,
+      connectReadOnly,
       resolvedRoomId,
       resolvedGroupId,
       clientId,
@@ -1698,10 +1755,14 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       syncProgressData,
       setGroupReady,
       sendLobbyChat,
+      sendLevelMetaUpdate,
+      lastLevelMetaUpdate,
       reportEditorWatchState,
       reportCollaborationHealthEvent,
       getYText,
       getYCodeSnapshot,
+      getYSolutionText,
+      getYSolutionSnapshot,
       connect,
       disconnect,
     ]
@@ -1757,13 +1818,18 @@ export function useYjsLevelCodeSnapshot(
      * component state so non-editor consumers stay in sync with the CRDT document.
      */
     const sync = () => {
+      console.log(`[collab-loop] useYjsLevelCodeSnapshot.sync levelIndex=${levelIndex}`);
       logCollaborationStep("14.4", "useYjsLevelCodeSnapshot.sync", {
         levelIndex,
       });
-      setCode({
-        html: getYText("html", levelIndex)?.toString() ?? fallbackCode.html,
-        css: getYText("css", levelIndex)?.toString() ?? fallbackCode.css,
-        js: getYText("js", levelIndex)?.toString() ?? fallbackCode.js,
+      const nextHtml = getYText("html", levelIndex)?.toString() ?? fallbackCode.html;
+      const nextCss = getYText("css", levelIndex)?.toString() ?? fallbackCode.css;
+      const nextJs = getYText("js", levelIndex)?.toString() ?? fallbackCode.js;
+      setCode((prev) => {
+        if (prev.html === nextHtml && prev.css === nextCss && prev.js === nextJs) {
+          return prev;
+        }
+        return { html: nextHtml, css: nextCss, js: nextJs };
       });
     };
 

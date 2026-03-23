@@ -20,6 +20,7 @@ export interface EditorCursor {
   userId: string;
   userName?: string;
   color: string;
+  sessionRole?: "active" | "readonly";
   selection: { from: number; to: number };
   ts: number;
 }
@@ -134,6 +135,7 @@ export interface ActiveUser {
   userName?: string;
   userImage?: string;
   color?: string;
+  sessionRole?: "active" | "readonly";
   cursor?: { x: number; y: number };
   activeTab?: EditorType;
   activeLevelIndex?: number;
@@ -277,6 +279,16 @@ export interface ClientHealthEventMessage {
   editorType?: EditorType;
   levelIndex?: number;
   details?: Record<string, unknown>;
+  ts: number;
+}
+
+export type LevelMetaOperation = "update-level-meta" | "add-level" | "remove-level";
+
+export interface LevelMetaUpdateMessage {
+  operation: LevelMetaOperation;
+  levelIndex: number | null;
+  fields: Record<string, unknown> | null;
+  level: Record<string, unknown> | null;
   ts: number;
 }
 

@@ -21,6 +21,7 @@ import { initializePointsFromLevelsStateThunk } from "@/store/actions/score.acti
 import { mergeSavedPoints } from "@/store/slices/points.slice";
 import { ProgressionSync } from "./General/ProgressionSync";
 import { ProgressPersistence } from "./General/ProgressPersistence";
+import { LevelMetaSync } from "./General/LevelMetaSync";
 import { GameplayTelemetryTracker } from "./General/GameplayTelemetryTracker";
 import { useGameStore } from "./default/games";
 import { useSession } from "next-auth/react";
@@ -149,7 +150,10 @@ function App() {
       Boolean(collaboration?.roomId);
 
     if (shouldUseWsCodeSource && (!collaboration?.codeSyncReady || !collaboration?.initialRoomState)) {
-      setIsLoadingAsync(true);
+      // IMPORTANT: Don't flip the global levels loader on/off based on transient
+      // websocket readiness. The UI already shows "Syncing shared code..." via
+      // isWaitingForSharedCode, and toggling isLoading here can leave the app
+      // stuck after backend restarts until a full refresh.
       return;
     }
 
@@ -323,6 +327,7 @@ function App() {
     options.mode === "game" &&
     Boolean(collaboration?.roomId) &&
     (
+      !collaboration.isSessionEvicted &&
       !collaboration.codeSyncReady ||
       !collaboration.initialRoomState
     );
@@ -345,6 +350,7 @@ function App() {
     <>
       <ProgressionSync />
       <ProgressPersistence />
+      <LevelMetaSync />
       <GameplayTelemetryTracker />
       <article id="App" className="h-full flex flex-col justify-between">
         <LevelUpdater />

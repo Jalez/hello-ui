@@ -32,6 +32,27 @@ function scaledTimeout(ms) {
   return Math.round(ms * timeoutMultiplier);
 }
 
+function printRunSummary(scenarioName, passed, checks = {}, params = {}) {
+  console.log("");
+  console.log("=".repeat(60));
+  console.log(`Scenario: ${scenarioName}`);
+  console.log(`Result: ${passed ? "PASS" : "FAIL"}`);
+  const entries = Object.entries(checks);
+  if (entries.length > 0) {
+    for (const [name, ok] of entries) {
+      console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}`);
+    }
+  }
+  const paramEntries = Object.entries(params);
+  if (paramEntries.length > 0) {
+    console.log(`Params: ${paramEntries.map(([k, v]) => `${k}=${v}`).join(" ")}`);
+  }
+  console.log("=".repeat(60));
+  if (!passed) {
+    process.exitCode = 1;
+  }
+}
+
 function generateUsernames(count) {
   return Array.from({ length: count }, (_, index) => `user${String(index + 1).padStart(2, "0")}`);
 }
@@ -658,6 +679,12 @@ async function runInvalidRsv1Scenario() {
   console.log(`Playwright scenario: ${scenario}`);
   console.log(`Summary`);
   console.log(`ws-invalid-frame | ${expectCrash ? "EXPECT_CRASH" : "EXPECT_SURVIVE"} | ${healthAfter ? "HEALTHY" : "DOWN"}`);
+
+  const passed = expectCrash ? !healthAfter : healthAfter;
+  printRunSummary(scenario, passed, {
+    "handshake-complete": result.handshakeComplete,
+    [`health-${expectCrash ? "down" : "up"}`]: passed,
+  });
 }
 
 async function applyPlaywrightWebSocketOverride(context, wsUrl) {
@@ -1004,6 +1031,9 @@ async function runWsRecoveryScenario(browser) {
     console.log(
       `ws-recovery | ${recovered ? "RECOVERED" : "FAILED"} | restartDelayMs=${restartDelayMs} postStressRounds=${postStressRounds} extraReload=${extraReload} verifyStability=${verifyStability}`
     );
+    printRunSummary(scenario, recovered, {
+      "ws-recovered": recovered,
+    }, { restartDelayMs, postStressRounds, extraReload, verifyStability });
   } finally {
     await stopManagedWsServer(managedWsChild);
     if (shouldRestoreDetachedWs) {
@@ -1134,6 +1164,13 @@ async function runRefreshDesyncScenario(browser) {
       `refresh-desync | ${convergence.ok ? "PASS" : "FAIL"} | ` +
       `baseline=${baselineOk} duringReload=${reloadedCaughtDuringReload} originalToReloaded=${originalToReloadedOk} reloadedToOriginal=${reloadedToOriginalOk}`,
     );
+    const allPassed = baselineOk && originalToReloadedOk && reloadedToOriginalOk && convergence.ok;
+    printRunSummary(scenario, allPassed, {
+      baseline: baselineOk,
+      "original-to-reloaded": originalToReloadedOk,
+      "reloaded-to-original": reloadedToOriginalOk,
+      convergence: convergence.ok,
+    });
   } finally {
     await Promise.all(contexts.flatMap(({ extraPages = [] }) => extraPages).map(async (page) => page.close().catch(() => {})));
     await Promise.all(contexts.map(async ({ context }) => context.close().catch(() => {})));
@@ -1549,7 +1586,7 @@ async function createGroupModeGame(request, creatorUsername) {
     data: {
       collaborationMode: "group",
       ...((scenario === "same_user_duplicate" || flags.openExtraTabCount > 0)
-        ? { allowDuplicateUsersInGroup: true }
+        ? { allowDuplicateUsers: true }
         : {}),
       isPublic: true,
       title,
@@ -1617,6 +1654,28 @@ async function verifyDuplicateBlockedModal(page, label) {
   console.log(`duplicate-blocked-modal ${label}`);
 }
 
+async function verifyEvictionModal(page, label) {
+  const heading = page.getByRole("heading", { name: "Duplicate session detected" });
+  await heading.waitFor({ timeout: scaledTimeout(20000) });
+  await page.getByText("Session conflict").waitFor({ timeout: scaledTimeout(10000) });
+  const continueButton = page.getByRole("button", { name: "Continue in this session" });
+  const readOnlyButton = page.getByRole("button", { name: "View read-only" });
+  await expect(continueButton).toBeVisible({ timeout: scaledTimeout(5000) });
+  await expect(readOnlyButton).toBeVisible({ timeout: scaledTimeout(5000) });
+  // Verify the modal cannot be dismissed by Escape or clicking outside
+  await page.keyboard.press("Escape");
+  await expect(heading).toBeVisible();
+  await page.mouse.click(8, 8);
+  await expect(heading).toBeVisible();
+  console.log(`eviction-modal ${label}`);
+}
+
+async function dismissEvictionModalReadOnly(page, label) {
+  const readOnlyButton = page.getByRole("button", { name: "View read-only" });
+  await readOnlyButton.click();
+  console.log(`eviction-modal:read-only ${label}`);
+}
+
 async function startGroupGame(pages) {
   if (routeKind === "prototype-yjs") {
     return;
@@ -1673,7 +1732,55 @@ function isInGameFocusedScenario() {
 }
 
 async function getEditableContent(page) {
-  return (await page.locator(".cm-content[contenteditable='true']").first().textContent()) || "";
+  return await page.evaluate(() => {
+    const editableContent = document.querySelector(".cm-content[contenteditable='true']");
+    if (!editableContent) {
+      return "";
+    }
+    const cmEl = editableContent.closest(".cm-editor");
+    let view = null;
+    try { view = cmEl?.cmView?.view; } catch {}
+    if (!view) {
+      try { view = editableContent.parentNode?.cmView?.view; } catch {}
+      if (!view) try { view = editableContent.cmView?.view; } catch {}
+    }
+    if (view?.state?.doc) {
+      return view.state.doc.toString();
+    }
+    return editableContent.textContent || "";
+  });
+}
+
+async function setEditorSelection(page, placement = "end", offset = 0) {
+  const positioned = await page.evaluate(({ nextPlacement, nextOffset }) => {
+    const editableContent = document.querySelector(".cm-content[contenteditable='true']");
+    if (!editableContent) {
+      return false;
+    }
+    const cmEl = editableContent.closest(".cm-editor");
+    let view = null;
+    try { view = cmEl?.cmView?.view; } catch {}
+    if (!view) {
+      try { view = editableContent.parentNode?.cmView?.view; } catch {}
+      if (!view) try { view = editableContent.cmView?.view; } catch {}
+    }
+    if (!view?.state?.doc) {
+      return false;
+    }
+    const docLength = view.state.doc.length;
+    const basePosition = nextPlacement === "start" ? 0 : docLength;
+    const anchor = Math.max(0, Math.min(docLength, basePosition + nextOffset));
+    view.dispatch({
+      selection: { anchor, head: anchor },
+      scrollIntoView: true,
+    });
+    view.focus();
+    return true;
+  }, { nextPlacement: placement, nextOffset: offset });
+
+  if (!positioned) {
+    throw new Error(`Failed to position CodeMirror selection at ${placement}:${offset}`);
+  }
 }
 
 async function logPageEditorState(page, label) {
@@ -1754,12 +1861,13 @@ async function verifyLevelReset(group, contexts) {
   if (routeKind === "prototype-yjs") {
     return true;
   }
-  const memberPages = group.memberIndexes.map((memberIndex) => contexts[memberIndex].page);
+  const indexes = group.activeMemberIndexes ?? group.memberIndexes;
+  const memberPages = indexes.map((memberIndex) => contexts[memberIndex].page);
   const templateHtml = createStarterLevel().code.html.replace(/\n/g, "");
   const resetMarker = `pw-reset-${Date.now().toString(36)}`;
   const sourceEditor = memberPages[0].locator(".cm-content[contenteditable='true']").first();
   await sourceEditor.click();
-  await sourceEditor.press("End");
+  await setEditorSelection(memberPages[0], "end");
   await memberPages[0].keyboard.type(`\n<!-- ${resetMarker} -->`);
   await memberPages[0].waitForTimeout(Math.max(createWaitMs * 2, 2000));
   await triggerLevelReset(memberPages[0]);
@@ -1788,12 +1896,12 @@ async function trySharedEdit(pages, marker) {
   const editor = pages[0].locator(".cm-content[contenteditable='true']").first();
   await editor.waitFor({ timeout: scaledTimeout(10000) });
   await editor.click();
-  await editor.press("End");
+  await setEditorSelection(pages[0], "end");
   await pages[0].keyboard.type(`\n<!-- ${marker} -->`);
   await pages[0].waitForTimeout(createWaitMs);
   const target = pages[pages.length - 1].locator(".cm-content[contenteditable='true']").first();
   await target.waitFor({ timeout: scaledTimeout(10000) });
-  const observed = (await target.textContent()) || "";
+  const observed = await getEditableContent(pages[pages.length - 1]);
   return observed.includes(marker);
 }
 
@@ -1844,7 +1952,7 @@ async function waitForEditorsSettled(pages, label, timeoutMs = scaledTimeout(100
   while (Date.now() - startedAt < timeoutMs) {
     const states = await Promise.all(pages.map(async (page) => {
       const editable = (await page.locator(".cm-content[contenteditable='true']").count().catch(() => 0)) > 0;
-      const content = (await page.locator(".cm-content").first().textContent().catch(() => "")) || "";
+      const content = await getEditableContent(page).catch(() => "");
       return { editable, content };
     }));
     const allEditable = states.every((state) => state.editable);
@@ -1866,7 +1974,7 @@ async function waitForEditorsSettled(pages, label, timeoutMs = scaledTimeout(100
 async function typeMarkerSlowly(page, marker) {
   const editor = page.locator(".cm-content[contenteditable='true']").first();
   await editor.click();
-  await editor.press("End");
+  await setEditorSelection(page, "end");
   await page.keyboard.type(`\n<!-- ${marker} -->`, { delay: 35 });
 }
 
@@ -1884,19 +1992,14 @@ async function tryConcurrentSharedEdit(pages, groupName) {
       const editor = pages[index].locator(".cm-content[contenteditable='true']").first();
       await editor.click();
       const placement = placements[index];
-      if (placement === "start" || placement === "start-offset") {
-        await editor.press("Home");
-      } else {
-        await editor.press("End");
-      }
-      if (placement === "start-offset") {
-        await pages[index].keyboard.press("ArrowRight");
-        await pages[index].keyboard.press("ArrowRight");
-      }
-      if (placement === "end-offset") {
-        await pages[index].keyboard.press("ArrowLeft");
-        await pages[index].keyboard.press("ArrowLeft");
-      }
+      const selectionPlacement = placement.startsWith("start") ? "start" : "end";
+      const selectionOffset =
+        placement === "start-offset"
+          ? 2
+          : placement === "end-offset"
+            ? -2
+            : 0;
+      await setEditorSelection(pages[index], selectionPlacement, selectionOffset);
       await pages[index].keyboard.type(`\n<!-- ${markers[index]} -->`);
     })()),
   );
@@ -1952,7 +2055,7 @@ async function trySamePositionConcurrentEdit(pages, groupName) {
     Array.from({ length: activeEditors }, (_, index) => (async () => {
       const editor = pages[index].locator(".cm-content[contenteditable='true']").first();
       await editor.click();
-      await editor.press("End");
+      await setEditorSelection(pages[index], "end");
       await pages[index].keyboard.type(payloads[index]);
     })()),
   );
@@ -2029,7 +2132,7 @@ async function tryEditStability(targetPage, allPages, groupName, opts = {}) {
   // Type the marker on the target page
   const editor = targetPage.locator(".cm-content[contenteditable='true']").first();
   await editor.click();
-  await editor.press("End");
+  await setEditorSelection(targetPage, "end");
   await targetPage.keyboard.type(`\n<!-- ${marker} -->`, { delay: 30 });
 
   // Wait for the marker to first appear on the target page
@@ -2058,7 +2161,7 @@ async function tryEditStability(targetPage, allPages, groupName, opts = {}) {
       try {
         const otherEditor = bgPage.locator(".cm-content[contenteditable='true']").first();
         await otherEditor.click();
-        await otherEditor.press("End");
+        await setEditorSelection(bgPage, "end");
         await bgPage.keyboard.type(`\n<!-- bg-${round} -->`, { delay: 40 });
       } catch {
         // page may have navigated or closed
@@ -2124,7 +2227,7 @@ async function switchToLevel(page, levelName) {
 async function appendMarker(page, marker, commentStyle = "html") {
   const editor = page.locator(".cm-content[contenteditable='true']").first();
   await editor.click();
-  await editor.press("End");
+  await setEditorSelection(page, "end");
   const wrapped =
     commentStyle === "css"
       ? `\n/* ${marker} */`
@@ -2392,6 +2495,14 @@ async function applyChaosEvent(chaosType, typerPage, otherPages, allContexts, gr
     await gotoGamePage(extraPage, gameUrl(activeGameId, group.groupId), `chaos-extra-tab:${typerCtx.username}`);
     await typerPage.waitForTimeout(2000);
     await extraPage.close().catch(() => {});
+    // The extra tab may have evicted the typer's main page. Reclaim if needed.
+    const evictionHeading = typerPage.getByRole("heading", { name: "Duplicate session detected" });
+    const isEvicted = await evictionHeading.isVisible().catch(() => false);
+    if (isEvicted) {
+      await typerPage.keyboard.press("Enter");
+      log(`${group.groupName} reclaimed typer ${typerCtx.username} after extra tab`);
+      await typerPage.locator(".cm-content").first().waitFor({ timeout: scaledTimeout(10000) });
+    }
     return;
   }
 
@@ -3102,6 +3213,10 @@ async function runLtiAplusGroupScenario(browser) {
         `summary:${row.name} expected=${row.expectedMembers.join("|")} join=${row.observedJoinMembers.join("|")} visible=${row.observedVisibleNames.join("|")} avatars=${row.observedAvatarNames.join("|")}`,
       );
     }
+    const allPassed = summary.every((row) => row.namesPreserved);
+    printRunSummary(scenario, allPassed, Object.fromEntries(
+      summary.map((row) => [`${row.name}-names`, row.namesPreserved])
+    ));
   } finally {
     await Promise.all(contexts.map(async ({ context }) => context.close().catch(() => {})));
     await creatorContext.close().catch(() => {});
@@ -3295,6 +3410,7 @@ async function main() {
         ? group.memberIndexes.slice(-flags.lateOpenCount)
         : [];
       group.lateOpenIndexes = lateOpenIndexes;
+      group.evictedOriginalIndexes = [];
       for (const memberIndex of group.memberIndexes) {
         if (lateOpenIndexes.includes(memberIndex)) {
           continue;
@@ -3302,6 +3418,30 @@ async function main() {
         const participant = contexts[memberIndex];
         await gotoGamePage(participant.page, gameUrl(activeGameId, group.groupId), `group-open:${participant.username}`);
         console.log(`opened group route for ${participant.username} -> ${group.groupName}`);
+      }
+      // After all initial pages open, detect eviction modals caused by duplicate usernames.
+      // Due to WS connection timing, either the earlier or later duplicate might get evicted.
+      const initialNonLateIndexes = group.memberIndexes.filter((idx) => !lateOpenIndexes.includes(idx));
+      const duplicateUsernames = new Set();
+      const seenUsernames = new Set();
+      for (const idx of initialNonLateIndexes) {
+        const u = contexts[idx].username;
+        if (seenUsernames.has(u)) duplicateUsernames.add(u);
+        seenUsernames.add(u);
+      }
+      if (duplicateUsernames.size > 0) {
+        // Give WS connections time to establish and eviction to propagate
+        await contexts[initialNonLateIndexes[0]].page.waitForTimeout(2000);
+        for (const idx of initialNonLateIndexes) {
+          if (!duplicateUsernames.has(contexts[idx].username)) continue;
+          const evictionHeading = contexts[idx].page.getByRole("heading", { name: "Duplicate session detected" });
+          const isEvicted = await evictionHeading.isVisible().catch(() => false);
+          if (isEvicted) {
+            console.log(`eviction:initial-open ${group.groupName} user=${contexts[idx].username} idx=${idx}`);
+            await dismissEvictionModalReadOnly(contexts[idx].page, `${group.groupName}:${contexts[idx].username}:initial`);
+            group.evictedOriginalIndexes.push(idx);
+          }
+        }
       }
     }
 
@@ -3365,12 +3505,22 @@ async function main() {
           `summary:${row.name} expected=${row.expectedMembers.join("|")} join=${row.observedJoinMembers.join("|")} start=${row.observedStartMembers.join("|")} finish=${row.observedFinishMembers.join("|")} submit=${row.actualSubmitParticipants.join("|")}`,
         );
       }
+      const allPassed = summary.every((row) =>
+        row.singleEdit && row.concurrent && row.resetOk && (row.submitOk == null || row.submitOk)
+      );
+      printRunSummary(scenario, allPassed, Object.fromEntries(
+        summary.flatMap((row) => [
+          [`${row.name}-single`, row.singleEdit],
+          [`${row.name}-concurrent`, row.concurrent],
+          [`${row.name}-reset`, row.resetOk],
+        ])
+      ));
       return;
     }
 
     for (const group of groups) {
       const activePages = group.memberIndexes
-        .filter((memberIndex) => !group.lateOpenIndexes.includes(memberIndex))
+        .filter((memberIndex) => !group.lateOpenIndexes.includes(memberIndex) && !(group.evictedOriginalIndexes || []).includes(memberIndex))
         .map((memberIndex) => contexts[memberIndex].page);
       await startGroupGame(activePages);
       if ((scenario === "same_user_duplicate" || scenario === "same_user_blocked") && group.lateOpenIndexes.length > 0) {
@@ -3380,14 +3530,33 @@ async function main() {
       group.duplicateBlockedModalOk = true;
       for (const lateIndex of group.lateOpenIndexes) {
         const participant = contexts[lateIndex];
+        // Find the original (already-open) page with the same username
+        // that will be evicted when the late duplicate connects.
+        const originalIndex = (scenario === "same_user_blocked" || scenario === "same_user_duplicate")
+          ? group.memberIndexes.find((idx) =>
+              idx !== lateIndex &&
+              !group.lateOpenIndexes.includes(idx) &&
+              contexts[idx].username === participant.username)
+          : undefined;
         await gotoGamePage(participant.page, gameUrl(activeGameId, group.groupId), `late-open:${participant.username}`);
         console.log(`stress:late-open ${group.groupName} user=${participant.username}`);
-        if (scenario === "same_user_blocked") {
-          await verifyDuplicateBlockedModal(participant.page, `${group.groupName}:${participant.username}`);
-          group.blockedLateIndexes.push(lateIndex);
+        if (scenario === "same_user_blocked" && originalIndex !== undefined) {
+          // The server evicts the ORIGINAL socket, so check the original page for the eviction modal
+          await verifyEvictionModal(contexts[originalIndex].page, `${group.groupName}:${contexts[originalIndex].username}:evicted`);
+          await dismissEvictionModalReadOnly(contexts[originalIndex].page, `${group.groupName}:${contexts[originalIndex].username}`);
+          group.evictedOriginalIndexes.push(originalIndex);
+        } else if (scenario === "same_user_duplicate" && originalIndex !== undefined) {
+          // The server evicts the ORIGINAL socket; send it to read-only so the late opener is active
+          await verifyEvictionModal(contexts[originalIndex].page, `${group.groupName}:${contexts[originalIndex].username}:evicted`);
+          await dismissEvictionModalReadOnly(contexts[originalIndex].page, `${group.groupName}:${contexts[originalIndex].username}`);
+          group.evictedOriginalIndexes.push(originalIndex);
         }
       }
-      group.activeMemberIndexes = group.memberIndexes.filter((memberIndex) => !group.blockedLateIndexes.includes(memberIndex));
+      // For same_user_blocked: evicted originals are now read-only, late openers are active.
+      // Active members exclude the evicted originals.
+      group.activeMemberIndexes = group.memberIndexes.filter(
+        (memberIndex) => !group.blockedLateIndexes.includes(memberIndex) && !group.evictedOriginalIndexes.includes(memberIndex)
+      );
       await waitForEditorOnPages(group.activeMemberIndexes.map((memberIndex) => contexts[memberIndex].page));
       group.startSnapshot = await fetchGroupSnapshot(contexts[group.ownerIndex].context.request, group);
       console.log(`stress:start-snapshot ${group.groupName} memberCount=${group.startSnapshot.memberCount} members=${group.startSnapshot.memberNames.join("|")}`);
@@ -3414,6 +3583,17 @@ async function main() {
       }
       participant.extraPages.push(extraPage);
       console.log(`stress:extra-tab ${group.groupName} user=${participant.username}`);
+      // Opening the extra tab evicts the main page. Reclaim the main page so it stays active.
+      const mainEvictionHeading = participant.page.getByRole("heading", { name: "Duplicate session detected" });
+      try {
+        await mainEvictionHeading.waitFor({ timeout: scaledTimeout(5000) });
+        await participant.page.keyboard.press("Enter");
+        console.log(`stress:extra-tab:reclaimed-main ${group.groupName} user=${participant.username}`);
+        // Wait for the main page editor to be ready again after reclaim
+        await participant.page.locator(".cm-content").first().waitFor({ timeout: scaledTimeout(10000) });
+      } catch {
+        // No eviction on main page — might already be handled
+      }
     }
 
     for (const group of groups) {
@@ -3632,6 +3812,24 @@ async function main() {
       );
     }
 
+    if (scenario !== "classroom_text_production") {
+      const allPassed = summary.every((row) =>
+        row.singleEdit && row.concurrent &&
+        row.stressPasses === row.stressTotal &&
+        row.resetOk &&
+        (row.editStable == null || row.editStable) &&
+        (row.submitOk == null || row.submitOk)
+      );
+      printRunSummary(scenario, allPassed, Object.fromEntries(
+        summary.flatMap((row) => [
+          [`${row.name}-single`, row.singleEdit],
+          [`${row.name}-concurrent`, row.concurrent],
+          [`${row.name}-stress`, row.stressPasses === row.stressTotal],
+          [`${row.name}-reset`, row.resetOk],
+        ])
+      ));
+    }
+
     if (scenario === "classroom_text_production") {
       console.log("\n=== TEXT PRODUCTION REPORT ===");
       let totalFragments = 0;
@@ -3668,10 +3866,10 @@ async function main() {
       }
 
       const allOk = totalSurvived === totalFragments;
-      console.log(`\nOverall: ${allOk ? "PASS" : "FAIL"}`);
-      if (!allOk) {
-        process.exitCode = 1;
-      }
+      printRunSummary(scenario, allOk, {
+        "fragments-survived": totalSurvived === totalFragments,
+        "fragments-typed": totalTyped === totalFragments,
+      });
     }
 
     if (keepOpen) {
@@ -3687,5 +3885,11 @@ async function main() {
 
 main().catch((error) => {
   console.error(error);
+  console.log("");
+  console.log("=".repeat(60));
+  console.log(`Scenario: ${scenario}`);
+  console.log(`Result: FAIL (unhandled error)`);
+  console.log(`Error: ${error.message || error}`);
+  console.log("=".repeat(60));
   process.exit(1);
 });

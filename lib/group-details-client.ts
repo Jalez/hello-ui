@@ -28,12 +28,23 @@ export interface ClientActiveGroupInstance {
   updatedAt: string | null;
 }
 
+export interface ClientActiveIndividualInstance {
+  instanceId: string;
+  userId: string;
+  displayName: string | null;
+  userEmail: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
 const GROUP_DETAILS_TTL_MS = 5000;
 
 const groupDetailsCache = new Map<string, { expiresAt: number; value: ClientGroupDetails }>();
 const groupDetailsInflight = new Map<string, Promise<ClientGroupDetails>>();
 const activeGameGroupsCache = new Map<string, { expiresAt: number; value: ClientActiveGroupInstance[] }>();
 const activeGameGroupsInflight = new Map<string, Promise<ClientActiveGroupInstance[]>>();
+const activeGameIndividualsCache = new Map<string, { expiresAt: number; value: ClientActiveIndividualInstance[] }>();
+const activeGameIndividualsInflight = new Map<string, Promise<ClientActiveIndividualInstance[]>>();
 
 interface FetchGroupDetailsOptions {
   gameId?: string | null;
@@ -140,5 +151,38 @@ export async function fetchActiveGameGroupsCached(gameId: string): Promise<Clien
     });
 
   activeGameGroupsInflight.set(gameId, request);
+  return request;
+}
+
+export async function fetchActiveGameIndividualsCached(gameId: string): Promise<ClientActiveIndividualInstance[]> {
+  const now = Date.now();
+  const cached = activeGameIndividualsCache.get(gameId);
+  if (cached && cached.expiresAt > now) {
+    return cached.value;
+  }
+
+  const inflight = activeGameIndividualsInflight.get(gameId);
+  if (inflight) {
+    return inflight;
+  }
+
+  const request = fetch(apiUrl(`/api/games/${gameId}/individuals`))
+    .then(async (response) => {
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error || "Failed to load individual instances");
+      }
+      const value = Array.isArray(payload.individuals) ? (payload.individuals as ClientActiveIndividualInstance[]) : [];
+      activeGameIndividualsCache.set(gameId, {
+        expiresAt: Date.now() + GROUP_DETAILS_TTL_MS,
+        value,
+      });
+      return value;
+    })
+    .finally(() => {
+      activeGameIndividualsInflight.delete(gameId);
+    });
+
+  activeGameIndividualsInflight.set(gameId, request);
   return request;
 }

@@ -3,6 +3,7 @@
 import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
 import { useEffect, useState } from "react";
 import { changeLevelDifficulty } from "@/store/slices/levels.slice";
+import { useLevelMetaSync } from "@/lib/collaboration/hooks/useLevelMetaSync";
 import PoppingTitle from "../General/PoppingTitle";
 import { Skull } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
@@ -19,60 +20,70 @@ const difficulties: Difficulties = {
   medium: 2,
   hard: 3,
 };
-const Difficulty = () => {
-  // get difficulty from level
+
+const maxDifficultyIcons = Object.keys(difficulties).length;
+
+/**
+ * Shared skull row for level difficulty — creator can click to set; others read-only.
+ * Use in the level footer menu and anywhere else difficulty should be editable.
+ */
+export function LevelDifficultySkulls({ iconClassName = "h-5 w-5" }: { iconClassName?: string }) {
   const dispatch = useAppDispatch();
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const level = useAppSelector((state) => state.levels[currentLevel - 1]);
-  const difficulty = level.difficulty;
+  const difficulty = level?.difficulty ?? "easy";
   const options = useAppSelector((state) => state.options);
   const isCreator = options.creator;
-  const [difficultyLevel, setDifficultyLevel] = useState(difficulties[difficulty]);
+  const { syncLevelFields } = useLevelMetaSync();
+  const [difficultyLevel, setDifficultyLevel] = useState(difficulties[difficulty as keyof Difficulties]);
 
   useEffect(() => {
-    setDifficultyLevel(difficulties[difficulty]);
+    setDifficultyLevel(difficulties[difficulty as keyof Difficulties]);
   }, [difficulty]);
-  //   if difficulty is easy, value
+
   const handleChange = (value: number) => {
-    // fidn the difficulty
-    const difficulty = Object.keys(difficulties).find(
+    const nextDifficulty = Object.keys(difficulties).find(
       (key) => difficulties[key as keyof Difficulties] === value
     ) as keyof Difficulties;
-    dispatch(changeLevelDifficulty({ levelId: currentLevel, difficulty }));
+    dispatch(changeLevelDifficulty({ levelId: currentLevel, difficulty: nextDifficulty }));
+    syncLevelFields(currentLevel - 1, ["difficulty"]);
   };
 
-  const maxDifficultyIcons = Object.keys(difficulties).length;
+  return (
+    <div className="flex items-center justify-center gap-1">
+      {Array.from({ length: maxDifficultyIcons }).map((_, index) => {
+        const difficultyValue = index + 1;
+        return (
+          <Skull
+            key={index}
+            className={cn(
+              iconClassName,
+              "fill-none shrink-0 transition-colors",
+              difficultyValue <= difficultyLevel ? "text-red-500" : "text-primary/45",
+              !isCreator && "cursor-default",
+              isCreator && "cursor-pointer hover:text-red-400"
+            )}
+            onClick={() => {
+              if (isCreator) {
+                setDifficultyLevel(difficultyValue);
+                handleChange(difficultyValue);
+              }
+            }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+const Difficulty = () => {
+  const options = useAppSelector((state) => state.options);
+  const isCreator = options.creator;
 
   return (
     <div className="flex flex-col justify-center items-center m-0 p-0">
-      <PoppingTitle
-        topTitle={isCreator ? "Set Difficulty" : "Difficulty"}
-      >
-        <div className="flex gap-1">
-          {Array.from({ length: maxDifficultyIcons }).map((_, index) => {
-            const difficultyValue = index + 1;
-            return (
-              <Skull
-                key={index}
-                className={cn(
-                  "h-5 w-5 fill-none transition-colors",
-                  difficultyValue <= difficultyLevel
-                    ? "text-red-500"
-                    : "text-primary/45",
-                  !isCreator && "cursor-default",
-                  isCreator && "cursor-pointer hover:text-red-400"
-                )}
-                onClick={() => {
-                  if (isCreator) {
-                    const newValue = difficultyValue;
-                    setDifficultyLevel(newValue);
-                    handleChange(newValue);
-                  }
-                }}
-              />
-            );
-          })}
-        </div>
+      <PoppingTitle topTitle={isCreator ? "Set Difficulty" : "Difficulty"}>
+        <LevelDifficultySkulls />
       </PoppingTitle>
     </div>
   );

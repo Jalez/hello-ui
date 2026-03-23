@@ -63,6 +63,18 @@ export function GameHelpContent() {
           </AccordionContent>
         </AccordionItem>
 
+        <AccordionItem value="kbd" className="border rounded-md px-4">
+          <AccordionTrigger>What is <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">kbd</code>?</AccordionTrigger>
+          <AccordionContent className="text-sm space-y-2">
+            <p>
+              In the HTML editor you see your code wrapped with <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">&lt;div id=&quot;root&quot;&gt;&lt;kbd&gt;</code> and <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">&lt;/kbd&gt;&lt;/div&gt;</code>. These lines are fixed; you only edit the content between them.
+            </p>
+            <p>
+              <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">kbd</code> is a standard HTML element. Here it is used as the inner container for your markup in the preview (drawboard). The structure is: <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">div#root</code> → <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">kbd</code> → your content. What you see in the editor matches what is actually rendered, so you can reason about layout and styling correctly.
+            </p>
+          </AccordionContent>
+        </AccordionItem>
+
         <AccordionItem value="multiplayer" className="border rounded-md px-4">
           <AccordionTrigger>Group vs Individual Tasks</AccordionTrigger>
           <AccordionContent className="text-sm space-y-2">

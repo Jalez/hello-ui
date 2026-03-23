@@ -9,6 +9,7 @@ interface UseCodeEditorCollaborationOptions {
   setCode: Dispatch<SetStateAction<string>>;
   template: string;
   enabled?: boolean;
+  docKind?: "template" | "solution";
   locked: boolean;
   levelIdentifier: string;
   currentLevel: number;

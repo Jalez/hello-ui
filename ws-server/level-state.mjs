@@ -91,6 +91,14 @@ export function createVersionMap(source = {}) {
 
 export function createLevelState(level = {}) {
   const { name = "", code = {}, versions = {}, ...meta } = level || {};
+  // Ensure scenarios and buildingBlocks always exist so the creator UI
+  // can add/remove items without guarding against undefined.
+  if (!Array.isArray(meta.scenarios)) {
+    meta.scenarios = [];
+  }
+  if (!meta.buildingBlocks || typeof meta.buildingBlocks !== "object" || Array.isArray(meta.buildingBlocks)) {
+    meta.buildingBlocks = { pictures: [], colors: [] };
+  }
   return {
     name: typeof name === "string" ? name : "",
     code: {

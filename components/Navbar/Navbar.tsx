@@ -46,7 +46,7 @@ export const Navbar = () => {
   const dispatch = useAppDispatch();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { openOverlay, toggleCollapsed, isMobile, isOverlayOpen, isVisible, isCollapsed } = useSidebarCollapse();
+  const { openOverlay, isMobile, isOverlayOpen, isVisible } = useSidebarCollapse();
   const pathname = usePathname();
   const normalizedPathname = stripBasePath(pathname);
   const isCreatorRoute = normalizedPathname.startsWith("/creator/");
@@ -72,13 +72,9 @@ export const Navbar = () => {
     isMobile &&
     !isOverlayOpen &&
     !shouldHideSidebarForPlayers;
+  // Only when the inline sidebar is not shown (mobile drawer UX). Desktop uses the sidebar rail / expand control.
   const shouldShowCreatorSidebarToggle =
-    isCreator &&
-    isVisible &&
-    (
-      (isMobile && !isOverlayOpen) ||
-      (!isMobile && isCollapsed)
-    );
+    isCreator && isVisible && isMobile && !isOverlayOpen;
 
   const level = levels[currentLevel - 1];
   const points = useAppSelector((state) => state.points);
@@ -452,8 +448,8 @@ export const Navbar = () => {
               icon={PanelLeft}
               label="Sidebar"
               text="Sidebar"
-              onClick={isMobile ? openOverlay : toggleCollapsed}
-              title="Toggle sidebar"
+              onClick={openOverlay}
+              title="Open sidebar"
             />
           </div>
         </div>
@@ -484,8 +480,8 @@ export const Navbar = () => {
               icon={PanelLeft}
               label="Sidebar"
               text="Sidebar"
-              onClick={isMobile ? openOverlay : toggleCollapsed}
-              title="Toggle sidebar"
+              onClick={openOverlay}
+              title="Open sidebar"
             />
           </div>
         </div>

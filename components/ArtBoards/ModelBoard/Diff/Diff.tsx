@@ -35,8 +35,17 @@ export const Diff = ({ scenario }: DiffProps): React.ReactNode => {
     const ctx = canvas.getContext("2d");
     const imgData = ctx?.createImageData(width, height);
     const deserializedDiff = Buffer.from(scenarioDiffUrl, "base64");
+    const expectedLength = width * height * 4;
 
-    imgData?.data.set(deserializedDiff);
+    let normalizedDiff: ArrayLike<number> = deserializedDiff;
+    if (deserializedDiff.length !== expectedLength) {
+      // Normalize stale/mismatched buffers to the exact canvas size.
+      const resized = new Uint8ClampedArray(expectedLength);
+      resized.set(deserializedDiff.subarray(0, expectedLength));
+      normalizedDiff = resized;
+    }
+
+    imgData?.data.set(normalizedDiff);
     ctx?.putImageData(imgData!, 0, 0);
 
     canvas.toBlob((blob) => {

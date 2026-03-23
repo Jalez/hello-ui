@@ -30,6 +30,7 @@ const InfoLevelPoints = () => {
             <LevelData
               reduxState="maxPoints"
               actionToDispatch={changeMaxPoints}
+              levelMetaSyncFields={["maxPoints"]}
             />
           </InfoText>
         </InfoBox>
