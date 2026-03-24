@@ -123,7 +123,7 @@ export function FinishGameView({ gameId, gameTitle }: FinishGameViewProps) {
     }
 
     setTimeout(() => {
-      window.parent.postMessage({ type: "a-plus-refresh-stats" }, "*");
+      window.parent.postMessage({ type: "edu-game-refresh-grade" }, "*");
       if (window.top) {
         window.top.location.reload();
       }
