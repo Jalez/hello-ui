@@ -1,12 +1,12 @@
 'use client';
 
-import { use, useEffect, useRef, useState } from "react";
+import { use, useCallback, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import App from "@/components/App";
 import { useGameStore } from "@/components/default/games";
 import { CollaborationProvider, useCollaboration } from "@/lib/collaboration";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { GroupSelector, PublicGroupLobby, GroupWaitingRoom, normalizeGroupStartGate } from "@/components/groups";
+import { GroupSelector, PublicGroupLobby, GroupWaitingRoom } from "@/components/groups";
 import { useSidebarCollapse } from "@/components/default/sidebar/context/SidebarCollapseContext";
 import { GameSummaryView } from "@/components/GameSummary/GameSummaryView";
 import { FinishGameView } from "@/components/GameSummary/FinishGameView";
@@ -26,6 +26,7 @@ interface GamePageProps {
 
 interface LtiSessionInfo {
   isLtiMode: boolean;
+  isInIframe?: boolean;
   courseName: string | null;
   contextId: string | null;
   role?: "instructor" | "member";
@@ -33,8 +34,13 @@ interface LtiSessionInfo {
 
 type PersistedGroupMember = ClientGroupMember;
 
+interface LmsGroupOption {
+  id: string;
+  memberNames: string[];
+  timestamp: string | null;
+}
+
 const ACCESS_KEY_STORAGE_PREFIX = "ui-designer-game-access-key:";
-const GROUP_START_MIN_READY_COUNT = 2;
 
 function getAccessKeyStorageKey(gameId: string): string {
   return `${ACCESS_KEY_STORAGE_PREFIX}${gameId}`;
@@ -133,24 +139,6 @@ function sanitizeReplayProgressData(progressData: Record<string, unknown>, repla
   return nextProgressData;
 }
 
-// normalizeGroupStartGate moved to components/groups/GroupWaitingRoom.tsx
-
-function hasSharedStartTime(initialRoomState: { levels?: Array<Record<string, unknown>> } | null): boolean {
-  const firstLevel = initialRoomState?.levels?.[0];
-  if (!firstLevel || typeof firstLevel !== "object" || Array.isArray(firstLevel)) {
-    return false;
-  }
-  const timeData =
-    firstLevel.timeData && typeof firstLevel.timeData === "object" && !Array.isArray(firstLevel.timeData)
-      ? firstLevel.timeData as Record<string, unknown>
-      : null;
-  return Number(timeData?.startTime ?? 0) > 0;
-}
-
-// PresenceStack moved to components/groups/PresenceStack.tsx
-
-
-
 function GameInstancesResetWatcher({ gameId }: { gameId: string }) {
   const collaboration = useCollaboration();
   const dispatch = useAppDispatch();
@@ -198,20 +186,36 @@ export default function GamePage({ params }: GamePageProps) {
   const sessionUserId = session?.userId || session?.user?.email || "";
   const { setCurrentGameId, addGameToStore } = useGameStore();
   const searchParams = useSearchParams();
+  const searchParamsString = searchParams.toString();
   const selectedGroupId = searchParams.get("groupId");
   const requestedMode = searchParams.get("mode") === "lobby" ? "lobby" : "game";
   const requestedSkipWaiting = searchParams.get("skipWaiting") === "1";
+  const requestedView = searchParams.get("view");
+  const requestedUserId = searchParams.get("userId");
   const router = useRouter();
   const pathname = usePathname();
   const [isLoading, setIsLoading] = useState(true);
   const [loadingMessage, setLoadingMessage] = useState("Loading game...");
+  const [isResolvingLmsGroups, setIsResolvingLmsGroups] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const hasInitializedRef = useRef(false);
   const [requiresGroup, setRequiresGroup] = useState(false);
   const [publicLobby, setPublicLobby] = useState<{ roomId: string; courseName: string | null; contextId: string | null } | null>(null);
+  const [ltiSessionInfo, setLtiSessionInfo] = useState<LtiSessionInfo | null>(null);
   const [currentGroupName, setCurrentGroupName] = useState<string | null>(null);
   const [currentGroupJoinKey, setCurrentGroupJoinKey] = useState<string | null>(null);
   const [currentGroupMembers, setCurrentGroupMembers] = useState<PersistedGroupMember[]>([]);
+  const [lmsGroupPicker, setLmsGroupPicker] = useState<{
+    open: boolean;
+    loading: boolean;
+    groups: LmsGroupOption[];
+    error: string | null;
+  }>({
+    open: false,
+    loading: false,
+    groups: [],
+    error: null,
+  });
   const [requiresAccessKey, setRequiresAccessKey] = useState(false);
   const [accessKeyInput, setAccessKeyInput] = useState("");
   const [submittedAccessKey, setSubmittedAccessKey] = useState("");
@@ -230,9 +234,18 @@ export default function GamePage({ params }: GamePageProps) {
   }, [requiresAccessKey, hideSidebar, setSidebarVisible]);
   const [roomId, setRoomId] = useState<string | null>(null);
   const [guestId, setGuestId] = useState<string>("");
-  const isReplayView = searchParams.get("view") === "play";
+  const iframeGroupRequestAttemptedRef = useRef(false);
+  const iframeGroupRequestSettledRef = useRef(false);
+  const isReplayView = requestedView === "play";
   const currentGame = useGameStore((s) => s.getCurrentGame());
   const isCurrentGameResolved = currentGame?.id === gameId;
+  const currentProgressGroupId =
+    currentGame?.progressData &&
+    typeof currentGame.progressData === "object" &&
+    !Array.isArray(currentGame.progressData) &&
+    typeof currentGame.progressData.groupId === "string"
+      ? currentGame.progressData.groupId
+      : null;
   const isGroupWorkMode = currentGame?.collaborationMode === "group";
   const canEditCurrentGame = Boolean(currentGame?.canEdit ?? currentGame?.isOwner);
   const isFinished =
@@ -273,17 +286,18 @@ export default function GamePage({ params }: GamePageProps) {
       if (!hasUser && !guestId) return;
 
       try {
-        const isSwitchingGroup = Boolean(currentGame && searchParams.get("groupId") !== currentGame.progressData?.groupId);
+        const isSwitchingGroup = Boolean(isCurrentGameResolved && selectedGroupId !== currentProgressGroupId);
         // Only show loading spinner on first init or explicit group switch.
         // Re-runs from dep changes (session refetch, store updates) must NOT
         // set isLoading=true — that unmounts CollaborationProvider and kills
         // the WebSocket connection, creating an infinite reconnect loop.
-        if (!hasInitializedRef.current && (!isSwitchingGroup || !currentGame)) {
+        if (!hasInitializedRef.current && (!isSwitchingGroup || !isCurrentGameResolved)) {
           setIsLoading(true);
           setLoadingMessage("Loading game...");
         }
         setError(null);
         setRequiresGroup(false);
+        setLtiSessionInfo(null);
         // Do NOT reset publicLobby here — the LTI-scoped lobby room ID is stable for the
         // entire session. Resetting it on every re-run (e.g. when groupId changes) would
         // fall back to lobby:all:game:xxx, putting group-selected users in a different room
@@ -291,7 +305,7 @@ export default function GamePage({ params }: GamePageProps) {
         setRequiresAccessKey(false);
         setAccessKeyError(null);
 
-        const normalizedParams = new URLSearchParams(searchParams.toString());
+        const normalizedParams = new URLSearchParams(searchParamsString);
         if (normalizedParams.get("mode") !== requestedMode) {
           normalizedParams.set("mode", requestedMode);
           router.replace(`${pathname}?${normalizedParams.toString()}`);
@@ -353,7 +367,7 @@ export default function GamePage({ params }: GamePageProps) {
             setIsLoading(false);
             return;
           }
-          const groupId = searchParams.get("groupId");
+          const groupId = selectedGroupId;
           const canOpenCreatorPreview = Boolean(game.canEdit);
           const shouldOpenCreatorLobby = canOpenCreatorPreview && !groupId && requestedMode === "lobby";
           if ((!groupId && !canOpenCreatorPreview) || shouldOpenCreatorLobby) {
@@ -367,6 +381,7 @@ export default function GamePage({ params }: GamePageProps) {
             } catch {
               // Ignore LTI session probe failures and fall back to the normal group picker.
             }
+            setLtiSessionInfo(nextLtiInfo);
 
             if (nextLtiInfo?.isLtiMode || shouldOpenCreatorLobby) {
               setLoadingMessage("Opening group lobby...");
@@ -454,9 +469,8 @@ export default function GamePage({ params }: GamePageProps) {
             instanceParams.set("key", submittedAccessKey);
           }
           // Allow creators to view another user's individual instance
-          const viewUserId = searchParams.get("userId");
-          if (viewUserId && game.canEdit) {
-            instanceParams.set("userId", viewUserId);
+          if (requestedUserId && game.canEdit) {
+            instanceParams.set("userId", requestedUserId);
           }
           setLoadingMessage("Opening game...");
           const instanceRes = await fetch(apiUrl(`/api/games/${gameId}/instance${instanceParams.toString() ? `?${instanceParams.toString()}` : ""}`));
@@ -519,9 +533,9 @@ export default function GamePage({ params }: GamePageProps) {
     };
 
     initializeGame();
-  }, [gameId, hasUser, sessionUserId, guestId, setCurrentGameId, searchParams, requestedMode, router, pathname, addGameToStore, loadAttempt, accessKeyReady, submittedAccessKey, isReplayView]);
+  }, [addGameToStore, accessKeyReady, currentProgressGroupId, gameId, guestId, hasUser, isCurrentGameResolved, isReplayView, loadAttempt, pathname, requestedMode, requestedUserId, router, searchParamsString, selectedGroupId, sessionUserId, setCurrentGameId, submittedAccessKey]);
 
-  const handleGroupSelect = async (groupId: string | null, options?: { joinKey?: string }) => {
+  const handleGroupSelect = useCallback(async (groupId: string | null, options?: { joinKey?: string }) => {
     if (!groupId) {
       const normalizedParams = new URLSearchParams(searchParams.toString());
       normalizedParams.delete("groupId");
@@ -579,7 +593,44 @@ export default function GamePage({ params }: GamePageProps) {
     normalizedParams.delete("skipWaiting");
     router.push(`${pathname}?${normalizedParams.toString()}`);
     setRequiresGroup(false);
-  };
+  }, [canEditCurrentGame, gameId, hasUser, pathname, publicLobby?.roomId, router, searchParams, session?.user?.email]);
+
+  const resolveLmsGroupSelection = useCallback(async (lmsGroupId: string) => {
+    setIsResolvingLmsGroups(true);
+    setLoadingMessage("Opening LMS group...");
+    setLmsGroupPicker((current) => ({
+      ...current,
+      error: null,
+    }));
+
+    try {
+      const response = await fetch(apiUrl(`/api/games/${gameId}/lti-groups/resolve`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lmsGroupId }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.groupId) {
+        throw new Error(payload.error || "Failed to open LMS group");
+      }
+
+      await handleGroupSelect(payload.groupId);
+      setLmsGroupPicker({
+        open: false,
+        loading: false,
+        groups: [],
+        error: null,
+      });
+    } catch (err) {
+      setLmsGroupPicker((current) => ({
+        ...current,
+        loading: false,
+        error: err instanceof Error ? err.message : "Failed to open LMS group",
+      }));
+    } finally {
+      setIsResolvingLmsGroups(false);
+    }
+  }, [gameId, handleGroupSelect]);
 
   const handleCreatorSkipWaiting = () => {
     if (!selectedGroupId) {
@@ -591,6 +642,143 @@ export default function GamePage({ params }: GamePageProps) {
     normalizedParams.set("skipWaiting", "1");
     router.push(`${pathname}?${normalizedParams.toString()}`);
   };
+
+  useEffect(() => {
+    if (
+      iframeGroupRequestSettledRef.current ||
+      selectedGroupId ||
+      !publicLobby ||
+      !ltiSessionInfo?.isLtiMode ||
+      !ltiSessionInfo?.isInIframe ||
+      typeof window === "undefined" ||
+      window.parent === window
+    ) {
+      return;
+    }
+
+    iframeGroupRequestAttemptedRef.current = true;
+    const requestId = `edu-game-groups-${gameId}-${Date.now()}`;
+    let finished = false;
+
+    setLmsGroupPicker({
+      open: false,
+      loading: true,
+      groups: [],
+      error: null,
+    });
+    setIsResolvingLmsGroups(true);
+    setLoadingMessage("Resolving your LMS groups...");
+
+    const normalizeGroups = (payload: unknown): LmsGroupOption[] => {
+      const rawGroups =
+        payload && typeof payload === "object" && !Array.isArray(payload) && Array.isArray((payload as { groups?: unknown[] }).groups)
+          ? (payload as { groups: unknown[] }).groups
+          : [];
+
+      return rawGroups
+        .map((entry) => {
+          if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+            return null;
+          }
+          const candidate = entry as {
+            id?: string | number;
+            members?: unknown[];
+            timestamp?: unknown;
+          };
+          const id = candidate.id == null ? "" : String(candidate.id).trim();
+          if (!id) {
+            return null;
+          }
+          return {
+            id,
+            memberNames: Array.isArray(candidate.members)
+              ? candidate.members.filter((member): member is string => typeof member === "string" && member.length > 0)
+              : [],
+            timestamp: typeof candidate.timestamp === "string" ? candidate.timestamp : null,
+          };
+        })
+        .filter((entry): entry is LmsGroupOption => Boolean(entry));
+    };
+
+    const handleMessage = (event: MessageEvent) => {
+      const data = event.data;
+      if (!data || typeof data !== "object" || Array.isArray(data) || data.requestId !== requestId) {
+        return;
+      }
+
+      if (data.type === "edu-game-groups-loading") {
+        setLmsGroupPicker((current) => ({
+          ...current,
+          open: false,
+          loading: true,
+          error: null,
+        }));
+        return;
+      }
+
+      if (data.type !== "edu-game-groups-data") {
+        return;
+      }
+
+      finished = true;
+      iframeGroupRequestSettledRef.current = true;
+      window.removeEventListener("message", handleMessage);
+      const normalizedGroups = normalizeGroups(data.groups);
+
+      if (!data.success || normalizedGroups.length === 0) {
+        setIsResolvingLmsGroups(false);
+        setLmsGroupPicker({
+          open: false,
+          loading: false,
+          groups: [],
+          error: null,
+        });
+        return;
+      }
+
+      if (normalizedGroups.length === 1) {
+        void resolveLmsGroupSelection(normalizedGroups[0].id);
+        return;
+      }
+
+      setIsResolvingLmsGroups(false);
+      setLmsGroupPicker({
+        open: true,
+        loading: false,
+        groups: normalizedGroups,
+        error: null,
+      });
+    };
+
+    const timeoutId = window.setTimeout(() => {
+      if (finished) {
+        return;
+      }
+      iframeGroupRequestSettledRef.current = true;
+      setIsResolvingLmsGroups(false);
+      window.removeEventListener("message", handleMessage);
+      setLmsGroupPicker({
+        open: false,
+        loading: false,
+        groups: [],
+        error: null,
+      });
+    }, 5000);
+
+    window.addEventListener("message", handleMessage);
+    window.parent.postMessage({
+      type: "edu-game-get-groups",
+      requestId,
+    }, "*");
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      window.removeEventListener("message", handleMessage);
+      if (!finished) {
+        iframeGroupRequestAttemptedRef.current = false;
+      }
+    };
+  }, [gameId, ltiSessionInfo, publicLobby, resolveLmsGroupSelection, selectedGroupId]);
 
   useEffect(() => {
     const groupId = searchParams.get("groupId");
@@ -637,6 +825,17 @@ export default function GamePage({ params }: GamePageProps) {
     );
   }
 
+  if (isResolvingLmsGroups) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 dark:border-gray-100 mx-auto"></div>
+          <p className="mt-4 text-gray-600 dark:text-gray-400">{loadingMessage}</p>
+        </div>
+      </div>
+    );
+  }
+
   if (error) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -662,7 +861,7 @@ export default function GamePage({ params }: GamePageProps) {
             If you do not see the right group yet, create one here or return to the public lobby and coordinate with your teammates.
           </p>
           <GroupSelector
-            selectedGroupId={searchParams.get("groupId")}
+            selectedGroupId={selectedGroupId}
             onGroupSelect={handleGroupSelect}
             allowCreate
             createContext={{ resourceLinkId: gameId }}
@@ -722,8 +921,8 @@ export default function GamePage({ params }: GamePageProps) {
     );
   }
 
-  const showSummary = isFinished && currentGame?.progressData && searchParams.get("view") !== "play";
-  const showFinishView = searchParams.get("view") === "finish";
+  const showSummary = isFinished && currentGame?.progressData && requestedView !== "play";
+  const showFinishView = requestedView === "finish";
 
   if (showFinishView) {
     return (
@@ -772,6 +971,18 @@ export default function GamePage({ params }: GamePageProps) {
             onGroupSelect={handleGroupSelect}
             onSkipWaiting={handleCreatorSkipWaiting}
             canSkipWaiting={canSkipWaitingAsCreator}
+            lmsGroupPicker={{
+              ...lmsGroupPicker,
+              onOpenChange: (open) => {
+                setLmsGroupPicker((current) => ({
+                  ...current,
+                  open,
+                }));
+              },
+              onSelect: (groupId) => {
+                void resolveLmsGroupSelection(groupId);
+              },
+            }}
           />
         </CollaborationNotice>
       </CollaborationProvider>
@@ -787,7 +998,7 @@ export default function GamePage({ params }: GamePageProps) {
             This game is in Group Work Mode. Choose one of your existing groups to open the shared instance.
           </p>
           <GroupSelector
-            selectedGroupId={searchParams.get("groupId")}
+            selectedGroupId={selectedGroupId}
             onGroupSelect={handleGroupSelect}
             allowCreate
             createContext={{ resourceLinkId: gameId }}
@@ -806,7 +1017,7 @@ export default function GamePage({ params }: GamePageProps) {
         {user && currentGame?.collaborationMode === "group" && roomId?.startsWith("group:") && !shouldBypassWaitingRoom ? (
           <GroupWaitingRoom
             gameTitle={currentGame.title}
-            groupId={searchParams.get("groupId") || roomId.split(":")[1] || ""}
+            groupId={selectedGroupId || roomId.split(":")[1] || ""}
             groupName={currentGroupName}
             joinKey={currentGroupJoinKey}
             currentUser={user}

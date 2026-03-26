@@ -13,6 +13,7 @@ import { getSql } from "@/app/api/_lib/db";
 import { extractRows } from "@/app/api/_lib/db/shared";
 import { logDebug } from "@/lib/debug-logger";
 import { createOneTimeCode } from "@/lib/lti/one-time-code";
+import { resolveAplusAppGroup } from "@/app/api/_lib/services/ltiGroupResolver";
 
 function sanitizeLtiLaunchBody(body: Record<string, string>) {
   const redactedKeys = new Set([
@@ -27,65 +28,6 @@ function sanitizeLtiLaunchBody(body: Record<string, string>) {
       redactedKeys.has(key) ? "[redacted]" : value,
     ]),
   );
-}
-
-async function resolveAplusAppGroup(params: {
-  sql: Awaited<ReturnType<typeof getSql>>;
-  resourceLinkId: string;
-  contextTitle: string | null;
-  aplusGroup: string;
-  userId: string;
-  role: "instructor" | "member";
-}) {
-  const groupName = `A+ Group ${params.aplusGroup}`;
-  console.log("[LTI launch] app-group lookup start:", params.resourceLinkId, groupName);
-  const existingResult = await params.sql.query(
-    `SELECT id, name
-     FROM groups
-     WHERE resource_link_id = $1
-       AND name = $2
-       AND created_by IS NULL
-       AND COALESCE(lti_context_title, '') = COALESCE($3, '')
-     ORDER BY created_at ASC
-     LIMIT 1`,
-    [params.resourceLinkId, groupName, params.contextTitle],
-  );
-  const existingRows = extractRows(existingResult) as Array<{ id: string; name: string }>;
-  console.log("[LTI launch] app-group lookup done:", existingRows[0]?.id ?? null);
-
-  let resolvedGroup = existingRows[0] ?? null;
-  if (!resolvedGroup) {
-    console.log("[LTI launch] app-group create start:", groupName);
-    const createResult = await params.sql.query(
-      `INSERT INTO groups (name, join_key, lti_context_title, resource_link_id, created_by)
-       VALUES ($1, $2, $3, $4, NULL)
-       RETURNING id, name`,
-      [
-        groupName,
-        randomUUID().replace(/-/g, "").slice(0, 6).toUpperCase(),
-        params.contextTitle,
-        params.resourceLinkId,
-      ],
-    );
-    const createdRows = extractRows(createResult) as Array<{ id: string; name: string }>;
-    resolvedGroup = createdRows[0];
-    console.log("[LTI launch] app-group create done:", resolvedGroup?.id ?? null);
-  }
-
-  console.log("[LTI launch] app-group membership upsert start:", resolvedGroup.id, params.userId);
-  await params.sql.query(
-    `INSERT INTO group_members (group_id, user_id, role)
-     VALUES ($1, $2, $3)
-     ON CONFLICT (group_id, user_id)
-     DO UPDATE SET role = EXCLUDED.role, updated_at = NOW()`,
-    [resolvedGroup.id, params.userId, params.role],
-  );
-  console.log("[LTI launch] app-group membership upsert done:", resolvedGroup.id, params.userId);
-
-  return {
-    groupId: resolvedGroup.id,
-    groupName: resolvedGroup.name,
-  };
 }
 
 function isDuplicateUserEmailError(error: unknown): error is { code?: string } {
