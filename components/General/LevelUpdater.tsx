@@ -5,13 +5,14 @@ import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
 import { sendScoreToParentFrame } from "@/store/actions/score.actions";
 import { ScenarioUpdater } from "./ScenarioUpdater";
 import { updateDrawnState } from "@/store/slices/solutions.slice";
+import { imageDataFromRawRgba } from "@/lib/utils/drawboardSnapshot";
 
 // drawingPixels, solutionPixels should be objects, where key is the scenarioId and value is the ImageData
 type scenarioData = {
   [key: string]: ImageData;
 };
 
-export let scenarioDiffs = {};
+export const scenarioDiffs = {};
 
 export const LevelUpdater = () => {
   const [drawingPixels, setDrawingPixels] = useState<scenarioData>({});
@@ -25,21 +26,29 @@ export const LevelUpdater = () => {
 
   useEffect(() => {
     // reset the pixels when level changes
-    setDrawingPixels({});
-    setSolutionPixels({});
+    queueMicrotask(() => {
+      setDrawingPixels({});
+      setSolutionPixels({});
+    });
 
     const handlePixelsFromIframe = (event: MessageEvent) => {
       if (event.data.message !== "pixels") return;
+      if (!(event.data.dataURL instanceof ArrayBuffer)) return;
+      const imageData = imageDataFromRawRgba(
+        event.data.dataURL,
+        event.data.width,
+        event.data.height
+      );
       if (event.data.urlName === "solutionUrl") {
         setSolutionPixels((prev) => ({
           ...prev,
-          [event.data.scenarioId]: event.data.dataURL,
+          [event.data.scenarioId]: imageData,
         }));
         return;
       } else if (event.data.urlName === "drawingUrl") {
         setDrawingPixels((prev) => ({
           ...prev,
-          [event.data.scenarioId]: event.data.dataURL,
+          [event.data.scenarioId]: imageData,
         }));
       }
     };

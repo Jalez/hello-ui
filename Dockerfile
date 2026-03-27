@@ -6,6 +6,7 @@ WORKDIR /app
 
 # Force ASCII output — old docker-compose chokes on Unicode progress bars
 ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 # Install pnpm
 RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
@@ -13,6 +14,7 @@ RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
 # Install dependencies
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile --reporter=append-only
+RUN npx playwright install --with-deps chromium
 
 # Copy source and build
 COPY . .

@@ -87,6 +87,10 @@ if [ ! -d "node_modules" ]; then
   echo "Installing main app dependencies..."
   pnpm install
 fi
+if [ ! -d "${HOME}/.cache/ms-playwright" ]; then
+  echo "Installing Playwright Chromium for backend drawboard rendering..."
+  npx playwright install chromium
+fi
 npm run dev &
 APP_PID=$!
 

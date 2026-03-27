@@ -1,11 +1,15 @@
 /** @format */
 'use client';
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
 import { scenario } from "@/types";
 import { addSolutionUrl } from "@/store/slices/solutionUrls.slice";
+import { addDrawingUrl } from "@/store/slices/drawingUrls.slice";
 import { cn } from "@/lib/utils/cn";
+import { apiUrl } from "@/lib/apiUrl";
+import { LOCAL_REDUX_UPDATE_DEBOUNCE_MS } from "@/components/Editors/CodeEditor/constants";
+import { dataUrlFromRawRgba } from "@/lib/utils/drawboardSnapshot";
 
 interface FrameProps {
   newHtml: string;
@@ -16,6 +20,7 @@ interface FrameProps {
   name: string;
   frameUrl?: string;
   scenario: scenario;
+  hiddenFromView?: boolean;
 }
 
 export const Frame = ({
@@ -27,14 +32,106 @@ export const Frame = ({
   events,
   scenario,
   frameUrl = process.env.NEXT_PUBLIC_DRAWBOARD_URL || "http://localhost:3500",
+  hiddenFromView = false,
 }: FrameProps) => {
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const renderReadyCaptureTimeoutRef = useRef<number | null>(null);
   const dispatch = useAppDispatch();
-  const { currentLevel } = useAppSelector((state: any) => state.currentLevel);
+  const { currentLevel } = useAppSelector((state: { currentLevel: { currentLevel: number } }) => state.currentLevel);
+  const isCreator = useAppSelector((state) => state.options.creator);
   const counterRef = useRef({ reloads: 0, mounts: 0, data: 0, lastLog: Date.now() });
 
-  const level = useAppSelector((state: any) => state.levels[currentLevel - 1]);
+  const level = useAppSelector((state: { levels: Array<{ interactive: boolean }> }) => state.levels[currentLevel - 1]);
   const interactive = level.interactive;
+
+  const captureFrame = useCallback(
+    async (
+      snapshot: { css: string; snapshotHtml: string },
+      includeDataUrl = name === "solutionUrl" || (name === "drawingUrl" && isCreator),
+    ) => {
+      try {
+        const response = await fetch(apiUrl("/api/drawboard/render"), {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            css: snapshot.css,
+            snapshotHtml: snapshot.snapshotHtml,
+            width: scenario.dimensions.width,
+            height: scenario.dimensions.height,
+            scenarioId: scenario.scenarioId,
+            urlName: name,
+            includeDataUrl,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Drawboard render failed with status ${response.status}`);
+        }
+
+        const payload = await response.json() as {
+          scenarioId: string;
+          urlName: string;
+          width: number;
+          height: number;
+          pixelBufferBase64: string;
+          dataUrl?: string;
+        };
+
+        const binary = atob(payload.pixelBufferBase64);
+        const pixelBuffer = new Uint8Array(binary.length);
+        for (let index = 0; index < binary.length; index += 1) {
+          pixelBuffer[index] = binary.charCodeAt(index);
+        }
+
+        const displayDataUrl =
+          payload.dataUrl || dataUrlFromRawRgba(pixelBuffer, payload.width, payload.height);
+
+        window.postMessage(
+          {
+            message: "pixels",
+            dataURL: pixelBuffer.buffer,
+            urlName: payload.urlName,
+            scenarioId: payload.scenarioId,
+            width: payload.width,
+            height: payload.height,
+          },
+          "*",
+          [pixelBuffer.buffer],
+        );
+
+        if (payload.urlName === "solutionUrl") {
+          dispatch(
+            addSolutionUrl({
+              solutionUrl: displayDataUrl,
+              scenarioId: payload.scenarioId,
+            }),
+          );
+        }
+
+        if (payload.urlName === "drawingUrl") {
+          dispatch(
+            addDrawingUrl({
+              drawingUrl: displayDataUrl,
+              scenarioId: payload.scenarioId,
+            }),
+          );
+        }
+      } catch (error) {
+        console.error(`[Frame:${name}] Failed to capture frame`, error);
+      }
+    },
+    [dispatch, isCreator, name, scenario.dimensions.height, scenario.dimensions.width, scenario.scenarioId],
+  );
+
+  const clearPendingRenderReadyCapture = useCallback(() => {
+    if (renderReadyCaptureTimeoutRef.current) {
+      window.clearTimeout(renderReadyCaptureTimeoutRef.current);
+      renderReadyCaptureTimeoutRef.current = null;
+    }
+  }, []);
+
   useEffect(() => {
     const resendDataAfterMount = (event: MessageEvent) => {
       if (event.data === "mounted") {
@@ -56,38 +153,47 @@ export const Frame = ({
           },
           "*"
         );
+        return;
+      }
+
+      if (
+        event.data?.name === name
+        && event.data?.scenarioId === scenario.scenarioId
+        && (event.data?.message === "render-ready" || event.data?.message === "capture-request")
+        && typeof event.data?.css === "string"
+        && typeof event.data?.snapshotHtml === "string"
+      ) {
+        const snapshot = {
+          css: event.data.css,
+          snapshotHtml: event.data.snapshotHtml,
+        };
+
+        if (event.data.message === "capture-request") {
+          clearPendingRenderReadyCapture();
+          void captureFrame(snapshot);
+          return;
+        }
+
+        clearPendingRenderReadyCapture();
+        renderReadyCaptureTimeoutRef.current = window.setTimeout(() => {
+          renderReadyCaptureTimeoutRef.current = null;
+          void captureFrame(snapshot);
+        }, LOCAL_REDUX_UPDATE_DEBOUNCE_MS);
       }
     };
 
     window.addEventListener("message", resendDataAfterMount);
 
     return () => {
+      clearPendingRenderReadyCapture();
       window.removeEventListener("message", resendDataAfterMount);
     };
-  }, [newHtml, newCss, name, newJs, scenario, interactive, events]);
-
-  useEffect(() => {
-    const handleDataFromIframe = async (event: MessageEvent) => {
-      if (!event.data.dataURL) return;
-      if (event.data.message !== "data") return;
-      dispatch(
-        addSolutionUrl({
-          solutionUrl: event.data.dataURL,
-          scenarioId: event.data.scenarioId,
-        })
-      );
-    };
-
-    window.addEventListener("message", handleDataFromIframe);
-
-    return () => {
-      window.removeEventListener("message", handleDataFromIframe);
-    };
-  }, [currentLevel, dispatch]);
+  }, [captureFrame, clearPendingRenderReadyCapture, dispatch, events, interactive, name, newCss, newHtml, newJs, scenario]);
 
   useEffect(() => {
     const iframe = iframeRef.current;
     counterRef.current.reloads++;
+    clearPendingRenderReadyCapture();
     if (iframe) {
       iframeRef.current?.contentWindow?.postMessage(
         {
@@ -97,7 +203,7 @@ export const Frame = ({
         "*"
       );
     }
-  }, [newHtml, newCss, iframeRef, newJs, name, interactive]);
+  }, [clearPendingRenderReadyCapture, newHtml, newCss, iframeRef, newJs, name, interactive]);
   if (!scenario) {
     return <div>Scenario not found</div>;
   }
@@ -109,11 +215,14 @@ export const Frame = ({
       width={scenario.dimensions.width}
       height={scenario.dimensions.height}
       className={cn(
-        "overflow-hidden m-0 p-0 border-none bg-secondary absolute top-0 left-0 z-0 transition-[z-index] duration-300 ease-in-out"
+        "overflow-hidden m-0 p-0 border-none bg-secondary absolute top-0 left-0 z-0 transition-[z-index] duration-300 ease-in-out",
+        hiddenFromView && "pointer-events-none opacity-0"
       )}
+      aria-hidden={hiddenFromView}
       style={{
         width: `${scenario.dimensions.width}px`,
         height: `${scenario.dimensions.height}px`,
+        visibility: hiddenFromView ? "hidden" : "visible",
       }}
     />
   );

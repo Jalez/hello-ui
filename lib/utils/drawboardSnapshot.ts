@@ -1,45 +1,9 @@
-export const getPixelData = (
-  img = new Image(),
-  targetWidth?: number,
-  targetHeight?: number
-) => {
-  const canvas = document.createElement("canvas");
-  const width = targetWidth || img.width;
-  const height = targetHeight || img.height;
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext("2d");
-  if (ctx) {
-    // Keep comparisons stable when capture is downsampled to scenario size.
-    ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(img, 0, 0, width, height);
-  }
-  const imgData = ctx?.getImageData(0, 0, width, height);
-  // Release GPU surface immediately (critical for Firefox)
-  canvas.width = 0;
-  canvas.height = 0;
-  return imgData;
-};
-
-export function loadImage(base64Url: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = reject;
-    img.src = base64Url;
-  });
+export interface DrawboardSnapshot {
+  css: string;
+  snapshotHtml: string;
 }
 
-export const sendToParent = (
-  dataURL: string,
-  urlName: string,
-  scenarioId: string,
-  message?: string | "data"
-) => {
-  window.parent.postMessage({ dataURL, urlName, scenarioId, message }, "*");
-};
-
-const syncFormControlState = (sourceRoot: HTMLElement, snapshotRoot: HTMLElement) => {
+function syncFormControlState(sourceRoot: HTMLElement, snapshotRoot: HTMLElement) {
   const sourceInputs = sourceRoot.querySelectorAll("input");
   const snapshotInputs = snapshotRoot.querySelectorAll("input");
   sourceInputs.forEach((sourceInput, index) => {
@@ -109,9 +73,9 @@ const syncFormControlState = (sourceRoot: HTMLElement, snapshotRoot: HTMLElement
       snapshotDetailsElement.removeAttribute("open");
     }
   });
-};
+}
 
-const replaceCanvasWithImages = (sourceRoot: HTMLElement, snapshotRoot: HTMLElement) => {
+function replaceCanvasWithImages(sourceRoot: HTMLElement, snapshotRoot: HTMLElement) {
   const sourceCanvases = sourceRoot.querySelectorAll("canvas");
   const snapshotCanvases = snapshotRoot.querySelectorAll("canvas");
   sourceCanvases.forEach((sourceCanvas, index) => {
@@ -131,34 +95,68 @@ const replaceCanvasWithImages = (sourceRoot: HTMLElement, snapshotRoot: HTMLElem
       image.style.display = "block";
       snapshotCanvas.replaceWith(image);
     } catch {
-      // Ignore unreadable canvases and keep them as-is.
+      // Ignore tainted or otherwise unreadable canvases and keep the canvas node as-is.
     }
   });
-};
+}
 
-export const createDrawboardSnapshot = () => {
-  const style = document.getElementById("user-styles") as HTMLStyleElement | null;
-  const snapshotBody = document.body.cloneNode(true);
-  if (!(snapshotBody instanceof HTMLBodyElement)) {
-    throw new Error("Drawboard body snapshot could not be created");
+export function snapshotDrawboardIframe(iframe: HTMLIFrameElement): DrawboardSnapshot {
+  const doc = iframe.contentDocument;
+  if (!doc) {
+    throw new Error("Drawboard iframe document is unavailable");
   }
 
-  snapshotBody.querySelectorAll("script, [data-drawboard-ui]").forEach((element) => {
-    element.remove();
-  });
+  const root = doc.getElementById("root");
+  if (!(root instanceof HTMLElement)) {
+    throw new Error("Drawboard iframe root element is unavailable");
+  }
 
-  syncFormControlState(document.body, snapshotBody);
-  replaceCanvasWithImages(document.body, snapshotBody);
+  const style = doc.getElementById("user-styles");
+  const css =
+    style instanceof HTMLStyleElement
+      ? style.textContent || ""
+      : Array.from(doc.querySelectorAll("style"))
+          .map((styleTag) => styleTag.textContent || "")
+          .join("\n");
+
+  const snapshotRoot = root.cloneNode(true);
+  if (!(snapshotRoot instanceof HTMLElement)) {
+    throw new Error("Drawboard iframe root snapshot could not be created");
+  }
+
+  syncFormControlState(root, snapshotRoot);
+  replaceCanvasWithImages(root, snapshotRoot);
 
   return {
-    css: style?.textContent || "",
-    snapshotHtml: snapshotBody.innerHTML,
+    css,
+    snapshotHtml: snapshotRoot.outerHTML,
   };
-};
+}
 
-export const setStyles = (css: string) => {
-  const style = document.getElementById("user-styles") as HTMLStyleElement;
-  if (style) {
-    style.innerHTML = css || "";
+export function imageDataFromRawRgba(
+  buffer: ArrayBuffer,
+  width: number,
+  height: number,
+): ImageData {
+  return new ImageData(new Uint8ClampedArray(buffer), width, height);
+}
+
+export function dataUrlFromRawRgba(
+  buffer: ArrayBuffer | Uint8Array,
+  width: number,
+  height: number,
+): string {
+  const rgbaBuffer = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+
+  if (!context) {
+    throw new Error("Canvas 2D context is unavailable");
   }
-};
+
+  const imageData = new ImageData(new Uint8ClampedArray(rgbaBuffer), width, height);
+  context.putImageData(imageData, 0, 0);
+  return canvas.toDataURL("image/png");
+}
