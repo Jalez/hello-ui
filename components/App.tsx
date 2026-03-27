@@ -5,7 +5,7 @@ import { ArtBoards } from "./ArtBoards/ArtBoards";
 import { LevelUpdater } from "./General/LevelUpdater";
 import { GameContainer } from "./General/GameContainer";
 import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { updateWeek, setAllLevels } from "@/store/slices/levels.slice";
 import { Footer } from "./Footer/Footer";
@@ -15,6 +15,7 @@ import { setCurrentLevel } from "@/store/slices/currentLevel.slice";
 import { Level } from "@/types";
 import { setSolutions } from "@/store/slices/solutions.slice";
 import { resetSolutionUrls } from "@/store/slices/solutionUrls.slice";
+import { resetDrawingUrls } from "@/store/slices/drawingUrls.slice";
 import { getAllLevels } from "@/lib/utils/network/levels";
 import { getMapLevels } from "@/lib/utils/network/maps";
 import { initializePointsFromLevelsStateThunk } from "@/store/actions/score.actions";
@@ -31,6 +32,10 @@ import { apiUrl, stripBasePath } from "@/lib/apiUrl";
 
 export const allLevels: Level[] = [];
 type SolutionsByLevelName = Record<string, { html: string; css: string; js: string }>;
+const MIN_EDITOR_PANE_WIDTH = 420;
+const ARTBOARD_PANE_CHROME_WIDTH = 56;
+const MIN_STACKED_ARTBOARDS_HEIGHT = 220;
+const MIN_STACKED_EDITOR_HEIGHT = 260;
 
 function normalizeRoomStateLevels(
   levels: Array<Record<string, unknown>>,
@@ -58,6 +63,7 @@ function normalizeRoomStateLevels(
 
 function App() {
   const levels = useAppSelector((state) => state.levels);
+  const currentLevel = useAppSelector((state) => state.currentLevel.currentLevel);
   const dispatch = useAppDispatch();
   const options = useAppSelector((state) => state.options);
   const [isLoading, setIsLoading] = useState(true);
@@ -81,9 +87,97 @@ function App() {
   const lastModeRef = useRef<string | null>(null);
   const lastRoomIdRef = useRef<string | null>(null);
   const lastRoomStateSignatureRef = useRef<string | null>(null);
+  const contentRowRef = useRef<HTMLDivElement | null>(null);
+  const [contentRowWidth, setContentRowWidth] = useState(0);
+  const [stackedArtboardsHeight, setStackedArtboardsHeight] = useState<number | null>(null);
   const setIsLoadingAsync = (value: boolean) => {
     queueMicrotask(() => setIsLoading(value));
   };
+  const maxScenarioWidth = useMemo(() => {
+    const activeLevel = levels[currentLevel - 1];
+    const scenarios = activeLevel?.scenarios ?? [];
+
+    if (scenarios.length === 0) {
+      return 0;
+    }
+
+    return scenarios.reduce(
+      (maxWidth, scenario) => Math.max(maxWidth, scenario.dimensions.width),
+      0
+    );
+  }, [currentLevel, levels]);
+  const shouldStackGameLayout =
+    contentRowWidth > 0
+      ? contentRowWidth < maxScenarioWidth + ARTBOARD_PANE_CHROME_WIDTH + MIN_EDITOR_PANE_WIDTH
+      : false;
+
+  useEffect(() => {
+    const target = contentRowRef.current;
+    if (!target || typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    const updateWidth = () => {
+      setContentRowWidth(target.clientWidth);
+    };
+
+    updateWidth();
+
+    const observer = new ResizeObserver(() => {
+      updateWidth();
+    });
+
+    observer.observe(target);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [
+    isLoading,
+    levels.length,
+    collaboration?.roomId,
+    collaboration?.codeSyncReady,
+    collaboration?.initialRoomState,
+  ]);
+
+  useEffect(() => {
+    if (!shouldStackGameLayout) {
+      return;
+    }
+
+    const container = contentRowRef.current;
+    if (!container) {
+      return;
+    }
+
+    const availableHeight = container.clientHeight;
+    if (availableHeight <= 0) {
+      return;
+    }
+
+    const maxAllowedArtboardsHeight = Math.max(
+      MIN_STACKED_ARTBOARDS_HEIGHT,
+      availableHeight - MIN_STACKED_EDITOR_HEIGHT,
+    );
+    const preferredHeight = Math.round(availableHeight * 0.48);
+    const nextHeight = Math.min(
+      maxAllowedArtboardsHeight,
+      Math.max(MIN_STACKED_ARTBOARDS_HEIGHT, preferredHeight),
+    );
+
+    setStackedArtboardsHeight((currentValue) => {
+      if (currentValue === null) {
+        return nextHeight;
+      }
+
+      const clampedCurrentValue = Math.min(
+        maxAllowedArtboardsHeight,
+        Math.max(MIN_STACKED_ARTBOARDS_HEIGHT, currentValue),
+      );
+
+      return clampedCurrentValue === currentValue ? currentValue : clampedCurrentValue;
+    });
+  }, [shouldStackGameLayout, contentRowWidth]);
 
   useEffect(() => {
     hasFetchedRef.current = false;
@@ -190,7 +284,7 @@ function App() {
       let solutions: SolutionsByLevelName = {};
       try {
         let fetchedLevels: Level[] = levelsSnapshot;
-        let nextLevels: Level[] = levelsSnapshot;
+        let nextLevels: Level[] = fetchedLevels;
 
         solutions = nextLevels.reduce((acc, level) => {
           acc[level.name] = {
@@ -254,6 +348,7 @@ function App() {
         dispatch(updateWeek({ levels: nextLevels, mapName, gameId: currentGame?.id, mode: currentMode, forceFresh: modeChanged }));
         dispatch(setSolutions(solutions));
         dispatch(resetSolutionUrls());
+        dispatch(resetDrawingUrls());
         setAllLevels(fetchedLevels);
         await dispatch(initializePointsFromLevelsStateThunk());
 
@@ -356,9 +451,9 @@ function App() {
       <ProgressPersistence />
       <LevelMetaSync />
       <GameplayTelemetryTracker />
-      <article id="App" className="h-full flex flex-col justify-between">
+      <article id="App" className="flex h-full min-h-0 flex-col justify-start">
         <LevelUpdater />
-        <div className="flex-1">
+        <div className="flex-1 min-h-0">
           <GameContainer>
             {isLoading || isWaitingForSharedCode ? (
               <div className="flex items-center justify-center h-full">
@@ -373,12 +468,37 @@ function App() {
               <>
                 <Navbar />
                 <div
-                  className="flex flex-row flex-wrap justify-center items-stretch w-full flex-1 overflow-hidden"
+                  ref={contentRowRef}
+                  className={`flex w-full min-h-0 flex-1 items-stretch ${
+                    shouldStackGameLayout
+                      ? "flex-col justify-start gap-4 overflow-visible"
+                      : "flex-row overflow-hidden"
+                  }`}
                 >
-                  <div className="flex-1 flex items-center justify-center">
+                  <div className={`flex w-full min-h-0 items-center justify-center ${
+                    shouldStackGameLayout
+                      ? "flex-none overflow-visible"
+                      : "min-w-0 flex-1 overflow-hidden"
+                  }`}
+                  style={
+                    shouldStackGameLayout && stackedArtboardsHeight
+                      ? { height: `${stackedArtboardsHeight}px` }
+                      : undefined
+                  }>
                     <ArtBoards />
                   </div>
-                  <Editors />
+                  <div className={`flex w-full ${
+                    shouldStackGameLayout
+                      ? "min-h-0 flex-1 overflow-hidden"
+                      : "min-h-0 min-w-0 flex-1 overflow-hidden"
+                  }`}
+                  style={
+                    shouldStackGameLayout
+                      ? { minHeight: `${MIN_STACKED_EDITOR_HEIGHT}px` }
+                      : undefined
+                  }>
+                    <Editors />
+                  </div>
                 </div>
                 <Footer />
               </>

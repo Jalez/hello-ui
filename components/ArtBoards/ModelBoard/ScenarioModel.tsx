@@ -12,21 +12,32 @@ import { FloatingActionButton } from "@/components/General/FloatingActionButton"
 import { useCallback, useState } from "react";
 import { toggleShowModelSolution } from "@/store/slices/levels.slice";
 import { useLevelMetaSync } from "@/lib/collaboration/hooks/useLevelMetaSync";
+import { Button } from "@/components/ui/button";
+import PoppingTitle from "@/components/General/PoppingTitle";
+import { ImageIcon, MousePointer } from "lucide-react";
 
 type ScenarioModelProps = {
   scenario: scenario;
+  allowScaling?: boolean;
 };
 
 export const ScenarioModel = ({
   scenario,
+  allowScaling = false,
 }: ScenarioModelProps): React.ReactNode => {
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const level = useAppSelector((state) => state.levels[currentLevel - 1]);
   const showModel = level.showModelPicture;
   const dispatch = useAppDispatch();
   const { syncLevelFields } = useLevelMetaSync();
-  const solutionUrls = useAppSelector((state: any) => state.solutionUrls);
+  const solutionUrls = useAppSelector((state) => state.solutionUrls as Record<string, string>);
   const solutionUrl = solutionUrls[scenario.scenarioId];
+  const options = useAppSelector((state) => state.options);
+  const isCreator = options.creator;
+  const [showInteractivePreview, setShowInteractivePreview] = useState(false);
+  const [hasExplicitPreviewChoice, setHasExplicitPreviewChoice] = useState(false);
+  const shouldShowInteractivePreview =
+    isCreator && (showInteractivePreview || (!hasExplicitPreviewChoice && !solutionUrl));
 
   const handleSwitchModel = useCallback(() => {
     dispatch(toggleShowModelSolution(currentLevel));
@@ -34,40 +45,58 @@ export const ScenarioModel = ({
   }, [currentLevel, dispatch, syncLevelFields]);
 
   return (
-    <div className="relative flex justify-center">
-      <BoardContainer width={scenario.dimensions.width}>
+    <div className="relative flex h-full min-h-0 w-full justify-center">
+      <BoardContainer
+        width={scenario.dimensions.width}
+        height={scenario.dimensions.height}
+        allowScaling={allowScaling}
+      >
         <Board>
-          <ModelArtContainer scenario={scenario}>
+          <ModelArtContainer
+            scenario={scenario}
+            showInteractivePreview={shouldShowInteractivePreview}
+          >
             <div className="relative">
-              {/* {!scenario.solutionUrl ? (
-                <Frame
-                  id="DrawBoard"
-                  newCss={level.solution.css}
-                  newHtml={level.solution.html}
-                  newJs={level.solution.js}
-                  scenario={scenario}
-                  name="solutionUrl"
-                />
-              ) : */}
-              {showModel && solutionUrl ? (
-                <Image
-                  name="solution"
-                  imageUrl={solutionUrl}
-                  height={scenario.dimensions.height}
-                  width={scenario.dimensions.width}
-                />
-              ) : (
-                <Diff scenario={scenario} />
+              {isCreator && (
+                <div className="absolute top-2 right-2 z-20">
+                  <PoppingTitle topTitle={showInteractivePreview ? "Switch to Static" : "Switch to Interactive"}>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7 bg-background/80 hover:bg-background"
+                      onClick={() => {
+                        setHasExplicitPreviewChoice(true);
+                        setShowInteractivePreview((currentValue) => !currentValue);
+                      }}
+                    >
+                      {showInteractivePreview ? <ImageIcon className="h-4 w-4" /> : <MousePointer className="h-4 w-4" />}
+                    </Button>
+                  </PoppingTitle>
+                </div>
               )}
-              <FloatingActionButton
-                leftLabel="diff"
-                rightLabel="model"
-                checked={showModel}
-                onCheckedChange={handleSwitchModel}
-                tooltip="Toggle between difference view and model image"
-                showOnHover={true}
-                storageKey={`floating-button-model-${scenario.scenarioId}`}
-              />
+              {!shouldShowInteractivePreview && (
+                <>
+                  {showModel && solutionUrl ? (
+                    <Image
+                      name="solution"
+                      imageUrl={solutionUrl}
+                      height={scenario.dimensions.height}
+                      width={scenario.dimensions.width}
+                    />
+                  ) : (
+                    <Diff scenario={scenario} />
+                  )}
+                  <FloatingActionButton
+                    leftLabel="diff"
+                    rightLabel="model"
+                    checked={showModel}
+                    onCheckedChange={handleSwitchModel}
+                    tooltip="Toggle between difference view and model image"
+                    showOnHover={true}
+                    storageKey={`floating-button-model-${scenario.scenarioId}`}
+                  />
+                </>
+              )}
             </div>
           </ModelArtContainer>
         </Board>
@@ -76,5 +105,3 @@ export const ScenarioModel = ({
     </div>
   );
 };
-
-

@@ -16,7 +16,7 @@ const ModelBoard = () => {
     return <div>Scenarios not found</div>;
   }
   return (
-    <div>
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <BoardsContainer>
         {scenarios.map((scenario) => (
           <ScenarioModel key={scenario.scenarioId} scenario={scenario} />

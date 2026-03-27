@@ -10,13 +10,12 @@ import { BoardContainer } from "../BoardContainer";
 import { Board } from "../Board";
 import { Button } from "@/components/ui/button";
 import { scenario } from "@/types";
-import { FloatingActionButton } from "@/components/General/FloatingActionButton";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import {
   removeScenario,
   toggleImageInteractivity,
 } from "@/store/slices/levels.slice";
-import { Trash2, MousePointer, ImageIcon } from "lucide-react";
+import { MousePointer, ImageIcon } from "lucide-react";
 import PoppingTitle from "@/components/General/PoppingTitle";
 import { ScenarioDimensionsWrapper } from "./ScenarioDimensionsWrapper";
 import { ScenarioHoverContainer } from "./ScenarioHoverContainer";
@@ -24,48 +23,43 @@ import { useLevelMetaSync } from "@/lib/collaboration/hooks/useLevelMetaSync";
 
 type ScenarioDrawingProps = {
   scenario: scenario;
+  allowScaling?: boolean;
 };
 
 export const ScenarioDrawing = ({
   scenario,
+  allowScaling = false,
 }: ScenarioDrawingProps): React.ReactNode => {
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const level = useAppSelector((state) => state.levels[currentLevel - 1]);
-  const solutionUrls = useAppSelector((state: any) => state.solutionUrls);
+  const solutionUrls = useAppSelector((state) => state.solutionUrls as Record<string, string>);
+  const drawingUrls = useAppSelector((state) => state.drawingUrls as Record<string, string>);
   const solutionUrl = solutionUrls[scenario.scenarioId];
+  const drawingUrl = drawingUrls[scenario.scenarioId];
   const dispatch = useAppDispatch();
   const { syncLevelFields } = useLevelMetaSync();
   const options = useAppSelector((state) => state.options);
   const isCreator = options.creator;
-  const [drawWithSolution, setDrawWithSolution] = useState(false);
-  const [css, setCss] = useState<string>(
-    drawWithSolution ? level.solution.css : level.code.css
-  );
-  const [html, setHtml] = useState<string>(
-    drawWithSolution ? level.solution.html : level.code.html
-  );
-  const [js, setJs] = useState<string>(
-    drawWithSolution ? level.solution.js : level.code.js
-  );
-
-  if (!level) return null;
-
-  useEffect(() => {
-    setCss(drawWithSolution ? level.solution.css : level.code.css);
-    setHtml(drawWithSolution ? level.solution.html : level.code.html);
-    setJs(drawWithSolution ? level.solution.js : level.code.js);
-  }, [drawWithSolution, level.code, level.solution]);
-
+  const [showInteractivePreview, setShowInteractivePreview] = useState(false);
+  const [hasExplicitPreviewChoice, setHasExplicitPreviewChoice] = useState(false);
+  const css = level?.code.css ?? "";
+  const html = level?.code.html ?? "";
+  const js = level?.code.js ?? "";
+  const shouldShowInteractivePreview =
+    isCreator && (showInteractivePreview || (!hasExplicitPreviewChoice && !drawingUrl));
 
   const handleSwitchDrawing = useCallback(() => {
     if (isCreator) {
-      setDrawWithSolution(!drawWithSolution);
+      setHasExplicitPreviewChoice(true);
+      setShowInteractivePreview((currentValue) => !currentValue);
     } else {
       dispatch(toggleImageInteractivity(currentLevel));
       syncLevelFields(currentLevel - 1, ["interactive"]);
     }
-  }, [currentLevel, dispatch, drawWithSolution, isCreator, syncLevelFields]);
-  const interactive = level.interactive;
+  }, [currentLevel, dispatch, isCreator, syncLevelFields]);
+  const interactive = level?.interactive ?? false;
+
+  if (!level) return null;
 
   const handleRemoveScenario = () => {
     dispatch(
@@ -74,8 +68,12 @@ export const ScenarioDrawing = ({
     syncLevelFields(currentLevel - 1, ["scenarios"]);
   };
   return (
-    <div className="relative flex justify-center">
-      <BoardContainer width={scenario.dimensions.width}>
+    <div className="relative flex h-full min-h-0 w-full justify-center">
+      <BoardContainer
+        width={scenario.dimensions.width}
+        height={scenario.dimensions.height}
+        allowScaling={allowScaling}
+      >
         {/* <BoardTitle>Your version</BoardTitle> */}
         <Board>
           {" "}
@@ -83,7 +81,17 @@ export const ScenarioDrawing = ({
             <div className="relative">
               {isCreator && (
                 <ScenarioHoverContainer>
-                  <div className="absolute top-2 right-2">
+                  <div className="absolute top-2 right-2 flex items-center gap-2 z-10">
+                    <PoppingTitle topTitle={showInteractivePreview ? "Switch to Static" : "Switch to Interactive"}>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7 bg-background/80 hover:bg-background"
+                        onClick={handleSwitchDrawing}
+                      >
+                        {showInteractivePreview ? <ImageIcon className="h-4 w-4" /> : <MousePointer className="h-4 w-4" />}
+                      </Button>
+                    </PoppingTitle>
                     <ScenarioDimensionsWrapper 
                       scenario={scenario} 
                       levelId={currentLevel}
@@ -126,15 +134,38 @@ export const ScenarioDrawing = ({
                       width: `${scenario.dimensions.width}px`,
                     }}
                   >
-                    <Frame
-                       id="DrawBoard"
-                       events={level.events || []}
-                       newCss={css}
-                       newHtml={html}
-                       newJs={js + "\n" + scenario.js}
-                       scenario={scenario}
-                       name="drawingUrl"
-                     />
+                    {isCreator ? (
+                      <>
+                        <Frame
+                          id="DrawBoard"
+                          events={level.events || []}
+                          newCss={css}
+                          newHtml={html}
+                          newJs={js + "\n" + scenario.js}
+                          scenario={scenario}
+                          name="drawingUrl"
+                          hiddenFromView={!shouldShowInteractivePreview}
+                        />
+                        {!shouldShowInteractivePreview && (
+                          <Image
+                            name="drawing"
+                            imageUrl={drawingUrl}
+                            height={scenario.dimensions.height}
+                            width={scenario.dimensions.width}
+                          />
+                        )}
+                      </>
+                    ) : (
+                      <Frame
+                        id="DrawBoard"
+                        events={level.events || []}
+                        newCss={css}
+                        newHtml={html}
+                        newJs={js + "\n" + scenario.js}
+                        scenario={scenario}
+                        name="drawingUrl"
+                      />
+                    )}
                   </div>
                 }
               />
