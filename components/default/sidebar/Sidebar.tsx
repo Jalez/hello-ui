@@ -44,8 +44,13 @@ export const Sidebar: React.FC<LeftSidebarProps> = ({ isUserAdmin, sidebarHeader
   } = useSidebarCollapse();
   const pathname = usePathname();
   const normalizedPathname = stripBasePath(pathname);
-  const getCurrentGame = useGameStore((state) => state.getCurrentGame);
-  const game = getCurrentGame();
+  const game = useGameStore((state) => {
+    if (!state.currentGameId) {
+      return null;
+    }
+
+    return state.games.find((candidate) => candidate.id === state.currentGameId) ?? null;
+  });
 
   const isCreatorRoute = normalizedPathname.startsWith("/creator/");
   const isGameRoute = normalizedPathname.startsWith("/game/");
@@ -53,6 +58,8 @@ export const Sidebar: React.FC<LeftSidebarProps> = ({ isUserAdmin, sidebarHeader
   const isHomeRoute = normalizedPathname === "/";
   const isPlayerRoute = isGameRoute;
   const showInlineSidebarOnMobile = false;
+  const shouldShowDesktopSidebar = showInlineSidebarOnMobile || !isMobile;
+  const desktopSidebarWidthClass = isCollapsed ? "w-16" : "w-64";
   const isResolvingGameOnGameRoute = isGameRoute && !game;
   const shouldHideForPlayerContext = isPlayerRoute && Boolean(game?.hideSidebar);
   const shouldHideSidebar =
@@ -153,11 +160,16 @@ export const Sidebar: React.FC<LeftSidebarProps> = ({ isUserAdmin, sidebarHeader
     <>
       {/* Desktop Sidebar */}
       <div
-        className={`${showInlineSidebarOnMobile ? "flex" : "hidden md:flex"} relative z-20 h-full overflow-visible`}
+        aria-hidden={!shouldShowDesktopSidebar}
+        className={`absolute inset-y-0 left-0 z-20 h-full overflow-visible transition-[width,opacity,transform] duration-300 ease-in-out ${
+          shouldShowDesktopSidebar
+            ? `${desktopSidebarWidthClass} translate-x-0 opacity-100`
+            : "pointer-events-none w-0 -translate-x-6 opacity-0"
+        }`}
       >
         <div
-          className={`flex min-w-0 overflow-hidden flex-col items-start justify-start gap-2 group h-full bg-background border-r border-border/70 shadow-sm transition-[width] duration-300 ease-in-out ${
-            isCollapsed ? "w-16 cursor-expand-sidebar" : "w-64"
+          className={`group flex h-full w-full min-w-0 overflow-hidden flex-col items-start justify-start gap-2 bg-background border-r border-border/70 shadow-sm transition-[width] duration-300 ease-in-out ${
+            isCollapsed ? "cursor-expand-sidebar" : ""
           }`}
           data-sidebar
           onClick={handleDesktopRailClick}
@@ -176,7 +188,7 @@ export const Sidebar: React.FC<LeftSidebarProps> = ({ isUserAdmin, sidebarHeader
 
       {/* Mobile Sidebar Drawer */}
       <Drawer open={isOverlayOpen} onOpenChange={setIsOverlayOpen}>
-        <DrawerContentLeft className="md:hidden h-full">
+        <DrawerContentLeft className="h-full">
           <MobileSidebarContext.Provider value={true}>
             <div
               id="mobile-sidebar"

@@ -27,6 +27,9 @@ import { TabPresence } from "@/components/collaboration/TabPresence";
 import { ActiveUser, EditorType } from "@/lib/collaboration/types";
 import { logDebugClient } from "@/lib/debug-logger";
 
+const EDITOR_COMPACT_BREAKPOINT = 768;
+const EDITOR_DESKTOP_REENTRY_BREAKPOINT = 920;
+
 interface LanguageData {
   code: string;
   solution: string;
@@ -61,6 +64,24 @@ function EditorTabs({
 
   const [activeLanguage, setActiveLanguage] = React.useState<'html' | 'css' | 'js'>('html');
   const [isTemplateMode, setIsTemplateMode] = React.useState<boolean>(true);
+  const getIsCompactForWidth = React.useCallback((width: number, previousIsCompact?: boolean) => {
+    if (typeof previousIsCompact === "boolean") {
+      if (previousIsCompact) {
+        return width < EDITOR_DESKTOP_REENTRY_BREAKPOINT;
+      }
+
+      return width < EDITOR_COMPACT_BREAKPOINT;
+    }
+
+    return width < EDITOR_DESKTOP_REENTRY_BREAKPOINT;
+  }, []);
+  const [isCompactHeader, setIsCompactHeader] = React.useState(() => {
+    if (typeof window === "undefined") {
+      return false;
+    }
+
+    return getIsCompactForWidth(window.innerWidth);
+  });
 
   const collaboration = useOptionalCollaboration();
   const isConnected = collaboration?.isConnected ?? false;
@@ -91,6 +112,18 @@ function EditorTabs({
     lastSentTabRef.current = nextPresenceKey;
     setActiveTab(activeLanguage, currentLevel - 1);
   }, [currentLevel, isConnected, setActiveTab, activeLanguage]);
+
+  React.useEffect(() => {
+    const handleResize = () => {
+      setIsCompactHeader((previousIsCompact) => {
+        const nextIsCompact = getIsCompactForWidth(window.innerWidth, previousIsCompact);
+        return previousIsCompact === nextIsCompact ? previousIsCompact : nextIsCompact;
+      });
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [getIsCompactForWidth]);
 
   const handleLanguageChange = (newLanguage: string) => {
     const editorType = newLanguage as EditorType;
@@ -198,7 +231,7 @@ function EditorTabs({
         <Tabs value={activeLanguage} onValueChange={handleLanguageChange} className="w-full h-full flex flex-col">
           <div className="flex items-center gap-0 bg-border/20 dark:bg-muted/60">
             {/* Mobile Menu Button - Only visible on small screens */}
-            <div className="md:hidden">
+            <div className={isCompactHeader ? "block" : "hidden"}>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -257,7 +290,7 @@ function EditorTabs({
             </div>
 
             {/* Desktop Tabs - Hidden on mobile */}
-            <TabsList className="hidden md:flex flex-1 gap-0">
+            <TabsList className={cn("flex-1 gap-0", isCompactHeader ? "hidden" : "flex")}>
               {languageTabs.map((tab) => {
                 const tabLanguage = tab.value as 'html' | 'css' | 'js';
                 const tabLocked = languages[tabLanguage].locked;
@@ -305,7 +338,7 @@ function EditorTabs({
             </TabsList>
 
             {/* Active Tab Display on Mobile - Shows current tab with user avatars */}
-            <div className="md:hidden flex-1 flex items-center justify-between gap-2 px-2 min-w-0">
+            <div className={cn("flex-1 items-center justify-between gap-2 px-2 min-w-0", isCompactHeader ? "flex" : "hidden")}>
               <div className="flex items-center gap-2 min-w-0">
                 <span className="text-sm font-medium text-primary truncate">
                   {languageTabs.find(tab => tab.value === activeLanguage)?.label}
@@ -329,7 +362,7 @@ function EditorTabs({
 
             {/* Template/Solution Toggle - Hidden on mobile (shown in menu) */}
             {isCreator && (
-              <div className="hidden md:flex items-center gap-2 px-2">
+              <div className={cn("items-center gap-2 px-2", isCompactHeader ? "hidden" : "flex")}>
                 <span className="text-sm text-muted-foreground">Template</span>
                 <Switch
                   checked={!isTemplateMode}

@@ -6,16 +6,19 @@ import { stripBasePath } from "@/lib/apiUrl";
 import { Flag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import PoppingTitle from "@/components/General/PoppingTitle";
+import { cn } from "@/lib/utils/cn";
 
 type NavbarActionDisplayMode = "icon-label" | "icon";
 
 interface AplusSubmitButtonProps {
   displayMode?: NavbarActionDisplayMode;
+  shouldShake?: boolean;
   renderTrigger?: (options: { openDialog: () => void }) => ReactNode;
 }
 
 export const AplusSubmitButton = ({
   displayMode = "icon",
+  shouldShake = false,
   renderTrigger,
 }: AplusSubmitButtonProps) => {
   const params = useParams();
@@ -66,5 +69,14 @@ export const AplusSubmitButton = ({
     )
   );
 
-  return <>{trigger}</>;
+  return (
+    <span
+      className={cn(
+        renderTrigger || displayMode === "icon-label" ? "block w-full" : "inline-flex",
+        shouldShake && "animate-shake-burst",
+      )}
+    >
+      {trigger}
+    </span>
+  );
 };

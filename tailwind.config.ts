@@ -67,6 +67,19 @@ const config: Config = {
           "80%": { transform: "rotate(-5deg)" },
           "100%": { top: "5px" },
         },
+        "shake-burst": {
+          "0%, 55%, 100%": { transform: "translate3d(0, 0, 0) rotate(0deg)" },
+          "6%": { transform: "translate3d(-1px, 0, 0) rotate(-4deg)" },
+          "12%": { transform: "translate3d(1px, 0, 0) rotate(4deg)" },
+          "18%": { transform: "translate3d(-1px, 0, 0) rotate(-3deg)" },
+          "24%": { transform: "translate3d(1px, 0, 0) rotate(3deg)" },
+          "30%": { transform: "translate3d(0, 0, 0) rotate(0deg)" },
+          "66%": { transform: "translate3d(-1px, 0, 0) rotate(-4deg)" },
+          "72%": { transform: "translate3d(1px, 0, 0) rotate(4deg)" },
+          "78%": { transform: "translate3d(-1px, 0, 0) rotate(-3deg)" },
+          "84%": { transform: "translate3d(1px, 0, 0) rotate(3deg)" },
+          "90%": { transform: "translate3d(0, 0, 0) rotate(0deg)" },
+        },
         "slide-in-from-left": {
           "0%": { transform: "translateX(-100%)" },
           "100%": { transform: "translateX(0)" },
@@ -102,6 +115,7 @@ const config: Config = {
       },
       animation: {
         shake: "shake 250ms alternate infinite",
+        "shake-burst": "shake-burst 2.8s ease-in-out infinite",
         "slide-in-from-left": "slide-in-from-left 0.3s ease-out",
         "slide-out-to-left": "slide-out-to-left 0.3s ease-in",
         "slide-in-from-right": "slide-in-from-right 0.3s ease-out",
@@ -117,4 +131,3 @@ const config: Config = {
 };
 
 export default config;
-

@@ -4,18 +4,16 @@ import type React from "react";
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import useSidebarPersistence from "../hooks/useSidebarPersistence";
 
-interface SidebarCollapseState {
-  isCollapsed: boolean;
-  isMobile: boolean;
-  isOverlayOpen: boolean;
-  isVisible: boolean;
-}
+const MOBILE_BREAKPOINT = 768;
+const COLLAPSED_SIDEBAR_WIDTH = 64;
+const DESKTOP_REENTRY_BREAKPOINT = MOBILE_BREAKPOINT + COLLAPSED_SIDEBAR_WIDTH;
 
 interface SidebarCollapseContextType {
   isCollapsed: boolean;
   isMobile: boolean;
   isOverlayOpen: boolean;
   isVisible: boolean;
+  hasResolvedResponsiveState: boolean;
   setIsCollapsed: (collapsed: boolean) => void;
   setIsOverlayOpen: (open: boolean) => void;
   setIsVisible: (visible: boolean) => void;
@@ -43,48 +41,63 @@ export const SidebarCollapseProvider: React.FC<SidebarCollapseProviderProps> = (
   children,
   initialCollapsed = true
 }) => {
+  const getIsMobileForWidth = useCallback((width: number, previousIsMobile?: boolean) => {
+    if (typeof previousIsMobile === "boolean") {
+      if (previousIsMobile) {
+        return width < DESKTOP_REENTRY_BREAKPOINT;
+      }
+
+      return width < MOBILE_BREAKPOINT;
+    }
+
+    return width < DESKTOP_REENTRY_BREAKPOINT;
+  }, []);
+
   const [isCollapsed, setIsCollapsedState] = useSidebarPersistence("sidebar-collapsed", initialCollapsed);
-  const [isMobile, setIsMobile] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === "undefined") {
+      return false;
+    }
+
+    return getIsMobileForWidth(window.innerWidth);
+  });
   const [isOverlayOpen, setIsOverlayOpen] = useState(false);
   const [isVisible, setIsVisible] = useState(true);
+  const [hasResolvedResponsiveState, setHasResolvedResponsiveState] = useState(false);
 
-  // Set initial responsive state immediately on client-side
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const width = window.innerWidth;
-      const isMobileScreen = width < 768; // md breakpoint
-      setIsMobile(isMobileScreen);
+  const syncResponsiveState = useCallback(() => {
+    const width = window.innerWidth;
+    const nextIsMobile = getIsMobileForWidth(width, isMobile);
+    const isSmallScreen = width < 1024; // lg breakpoint
 
-      if (isMobileScreen) {
-        setIsCollapsedState(true);
-      }
+    setIsMobile((previousIsMobile) => {
+      const resolvedIsMobile = getIsMobileForWidth(width, previousIsMobile);
+      return previousIsMobile === resolvedIsMobile ? previousIsMobile : resolvedIsMobile;
+    });
+    setHasResolvedResponsiveState(true);
+
+    if (!isSmallScreen && isOverlayOpen) {
+      setIsOverlayOpen(false);
     }
-  }, [setIsCollapsedState]);
+
+    if (nextIsMobile && !isCollapsed) {
+      setIsCollapsedState(true);
+    }
+  }, [getIsMobileForWidth, isCollapsed, isMobile, isOverlayOpen, setIsCollapsedState]);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      syncResponsiveState();
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [syncResponsiveState]);
 
   // Handle responsive behavior and resize events
   useEffect(() => {
-    const handleResize = () => {
-      const width = window.innerWidth;
-      const isMobileScreen = width < 768; // md breakpoint
-      const isSmallScreen = width < 1024; // lg breakpoint
-
-      setIsMobile(isMobileScreen);
-
-      // Close overlay on larger screens
-      if (!isSmallScreen && isOverlayOpen) {
-        setIsOverlayOpen(false);
-      }
-
-      // Auto-collapse on mobile
-      if (isMobileScreen && !isCollapsed) {
-        setIsCollapsedState(true);
-      }
-    };
-
-    // Listen for resize events (initial state already set)
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, [isOverlayOpen, isCollapsed, setIsCollapsedState]);
+    window.addEventListener("resize", syncResponsiveState);
+    return () => window.removeEventListener("resize", syncResponsiveState);
+  }, [syncResponsiveState]);
 
   const setIsCollapsed = useCallback((collapsed: boolean) => {
     setIsCollapsedState(collapsed);
@@ -109,6 +122,7 @@ export const SidebarCollapseProvider: React.FC<SidebarCollapseProviderProps> = (
         isMobile,
         isOverlayOpen,
         isVisible,
+        hasResolvedResponsiveState,
         setIsCollapsed,
         setIsOverlayOpen,
         setIsVisible,

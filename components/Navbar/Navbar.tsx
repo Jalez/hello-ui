@@ -3,7 +3,7 @@
 import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
 import { Button } from "@/components/ui/button";
 import { RotateCcw, PanelLeft, Map, Flag, Settings, Trash2, Loader2, Gamepad2, BarChart3, Users } from "lucide-react";
-import LevelControls, { LevelSelect } from "@/components/General/LevelControls/LevelControls";
+import { LevelSelect } from "@/components/General/LevelControls/LevelControls";
 import { setCurrentLevel } from "@/store/slices/currentLevel.slice";
 import { resetLevel } from "@/store/slices/levels.slice";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -41,6 +41,7 @@ import { logDebugClient } from "@/lib/debug-logger";
 import Shaker from "@/components/General/Shaker/Shaker";
 import { CompactMenuButton, compactMenuButtonClass, compactMenuLabelClass } from "@/components/General/CompactMenuButton";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils/cn";
 
 export const Navbar = () => {
   const dispatch = useAppDispatch();
@@ -54,8 +55,13 @@ export const Navbar = () => {
   const currentLevel = useAppSelector(
     (state) => state.currentLevel.currentLevel
   );
-  const isCreator = useAppSelector((state) => state.options.creator);
-  const currentGame = useGameStore((state) => state.getCurrentGame());
+  const currentGame = useGameStore((state) => {
+    if (!state.currentGameId) {
+      return null;
+    }
+
+    return state.games.find((candidate) => candidate.id === state.currentGameId) ?? null;
+  });
   const collaboration = useOptionalCollaboration();
   const { recordReset } = useGameplayTelemetry();
   const canEditCurrentGame = Boolean(currentGame?.canEdit ?? currentGame?.isOwner);
@@ -74,14 +80,25 @@ export const Navbar = () => {
     !shouldHideSidebarForPlayers;
   // Only when the inline sidebar is not shown (mobile drawer UX). Desktop uses the sidebar rail / expand control.
   const shouldShowCreatorSidebarToggle =
-    isCreator && isVisible && isMobile && !isOverlayOpen;
+    (showCreatorGameMenus || isCreatorWorkbenchContext) &&
+    isVisible &&
+    isMobile &&
+    !isOverlayOpen;
 
   const level = levels[currentLevel - 1];
   const points = useAppSelector((state) => state.points);
+  const shouldEmphasizeFinishGame = points.allMaxPoints > 0 && points.allPoints >= points.allMaxPoints;
   const mapEditorRef = useRef<MapEditorRef>(null);
   const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
   const [resetScope, setResetScope] = useState<"level" | "game">("level");
   const [isResettingInstances, setIsResettingInstances] = useState(false);
+  const [hasDismissedCompactGameShake, setHasDismissedCompactGameShake] = useState(false);
+
+  useEffect(() => {
+    if (!shouldEmphasizeFinishGame) {
+      setHasDismissedCompactGameShake(false);
+    }
+  }, [shouldEmphasizeFinishGame]);
 
   const levelChanger = useCallback((pickedLevel: number) => {
     dispatch(setCurrentLevel(pickedLevel));
@@ -270,6 +287,7 @@ export const Navbar = () => {
             </DropdownMenuItem>
             <AplusSubmitButton
               displayMode="icon-label"
+              shouldShake={shouldEmphasizeFinishGame}
               renderTrigger={({ openDialog }) => (
                 <DropdownMenuItem onSelect={openDialog}>
                   <Flag className="h-4 w-4 mr-2" />
@@ -327,10 +345,19 @@ export const Navbar = () => {
         <div className="rounded-md px-2 py-1.5">
             <Popover>
               <PopoverTrigger asChild>
-                  <Button type="button" variant="ghost" size="sm" className={compactMenuButtonClass}>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className={compactMenuButtonClass}
+                    onClick={() => setHasDismissedCompactGameShake(true)}
+                  >
                     <Shaker
                       value={points.allPoints >= points.allMaxPoints && points.allMaxPoints > 0 ? 1 : 0}
-                      className="inline-flex items-center justify-center gap-1 max-[519px]:flex-col"
+                      className={cn(
+                        "inline-flex items-center justify-center gap-1 max-[519px]:flex-col",
+                        shouldEmphasizeFinishGame && !hasDismissedCompactGameShake && "animate-shake-burst",
+                      )}
                     >
                     <span className={`${compactMenuLabelClass} min-[520px]:hidden`}>
                       Game
@@ -369,6 +396,7 @@ export const Navbar = () => {
                   <div className="mt-3 rounded-md bg-background/80 px-3 py-2">
                     <AplusSubmitButton
                       displayMode="icon-label"
+                      shouldShake={shouldEmphasizeFinishGame}
                       renderTrigger={({ openDialog }) => (
                         <Button
                           type="button"
@@ -417,7 +445,7 @@ export const Navbar = () => {
         </Button>
       </div>
       <div className="flex flex-none">
-        <AplusSubmitButton displayMode="icon-label" />
+        <AplusSubmitButton displayMode="icon-label" shouldShake={shouldEmphasizeFinishGame} />
       </div>
       <div className="flex flex-1 min-w-0">
         <div className="w-full rounded-md px-2 py-1.5">
@@ -511,7 +539,7 @@ export const Navbar = () => {
       className="flex w-full flex-wrap items-center justify-around gap-2 border-b bg-background/80 px-3 py-2 2xl:flex-nowrap 2xl:justify-between"
     >
       {(isGameRoute || isCreatorWorkbenchContext) && (
-        <div className="flex w-full min-w-0 items-center gap-1 sm:hidden">
+        <div className={`${isMobile ? "flex" : "hidden"} w-full min-w-0 items-center gap-1`}>
           {!showCreatorGameMenus && shouldShowMobileSidebarToggle && (
             <div className="flex-none rounded-md px-2 py-1.5">
                 <CompactMenuButton
@@ -534,7 +562,7 @@ export const Navbar = () => {
       )}
 
       {/* Compact nav: text-first menus (no icon-only mode). Hide Game and Level menus on game route. */}
-      <div className="hidden sm:flex flex-1 min-w-0 items-center gap-1">
+      <div className={`${isMobile ? "hidden" : "flex"} flex-1 min-w-0 items-center gap-1`}>
         {showCreatorGameMenus && currentGame?.id ? (
           renderCompactCreatorMenus()
         ) : isCreatorWorkbenchContext ? (
@@ -545,10 +573,10 @@ export const Navbar = () => {
 
         {isGameRoute && !showCreatorGameMenus ? (
           <>
-            <div className="hidden md:flex flex-1 min-w-0 items-center gap-2">
+            <div className={`${isMobile ? "hidden" : "flex"} flex-1 min-w-0 items-center gap-2`}>
               {renderInlinePlayerMenus()}
             </div>
-            <div className="flex md:hidden flex-1 min-w-0 items-center gap-1">
+            <div className={`${isMobile ? "flex" : "hidden"} flex-1 min-w-0 items-center gap-1`}>
               {renderCompactPlayerMenus()}
             </div>
           </>

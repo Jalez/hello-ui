@@ -202,7 +202,13 @@ export const Footer = () => {
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const normalizedPathname = stripBasePath(pathname);
-  const currentGame = useGameStore((state) => state.getCurrentGame());
+  const currentGame = useGameStore((state) => {
+    if (!state.currentGameId) {
+      return null;
+    }
+
+    return state.games.find((candidate) => candidate.id === state.currentGameId) ?? null;
+  });
   const isCurrentGameResolved = currentGame?.id != null;
   const groupId = searchParams.get("groupId");
 
