@@ -994,7 +994,7 @@ async function runWsRecoveryScenario(browser) {
       try {
         const stabilityResult = await tryEditStability(pages[0], pages, "ws-recovery-post");
         console.log(
-          `ws-recovery stability stable=${stabilityResult.stable} appearedAt=${stabilityResult.appearedAt} disappearedAt=${stabilityResult.disappearedAt}`
+          `ws-recovery stability stable=${stabilityResult.stable} convergedToPeers=${stabilityResult.convergedToPeers} appearedAt=${stabilityResult.appearedAt} disappearedAt=${stabilityResult.disappearedAt}`
         );
         expect(stabilityResult.stable).toBe(true);
       } finally {
@@ -1783,6 +1783,38 @@ async function setEditorSelection(page, placement = "end", offset = 0) {
   }
 }
 
+async function insertEditorText(page, text) {
+  const inserted = await page.evaluate((nextText) => {
+    const editableContent = document.querySelector(".cm-content[contenteditable='true']");
+    if (!editableContent) {
+      return false;
+    }
+    const cmEl = editableContent.closest(".cm-editor");
+    let view = null;
+    try { view = cmEl?.cmView?.view; } catch {}
+    if (!view) {
+      try { view = editableContent.parentNode?.cmView?.view; } catch {}
+      if (!view) try { view = editableContent.cmView?.view; } catch {}
+    }
+    if (!view?.state) {
+      return false;
+    }
+    const range = view.state.selection.main;
+    const insertAt = range.from + nextText.length;
+    view.dispatch({
+      changes: { from: range.from, to: range.to, insert: nextText },
+      selection: { anchor: insertAt, head: insertAt },
+      scrollIntoView: true,
+    });
+    view.focus();
+    return true;
+  }, text);
+
+  if (!inserted) {
+    throw new Error("Failed to insert text into CodeMirror.");
+  }
+}
+
 async function logPageEditorState(page, label) {
   const url = page.url();
   const editableCount = await page.locator(".cm-content[contenteditable='true']").count().catch(() => 0);
@@ -1922,6 +1954,7 @@ async function waitForMarkerOnPage(page, marker, label, timeoutMs = scaledTimeou
 async function waitForPagesConverged(pages, requiredMarkers, label, timeoutMs = scaledTimeout(15000)) {
   const startedAt = Date.now();
   let lastContents = [];
+  let stablePasses = 0;
   while (Date.now() - startedAt < timeoutMs) {
     lastContents = await Promise.all(pages.map((page) => getEditableContent(page)));
     const converged = lastContents.length > 0 && lastContents.every((content) => content === lastContents[0]);
@@ -1930,10 +1963,15 @@ async function waitForPagesConverged(pages, requiredMarkers, label, timeoutMs = 
         ? true
         : lastContents.every((content) => requiredMarkers.every((marker) => content.includes(marker)));
     if (converged && containsMarkers) {
-      return {
-        ok: true,
-        contents: lastContents,
-      };
+      stablePasses += 1;
+      if (stablePasses >= 2) {
+        return {
+          ok: true,
+          contents: lastContents,
+        };
+      }
+    } else {
+      stablePasses = 0;
     }
     await pages[0].waitForTimeout(750);
   }
@@ -1959,7 +1997,7 @@ async function waitForEditorsSettled(pages, label, timeoutMs = scaledTimeout(100
     const converged = states.length > 0 && states.every((state) => state.content === states[0].content);
     if (allEditable && converged) {
       stablePasses += 1;
-      if (stablePasses >= 2) {
+      if (stablePasses >= 3) {
         return true;
       }
     } else {
@@ -2120,7 +2158,7 @@ async function trySamePositionConcurrentEdit(pages, groupName) {
  * @param {object} [opts]
  * @param {number} [opts.stabilityWindowMs]  How long the marker must persist (default 10s)
  * @param {number} [opts.pollIntervalMs]     Check interval (default 400ms)
- * @returns {Promise<{stable: boolean, appearedAt: number|null, disappearedAt: number|null}>}
+ * @returns {Promise<{stable: boolean, appearedAt: number|null, disappearedAt: number|null, convergedToPeers: boolean}>}
  */
 async function tryEditStability(targetPage, allPages, groupName, opts = {}) {
   const stabilityWindowMs = opts.stabilityWindowMs ?? 10000;
@@ -2133,7 +2171,7 @@ async function tryEditStability(targetPage, allPages, groupName, opts = {}) {
   const editor = targetPage.locator(".cm-content[contenteditable='true']").first();
   await editor.click();
   await setEditorSelection(targetPage, "end");
-  await targetPage.keyboard.type(`\n<!-- ${marker} -->`, { delay: 30 });
+  await insertEditorText(targetPage, `\n<!-- ${marker} -->`);
 
   // Wait for the marker to first appear on the target page
   let appearedAt = null;
@@ -2148,7 +2186,7 @@ async function tryEditStability(targetPage, allPages, groupName, opts = {}) {
 
   if (!appearedAt) {
     console.warn(`[stability:never-appeared] ${groupName} marker=${marker}`);
-    return { stable: false, appearedAt: null, disappearedAt: null };
+    return { stable: false, appearedAt: null, disappearedAt: null, convergedToPeers: false };
   }
 
   // Have ONE other page type a few edits to create divergence conditions.
@@ -2190,23 +2228,32 @@ async function tryEditStability(targetPage, allPages, groupName, opts = {}) {
   // Wait for background typing to finish
   await bgTypingPromise;
 
-  const stable = disappearedAt === null;
-  if (stable) {
-    // Verify the marker eventually reaches other pages (convergence still works)
+  let convergedToPeers = true;
+  if (disappearedAt === null) {
+    // End the synthetic partition before checking convergence. The usability goal
+    // is "recover once the bad network condition clears", not "magically converge
+    // while inbound collaboration traffic is still being dropped on this page".
+    stopDroppingYjsUpdates(targetPage);
+    await targetPage.waitForTimeout(600);
+
+    // Verify the marker eventually reaches other pages once traffic resumes.
     for (const page of otherPages) {
       try {
         const hasMarker = await waitForMarkerOnPage(page, marker, `${groupName}:stability-converge`, scaledTimeout(10000));
         if (!hasMarker) {
           console.warn(`[stability:no-converge] ${groupName} marker=${marker} did not reach all pages`);
+          convergedToPeers = false;
         }
       } catch (err) {
         console.warn(`[stability:converge-error] ${groupName} marker=${marker} ${err.message?.slice(0, 100)}`);
+        convergedToPeers = false;
       }
     }
   }
 
+  const stable = disappearedAt === null && convergedToPeers;
   console.log(`stability:check ${groupName} stable=${stable} checks=${checks} marker=${marker}`);
-  return { stable, appearedAt, disappearedAt };
+  return { stable, appearedAt, disappearedAt, convergedToPeers };
 }
 
 async function switchToEditorTab(page, label) {
@@ -3854,6 +3901,8 @@ async function main() {
       }
 
       console.log(`\nFragments: ${totalSurvived}/${totalFragments} survived on all pages (${totalTyped}/${totalFragments} typed successfully)`);
+      const allGroupsConverged = summary.every((row) => row.textProduction?.converged);
+      console.log(`Groups converged: ${summary.filter((row) => row.textProduction?.converged).length}/${summary.length}`);
       console.log("\nChaos event breakdown:");
       console.log("event | attempts | failures | failure_rate");
       for (const event of CHAOS_EVENTS) {
@@ -3865,10 +3914,14 @@ async function main() {
         }
       }
 
-      const allOk = totalSurvived === totalFragments;
+      const allOk =
+        totalSurvived === totalFragments &&
+        totalTyped === totalFragments &&
+        allGroupsConverged;
       printRunSummary(scenario, allOk, {
         "fragments-survived": totalSurvived === totalFragments,
         "fragments-typed": totalTyped === totalFragments,
+        "groups-converged": allGroupsConverged,
       });
     }
 

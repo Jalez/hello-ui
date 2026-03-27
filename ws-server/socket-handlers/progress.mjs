@@ -1,5 +1,7 @@
 import { logCollaborationStep } from "../log-collaboration-step.mjs";
 import { extractGroupIdFromRoomId, parseRoomContext } from "../room-context.mjs";
+import * as encoding from "lib0/encoding";
+import * as syncProtocol from "y-protocols/sync";
 
 /**
  * @typedef {import("../ws-runtime-context.mjs").WsRuntimeContext} WsRuntimeContext
@@ -32,6 +34,18 @@ async function handleRequestRoomStateSync({ socket, data, socketId, resolveRoomI
   const groupStartSync = ctx.serializeGroupStartSync(roomId, state);
   if (groupStartSync) {
     ctx.sendMessage(socket, "group-start-sync", groupStartSync);
+  }
+  if (ctx.isYjsEnabled()) {
+    const doc = ctx.getOrCreateYDoc(roomId, state);
+    const snapshotEncoder = encoding.createEncoder();
+    syncProtocol.writeSyncStep2(snapshotEncoder, doc);
+    ctx.sendYjsProtocol(socket, roomId, "sync", snapshotEncoder);
+
+    const handshakeEncoder = encoding.createEncoder();
+    syncProtocol.writeSyncStep1(handshakeEncoder, doc);
+    ctx.sendYjsProtocol(socket, roomId, "sync", handshakeEncoder);
+
+    ctx.sendFullAwarenessState(socket, roomId, state);
   }
   ctx.clearHandshakeGrace(socket);
   console.log(
