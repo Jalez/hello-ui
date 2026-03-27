@@ -225,6 +225,9 @@ export default function GamePage({ params }: GamePageProps) {
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [accessKeyReady, setAccessKeyReady] = useState(false);
   const { setIsVisible: setSidebarVisible } = useSidebarCollapse();
+  const initializedGroupIdRef = useRef<string | null>(null);
+  const initializedModeRef = useRef<"game" | "lobby" | null>(null);
+  const initializedViewRef = useRef<string | null>(null);
 
   // Hide sidebar on the access key prompt screen when the game requires it.
   // The Sidebar's own effect reclaims control once requiresAccessKey is cleared.
@@ -238,15 +241,14 @@ export default function GamePage({ params }: GamePageProps) {
   const iframeGroupRequestAttemptedRef = useRef(false);
   const iframeGroupRequestSettledRef = useRef(false);
   const isReplayView = requestedView === "play";
-  const currentGame = useGameStore((s) => s.getCurrentGame());
+  const currentGame = useGameStore((state) => {
+    if (!state.currentGameId) {
+      return null;
+    }
+
+    return state.games.find((candidate) => candidate.id === state.currentGameId) ?? null;
+  });
   const isCurrentGameResolved = currentGame?.id === gameId;
-  const currentProgressGroupId =
-    currentGame?.progressData &&
-    typeof currentGame.progressData === "object" &&
-    !Array.isArray(currentGame.progressData) &&
-    typeof currentGame.progressData.groupId === "string"
-      ? currentGame.progressData.groupId
-      : null;
   const isGroupWorkMode = currentGame?.collaborationMode === "group";
   const canEditCurrentGame = Boolean(currentGame?.canEdit ?? currentGame?.isOwner);
 
@@ -283,12 +285,20 @@ export default function GamePage({ params }: GamePageProps) {
       if (!hasUser && !guestId) return;
 
       try {
-        const isSwitchingGroup = Boolean(isCurrentGameResolved && selectedGroupId !== currentProgressGroupId);
+        const isSwitchingGroup =
+          hasInitializedRef.current &&
+          initializedGroupIdRef.current !== selectedGroupId;
+        const isModeTransition =
+          hasInitializedRef.current &&
+          initializedModeRef.current !== requestedMode;
+        const isViewTransition =
+          hasInitializedRef.current &&
+          initializedViewRef.current !== requestedView;
         // Only show loading spinner on first init or explicit group switch.
         // Re-runs from dep changes (session refetch, store updates) must NOT
         // set isLoading=true — that unmounts CollaborationProvider and kills
         // the WebSocket connection, creating an infinite reconnect loop.
-        if (!hasInitializedRef.current && (!isSwitchingGroup || !isCurrentGameResolved)) {
+        if (!hasInitializedRef.current || isSwitchingGroup || isModeTransition || isViewTransition) {
           setIsLoading(true);
           setLoadingMessage("Loading game...");
         }
@@ -520,6 +530,9 @@ export default function GamePage({ params }: GamePageProps) {
         }
 
         hasInitializedRef.current = true;
+        initializedGroupIdRef.current = selectedGroupId;
+        initializedModeRef.current = requestedMode;
+        initializedViewRef.current = requestedView;
         setCurrentGameId(gameId);
         setIsLoading(false);
       } catch (err) {
@@ -530,7 +543,7 @@ export default function GamePage({ params }: GamePageProps) {
     };
 
     initializeGame();
-  }, [addGameToStore, accessKeyReady, currentProgressGroupId, gameId, guestId, hasUser, isCurrentGameResolved, isReplayView, loadAttempt, pathname, requestedMode, requestedUserId, router, searchParamsString, selectedGroupId, sessionUserId, setCurrentGameId, submittedAccessKey]);
+  }, [accessKeyReady, addGameToStore, gameId, guestId, hasUser, isReplayView, loadAttempt, pathname, requestedMode, requestedUserId, requestedView, router, searchParamsString, selectedGroupId, sessionUserId, setCurrentGameId, submittedAccessKey]);
 
   const handleGroupSelect = useCallback(async (groupId: string | null, options?: { joinKey?: string }) => {
     if (!groupId) {

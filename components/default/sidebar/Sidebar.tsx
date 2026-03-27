@@ -187,19 +187,21 @@ export const Sidebar: React.FC<LeftSidebarProps> = ({ isUserAdmin, sidebarHeader
       </div>
 
       {/* Mobile Sidebar Drawer */}
-      <Drawer open={isOverlayOpen} onOpenChange={setIsOverlayOpen}>
-        <DrawerContentLeft className="h-full">
-          <MobileSidebarContext.Provider value={true}>
-            <div
-              id="mobile-sidebar"
-              className="flex flex-col items-start justify-start gap-2 h-full w-full min-h-0 z-20 bg-background border-r border-border/70 shadow-sm"
-              data-sidebar
-            >
-              {renderSidebarContent(true)}
-            </div>
-          </MobileSidebarContext.Provider>
-        </DrawerContentLeft>
-      </Drawer>
+      {isMobile && (
+        <Drawer open={isOverlayOpen} onOpenChange={setIsOverlayOpen}>
+          <DrawerContentLeft className="h-full">
+            <MobileSidebarContext.Provider value={true}>
+              <div
+                id="mobile-sidebar"
+                className="flex h-full w-full min-h-0 flex-col items-start justify-start gap-2 z-20 bg-background border-r border-border/70 shadow-sm"
+                data-sidebar
+              >
+                {renderSidebarContent(true)}
+              </div>
+            </MobileSidebarContext.Provider>
+          </DrawerContentLeft>
+        </Drawer>
+      )}
     </>
   );
 };

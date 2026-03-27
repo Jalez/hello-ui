@@ -61,7 +61,11 @@ function App() {
   const dispatch = useAppDispatch();
   const options = useAppSelector((state) => state.options);
   const [isLoading, setIsLoading] = useState(true);
-  const currentGame = useGameStore((state) => state.getCurrentGame());
+  const currentGame = useGameStore((state) => {
+    const { currentGameId, games } = state;
+    if (!currentGameId) return null;
+    return games.find((g) => g.id === currentGameId) ?? null;
+  });
   const { data: session } = useSession();
   const collaboration = useOptionalCollaboration();
   const router = useRouter();

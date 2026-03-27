@@ -36,10 +36,10 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({ showCloseButton = 
         sidebarElement.addEventListener("transitionend", handleTransitionEnd);
 
         // Also set a fallback timer in case transitionend doesn't fire
-        // This handles the case where sidebar is already open on page load
+        // Must be >= the 300ms CSS transition duration to avoid showing text mid-animation
         const fallbackTimer = setTimeout(() => {
           setShouldShowText(true);
-        }, 100); // Small delay to ensure DOM is ready
+        }, 350);
 
         return () => {
           sidebarElement.removeEventListener("transitionend", handleTransitionEnd);

@@ -31,7 +31,7 @@ function LayoutShell({ children, isUserAdmin }: LayoutShellProps) {
         isUserAdmin={isUserAdmin}
         sidebarHeader={<SidebarHeader />}
       >
-        <SidebarProjectList isUserAdmin={isUserAdmin} />
+        <SidebarProjectList />
       </Sidebar>
       <main
         className={`flex min-w-0 flex-1 flex-col overflow-hidden bg-background transition-[padding] duration-300 ease-in-out ${desktopSidebarOffsetClass}`}

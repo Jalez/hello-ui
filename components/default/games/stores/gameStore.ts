@@ -54,10 +54,19 @@ export const useGameStore = create<GameState>()((set, get) => ({
     set({ isLoading: true });
     try {
       const games = await loadGames();
-      set({
-        games,
-        isLoading: false,
-        isInitialized: true,
+      set((state) => {
+        const currentGame =
+          state.currentGameId
+            ? state.games.find((game) => game.id === state.currentGameId) ?? null
+            : null;
+        const includesCurrentGame =
+          currentGame != null && games.some((game) => game.id === currentGame.id);
+
+        return {
+          games: includesCurrentGame || !currentGame ? games : [currentGame, ...games],
+          isLoading: false,
+          isInitialized: true,
+        };
       });
     } catch (error) {
       console.error("Failed to load games:", error);

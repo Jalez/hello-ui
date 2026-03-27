@@ -17,18 +17,18 @@ import { GamesSearchModal } from "./GamesSearchModal";
 
 interface SidebarGameListProps {
   onGameClick?: () => void;
-  isUserAdmin: boolean;
 }
 
-export const GameSidebar: React.FC<SidebarGameListProps> = ({ onGameClick, isUserAdmin }) => {
+export const GameSidebar: React.FC<SidebarGameListProps> = ({ onGameClick }) => {
   const { isCollapsed: contextCollapsed } = useSidebarCollapse();
   const isMobileSidebar = useMobileSidebar();
   const isCollapsed = isMobileSidebar ? false : contextCollapsed;
   const pathname = usePathname();
   const { data: session } = useSession();
-  const { games, loadGames } = useGameStore();
-  const [isLoading, setIsLoading] = useState(false);
-  const [hasLoadedGames, setHasLoadedGames] = useState(false);
+  const games = useGameStore((state) => state.games);
+  const loadGames = useGameStore((state) => state.loadGames);
+  const isStoreLoading = useGameStore((state) => state.isLoading);
+  const hasInitializedGames = useGameStore((state) => state.isInitialized);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
@@ -42,21 +42,25 @@ export const GameSidebar: React.FC<SidebarGameListProps> = ({ onGameClick, isUse
 
   useEffect(() => {
     const loadGms = async () => {
-      if (isAuthenticated && !hasLoadedGames && session?.user?.email && (!isCollapsed || isSearchModalOpen)) {
-        setIsLoading(true);
-        try {
-          await loadGames();
-          setHasLoadedGames(true);
-        } catch (error) {
-          console.error("Error loading games:", error);
-        } finally {
-          setIsLoading(false);
-        }
+      if (
+        !isAuthenticated ||
+        hasInitializedGames ||
+        isStoreLoading ||
+        !session?.user?.email ||
+        (isCollapsed && !isSearchModalOpen)
+      ) {
+        return;
+      }
+
+      try {
+        await loadGames();
+      } catch (error) {
+        console.error("Error loading games:", error);
       }
     };
 
-    loadGms();
-  }, [isAuthenticated, hasLoadedGames, session?.user?.email, loadGames, isCollapsed, isSearchModalOpen]);
+    void loadGms();
+  }, [hasInitializedGames, isAuthenticated, isCollapsed, isSearchModalOpen, isStoreLoading, loadGames, session?.user?.email]);
 
   const isActive = (gameId: string) => {
     return pathname === `/game/${gameId}` || pathname === `/creator/${gameId}`;
@@ -149,7 +153,7 @@ export const GameSidebar: React.FC<SidebarGameListProps> = ({ onGameClick, isUse
         )}
         <GamesList
           games={creatorGames}
-          isLoading={isLoading}
+          isLoading={isStoreLoading && !hasInitializedGames}
           creatingGameId={creatingGameId}
           isCollapsed={isCollapsed}
           editingId={editingId}
@@ -173,7 +177,7 @@ export const GameSidebar: React.FC<SidebarGameListProps> = ({ onGameClick, isUse
         )}
         <GamesList
           games={playedGames}
-          isLoading={isLoading}
+          isLoading={isStoreLoading && !hasInitializedGames}
           creatingGameId={creatingGameId}
           isCollapsed={isCollapsed}
           editingId={editingId}
