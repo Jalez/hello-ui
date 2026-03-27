@@ -17,6 +17,7 @@ import { fetchGroupDetailsCached } from "@/lib/group-details-client";
 import type { ClientGroupMember } from "@/lib/group-details-client";
 import { toast } from "sonner";
 import { CollaborationNotice } from "@/components/collaboration/CollaborationNotice";
+import { getCurrentUserFinishState } from "@/lib/gameFinishState";
 
 interface GamePageProps {
   params: Promise<{
@@ -248,10 +249,6 @@ export default function GamePage({ params }: GamePageProps) {
       : null;
   const isGroupWorkMode = currentGame?.collaborationMode === "group";
   const canEditCurrentGame = Boolean(currentGame?.canEdit ?? currentGame?.isOwner);
-  const isFinished =
-    currentGame?.progressData &&
-    typeof currentGame.progressData === "object" &&
-    "finishedAt" in currentGame.progressData;
 
   useEffect(() => {
     const storedAccessKey = readStoredAccessKey(gameId);
@@ -888,6 +885,11 @@ export default function GamePage({ params }: GamePageProps) {
         image: undefined,
       }
       : null;
+  const currentUserFinishState = getCurrentUserFinishState(
+    currentGame?.progressData,
+    (user?.id ?? sessionUserId) || null,
+  );
+  const isFinished = Boolean(currentUserFinishState?.finishedAt);
 
   if (requiresAccessKey) {
     return (
@@ -943,7 +945,12 @@ export default function GamePage({ params }: GamePageProps) {
       <GameSummaryView
         gameId={gameId}
         gameTitle={currentGame.title}
-        progressData={currentGame.progressData as { finishedAt?: string; finalScore?: { points: number; maxPoints: number } }}
+        progressData={{
+          finishedAt: currentUserFinishState?.finishedAt,
+          finalScore: currentUserFinishState?.finalScore,
+        }}
+        currentUserId={(user?.id ?? sessionUserId) || null}
+        isGroupGameplay={Boolean(selectedGroupId)}
       />
     );
   }

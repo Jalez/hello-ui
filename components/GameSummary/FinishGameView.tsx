@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { apiUrl, stripBasePath } from "@/lib/apiUrl";
 import { useAppSelector } from "@/store/hooks/hooks";
@@ -49,6 +50,7 @@ interface FinishGameViewProps {
 }
 
 export function FinishGameView({ gameId, gameTitle }: FinishGameViewProps) {
+  const { data: session } = useSession();
   const pathname = usePathname();
   const normalizedPathname = stripBasePath(pathname);
   const router = useRouter();
@@ -63,6 +65,7 @@ export function FinishGameView({ gameId, gameTitle }: FinishGameViewProps) {
   const [result, setResult] = useState<{ success: boolean; message?: string; error?: string } | null>(null);
 
   const isGroupGameplay = Boolean(searchParams.get("groupId"));
+  const currentUserId = session?.userId || session?.user?.email || null;
 
   useEffect(() => {
     let cancelled = false;
@@ -183,11 +186,22 @@ export function FinishGameView({ gameId, gameTitle }: FinishGameViewProps) {
       if (ltiInfo?.hasOutcomeService) {
         const fallbackGradeData = await submitGradeDirectly();
         if (fallbackGradeData.success) {
-          collaboration?.syncProgressData({
-            finishedAt: finishData.instance?.progressData?.finishedAt ?? new Date().toISOString(),
-            finalScore: { points: points.allPoints, maxPoints: points.allMaxPoints },
+          const syncProgressData: Record<string, unknown> = {
             ltiGradeRefreshAt: new Date().toISOString(),
-          });
+          };
+          if (isGroupGameplay && currentUserId) {
+            syncProgressData.userFinishStates = {
+              [currentUserId]: {
+                finishedAt: new Date().toISOString(),
+                finalScore: { points: points.allPoints, maxPoints: points.allMaxPoints },
+              },
+            };
+          } else {
+            syncProgressData.finishedAt =
+              finishData.instance?.progressData?.finishedAt ?? new Date().toISOString();
+            syncProgressData.finalScore = { points: points.allPoints, maxPoints: points.allMaxPoints };
+          }
+          collaboration?.syncProgressData(syncProgressData);
           if (fallbackGradeData.isInIframe) {
             triggerAplusRefresh();
           }
@@ -221,6 +235,8 @@ export function FinishGameView({ gameId, gameTitle }: FinishGameViewProps) {
     router,
     submitGradeDirectly,
     triggerAplusRefresh,
+    currentUserId,
+    isGroupGameplay,
   ]);
 
   return (
