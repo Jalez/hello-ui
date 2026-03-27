@@ -37,6 +37,35 @@ export function useCollaborationPresence(
 
   const [activeUsers, setActiveUsers] = useState<ActiveUser[]>([]);
 
+  const areActiveUsersEqual = useCallback((left: ActiveUser[], right: ActiveUser[]) => {
+    if (left.length !== right.length) {
+      return false;
+    }
+
+    for (let index = 0; index < left.length; index += 1) {
+      const leftUser = left[index];
+      const rightUser = right[index];
+      if (
+        leftUser.clientId !== rightUser.clientId
+        || leftUser.userId !== rightUser.userId
+        || leftUser.accountUserId !== rightUser.accountUserId
+        || leftUser.userEmail !== rightUser.userEmail
+        || leftUser.accountUserEmail !== rightUser.accountUserEmail
+        || leftUser.userName !== rightUser.userName
+        || leftUser.userImage !== rightUser.userImage
+        || leftUser.color !== rightUser.color
+        || leftUser.sessionRole !== rightUser.sessionRole
+        || leftUser.activeTab !== rightUser.activeTab
+        || leftUser.activeLevelIndex !== rightUser.activeLevelIndex
+        || Boolean(leftUser.isTyping) !== Boolean(rightUser.isTyping)
+      ) {
+        return false;
+      }
+    }
+
+    return true;
+  }, []);
+
   /**
    * COLLABORATION STEP 15.2:
    * Add a newly seen collaborator into local presence state once the room tells
@@ -114,8 +143,9 @@ export function useCollaborationPresence(
         color: user.color || generateUserColor(user.userEmail),
       });
     }
-    setActiveUsers(Array.from(uniqueUsers.values()));
-  }, []);
+    const nextUsers = Array.from(uniqueUsers.values());
+    setActiveUsers((prev) => (areActiveUsersEqual(prev, nextUsers) ? prev : nextUsers));
+  }, [areActiveUsersEqual]);
 
   /**
    * COLLABORATION STEP 19.4:

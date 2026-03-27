@@ -27,7 +27,6 @@ import {
   LOCAL_REDUX_UPDATE_DEBOUNCE_MS,
 } from "./constants";
 import { getCommentKeymap } from "./getCommentKeyMap";
-import { HtmlFrameLine } from "./HtmlFrameLine";
 import { RemoteCaretsOverlay } from "./RemoteCaretsOverlay";
 import { createConsistentLineTheme } from "./theme";
 import type { CodeEditorProps } from "./types";
@@ -298,7 +297,7 @@ export default function CodeEditor({
               lastActivityTsRef.current = now;
               recordEditorActivity(currentLevel - 1, delta);
             }
-            handleCodeUpdate(value);
+            handleCodeUpdate();
           },
         }),
     onCreateEditor: handleEditorCreate,
@@ -319,20 +318,9 @@ export default function CodeEditor({
     placeholder: `Write your ${title} here...`,
   };
 
-  const htmlFrameLineProps: ReactCodeMirrorProps = {
-    extensions: [
-      EditorState.readOnly.of(true),
-      EditorView.editable.of(false),
-      EditorView.lineWrapping,
-      consistentLineTheme,
-      lineNumberCompartment.of([]),
-    ],
-    theme,
-    placeholder: `Write your ${title} here...`,
-  };
-
   const editorStyle: React.CSSProperties = {
-    overflow: "auto",
+    // Let the parent container own scrolling so HTML frame lines stay in flow.
+    overflow: "visible",
     boxSizing: "border-box",
     margin: "0",
     padding: "0",
@@ -398,14 +386,7 @@ export default function CodeEditor({
         )}
 
         <div className="flex min-h-0 flex-1 flex-col overflow-auto">
-          {title === "HTML" && (
-            <HtmlFrameLine
-              value={"<div id='root'><kbd>"}
-              props={htmlFrameLineProps}
-            />
-          )}
-
-          <div ref={editorViewportRef} className="relative min-h-0 flex-1">
+          <div ref={editorViewportRef} className="relative min-h-0">
             {isYjsManaged ? (
               canMountYjsSurface ? (
                 <YjsEditorSurface
@@ -444,13 +425,6 @@ export default function CodeEditor({
               </div>
             )}
           </div>
-
-          {title === "HTML" && (
-            <HtmlFrameLine
-              value={"</kbd></div>"}
-              props={htmlFrameLineProps}
-            />
-          )}
         </div>
       </div>
     </div>

@@ -27,9 +27,6 @@ import { TabPresence } from "@/components/collaboration/TabPresence";
 import { ActiveUser, EditorType } from "@/lib/collaboration/types";
 import { logDebugClient } from "@/lib/debug-logger";
 
-const EDITOR_COMPACT_BREAKPOINT = 768;
-const EDITOR_DESKTOP_REENTRY_BREAKPOINT = 920;
-
 interface LanguageData {
   code: string;
   solution: string;
@@ -64,24 +61,6 @@ function EditorTabs({
 
   const [activeLanguage, setActiveLanguage] = React.useState<'html' | 'css' | 'js'>('html');
   const [isTemplateMode, setIsTemplateMode] = React.useState<boolean>(true);
-  const getIsCompactForWidth = React.useCallback((width: number, previousIsCompact?: boolean) => {
-    if (typeof previousIsCompact === "boolean") {
-      if (previousIsCompact) {
-        return width < EDITOR_DESKTOP_REENTRY_BREAKPOINT;
-      }
-
-      return width < EDITOR_COMPACT_BREAKPOINT;
-    }
-
-    return width < EDITOR_DESKTOP_REENTRY_BREAKPOINT;
-  }, []);
-  const [isCompactHeader, setIsCompactHeader] = React.useState(() => {
-    if (typeof window === "undefined") {
-      return false;
-    }
-
-    return getIsCompactForWidth(window.innerWidth);
-  });
 
   const collaboration = useOptionalCollaboration();
   const isConnected = collaboration?.isConnected ?? false;
@@ -112,18 +91,6 @@ function EditorTabs({
     lastSentTabRef.current = nextPresenceKey;
     setActiveTab(activeLanguage, currentLevel - 1);
   }, [currentLevel, isConnected, setActiveTab, activeLanguage]);
-
-  React.useEffect(() => {
-    const handleResize = () => {
-      setIsCompactHeader((previousIsCompact) => {
-        const nextIsCompact = getIsCompactForWidth(window.innerWidth, previousIsCompact);
-        return previousIsCompact === nextIsCompact ? previousIsCompact : nextIsCompact;
-      });
-    };
-
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, [getIsCompactForWidth]);
 
   const handleLanguageChange = (newLanguage: string) => {
     const editorType = newLanguage as EditorType;
@@ -229,9 +196,8 @@ function EditorTabs({
     >
       <div className="flex flex-col justify-start items-stretch m-0 p-0 flex-1 h-full w-full relative ">
         <Tabs value={activeLanguage} onValueChange={handleLanguageChange} className="w-full h-full flex flex-col">
-          <div className="flex items-center gap-0 bg-border/20 dark:bg-muted/60">
-            {/* Mobile Menu Button - Only visible on small screens */}
-            <div className={isCompactHeader ? "block" : "hidden"}>
+          <div className="relative min-h-10 bg-border/20 dark:bg-muted/60">
+            <div className="absolute inset-0 flex items-center gap-0 transition-opacity duration-150 md:pointer-events-none md:opacity-0">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -287,91 +253,90 @@ function EditorTabs({
                   })}
                 </DropdownMenuContent>
               </DropdownMenu>
-            </div>
 
-            {/* Desktop Tabs - Hidden on mobile */}
-            <TabsList className={cn("flex-1 gap-0", isCompactHeader ? "hidden" : "flex")}>
-              {languageTabs.map((tab) => {
-                const tabLanguage = tab.value as 'html' | 'css' | 'js';
-                const tabLocked = languages[tabLanguage].locked;
-                const isActive = activeLanguage === tabLanguage;
-                const tabUsers = otherUsersByTab[tabLanguage] || [];
-
-                return (
-                  <div
-                    key={tab.value}
-                    className={cn(
-                      "flex items-center h-full",
-                      isActive ? "bg-secondary" : "bg-border/20 dark:bg-muted/60"
-                    )}
-                  >
-                    <TabsTrigger
-                      value={tab.value}
-                      className="text-primary flex items-center gap-1.5 border-0 h-full"
-                    >
-                      <span>{tab.label}</span>
-                      {isConnected && tabUsers.length > 0 && (
-                        <TabPresence users={tabUsers} size="sm" />
-                      )}
-                    </TabsTrigger>
-                    {isCreator && (
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-full w-6 p-0 px-2 flex items-center justify-center relative z-10 rounded-none"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          e.preventDefault();
-                          handleLockUnlock(tabLanguage);
-                        }}
-                        onMouseDown={(e) => {
-                          e.stopPropagation();
-                        }}
-                        title={tabLocked ? "Unlock" : "Lock"}
-                      >
-                        {tabLocked ? <Lock className="h-3 w-3" /> : <LockOpen className="h-3 w-3" />}
-                      </Button>
-                    )}
+              <div className="flex flex-1 items-center justify-between gap-2 px-2 min-w-0">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-sm font-medium text-primary truncate">
+                    {languageTabs.find(tab => tab.value === activeLanguage)?.label}
+                  </span>
+                  {isConnected && (otherUsersByTab[activeLanguage] || []).length > 0 && (
+                    <TabPresence users={otherUsersByTab[activeLanguage]} size="sm" />
+                  )}
+                </div>
+                {isCreator && (
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-xs text-muted-foreground">Template</span>
+                    <Switch
+                      checked={!isTemplateMode}
+                      onCheckedChange={(checked) => setIsTemplateMode(!checked)}
+                      aria-label="Toggle between template and solution"
+                    />
+                    <span className="text-xs text-muted-foreground">Solution</span>
                   </div>
-                );
-              })}
-            </TabsList>
-
-            {/* Active Tab Display on Mobile - Shows current tab with user avatars */}
-            <div className={cn("flex-1 items-center justify-between gap-2 px-2 min-w-0", isCompactHeader ? "flex" : "hidden")}>
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="text-sm font-medium text-primary truncate">
-                  {languageTabs.find(tab => tab.value === activeLanguage)?.label}
-                </span>
-                {isConnected && (otherUsersByTab[activeLanguage] || []).length > 0 && (
-                  <TabPresence users={otherUsersByTab[activeLanguage]} size="sm" />
                 )}
               </div>
+            </div>
+
+            <div className="pointer-events-none absolute inset-0 flex items-center gap-0 opacity-0 transition-opacity duration-150 md:pointer-events-auto md:opacity-100">
+              <TabsList className="flex flex-1 gap-0 bg-transparent">
+                {languageTabs.map((tab) => {
+                  const tabLanguage = tab.value as 'html' | 'css' | 'js';
+                  const tabLocked = languages[tabLanguage].locked;
+                  const isActive = activeLanguage === tabLanguage;
+                  const tabUsers = otherUsersByTab[tabLanguage] || [];
+
+                  return (
+                    <div
+                      key={tab.value}
+                      className={cn(
+                        "flex items-center h-full",
+                        isActive ? "bg-secondary" : "bg-border/20 dark:bg-muted/60"
+                      )}
+                    >
+                      <TabsTrigger
+                        value={tab.value}
+                        className="text-primary flex items-center gap-1.5 border-0 h-full"
+                      >
+                        <span>{tab.label}</span>
+                        {isConnected && tabUsers.length > 0 && (
+                          <TabPresence users={tabUsers} size="sm" />
+                        )}
+                      </TabsTrigger>
+                      {isCreator && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-full w-6 p-0 px-2 flex items-center justify-center relative z-10 rounded-none"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            handleLockUnlock(tabLanguage);
+                          }}
+                          onMouseDown={(e) => {
+                            e.stopPropagation();
+                          }}
+                          title={tabLocked ? "Unlock" : "Lock"}
+                        >
+                          {tabLocked ? <Lock className="h-3 w-3" /> : <LockOpen className="h-3 w-3" />}
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })}
+              </TabsList>
+
               {isCreator && (
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-xs text-muted-foreground">Template</span>
+                <div className="flex items-center gap-2 px-2">
+                  <span className="text-sm text-muted-foreground">Template</span>
                   <Switch
                     checked={!isTemplateMode}
                     onCheckedChange={(checked) => setIsTemplateMode(!checked)}
                     aria-label="Toggle between template and solution"
                   />
-                  <span className="text-xs text-muted-foreground">Solution</span>
+                  <span className="text-sm text-muted-foreground">Solution</span>
                 </div>
               )}
             </div>
-
-            {/* Template/Solution Toggle - Hidden on mobile (shown in menu) */}
-            {isCreator && (
-              <div className={cn("items-center gap-2 px-2", isCompactHeader ? "hidden" : "flex")}>
-                <span className="text-sm text-muted-foreground">Template</span>
-                <Switch
-                  checked={!isTemplateMode}
-                  onCheckedChange={(checked) => setIsTemplateMode(!checked)}
-                  aria-label="Toggle between template and solution"
-                />
-                <span className="text-sm text-muted-foreground">Solution</span>
-              </div>
-            )}
           </div>
           {languageTabs.map((tab) => {
             const langData = languages[tab.value as 'html' | 'css' | 'js'];

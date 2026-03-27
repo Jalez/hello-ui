@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import useSidebarPersistence from "../hooks/useSidebarPersistence";
 
 const MOBILE_BREAKPOINT = 768;
@@ -64,10 +64,26 @@ export const SidebarCollapseProvider: React.FC<SidebarCollapseProviderProps> = (
   const [isOverlayOpen, setIsOverlayOpen] = useState(false);
   const [isVisible, setIsVisible] = useState(true);
   const [hasResolvedResponsiveState, setHasResolvedResponsiveState] = useState(false);
+  const isMobileRef = useRef(isMobile);
+  const isCollapsedRef = useRef(isCollapsed);
+  const isOverlayOpenRef = useRef(isOverlayOpen);
+  const resizeFrameRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    isMobileRef.current = isMobile;
+  }, [isMobile]);
+
+  useEffect(() => {
+    isCollapsedRef.current = isCollapsed;
+  }, [isCollapsed]);
+
+  useEffect(() => {
+    isOverlayOpenRef.current = isOverlayOpen;
+  }, [isOverlayOpen]);
 
   const syncResponsiveState = useCallback(() => {
     const width = window.innerWidth;
-    const nextIsMobile = getIsMobileForWidth(width, isMobile);
+    const nextIsMobile = getIsMobileForWidth(width, isMobileRef.current);
     const isSmallScreen = width < 1024; // lg breakpoint
 
     setIsMobile((previousIsMobile) => {
@@ -76,28 +92,45 @@ export const SidebarCollapseProvider: React.FC<SidebarCollapseProviderProps> = (
     });
     setHasResolvedResponsiveState(true);
 
-    if (!isSmallScreen && isOverlayOpen) {
+    if (!isSmallScreen && isOverlayOpenRef.current) {
       setIsOverlayOpen(false);
     }
 
-    if (nextIsMobile && !isCollapsed) {
+    if (nextIsMobile && !isCollapsedRef.current) {
       setIsCollapsedState(true);
     }
-  }, [getIsMobileForWidth, isCollapsed, isMobile, isOverlayOpen, setIsCollapsedState]);
+  }, [getIsMobileForWidth, setIsCollapsedState]);
+
+  const scheduleResponsiveSync = useCallback(() => {
+    if (resizeFrameRef.current != null) {
+      return;
+    }
+
+    resizeFrameRef.current = window.requestAnimationFrame(() => {
+      resizeFrameRef.current = null;
+      syncResponsiveState();
+    });
+  }, [syncResponsiveState]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
       syncResponsiveState();
     });
 
-    return () => window.cancelAnimationFrame(frame);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      if (resizeFrameRef.current != null) {
+        window.cancelAnimationFrame(resizeFrameRef.current);
+        resizeFrameRef.current = null;
+      }
+    };
   }, [syncResponsiveState]);
 
   // Handle responsive behavior and resize events
   useEffect(() => {
-    window.addEventListener("resize", syncResponsiveState);
-    return () => window.removeEventListener("resize", syncResponsiveState);
-  }, [syncResponsiveState]);
+    window.addEventListener("resize", scheduleResponsiveSync, { passive: true });
+    return () => window.removeEventListener("resize", scheduleResponsiveSync);
+  }, [scheduleResponsiveSync]);
 
   const setIsCollapsed = useCallback((collapsed: boolean) => {
     setIsCollapsedState(collapsed);

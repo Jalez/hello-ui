@@ -37,7 +37,6 @@ export function useYjsCodeEditorCollaboration({
   title,
   code,
   setCode,
-  template,
   enabled = true,
   docKind = "template",
   locked,
@@ -78,6 +77,7 @@ export function useYjsCodeEditorCollaboration({
   const applyingExternalUpdateRef = useRef(false);
   const lastObservedYTextValueRef = useRef<string | null>(null);
   const codeUpdateOriginRef = useRef<"editor" | "yjs" | null>(null);
+  const initialSyncKeyRef = useRef<string | null>(null);
 
   const editorKey = `${levelIdentifier}:${docKind}:${editorType}:${levelIndex}`;
   const [editorMountValue] = useState(() => {
@@ -168,7 +168,11 @@ export function useYjsCodeEditorCollaboration({
       }
     };
 
-    syncReactCode(yText.toString(), false, "initial");
+    const initialSyncKey = `${editorKey}:g${yjsDocGeneration}`;
+    if (initialSyncKeyRef.current !== initialSyncKey) {
+      initialSyncKeyRef.current = initialSyncKey;
+      syncReactCode(yText.toString(), false, "initial");
+    }
 
     /**
      * COLLABORATION STEP 13.2:
@@ -194,7 +198,7 @@ export function useYjsCodeEditorCollaboration({
     return () => {
       yText.unobserve(observer);
     };
-  }, [editorType, enabled, isConnected, levelIdentifier, levelIndex, locked, reportEditorWatchState, setCode, template, yText]);
+  }, [editorKey, editorType, enabled, isConnected, levelIdentifier, levelIndex, locked, reportEditorWatchState, setCode, yText, yjsDocGeneration, yjsReady]);
 
   useEffect(() => {
     codeRef.current = code;
@@ -219,7 +223,7 @@ export function useYjsCodeEditorCollaboration({
    * it intentionally does nothing because CodeMirror writes directly into the shared
    * Yjs text, so the shared document is already being updated at the source.
    */
-  const handleCodeUpdate = useCallback((_value?: string) => {
+  const handleCodeUpdate = useCallback(() => {
     logCollaborationStep("4.1", "handleCodeUpdate", {
       editorType,
       levelIndex,
@@ -309,7 +313,6 @@ export function useYjsCodeEditorCollaboration({
     setCode,
     typingPresenceTimeoutRef,
     updateEditorSelection,
-    yText,
   ]);
 
   /**

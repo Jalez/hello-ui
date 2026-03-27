@@ -68,6 +68,9 @@ const STALL_DETECTION_WINDOW_MS = 6000;
 const STALL_RETRY_COOLDOWN_MS = 10000;
 const LONG_TASK_WARN_MS = 700;
 const DIVERGENCE_RECOVERY_WINDOW_MS = 5000;
+const EMPTY_REMOTE_CODE_CHANGES: RemoteCodeChange[] = [];
+const EMPTY_REMOTE_CODE_RESYNCS: RemoteCodeResync[] = [];
+const EMPTY_LOCAL_CODE_ACKS: LocalCodeAck[] = [];
 
 type LocalEditorWatchState = EditorWatchdogSnapshot & {
   contentHash: string;
@@ -131,6 +134,39 @@ function sameSelection(
     return false;
   }
   return left.from === right.from && left.to === right.to;
+}
+
+function areEditorCursorsEqual(
+  left: Map<string, EditorCursor>,
+  right: Map<string, EditorCursor>,
+): boolean {
+  if (left.size !== right.size) {
+    return false;
+  }
+
+  for (const [key, leftCursor] of left.entries()) {
+    const rightCursor = right.get(key);
+    if (!rightCursor) {
+      return false;
+    }
+
+    if (
+      leftCursor.roomId !== rightCursor.roomId
+      || leftCursor.groupId !== rightCursor.groupId
+      || leftCursor.editorType !== rightCursor.editorType
+      || leftCursor.levelIndex !== rightCursor.levelIndex
+      || leftCursor.clientId !== rightCursor.clientId
+      || leftCursor.userId !== rightCursor.userId
+      || leftCursor.userName !== rightCursor.userName
+      || leftCursor.color !== rightCursor.color
+      || leftCursor.sessionRole !== rightCursor.sessionRole
+      || !sameSelection(leftCursor.selection, rightCursor.selection)
+    ) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 /**
@@ -276,17 +312,16 @@ interface CollaborationProviderProps {
 }
 
 export function CollaborationProvider({ children, roomId, groupId, user }: CollaborationProviderProps) {
-  console.log(`[collab-loop] CollaborationProvider render roomId=${roomId} groupId=${groupId}`);
   const collabEngine = "yjs" as const;
   const resolvedRoomId = roomId ?? groupId ?? null;
   const isLobbyRoomId = isLobbyRoom(resolvedRoomId);
   const isYjsEnabled = !isLobbyRoomId;
-  const resolvedGroupId = extractGroupIdFromRoomId(resolvedRoomId);
+  const resolvedGroupId = groupId ?? extractGroupIdFromRoomId(resolvedRoomId);
   const [canvasCursors, setCanvasCursors] = useState<Map<string, CanvasCursor>>(new Map());
   const [editorCursors, setEditorCursors] = useState<Map<string, EditorCursor>>(new Map());
-  const remoteCodeChanges: RemoteCodeChange[] = [];
-  const remoteCodeResyncs: RemoteCodeResync[] = [];
-  const localCodeAcks: LocalCodeAck[] = [];
+  const remoteCodeChanges = EMPTY_REMOTE_CODE_CHANGES;
+  const remoteCodeResyncs = EMPTY_REMOTE_CODE_RESYNCS;
+  const localCodeAcks = EMPTY_LOCAL_CODE_ACKS;
   const [lastProgressSync, setLastProgressSync] = useState<ProgressSync>(null);
   const [lastGameInstancesReset, setLastGameInstancesReset] = useState<GameInstancesResetSync>(null);
   const [groupStartGate, setGroupStartGate] = useState<GroupStartGateState | null>(null);
@@ -311,6 +346,10 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
   const pendingAwarenessStateRef = React.useRef<Record<string, unknown> | null>(null);
   const hasPendingAwarenessStateRef = React.useRef(false);
   const awarenessFlushScheduledRef = React.useRef(false);
+
+  useEffect(() => {
+    console.log(`[collab-loop] CollaborationProvider roomId=${roomId} groupId=${groupId}`);
+  }, [groupId, roomId]);
 
   /**
    * COLLABORATION STEP 13.1:
@@ -916,7 +955,7 @@ export function CollaborationProvider({ children, roomId, groupId, user }: Colla
       }
     }
     setUsersRef.current?.(nextUsers);
-    setEditorCursors(nextEditorCursors);
+    setEditorCursors((prev) => (areEditorCursorsEqual(prev, nextEditorCursors) ? prev : nextEditorCursors));
   }, [resolvedGroupId, resolvedRoomId]);
 
   /**

@@ -197,7 +197,7 @@ export function PublicGroupLobby({
             </TabsTrigger>
           </TabsList>
 
-          <CollaborationProvider roomId={groupRoomId} user={currentUser}>
+          <CollaborationProvider roomId={groupRoomId} groupId={groupId || null} user={currentUser}>
             <TabsContent value="group" className="mt-4 min-h-[400px]">
               <GroupTab
                 gameId={gameId}

@@ -938,10 +938,12 @@ export default function GamePage({ params }: GamePageProps) {
 
   const showSummary = isFinished && currentGame?.progressData && requestedView !== "play";
   const showFinishView = requestedView === "finish";
+  const collaborationGroupId =
+    selectedGroupId || (roomId?.startsWith("group:") ? roomId.split(":")[1] || null : null);
 
   if (showFinishView) {
     return (
-      <CollaborationProvider roomId={roomId} user={user}>
+      <CollaborationProvider roomId={roomId} groupId={collaborationGroupId} user={user}>
         <CollaborationNotice>
           <GameInstancesResetWatcher gameId={gameId} />
           <FinishGameView
@@ -979,7 +981,7 @@ export default function GamePage({ params }: GamePageProps) {
     const lobbyRoomId = publicLobby?.roomId || `lobby:all:game:${gameId}`;
     
     return (
-      <CollaborationProvider roomId={lobbyRoomId} user={user}>
+      <CollaborationProvider roomId={lobbyRoomId} groupId={selectedGroupId || null} user={user}>
         <CollaborationNotice>
           <GameInstancesResetWatcher gameId={gameId} />
           <PublicGroupLobby
@@ -1031,7 +1033,7 @@ export default function GamePage({ params }: GamePageProps) {
   }
 
   return (
-    <CollaborationProvider roomId={roomId} user={user}>
+    <CollaborationProvider roomId={roomId} groupId={collaborationGroupId} user={user}>
       <CollaborationNotice>
         <GameInstancesResetWatcher gameId={gameId} />
         {user && currentGame?.collaborationMode === "group" && roomId?.startsWith("group:") && !shouldBypassWaitingRoom ? (

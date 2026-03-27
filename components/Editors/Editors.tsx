@@ -15,7 +15,6 @@ import { LOCAL_REDUX_UPDATE_DEBOUNCE_MS } from "./CodeEditor/constants";
 import { apiUrl } from "@/lib/apiUrl";
 
 const Editors = (): React.ReactNode => {
-  console.log("[collab-loop] Editors render");
   const dispatch = useAppDispatch();
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const levels = useAppSelector((state) => state.levels);
@@ -27,6 +26,10 @@ const Editors = (): React.ReactNode => {
   const yjsDocGeneration = collaboration?.yjsDocGeneration ?? 0;
   const remoteSyncTimeoutsRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const solutionPersistTimeoutsRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+
+  useEffect(() => {
+    console.log("[collab-loop] Editors mounted");
+  }, []);
 
   const levelsRef = useRef(levels);
   levelsRef.current = levels;
