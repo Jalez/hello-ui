@@ -1,9 +1,14 @@
 .word-cloud-root {
+  position: relative;
+  overflow: hidden;
   --wc-base-fill: rgb(82, 82, 82);
   --wc-hover-fill: #222;
   --wc-wave-fill: rgb(106, 106, 106);
   --wc-featured-fill: rgb(110, 110, 110);
   --wc-featured-active-fill: #111;
+  --wc-hero-outline-color: rgb(92, 92, 92);
+  --wc-hero-outline-width: 1.4px;
+  --wc-hero-outline-opacity: 0.9;
   --wc-wave-opacity: 0.24;
   --wc-hover-opacity: 0.55;
 }
@@ -14,6 +19,9 @@
   --wc-wave-fill: rgb(166, 166, 166);
   --wc-featured-fill: rgb(205, 205, 205);
   --wc-featured-active-fill: rgb(245, 245, 245);
+  --wc-hero-outline-color: rgb(205, 205, 205);
+  --wc-hero-outline-width: 1.3px;
+  --wc-hero-outline-opacity: 0.88;
   --wc-wave-opacity: 0.26;
   --wc-hover-opacity: 0.62;
 }
@@ -77,4 +85,44 @@
 .word-cloud-root .word-cloud-hero {
   letter-spacing: 1px;
   fill: var(--wc-featured-active-fill);
+}
+
+.word-cloud-root .word-cloud-hero-outline {
+  letter-spacing: 1px;
+  fill: transparent;
+  stroke: var(--wc-hero-outline-color);
+  stroke-width: var(--wc-hero-outline-width);
+  stroke-linejoin: round;
+  paint-order: stroke;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.word-cloud-root .word-cloud-cycle {
+  position: absolute;
+  inset: 0;
+}
+
+.word-cloud-root .word-cloud-cycle--exiting .word-cloud-hero-outline:not(.word-cloud-hero-outline-dissolving) {
+  transition: opacity 700ms ease-out;
+  opacity: 0;
+}
+
+/* Dissolving text: kill ALL CSS transitions/opacity so only the SVG
+   noise-threshold filter controls visibility — no competing fades. */
+.word-cloud-root .word-cloud-hero-outline-dissolving {
+  transition: none !important;
+  opacity: 1 !important;
+}
+
+.word-cloud-root .word-cloud-snap-particles {
+  pointer-events: none;
+}
+
+.word-cloud-root .word-cloud-snap-particles ellipse {
+  mix-blend-mode: multiply;
+}
+
+.dark .word-cloud-root .word-cloud-snap-particles ellipse {
+  mix-blend-mode: screen;
 }
