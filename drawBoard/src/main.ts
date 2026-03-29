@@ -1,4 +1,5 @@
-import { createDrawboardSnapshot, setStyles } from "./utils";
+import { domToPng } from "modern-screenshot";
+import { createDrawboardSnapshot, getPixelData, loadImage, setStyles } from "./utils";
 
 type ErrorObj = {
   message: string;
@@ -14,6 +15,7 @@ type DrawboardPayload = {
   js?: string;
   events?: string | string[];
   interactive?: boolean;
+  isCreator?: boolean;
 };
 
 const params = new URLSearchParams(window.location.search);
@@ -21,6 +23,11 @@ const urlName = params.get("name") || "";
 const scenarioId = params.get("scenarioId") || "";
 const scenarioWidth = parseInt(params.get("width") || "0", 10);
 const scenarioHeight = parseInt(params.get("height") || "0", 10);
+const captureMode = params.get("captureMode") || "playwright";
+const isBrowserCapture = captureMode === "browser";
+
+/** Matches parent Frame debounce after render-ready (50ms iframe + 500ms parent). */
+const BROWSER_CAPTURE_AFTER_RENDER_MS = 550;
 
 document.documentElement.style.width = scenarioWidth ? `${scenarioWidth}px` : "100%";
 document.documentElement.style.height = scenarioHeight ? `${scenarioHeight}px` : "100%";
@@ -37,6 +44,7 @@ let renderReadyTimeoutId: number | null = null;
 let captureListener: (() => void) | null = null;
 let currentScript: HTMLScriptElement | null = null;
 let currentScriptUrl: string | null = null;
+let isCreatorFromParent = false;
 
 function updateInteractiveFlag() {
   document.body.dataset.interactive = interactive ? "true" : "false";
@@ -147,6 +155,10 @@ function syncEventListeners() {
 
   captureListener = () => {
     try {
+      if (isBrowserCapture) {
+        void captureBrowser();
+        return;
+      }
       const snapshot = createDrawboardSnapshot();
       window.parent.postMessage(
         {
@@ -167,14 +179,62 @@ function syncEventListeners() {
   });
 }
 
+async function captureBrowser() {
+  if (!stylesCorrect || !jsCorrect || errorOverlay) {
+    return;
+  }
+  const w = scenarioWidth || 300;
+  const h = scenarioHeight || 300;
+  try {
+    const dataUrl = await domToPng(document.body, {
+      width: w,
+      height: h,
+      scale: 2,
+      maximumCanvasSize: 8192,
+      backgroundColor: "transparent",
+    });
+    const img = await loadImage(dataUrl);
+    const imageData = getPixelData(img, w, h);
+    if (!imageData) {
+      return;
+    }
+    const bytes = new Uint8Array(imageData.data.length);
+    bytes.set(imageData.data);
+    window.parent.postMessage(
+      {
+        message: "pixels",
+        dataURL: bytes.buffer,
+        urlName,
+        scenarioId,
+        width: w,
+        height: h,
+      },
+      "*",
+      [bytes.buffer],
+    );
+    const includeDataUrl = urlName === "solutionUrl" || (urlName === "drawingUrl" && isCreatorFromParent);
+    if (includeDataUrl) {
+      window.parent.postMessage({ dataURL: dataUrl, urlName, scenarioId, message: "data" }, "*");
+    }
+  } catch (error) {
+    console.error("Drawboard: browser capture failed", error);
+  }
+}
+
 function scheduleRenderReady() {
   clearRenderReadyTimeout();
   if (!stylesCorrect || !jsCorrect || errorOverlay) {
     return;
   }
 
+  const delayMs = isBrowserCapture ? BROWSER_CAPTURE_AFTER_RENDER_MS : 50;
+
   renderReadyTimeoutId = window.setTimeout(() => {
     try {
+      if (isBrowserCapture) {
+        void captureBrowser();
+        return;
+      }
       const snapshot = createDrawboardSnapshot();
       window.parent.postMessage(
         {
@@ -188,7 +248,7 @@ function scheduleRenderReady() {
     } catch (snapshotError) {
       console.error("Drawboard: Failed to create snapshot", snapshotError);
     }
-  }, 50);
+  }, delayMs);
 }
 
 function applyHtml(html: string) {
@@ -243,6 +303,7 @@ function resetState() {
   interactive = false;
   events = [];
   dataReceived = false;
+  isCreatorFromParent = false;
   updateInteractiveFlag();
   syncEventListeners();
   startMountedPing();
@@ -290,6 +351,7 @@ window.addEventListener("message", (event: MessageEvent<DrawboardPayload>) => {
   const nextCss = event.data?.css || "";
   const nextJs = event.data?.js || "";
   interactive = Boolean(event.data?.interactive);
+  isCreatorFromParent = Boolean(event.data?.isCreator);
   events = parseEvents(event.data?.events);
   updateInteractiveFlag();
   syncEventListeners();

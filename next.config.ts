@@ -31,6 +31,8 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: process.env.STRIPE_PUBLISHABLE_KEY,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
     NEXT_PUBLIC_DRAWBOARD_URL: process.env.NEXT_PUBLIC_DRAWBOARD_URL || "http://localhost:3500",
+    NEXT_PUBLIC_DRAWBOARD_CAPTURE_MODE:
+      process.env.NEXT_PUBLIC_DRAWBOARD_CAPTURE_MODE || "playwright",
   },
 
   // Image domains for external images

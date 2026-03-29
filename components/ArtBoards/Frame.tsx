@@ -11,6 +11,8 @@ import { apiUrl } from "@/lib/apiUrl";
 import { LOCAL_REDUX_UPDATE_DEBOUNCE_MS } from "@/components/Editors/CodeEditor/constants";
 import { dataUrlFromRawRgba } from "@/lib/utils/drawboardSnapshot";
 
+const DRAWBOARD_CAPTURE_MODE = process.env.NEXT_PUBLIC_DRAWBOARD_CAPTURE_MODE ?? "playwright";
+
 interface FrameProps {
   newHtml: string;
   newCss: string;
@@ -150,6 +152,7 @@ export const Frame = ({
             scenarioId: scenario.scenarioId,
             name,
             interactive,
+            isCreator,
           },
           "*"
         );
@@ -163,6 +166,10 @@ export const Frame = ({
         && typeof event.data?.css === "string"
         && typeof event.data?.snapshotHtml === "string"
       ) {
+        if (DRAWBOARD_CAPTURE_MODE === "browser") {
+          return;
+        }
+
         const snapshot = {
           css: event.data.css,
           snapshotHtml: event.data.snapshotHtml,
@@ -188,7 +195,43 @@ export const Frame = ({
       clearPendingRenderReadyCapture();
       window.removeEventListener("message", resendDataAfterMount);
     };
-  }, [captureFrame, clearPendingRenderReadyCapture, dispatch, events, interactive, name, newCss, newHtml, newJs, scenario]);
+  }, [captureFrame, clearPendingRenderReadyCapture, dispatch, events, interactive, isCreator, name, newCss, newHtml, newJs, scenario]);
+
+  useEffect(() => {
+    const handleDisplayUrlFromIframe = (event: MessageEvent) => {
+      if (event.data?.message !== "data" || typeof event.data?.dataURL !== "string") {
+        return;
+      }
+      if (event.data.urlName !== name || event.data.scenarioId !== scenario.scenarioId) {
+        return;
+      }
+      const includeDataUrl = name === "solutionUrl" || (name === "drawingUrl" && isCreator);
+      if (!includeDataUrl) {
+        return;
+      }
+      if (name === "solutionUrl") {
+        dispatch(
+          addSolutionUrl({
+            solutionUrl: event.data.dataURL,
+            scenarioId: scenario.scenarioId,
+          }),
+        );
+      }
+      if (name === "drawingUrl") {
+        dispatch(
+          addDrawingUrl({
+            drawingUrl: event.data.dataURL,
+            scenarioId: scenario.scenarioId,
+          }),
+        );
+      }
+    };
+
+    window.addEventListener("message", handleDisplayUrlFromIframe);
+    return () => {
+      window.removeEventListener("message", handleDisplayUrlFromIframe);
+    };
+  }, [dispatch, isCreator, name, scenario.scenarioId]);
 
   useEffect(() => {
     const iframe = iframeRef.current;
@@ -207,11 +250,20 @@ export const Frame = ({
   if (!scenario) {
     return <div>Scenario not found</div>;
   }
+
+  const iframeSearch = new URLSearchParams({
+    name,
+    scenarioId: scenario.scenarioId,
+    width: String(scenario.dimensions.width),
+    height: String(scenario.dimensions.height),
+    captureMode: DRAWBOARD_CAPTURE_MODE,
+  });
+
   return (
     <iframe
       id={id}
       ref={iframeRef}
-      src={`${frameUrl}?name=${name}&scenarioId=${scenario.scenarioId}&width=${scenario.dimensions.width}&height=${scenario.dimensions.height}`}
+      src={`${frameUrl}?${iframeSearch.toString()}`}
       width={scenario.dimensions.width}
       height={scenario.dimensions.height}
       className={cn(
