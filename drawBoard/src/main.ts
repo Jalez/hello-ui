@@ -26,8 +26,8 @@ const scenarioHeight = parseInt(params.get("height") || "0", 10);
 const captureMode = params.get("captureMode") || "playwright";
 const isBrowserCapture = captureMode === "browser";
 
-/** Matches parent Frame debounce after render-ready (50ms iframe + 500ms parent). */
-const BROWSER_CAPTURE_AFTER_RENDER_MS = 550;
+/** Playwright iframe waits 50ms before posting `render-ready` to the parent. */
+const PLAYWRIGHT_RENDER_READY_DELAY_MS = 50;
 
 document.documentElement.style.width = scenarioWidth ? `${scenarioWidth}px` : "100%";
 document.documentElement.style.height = scenarioHeight ? `${scenarioHeight}px` : "100%";
@@ -179,6 +179,25 @@ function syncEventListeners() {
   });
 }
 
+/**
+ * Old React drawboard called `domToPng` from `useEffect` with no `fonts.ready` wait.
+ * Waiting unbounded on `document.fonts.ready` can feel very slow with remote fonts.
+ * Cap the font wait; one rAF approximates “after layout” before screenshot.
+ */
+async function waitForPaintAfterCss() {
+  if (document.fonts?.ready) {
+    try {
+      await Promise.race([
+        document.fonts.ready,
+        new Promise<void>((r) => setTimeout(r, 32)),
+      ]);
+    } catch {
+      /* ignore */
+    }
+  }
+  await new Promise<void>((r) => requestAnimationFrame(() => r()));
+}
+
 async function captureBrowser() {
   if (!stylesCorrect || !jsCorrect || errorOverlay) {
     return;
@@ -186,12 +205,14 @@ async function captureBrowser() {
   const w = scenarioWidth || 300;
   const h = scenarioHeight || 300;
   try {
-    const dataUrl = await domToPng(document.body, {
+    await waitForPaintAfterCss();
+    // Capture `<html>` so author rules on `html` (background, full-height, etc.)
+    // are included; `document.body` alone often misses that painting layer.
+    const dataUrl = await domToPng(document.documentElement, {
       width: w,
       height: h,
       scale: 2,
       maximumCanvasSize: 8192,
-      backgroundColor: "transparent",
     });
     const img = await loadImage(dataUrl);
     const imageData = getPixelData(img, w, h);
@@ -227,7 +248,11 @@ function scheduleRenderReady() {
     return;
   }
 
-  const delayMs = isBrowserCapture ? BROWSER_CAPTURE_AFTER_RENDER_MS : 50;
+  /**
+   * Browser: `setTimeout(0)` — like the old React `useEffect` after commit (no fixed 50ms sleep).
+   * Playwright: 50ms so the DOM settles before we clone HTML/CSS for the parent API.
+   */
+  const delayMs = isBrowserCapture ? 0 : PLAYWRIGHT_RENDER_READY_DELAY_MS;
 
   renderReadyTimeoutId = window.setTimeout(() => {
     try {
@@ -359,7 +384,6 @@ window.addEventListener("message", (event: MessageEvent<DrawboardPayload>) => {
   applyHtml(nextHtml);
   applyCss(nextCss);
   applyJs(nextJs);
-  scheduleRenderReady();
 });
 
 if (!dataReceived) {
