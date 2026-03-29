@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 const BOARD_BORDER_CHROME = 10;
+const BOARD_VERTICAL_MARGIN_CHROME = 10;
 
 interface BoardContainerProps {
   width: number;
@@ -66,7 +67,7 @@ export const BoardContainer = ({
   }, [allowScaling, height, width]);
 
   const naturalWidth = width + BOARD_BORDER_CHROME;
-  const naturalHeight = (height ?? 0) + BOARD_BORDER_CHROME;
+  const naturalHeight = (height ?? 0) + BOARD_BORDER_CHROME + BOARD_VERTICAL_MARGIN_CHROME;
   const widthScale = allowScaling && containerSize.width > 0 && naturalWidth > 0
     ? containerSize.width / naturalWidth
     : 1;
