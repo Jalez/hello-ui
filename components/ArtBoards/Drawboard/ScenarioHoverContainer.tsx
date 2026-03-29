@@ -49,7 +49,7 @@ export const ScenarioHoverContainer = ({
   return (
     <div ref={wrapperRef} data-scenario-hover-wrapper className="absolute inset-0 pointer-events-none z-50">
       {showContent && (
-        <div data-scenario-hover-content className="pointer-events-auto h-full w-full">
+        <div data-scenario-hover-content className="pointer-events-auto relative h-full w-full min-h-[1px]">
           {children}
         </div>
       )}

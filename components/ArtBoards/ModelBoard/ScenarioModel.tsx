@@ -1,5 +1,5 @@
 /** @format */
-'use client';
+"use client";
 
 import { Diff } from "./Diff/Diff";
 import { BoardContainer } from "../BoardContainer";
@@ -8,7 +8,8 @@ import { ModelArtContainer } from "./ModelArtContainer";
 import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
 import { scenario } from "@/types";
 import { Image } from "@/components/General/Image/Image";
-import { FloatingActionButton } from "@/components/General/FloatingActionButton";
+import { DiffModelToggleContent } from "@/components/General/FloatingActionButton";
+import { DraggableFloatingPanel } from "@/components/General/DraggableFloatingPanel";
 import { useCallback, useState } from "react";
 import { toggleShowModelSolution } from "@/store/slices/levels.slice";
 import { useLevelMetaSync } from "@/lib/collaboration/hooks/useLevelMetaSync";
@@ -36,6 +37,7 @@ export const ScenarioModel = ({
   const isCreator = options.creator;
   const [showInteractivePreview, setShowInteractivePreview] = useState(false);
   const [hasExplicitPreviewChoice, setHasExplicitPreviewChoice] = useState(false);
+  const [modelToolbarDragStarted, setModelToolbarDragStarted] = useState(false);
   const shouldShowInteractivePreview =
     isCreator && (showInteractivePreview || (!hasExplicitPreviewChoice && !solutionUrl));
 
@@ -58,21 +60,45 @@ export const ScenarioModel = ({
           >
             <div className="relative">
               {isCreator && (
-                <div className="absolute top-2 right-2 z-20">
-                  <PoppingTitle topTitle={showInteractivePreview ? "Switch to Static" : "Switch to Interactive"}>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-7 w-7 bg-background/80 hover:bg-background"
-                      onClick={() => {
-                        setHasExplicitPreviewChoice(true);
-                        setShowInteractivePreview((currentValue) => !currentValue);
-                      }}
-                    >
-                      {showInteractivePreview ? <ImageIcon className="h-4 w-4" /> : <MousePointer className="h-4 w-4" />}
-                    </Button>
-                  </PoppingTitle>
-                </div>
+                <DraggableFloatingPanel
+                  showOnHover
+                  storageKey={`floating-button-model-${scenario.scenarioId}`}
+                  defaultPosition={{ x: -16, y: 16 }}
+                  onDragStateChange={setModelToolbarDragStarted}
+                >
+                  <div className="flex flex-row items-center gap-3 rounded-lg border border-border/60 bg-background/85 px-3 py-2 text-foreground shadow-lg backdrop-blur-sm transition-colors hover:bg-background/95">
+                    <div className="shrink-0">
+                      <PoppingTitle topTitle={showInteractivePreview ? "Switch to Static" : "Switch to Interactive"}>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7"
+                          onClick={() => {
+                            setHasExplicitPreviewChoice(true);
+                            setShowInteractivePreview((currentValue) => !currentValue);
+                          }}
+                        >
+                          {showInteractivePreview ? <ImageIcon className="h-4 w-4" /> : <MousePointer className="h-4 w-4" />}
+                        </Button>
+                      </PoppingTitle>
+                    </div>
+                    {!shouldShowInteractivePreview && (
+                      <>
+                        <div className="h-8 w-px shrink-0 bg-border/60" aria-hidden />
+                        <div className="min-w-0 flex-1">
+                          <DiffModelToggleContent
+                            dragStarted={modelToolbarDragStarted}
+                            leftLabel="diff"
+                            rightLabel="model"
+                            checked={showModel}
+                            onCheckedChange={handleSwitchModel}
+                          />
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </DraggableFloatingPanel>
               )}
               {!shouldShowInteractivePreview && (
                 <>
@@ -86,15 +112,6 @@ export const ScenarioModel = ({
                   ) : (
                     <Diff scenario={scenario} />
                   )}
-                  <FloatingActionButton
-                    leftLabel="diff"
-                    rightLabel="model"
-                    checked={showModel}
-                    onCheckedChange={handleSwitchModel}
-                    tooltip="Toggle between difference view and model image"
-                    showOnHover={true}
-                    storageKey={`floating-button-model-${scenario.scenarioId}`}
-                  />
                 </>
               )}
             </div>

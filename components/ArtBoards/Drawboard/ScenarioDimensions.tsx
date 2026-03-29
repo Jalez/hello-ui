@@ -3,9 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
 import { changeScenarioDimensions } from "@/store/slices/levels.slice";
-import { batch } from "react-redux";
 import { scenario } from "@/types";
-import { secondaryColor, mainColor } from "@/constants";
 import {
   Select,
   SelectContent,
@@ -13,9 +11,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
-import { Trash2 } from "lucide-react";
-import PoppingTitle from "@/components/General/PoppingTitle";
 import { useLevelMetaSync } from "@/lib/collaboration/hooks/useLevelMetaSync";
 
 type ScenarioDimensionsProps = {
@@ -27,7 +22,6 @@ type ScenarioDimensionsProps = {
   setSelectOpen: (open: boolean) => void;
   editDimensions: boolean;
   setEditDimensions: (edit: boolean) => void;
-  onRemoveScenario?: () => void;
 };
 
 export const ScenarioDimensions = ({
@@ -39,7 +33,6 @@ export const ScenarioDimensions = ({
   setSelectOpen,
   editDimensions,
   setEditDimensions,
-  onRemoveScenario,
 }: ScenarioDimensionsProps): React.ReactNode => {
   const dispatch = useAppDispatch();
   const { syncLevelFields } = useLevelMetaSync();
@@ -235,48 +228,21 @@ export const ScenarioDimensions = ({
   if (!isCreator) return null;
 
 
+  if (!(showDimensions || editDimensions || selectOpen)) {
+    return null;
+  }
+
   return (
-    <>
-      {(showDimensions || editDimensions || selectOpen) && (
-        <div
-          data-dimensions-control
-          className="flex justify-center items-center flex-row gap-3 px-4 py-2"
-          style={{
-            color: secondaryColor,
-            backgroundColor: 'rgba(0, 0, 0, 0.8)',
-          }}
-          onMouseEnter={() => setShowDimensions(true)}
-          onMouseLeave={(e) => {
-            // Don't hide if mouse is moving to parent container or scenario area
-            const relatedTarget = e.relatedTarget as HTMLElement;
-            const parent = e.currentTarget.closest('[data-scenario-hover-content]')?.parentElement?.parentElement;
-            if (relatedTarget && parent && (relatedTarget === parent || parent.contains(relatedTarget))) {
-              return;
-            }
-            if (!selectOpen && !editDimensions) {
-              setShowDimensions(false);
-            }
-          }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {onRemoveScenario && (
-            <PoppingTitle topTitle="Remove Scenario">
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={onRemoveScenario}
-                className="text-destructive hover:text-destructive h-auto p-1"
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </PoppingTitle>
-          )}
+    <div
+      data-dimensions-control
+      className="flex flex-row items-center justify-center gap-3 text-foreground"
+      onClick={(e) => e.stopPropagation()}
+    >
           {!editDimensions ? (
             <div className="flex items-center gap-2">
               <div
                 onClick={handleStaticDimensionClick}
-                className="cursor-pointer select-none text-white font-[Kontakt] text-sm"
-                style={{ color: secondaryColor }}
+                className="cursor-pointer select-none font-[Kontakt] text-sm text-foreground"
               >
                 {currentScenario.dimensions.width} × {currentScenario.dimensions.height}
               </div>
@@ -294,8 +260,7 @@ export const ScenarioDimensions = ({
                 }}
               >
                 <SelectTrigger
-                  className="h-auto p-0 px-1 bg-transparent border-none text-white font-[Kontakt] text-sm focus:ring-0 focus:ring-offset-0 w-auto min-w-0 [&>span]:w-auto"
-                  style={{ color: secondaryColor }}
+                  className="h-auto w-auto min-w-0 border-none bg-transparent p-0 px-1 font-[Kontakt] text-sm text-foreground focus:ring-0 focus:ring-offset-0 [&>span]:w-auto"
                   onClick={(e) => {
                     e.stopPropagation();
                   }}
@@ -328,9 +293,8 @@ export const ScenarioDimensions = ({
               <div className="inline-flex items-center gap-2">
                 <input
                   ref={widthInputRef}
-                  className="text-center bg-transparent text-white font-[Kontakt] text-sm p-0 m-0 outline-none border-none"
-                  style={{ 
-                    color: secondaryColor,
+                  className="m-0 min-w-0 border-none bg-transparent p-0 text-center font-[Kontakt] text-sm text-foreground outline-none"
+                  style={{
                     width: `${String(currentScenario.dimensions.width).length + 1}ch`,
                   }}
                   type="text"
@@ -344,12 +308,11 @@ export const ScenarioDimensions = ({
                     e.currentTarget.select();
                   }}
                 />
-                <span className="text-white font-[Kontakt] text-sm" style={{ color: secondaryColor }}>×</span>
+                <span className="font-[Kontakt] text-sm text-foreground">×</span>
                 <input
                   ref={heightInputRef}
-                  className="text-center bg-transparent text-white font-[Kontakt] text-sm p-0 m-0 outline-none border-none"
-                  style={{ 
-                    color: secondaryColor,
+                  className="m-0 min-w-0 border-none bg-transparent p-0 text-center font-[Kontakt] text-sm text-foreground outline-none"
+                  style={{
                     width: `${String(currentScenario.dimensions.height).length + 1}ch`,
                   }}
                   type="text"
@@ -375,8 +338,7 @@ export const ScenarioDimensions = ({
                 }}
               >
                 <SelectTrigger
-                  className="h-auto p-0 px-1 bg-transparent border-none text-white font-[Kontakt] text-sm focus:ring-0 focus:ring-offset-0 w-auto min-w-0 [&>span]:w-auto"
-                  style={{ color: secondaryColor }}
+                  className="h-auto w-auto min-w-0 border-none bg-transparent p-0 px-1 font-[Kontakt] text-sm text-foreground focus:ring-0 focus:ring-offset-0 [&>span]:w-auto"
                 >
                   <SelectValue>{dimensionUnit}</SelectValue>
                 </SelectTrigger>
@@ -390,8 +352,6 @@ export const ScenarioDimensions = ({
               </Select>
             </form>
           )}
-        </div>
-      )}
-    </>
+    </div>
   );
 };

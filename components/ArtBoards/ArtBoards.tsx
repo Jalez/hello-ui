@@ -4,6 +4,7 @@
 import { useAppSelector } from "@/store/hooks/hooks";
 import { KeyBindings } from "@/components/Editors/KeyBindings";
 import ScenarioAdder from "./ScenarioAdder";
+import ScenarioRemover from "./ScenarioRemover";
 import SidebySideArt from "./SidebySideArt";
 import { ScenarioDrawing } from "./Drawboard/ScenarioDrawing";
 import { ScenarioModel } from "./ModelBoard/ScenarioModel";
@@ -126,7 +127,11 @@ export const ArtBoards = (): React.ReactNode => {
         ) : null}
       </div>
 
-      <div className="absolute bottom-0 right-0 z-[100] p-2">
+      <div className="absolute bottom-0 right-0 z-[100] flex flex-row items-center gap-1 p-2">
+        <ScenarioRemover
+          scenarioId={selectedScenario?.scenarioId ?? null}
+          canRemove={scenarios.length > 1}
+        />
         <ScenarioAdder />
       </div>
     </div>

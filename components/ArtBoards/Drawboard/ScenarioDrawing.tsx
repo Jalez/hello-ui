@@ -11,10 +11,7 @@ import { Board } from "../Board";
 import { Button } from "@/components/ui/button";
 import { scenario } from "@/types";
 import { useCallback, useState } from "react";
-import {
-  removeScenario,
-  toggleImageInteractivity,
-} from "@/store/slices/levels.slice";
+import { toggleImageInteractivity } from "@/store/slices/levels.slice";
 import { MousePointer, ImageIcon } from "lucide-react";
 import PoppingTitle from "@/components/General/PoppingTitle";
 import { ScenarioDimensionsWrapper } from "./ScenarioDimensionsWrapper";
@@ -61,12 +58,6 @@ export const ScenarioDrawing = ({
 
   if (!level) return null;
 
-  const handleRemoveScenario = () => {
-    dispatch(
-      removeScenario({ levelId: currentLevel, scenarioId: scenario.scenarioId })
-    );
-    syncLevelFields(currentLevel - 1, ["scenarios"]);
-  };
   return (
     <div className="relative flex h-full min-h-0 w-full justify-center">
       <BoardContainer
@@ -81,23 +72,25 @@ export const ScenarioDrawing = ({
             <div className="relative">
               {isCreator && (
                 <ScenarioHoverContainer>
-                  <div className="absolute top-2 right-2 flex items-center gap-2 z-10">
-                    <PoppingTitle topTitle={showInteractivePreview ? "Switch to Static" : "Switch to Interactive"}>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-7 w-7 bg-background/80 hover:bg-background"
-                        onClick={handleSwitchDrawing}
-                      >
-                        {showInteractivePreview ? <ImageIcon className="h-4 w-4" /> : <MousePointer className="h-4 w-4" />}
-                      </Button>
-                    </PoppingTitle>
-                    <ScenarioDimensionsWrapper 
-                      scenario={scenario} 
+                  <div className="relative h-full w-full min-h-[1px]">
+                    <ScenarioDimensionsWrapper
+                      scenario={scenario}
                       levelId={currentLevel}
                       showDimensions={true}
                       setShowDimensions={() => {}}
-                      onRemoveScenario={handleRemoveScenario}
+                      toolbarEnd={
+                        <PoppingTitle topTitle={showInteractivePreview ? "Switch to Static" : "Switch to Interactive"}>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7"
+                            onClick={handleSwitchDrawing}
+                          >
+                            {showInteractivePreview ? <ImageIcon className="h-4 w-4" /> : <MousePointer className="h-4 w-4" />}
+                          </Button>
+                        </PoppingTitle>
+                      }
                     />
                   </div>
                 </ScenarioHoverContainer>
