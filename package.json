@@ -107,7 +107,6 @@
     "lib0": "^0.2.117",
     "lti-v1.0-node-library": "^1.0.0",
     "lucide-react": "^0.454.0",
-    "modern-screenshot": "^4.4.9",
     "next": "16.0.10",
     "next-auth": "^4.24.13",
     "next-themes": "^0.4.6",
