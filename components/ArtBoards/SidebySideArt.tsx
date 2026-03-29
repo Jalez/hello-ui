@@ -135,25 +135,9 @@ const SidebySideArt = ({ contents }: SidebySideArtProps): ReactNode => {
         </div>
       </div>
 
-      <div className={layoutMode === "single" ? "flex h-full w-full flex-col items-center justify-center gap-3" : "hidden"}>
-        <div className="relative flex h-full w-full items-center justify-center overflow-hidden">
-          <div
-            className="flex h-full w-full transition-transform duration-300 ease-out"
-            style={{ transform: `translateX(-${visibleIndex * 100}%)` }}
-          >
-            {contents.map((content, index) => (
-              <div
-                key={`mobile-sidebyside-${index}`}
-                className="flex h-full min-w-full items-center justify-center"
-              >
-                {withScalingPreference(content, true)}
-              </div>
-            ))}
-          </div>
-        </div>
-
+      <div className={layoutMode === "single" ? "flex h-full min-h-0 w-full flex-col items-center justify-start gap-3" : "hidden"}>
         {contents.length > 1 ? (
-          <div className="flex w-full max-w-sm items-center justify-between gap-2 px-3">
+          <div className="flex w-full max-w-sm flex-none items-center justify-between gap-2 px-3">
             <Button
               type="button"
               variant="ghost"
@@ -183,6 +167,23 @@ const SidebySideArt = ({ contents }: SidebySideArtProps): ReactNode => {
             </Button>
           </div>
         ) : null}
+
+        <div className="relative flex min-h-0 flex-1 w-full items-center justify-center overflow-hidden">
+          <div
+            className="flex h-full min-h-0 w-full transition-transform duration-300 ease-out"
+            style={{ transform: `translateX(-${visibleIndex * 100}%)` }}
+          >
+            {contents.map((content, index) => (
+              <div
+                key={`mobile-sidebyside-${index}`}
+                className="flex h-full min-h-0 min-w-full items-center justify-center"
+              >
+                {withScalingPreference(content, true)}
+              </div>
+            ))}
+          </div>
+        </div>
+
       </div>
 
       <div className={layoutMode === "row" ? "flex h-full w-full min-h-0" : "hidden"}>

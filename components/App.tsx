@@ -471,13 +471,13 @@ function App() {
                   ref={contentRowRef}
                   className={`flex w-full min-h-0 flex-1 items-stretch ${
                     shouldStackGameLayout
-                      ? "flex-col justify-start gap-4 overflow-visible"
+                      ? "flex-col justify-start overflow-hidden"
                       : "flex-row overflow-hidden"
                   }`}
                 >
                   <div className={`flex w-full min-h-0 items-center justify-center ${
                     shouldStackGameLayout
-                      ? "flex-none overflow-visible"
+                      ? "flex-none overflow-auto"
                       : "min-w-0 flex-1 overflow-hidden"
                   }`}
                   style={

@@ -102,9 +102,9 @@ export const ArtBoards = (): React.ReactNode => {
         </div>
       ) : null}
 
-      <div className="flex-1 min-h-0 w-full">
+      <div className="flex min-h-0 flex-1 w-full flex-col">
         {selectedScenario ? (
-          <section className="flex h-full min-h-0 w-full items-center justify-center p-3">
+          <section className="flex min-h-0 flex-1 w-full items-center justify-center">
             <SidebySideArt
               key={selectedScenario.scenarioId}
               contents={[
@@ -114,7 +114,7 @@ export const ArtBoards = (): React.ReactNode => {
             />
           </section>
         ) : (
-          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+          <div className="flex min-h-0 flex-1 items-center justify-center text-sm text-muted-foreground">
             No scenarios found
           </div>
         )}
@@ -126,7 +126,7 @@ export const ArtBoards = (): React.ReactNode => {
         ) : null}
       </div>
 
-      <div className="absolute bottom-0 right-0 z-[100]">
+      <div className="absolute bottom-0 right-0 z-[100] p-2">
         <ScenarioAdder />
       </div>
     </div>
