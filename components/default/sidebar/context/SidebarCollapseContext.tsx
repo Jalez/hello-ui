@@ -62,12 +62,13 @@ export const SidebarCollapseProvider: React.FC<SidebarCollapseProviderProps> = (
     return getIsMobileForWidth(window.innerWidth);
   });
   const [isOverlayOpen, setIsOverlayOpen] = useState(false);
-  const [isVisible, setIsVisible] = useState(true);
+  const [isVisible, setIsVisibleState] = useSidebarPersistence("sidebar-visible", true);
   const [hasResolvedResponsiveState, setHasResolvedResponsiveState] = useState(false);
   const isMobileRef = useRef(isMobile);
   const isCollapsedRef = useRef(isCollapsed);
   const isOverlayOpenRef = useRef(isOverlayOpen);
   const resizeFrameRef = useRef<number | null>(null);
+  const hasSyncedResponsiveRef = useRef(false);
 
   useEffect(() => {
     isMobileRef.current = isMobile;
@@ -83,20 +84,25 @@ export const SidebarCollapseProvider: React.FC<SidebarCollapseProviderProps> = (
 
   const syncResponsiveState = useCallback(() => {
     const width = window.innerWidth;
-    const nextIsMobile = getIsMobileForWidth(width, isMobileRef.current);
+    const nextIsMobile = hasSyncedResponsiveRef.current
+      ? getIsMobileForWidth(width, isMobileRef.current)
+      : getIsMobileForWidth(width);
     const isSmallScreen = width < 1024; // lg breakpoint
 
     setIsMobile((previousIsMobile) => {
-      const resolvedIsMobile = getIsMobileForWidth(width, previousIsMobile);
+      const resolvedIsMobile = hasSyncedResponsiveRef.current
+        ? getIsMobileForWidth(width, previousIsMobile)
+        : getIsMobileForWidth(width);
       return previousIsMobile === resolvedIsMobile ? previousIsMobile : resolvedIsMobile;
     });
+    hasSyncedResponsiveRef.current = true;
     setHasResolvedResponsiveState(true);
 
     if (!isSmallScreen && isOverlayOpenRef.current) {
       setIsOverlayOpen(false);
     }
 
-    if (nextIsMobile && !isCollapsedRef.current) {
+    if (nextIsMobile) {
       setIsCollapsedState(true);
     }
   }, [getIsMobileForWidth, setIsCollapsedState]);
@@ -135,6 +141,10 @@ export const SidebarCollapseProvider: React.FC<SidebarCollapseProviderProps> = (
   const setIsCollapsed = useCallback((collapsed: boolean) => {
     setIsCollapsedState(collapsed);
   }, [setIsCollapsedState]);
+
+  const setIsVisible = useCallback((visible: boolean) => {
+    setIsVisibleState(visible);
+  }, [setIsVisibleState]);
 
   const toggleCollapsed = useCallback(() => {
     setIsCollapsedState(prev => !prev);

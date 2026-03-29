@@ -469,22 +469,18 @@ function App() {
                 <Navbar />
                 <div
                   ref={contentRowRef}
-                  className={`flex w-full min-h-0 flex-1 items-stretch ${
+                  className={`flex w-full flex-1 items-stretch ${
                     shouldStackGameLayout
                       ? "flex-col justify-start overflow-hidden"
                       : "flex-row overflow-hidden"
                   }`}
                 >
-                  <div className={`flex w-full min-h-0 items-center justify-center ${
+                  <div className={`flex w-full flex-1 min-h-0 items-center justify-center ${
                     shouldStackGameLayout
                       ? "flex-none overflow-auto"
                       : "min-w-0 flex-1 overflow-hidden"
                   }`}
-                  style={
-                    shouldStackGameLayout && stackedArtboardsHeight
-                      ? { height: `${stackedArtboardsHeight}px` }
-                      : undefined
-                  }>
+                >
                     <ArtBoards />
                   </div>
                   <div className={`flex w-full ${

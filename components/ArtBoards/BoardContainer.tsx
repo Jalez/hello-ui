@@ -82,7 +82,7 @@ export const BoardContainer = ({
     return (
       <div
         ref={containerRef}
-        className="flex h-full w-full min-h-0 justify-center"
+        className="flex h-full w-full min-h-0 justify-center items-center"
       >
         {children}
       </div>
@@ -92,7 +92,7 @@ export const BoardContainer = ({
   return (
     <div
       ref={containerRef}
-      className="flex h-full w-full min-h-0 justify-center"
+      className="flex h-full w-full min-h-0 justify-center items-center"
     >
       <div
         className="relative"

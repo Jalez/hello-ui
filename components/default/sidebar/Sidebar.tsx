@@ -36,6 +36,7 @@ export const Sidebar: React.FC<LeftSidebarProps> = ({ isUserAdmin, sidebarHeader
     isCollapsed,
     isMobile,
     isOverlayOpen,
+    hasResolvedResponsiveState,
     closeOverlay,
     setIsOverlayOpen,
     isVisible,
@@ -120,7 +121,7 @@ export const Sidebar: React.FC<LeftSidebarProps> = ({ isUserAdmin, sidebarHeader
     return items;
   };
 
-  if (!isVisible || shouldHideSidebar) {
+  if (!hasResolvedResponsiveState || !isVisible || shouldHideSidebar) {
     return null;
   }
 
