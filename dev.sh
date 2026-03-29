@@ -11,6 +11,8 @@ export COLLAB_ENGINE="${COLLAB_ENGINE:-${NEXT_PUBLIC_COLLAB_ENGINE:-yjs}}"
 export NEXT_PUBLIC_COLLAB_ENGINE="${NEXT_PUBLIC_COLLAB_ENGINE:-${COLLAB_ENGINE}}"
 export WS_ARTIFICIAL_DELAY_MS="${WS_ARTIFICIAL_DELAY_MS:-80}"
 export WS_ARTIFICIAL_JITTER_MS="${WS_ARTIFICIAL_JITTER_MS:-120}"
+export DATABASE_URL="${DATABASE_URL:-postgresql://postgres:postgres@localhost:5433/ui_designer}"
+export DB_CLIENT="${DB_CLIENT:-postgres}"
 APP_PORT="${APP_PORT:-3000}"
 WS_PORT="${WS_PORT:-3100}"
 DRAWBOARD_PORT="${DRAWBOARD_PORT:-3500}"
@@ -61,6 +63,7 @@ close_required_ports
 
 echo "Starting database via docker-compose..."
 docker compose up -d db db-init
+echo "Using DATABASE_URL=${DATABASE_URL}"
 
 echo "Starting ws-server in background..."
 cd "${SCRIPT_DIR}/ws-server"

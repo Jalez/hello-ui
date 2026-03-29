@@ -4,7 +4,8 @@ import { FolderKanban, Loader2, Plus, Search } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import type React from "react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { SidebarButton } from "../sidebar/SidebarButton";
 import { SidebarLink } from "../sidebar/SidebarLink";
 import { useSidebarCollapse } from "../sidebar/context/SidebarCollapseContext";
@@ -19,6 +20,9 @@ interface SidebarGameListProps {
   onGameClick?: () => void;
 }
 
+const MAX_AUTO_LOAD_RETRIES = 2;
+const AUTO_LOAD_RETRY_DELAY_MS = 1500;
+
 export const GameSidebar: React.FC<SidebarGameListProps> = ({ onGameClick }) => {
   const { isCollapsed: contextCollapsed } = useSidebarCollapse();
   const isMobileSidebar = useMobileSidebar();
@@ -32,6 +36,10 @@ export const GameSidebar: React.FC<SidebarGameListProps> = ({ onGameClick }) => 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
+  const autoLoadRetriesRef = useRef(0);
+  const autoLoadPausedRef = useRef(false);
+  const autoLoadInFlightRef = useRef(false);
+  const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isAuthenticated = !!session?.user;
 
@@ -40,27 +48,73 @@ export const GameSidebar: React.FC<SidebarGameListProps> = ({ onGameClick }) => 
     onGameClick,
   });
 
-  useEffect(() => {
-    const loadGms = async () => {
-      if (
-        !isAuthenticated ||
-        hasInitializedGames ||
-        isStoreLoading ||
-        !session?.user?.email ||
-        (isCollapsed && !isSearchModalOpen)
-      ) {
+  const clearRetryTimeout = useCallback(() => {
+    if (retryTimeoutRef.current !== null) {
+      clearTimeout(retryTimeoutRef.current);
+      retryTimeoutRef.current = null;
+    }
+  }, []);
+
+  const shouldAutoLoad =
+    isAuthenticated &&
+    !hasInitializedGames &&
+    !isStoreLoading &&
+    Boolean(session?.user?.email) &&
+    (!isCollapsed || isSearchModalOpen);
+
+  const attemptLoadGames = useCallback(async () => {
+    if (!shouldAutoLoad || autoLoadPausedRef.current || autoLoadInFlightRef.current) {
+      return;
+    }
+
+    autoLoadInFlightRef.current = true;
+
+    try {
+      await loadGames();
+      autoLoadRetriesRef.current = 0;
+      autoLoadPausedRef.current = false;
+      clearRetryTimeout();
+    } catch (error) {
+      console.error("Error loading games:", error);
+
+      if (autoLoadRetriesRef.current < MAX_AUTO_LOAD_RETRIES) {
+        autoLoadRetriesRef.current += 1;
+        const delay = AUTO_LOAD_RETRY_DELAY_MS * autoLoadRetriesRef.current;
+        clearRetryTimeout();
+        retryTimeoutRef.current = setTimeout(() => {
+          retryTimeoutRef.current = null;
+          autoLoadInFlightRef.current = false;
+          void attemptLoadGames();
+        }, delay);
         return;
       }
 
-      try {
-        await loadGames();
-      } catch (error) {
-        console.error("Error loading games:", error);
+      autoLoadPausedRef.current = true;
+      toast.error("Could not load games after multiple attempts. Auto-retries are paused.");
+    } finally {
+      if (retryTimeoutRef.current === null) {
+        autoLoadInFlightRef.current = false;
       }
-    };
+    }
+  }, [clearRetryTimeout, loadGames, shouldAutoLoad]);
 
-    void loadGms();
-  }, [hasInitializedGames, isAuthenticated, isCollapsed, isSearchModalOpen, isStoreLoading, loadGames, session?.user?.email]);
+  useEffect(() => {
+    void attemptLoadGames();
+  }, [attemptLoadGames]);
+
+  useEffect(() => {
+    if (hasInitializedGames) {
+      autoLoadPausedRef.current = false;
+      autoLoadRetriesRef.current = 0;
+      clearRetryTimeout();
+    }
+  }, [clearRetryTimeout, hasInitializedGames]);
+
+  useEffect(() => {
+    return () => {
+      clearRetryTimeout();
+    };
+  }, [clearRetryTimeout]);
 
   const isActive = (gameId: string) => {
     return pathname === `/game/${gameId}` || pathname === `/creator/${gameId}`;
