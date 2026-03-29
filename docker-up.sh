@@ -32,6 +32,14 @@ if [[ "$(hostname)" =~ tie-lukioplus.rd.tuni.fi ]]; then
   fi
   NEXT_PUBLIC_DRAWBOARD_CAPTURE_MODE="${NEXT_PUBLIC_DRAWBOARD_CAPTURE_MODE:-playwright}"
   echo "NEXT_PUBLIC_DRAWBOARD_CAPTURE_MODE for app image build: ${NEXT_PUBLIC_DRAWBOARD_CAPTURE_MODE}"
+  if [[ -z "${NEXT_PUBLIC_REMOTE_SYNC_DEBOUNCE_MS:-}" ]] && [[ -f .env.production ]]; then
+    NEXT_PUBLIC_REMOTE_SYNC_DEBOUNCE_MS="$(
+      grep -E '^[[:space:]]*NEXT_PUBLIC_REMOTE_SYNC_DEBOUNCE_MS=' .env.production 2>/dev/null | tail -1 \
+        | sed -E 's/^[[:space:]]*NEXT_PUBLIC_REMOTE_SYNC_DEBOUNCE_MS=//; s/\r$//; s/^"//; s/"$//; s/^'\''//; s/'\''$//'
+    )"
+  fi
+  NEXT_PUBLIC_REMOTE_SYNC_DEBOUNCE_MS="${NEXT_PUBLIC_REMOTE_SYNC_DEBOUNCE_MS:-0}"
+  echo "NEXT_PUBLIC_REMOTE_SYNC_DEBOUNCE_MS for app image build: ${NEXT_PUBLIC_REMOTE_SYNC_DEBOUNCE_MS}"
   docker build -t ui-designer-app:latest \
     --build-arg NEXT_PUBLIC_APP_URL=https://tie-lukioplus.rd.tuni.fi/css-artist \
     --build-arg NEXT_PUBLIC_DRAWBOARD_URL=https://tie-lukioplus.rd.tuni.fi/drawboard \
@@ -39,6 +47,7 @@ if [[ "$(hostname)" =~ tie-lukioplus.rd.tuni.fi ]]; then
     --build-arg NEXT_PUBLIC_ASSET_PREFIX=/css-artist \
     --build-arg NEXT_PUBLIC_BASE_PATH=/css-artist \
     --build-arg NEXT_PUBLIC_DRAWBOARD_CAPTURE_MODE="${NEXT_PUBLIC_DRAWBOARD_CAPTURE_MODE}" \
+    --build-arg NEXT_PUBLIC_REMOTE_SYNC_DEBOUNCE_MS="${NEXT_PUBLIC_REMOTE_SYNC_DEBOUNCE_MS}" \
     -f Dockerfile .
   docker build -t ui-designer-ws:latest -f ws-server/Dockerfile ./ws-server
   docker build -t ui-designer-drawboard:latest -f drawBoard/Dockerfile ./drawBoard

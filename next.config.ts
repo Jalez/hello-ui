@@ -33,6 +33,8 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_DRAWBOARD_URL: process.env.NEXT_PUBLIC_DRAWBOARD_URL || "http://localhost:3500",
     NEXT_PUBLIC_DRAWBOARD_CAPTURE_MODE:
       process.env.NEXT_PUBLIC_DRAWBOARD_CAPTURE_MODE || "playwright",
+    NEXT_PUBLIC_REMOTE_SYNC_DEBOUNCE_MS:
+      process.env.NEXT_PUBLIC_REMOTE_SYNC_DEBOUNCE_MS ?? "0",
   },
 
   // Image domains for external images
