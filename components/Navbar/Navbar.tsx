@@ -252,25 +252,6 @@ export const Navbar = () => {
     setIsResetDialogOpen(false);
   }, []);
 
-  const gradeManualCaptureNavControl = () => {
-    if (!showBoardPicturesNavButton || !drawboardNavbarCapture) {
-      return null;
-    }
-    return (
-      <div className="flex flex-none">
-        <div className="rounded-md px-2 py-1.5">
-          <CompactMenuButton
-            icon={ImageIcon}
-            label="Grade"
-            text="Grade"
-            disabled={drawboardNavbarCapture.captureBusy}
-            onClick={() => drawboardNavbarCapture.requestCaptureBoth()}
-            title="Capture reference and drawing images for the visible scenario (for scoring)"
-          />
-        </div>
-      </div>
-    );
-  };
 
   const renderGameMenu = () => (
     <DropdownMenu>
@@ -520,7 +501,6 @@ export const Navbar = () => {
           {renderGameMenu()}
         </div>
       </div>
-      {gradeManualCaptureNavControl()}
       {renderCompactCreatorLevelMenu()}
     </>
   );
@@ -548,7 +528,6 @@ export const Navbar = () => {
           {renderGameMenu()}
         </div>
       </div>
-      {gradeManualCaptureNavControl()}
       <div className="flex flex-1 min-w-0">
         <div className="w-full rounded-md px-2 py-1.5">
           <div className="flex-1 min-w-0">
