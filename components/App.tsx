@@ -2,6 +2,7 @@
 
 import Editors from "./Editors/Editors";
 import { ArtBoards } from "./ArtBoards/ArtBoards";
+import { DrawboardNavbarCaptureProvider } from "./ArtBoards/DrawboardNavbarCaptureContext";
 import { LevelUpdater } from "./General/LevelUpdater";
 import { GameContainer } from "./General/GameContainer";
 import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
@@ -465,7 +466,7 @@ function App() {
                 </div>
               </div>
             ) : levels.length > 0 ? (
-              <>
+              <DrawboardNavbarCaptureProvider>
                 <Navbar />
                 <div
                   ref={contentRowRef}
@@ -480,7 +481,7 @@ function App() {
                       ? "flex-none overflow-auto"
                       : "min-w-0 flex-1 overflow-hidden"
                   }`}
-                >
+                  >
                     <ArtBoards />
                   </div>
                   <div className={`flex w-full ${
@@ -497,7 +498,7 @@ function App() {
                   </div>
                 </div>
                 <Footer />
-              </>
+              </DrawboardNavbarCaptureProvider>
             ) : null}
           </GameContainer>
         </div>

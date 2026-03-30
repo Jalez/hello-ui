@@ -2,7 +2,7 @@
 
 import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
 import { Button } from "@/components/ui/button";
-import { RotateCcw, PanelLeft, Map, Flag, Settings, Trash2, Loader2, Gamepad2, BarChart3, Users } from "lucide-react";
+import { RotateCcw, PanelLeft, Map, Flag, Settings, Trash2, Loader2, Gamepad2, BarChart3, Users, ImageIcon } from "lucide-react";
 import { LevelSelect } from "@/components/General/LevelControls/LevelControls";
 import { setCurrentLevel } from "@/store/slices/currentLevel.slice";
 import { resetLevel } from "@/store/slices/levels.slice";
@@ -42,6 +42,8 @@ import Shaker from "@/components/General/Shaker/Shaker";
 import { CompactMenuButton, compactMenuButtonClass, compactMenuLabelClass } from "@/components/General/CompactMenuButton";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils/cn";
+import { resolveManualDrawboardCapture } from "@/lib/gameRuntimeConfig";
+import { useOptionalDrawboardNavbarCapture } from "@/components/ArtBoards/DrawboardNavbarCaptureContext";
 
 export const Navbar = () => {
   const dispatch = useAppDispatch();
@@ -87,6 +89,9 @@ export const Navbar = () => {
 
   const level = levels[currentLevel - 1];
   const points = useAppSelector((state) => state.points);
+  const drawboardNavbarCapture = useOptionalDrawboardNavbarCapture();
+  const showBoardPicturesNavButton =
+    resolveManualDrawboardCapture(currentGame) && Boolean(drawboardNavbarCapture);
   const shouldEmphasizeFinishGame = points.allMaxPoints > 0 && points.allPoints >= points.allMaxPoints;
   const mapEditorRef = useRef<MapEditorRef>(null);
   const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
@@ -246,6 +251,26 @@ export const Navbar = () => {
   const handleAnchorElReset = useCallback(() => {
     setIsResetDialogOpen(false);
   }, []);
+
+  const gradeManualCaptureNavControl = () => {
+    if (!showBoardPicturesNavButton || !drawboardNavbarCapture) {
+      return null;
+    }
+    return (
+      <div className="flex flex-none">
+        <div className="rounded-md px-2 py-1.5">
+          <CompactMenuButton
+            icon={ImageIcon}
+            label="Grade"
+            text="Grade"
+            disabled={drawboardNavbarCapture.captureBusy}
+            onClick={() => drawboardNavbarCapture.requestCaptureBoth()}
+            title="Capture reference and drawing images for the visible scenario (for scoring)"
+          />
+        </div>
+      </div>
+    );
+  };
 
   const renderGameMenu = () => (
     <DropdownMenu>
@@ -495,6 +520,7 @@ export const Navbar = () => {
           {renderGameMenu()}
         </div>
       </div>
+      {gradeManualCaptureNavControl()}
       {renderCompactCreatorLevelMenu()}
     </>
   );
@@ -522,6 +548,7 @@ export const Navbar = () => {
           {renderGameMenu()}
         </div>
       </div>
+      {gradeManualCaptureNavControl()}
       <div className="flex flex-1 min-w-0">
         <div className="w-full rounded-md px-2 py-1.5">
           <div className="flex-1 min-w-0">

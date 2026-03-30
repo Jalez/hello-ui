@@ -6,6 +6,20 @@
   <link rel="icon" type="image/svg+xml" href="/vite.svg" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>DRAW-BOARD</title>
+  <!-- Must match app/api/_lib/services/drawboardRenderService.ts buildRenderHtml base block (width/height set in main.ts from URL). -->
+  <style id="drawboard-base-shell">
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: transparent;
+    }
+
+    body {
+      position: relative;
+    }
+  </style>
   <style id="user-styles"></style>
 
 </head>

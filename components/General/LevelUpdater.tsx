@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
 import { sendScoreToParentFrame } from "@/store/actions/score.actions";
 import { ScenarioUpdater } from "./ScenarioUpdater";
@@ -81,19 +81,6 @@ export const LevelUpdater = () => {
     );
   }, [solutionPixels, level, solutions, dispatch]);
 
-  const handleSolutionPixelUpdate = useCallback((scenarioId: string, pixels: ImageData) => {
-    setSolutionPixels((prev) => ({
-      ...prev,
-      [scenarioId]: pixels,
-    }));
-  }, []);
-
-  const handleDrawingPixelUpdate = useCallback((scenarioId: string, pixels: ImageData) => {
-    setDrawingPixels((prev) => ({
-      ...prev,
-      [scenarioId]: pixels,
-    }));
-  }, []);
   if (!level) return null;
   const scenarios = Array.isArray(level.scenarios) ? level.scenarios : [];
   // get the points from the current level
@@ -107,8 +94,6 @@ export const LevelUpdater = () => {
               scenario={scenario}
               drawingPixels={drawingPixels[scenario.scenarioId] || undefined}
               solutionPixels={solutionPixels[scenario.scenarioId] || undefined}
-              handleSolutionPixelUpdate={handleSolutionPixelUpdate}
-              handleDrawingPixelUpdate={handleDrawingPixelUpdate}
             />
           </ErrorBoundary>
         );

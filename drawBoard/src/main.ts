@@ -10,6 +10,7 @@ type ErrorObj = {
 type DrawboardPayload = {
   name?: string;
   message?: string;
+  scenarioId?: string;
   html?: string;
   css?: string;
   js?: string;
@@ -25,13 +26,26 @@ const scenarioWidth = parseInt(params.get("width") || "0", 10);
 const scenarioHeight = parseInt(params.get("height") || "0", 10);
 const captureMode = params.get("captureMode") || "playwright";
 const isBrowserCapture = captureMode === "browser";
+const manualRaw = (params.get("manualCapture") || "").trim().toLowerCase();
+/** When true, `scheduleRenderReady` does not capture; parent sends `request-capture`. Level `events` still trigger capture. */
+const isManualCapture = manualRaw === "true" || manualRaw === "1";
 
-/** Playwright iframe waits 50ms before posting `render-ready` to the parent. */
-const PLAYWRIGHT_RENDER_READY_DELAY_MS = 50;
+/** Playwright iframe waits before posting `render-ready` so DOM/fonts can settle. */
+const PLAYWRIGHT_RENDER_READY_DELAY_MS = 80;
+/** Second pass: fonts/layout often match server screenshot only after a short delay. */
+const PLAYWRIGHT_LAYOUT_FOLLOW_UP_MS = 400;
 
-document.documentElement.style.width = scenarioWidth ? `${scenarioWidth}px` : "100%";
-document.documentElement.style.height = scenarioHeight ? `${scenarioHeight}px` : "100%";
-document.body.style.position = "relative";
+/** Scenario box on both roots — mirrors Playwright `buildRenderHtml` (drawboard-base-shell covers margin/padding/overflow/bg/position). */
+function applyScenarioDocumentBox() {
+  const w = scenarioWidth ? `${scenarioWidth}px` : "100%";
+  const h = scenarioHeight ? `${scenarioHeight}px` : "100%";
+  document.documentElement.style.width = w;
+  document.documentElement.style.height = h;
+  document.body.style.width = w;
+  document.body.style.height = h;
+}
+
+applyScenarioDocumentBox();
 
 let errorOverlay: HTMLDivElement | null = null;
 let dataReceived = false;
@@ -41,10 +55,18 @@ let interactive = false;
 let events: string[] = [];
 let mountedIntervalId: number | null = null;
 let renderReadyTimeoutId: number | null = null;
+/** Playwright: second `render-ready` after layout/fonts settle (dedup window allows it through). */
+let playwrightLayoutFollowUpId: number | null = null;
 let captureListener: (() => void) | null = null;
 let currentScript: HTMLScriptElement | null = null;
 let currentScriptUrl: string | null = null;
 let isCreatorFromParent = false;
+/**
+ * Manual capture: one automatic capture when this iframe document first becomes ready.
+ * Parent `reload` calls resetState() on every editor change — we must NOT reset this flag there,
+ * or every keystroke would re-trigger auto capture.
+ */
+let manualModeBootstrapCapturePending = true;
 
 function updateInteractiveFlag() {
   document.body.dataset.interactive = interactive ? "true" : "false";
@@ -57,14 +79,28 @@ function clearRenderReadyTimeout() {
   }
 }
 
+function clearPlaywrightLayoutFollowUp() {
+  if (playwrightLayoutFollowUpId !== null) {
+    window.clearTimeout(playwrightLayoutFollowUpId);
+    playwrightLayoutFollowUpId = null;
+  }
+}
+
+function postMountedPing() {
+  window.parent.postMessage(
+    { message: "mounted", name: urlName, scenarioId },
+    "*",
+  );
+}
+
 function startMountedPing() {
   if (mountedIntervalId !== null) {
     return;
   }
 
-  window.parent.postMessage("mounted", "*");
+  postMountedPing();
   mountedIntervalId = window.setInterval(() => {
-    window.parent.postMessage("mounted", "*");
+    postMountedPing();
   }, 200);
 }
 
@@ -146,19 +182,14 @@ function showError(error: ErrorObj) {
   }
 }
 
-function syncEventListeners() {
-  if (captureListener) {
-    events.forEach((eventName) => {
-      document.body.removeEventListener(eventName, captureListener!);
-    });
-  }
-
-  captureListener = () => {
+function runCaptureNow() {
+  void (async () => {
     try {
       if (isBrowserCapture) {
         void captureBrowser();
         return;
       }
+      await waitForPaintAfterCss();
       const snapshot = createDrawboardSnapshot();
       window.parent.postMessage(
         {
@@ -170,8 +201,20 @@ function syncEventListeners() {
         "*",
       );
     } catch (snapshotError) {
-      console.error("Drawboard: Failed to create event snapshot", snapshotError);
+      console.error("Drawboard: Failed to create snapshot", snapshotError);
     }
+  })();
+}
+
+function syncEventListeners() {
+  if (captureListener) {
+    events.forEach((eventName) => {
+      document.body.removeEventListener(eventName, captureListener!);
+    });
+  }
+
+  captureListener = () => {
+    runCaptureNow();
   };
 
   events.forEach((eventName) => {
@@ -180,22 +223,36 @@ function syncEventListeners() {
 }
 
 /**
- * Old React drawboard called `domToPng` from `useEffect` with no `fonts.ready` wait.
- * Waiting unbounded on `document.fonts.ready` can feel very slow with remote fonts.
- * Cap the font wait; one rAF approximates “after layout” before screenshot.
+ * Browser: cap font wait (domToPng path should stay snappy).
+ * Playwright: full `document.fonts.ready` + extra rAF so cloned HTML/CSS matches final layout;
+ * otherwise solution vs drawing iframes often finish on different font epochs until “interactive”.
  */
 async function waitForPaintAfterCss() {
-  if (document.fonts?.ready) {
+  const settleFonts = async () => {
+    if (!document.fonts?.ready) {
+      return;
+    }
     try {
-      await Promise.race([
-        document.fonts.ready,
-        new Promise<void>((r) => setTimeout(r, 32)),
-      ]);
+      if (isBrowserCapture) {
+        await Promise.race([
+          document.fonts.ready,
+          new Promise<void>((r) => setTimeout(r, 32)),
+        ]);
+      } else {
+        await document.fonts.ready;
+      }
     } catch {
       /* ignore */
     }
-  }
+  };
+
+  await settleFonts();
   await new Promise<void>((r) => requestAnimationFrame(() => r()));
+  if (!isBrowserCapture) {
+    await new Promise<void>((r) => requestAnimationFrame(() => r()));
+    await settleFonts();
+    await new Promise<void>((r) => setTimeout(r, 56));
+  }
 }
 
 async function captureBrowser() {
@@ -233,7 +290,9 @@ async function captureBrowser() {
       "*",
       [bytes.buffer],
     );
-    const includeDataUrl = urlName === "solutionUrl" || (urlName === "drawingUrl" && isCreatorFromParent);
+    // Match Playwright: always send PNG for both boards so Redux `drawingUrl` / `solutionUrl`
+    // update in game mode (domToPng path used to omit drawing for non-creator only).
+    const includeDataUrl = urlName === "solutionUrl" || urlName === "drawingUrl";
     if (includeDataUrl) {
       window.parent.postMessage({ dataURL: dataUrl, urlName, scenarioId, message: "data" }, "*");
     }
@@ -244,35 +303,79 @@ async function captureBrowser() {
 
 function scheduleRenderReady() {
   clearRenderReadyTimeout();
+  clearPlaywrightLayoutFollowUp();
   if (!stylesCorrect || !jsCorrect || errorOverlay) {
     return;
   }
 
   /**
    * Browser: `setTimeout(0)` — like the old React `useEffect` after commit (no fixed 50ms sleep).
-   * Playwright: 50ms so the DOM settles before we clone HTML/CSS for the parent API.
+   * Playwright: delay so the DOM settles before we clone HTML/CSS for the parent API.
    */
   const delayMs = isBrowserCapture ? 0 : PLAYWRIGHT_RENDER_READY_DELAY_MS;
 
   renderReadyTimeoutId = window.setTimeout(() => {
-    try {
-      if (isBrowserCapture) {
-        void captureBrowser();
+    void (async () => {
+      if (isManualCapture && !manualModeBootstrapCapturePending) {
         return;
       }
-      const snapshot = createDrawboardSnapshot();
-      window.parent.postMessage(
-        {
-          ...snapshot,
-          message: "render-ready",
-          name: urlName,
-          scenarioId,
-        },
-        "*",
-      );
-    } catch (snapshotError) {
-      console.error("Drawboard: Failed to create snapshot", snapshotError);
-    }
+      if (isBrowserCapture) {
+        try {
+          await captureBrowser();
+          if (isManualCapture) {
+            manualModeBootstrapCapturePending = false;
+          }
+        } catch (browserCaptureError) {
+          console.error("Drawboard: Browser capture failed", browserCaptureError);
+        }
+        return;
+      }
+      try {
+        await waitForPaintAfterCss();
+        const snapshot = createDrawboardSnapshot();
+        window.parent.postMessage(
+          {
+            ...snapshot,
+            message: "render-ready",
+            name: urlName,
+            scenarioId,
+          },
+          "*",
+        );
+        if (isManualCapture) {
+          manualModeBootstrapCapturePending = false;
+        }
+      } catch (playwrightSnapshotError) {
+        console.error("Drawboard: Failed to create snapshot", playwrightSnapshotError);
+      }
+
+      if (!isManualCapture) {
+        clearPlaywrightLayoutFollowUp();
+        playwrightLayoutFollowUpId = window.setTimeout(() => {
+          playwrightLayoutFollowUpId = null;
+          if (!stylesCorrect || !jsCorrect || errorOverlay) {
+            return;
+          }
+          void (async () => {
+            try {
+              await waitForPaintAfterCss();
+              const followSnapshot = createDrawboardSnapshot();
+              window.parent.postMessage(
+                {
+                  ...followSnapshot,
+                  message: "render-ready",
+                  name: urlName,
+                  scenarioId,
+                },
+                "*",
+              );
+            } catch (snapshotError) {
+              console.error("Drawboard: Failed layout follow-up snapshot", snapshotError);
+            }
+          })();
+        }, PLAYWRIGHT_LAYOUT_FOLLOW_UP_MS);
+      }
+    })();
   }, delayMs);
 }
 
@@ -319,10 +422,12 @@ function applyJs(js: string) {
 
 function resetState() {
   clearRenderReadyTimeout();
+  clearPlaywrightLayoutFollowUp();
   clearUserScript();
   hideError();
   document.body.innerHTML = "";
   setStyles("");
+  applyScenarioDocumentBox();
   stylesCorrect = false;
   jsCorrect = false;
   interactive = false;
@@ -365,6 +470,31 @@ window.addEventListener("message", (event: MessageEvent<DrawboardPayload>) => {
 
   if (event.data?.message === "reload") {
     resetState();
+    return;
+  }
+
+  if (event.data?.message === "options-patch") {
+    if (event.data.name !== urlName) {
+      return;
+    }
+    if (event.data.scenarioId !== undefined && event.data.scenarioId !== scenarioId) {
+      return;
+    }
+    interactive = Boolean(event.data.interactive);
+    isCreatorFromParent = Boolean(event.data.isCreator);
+    updateInteractiveFlag();
+    syncEventListeners();
+    if (stylesCorrect && jsCorrect && !errorOverlay) {
+      scheduleRenderReady();
+    }
+    return;
+  }
+
+  if (event.data?.message === "request-capture") {
+    if (event.data.scenarioId !== undefined && event.data.scenarioId !== scenarioId) {
+      return;
+    }
+    runCaptureNow();
     return;
   }
 

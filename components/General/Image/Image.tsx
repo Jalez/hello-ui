@@ -5,10 +5,12 @@ import { Spinner } from "../Spinner/Spinner";
 
 // interface
 interface ModelProps {
-  imageUrl: string;
+  imageUrl?: string;
   height: number;
   width: number;
   name?: string;
+  /** Shown while `imageUrl` is empty (e.g. capture not ready yet). */
+  loadingMessage?: string;
 }
 
 export const Image = ({
@@ -16,6 +18,7 @@ export const Image = ({
   height,
   width,
   name,
+  loadingMessage,
 }: ModelProps): React.ReactNode => {
   return (
     <div
@@ -32,7 +35,7 @@ export const Image = ({
             style={{ width: `${width}px`, height: `${height}px`, display: "block" }}
           />
         ) : (
-          <Spinner height={height} width={width} />
+          <Spinner height={height} width={width} message={loadingMessage} />
         )}
       </div>
       {imageUrl && (

@@ -75,7 +75,11 @@ function buildGamePayload(game: Game | null) {
     accessKey: game.access_key,
     hasAccessKey: Boolean(game.access_key),
     collaborationMode: game.collaboration_mode,
+    groupId: game.group_id,
     allowDuplicateUsers: game.allow_duplicate_users,
+    drawboardCaptureMode: game.drawboard_capture_mode,
+    manualDrawboardCapture: game.manual_drawboard_capture,
+    remoteSyncDebounceMs: game.remote_sync_debounce_ms,
     isOwner: Boolean(game.is_owner),
     isCollaborator: Boolean(game.is_collaborator),
     canEdit: Boolean(game.can_edit),
@@ -204,6 +208,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       accessKey,
       collaborationMode: body.collaborationMode,
       allowDuplicateUsers: body.allowDuplicateUsers,
+      drawboardCaptureMode: body.drawboardCaptureMode,
+      manualDrawboardCapture: body.manualDrawboardCapture,
+      remoteSyncDebounceMs:
+        body.remoteSyncDebounceMs === undefined ? undefined : Number(body.remoteSyncDebounceMs),
     });
 
     if (!game) {

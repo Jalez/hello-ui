@@ -24,8 +24,8 @@ import { AiReviewPanel } from "./AiReviewPanel";
 import {
   commentKeymapCompartment,
   reviewDecorationsCompartment,
-  LOCAL_REDUX_UPDATE_DEBOUNCE_MS,
 } from "./constants";
+import { useGameRuntimeConfig } from "@/hooks/useGameRuntimeConfig";
 import { getCommentKeymap } from "./getCommentKeyMap";
 import { RemoteCaretsOverlay } from "./RemoteCaretsOverlay";
 import { createConsistentLineTheme } from "./theme";
@@ -103,6 +103,7 @@ export default function CodeEditor({
   const consistentLineTheme = createConsistentLineTheme(isDark);
   const lastActivityTsRef = useRef<number | null>(null);
   const collaboration = useOptionalCollaboration();
+  const { remoteSyncDebounceMs } = useGameRuntimeConfig();
 
   const {
     review,
@@ -209,12 +210,12 @@ export default function CodeEditor({
     }
     const timeout = setTimeout(() => {
       flushPendingLocalCodeUpdate(code);
-    }, LOCAL_REDUX_UPDATE_DEBOUNCE_MS);
+    }, remoteSyncDebounceMs);
 
     return () => {
       clearTimeout(timeout);
     }
-  }, [applyingExternalUpdateRef, code, flushPendingLocalCodeUpdate, isYjsManaged, template]);
+  }, [applyingExternalUpdateRef, code, flushPendingLocalCodeUpdate, isYjsManaged, remoteSyncDebounceMs, template]);
 
 
   useEffect(() => {

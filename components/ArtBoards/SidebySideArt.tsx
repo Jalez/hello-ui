@@ -21,13 +21,18 @@ const hasOverflow = (element: HTMLDivElement | null): boolean => {
   );
 };
 
-const withScalingPreference = (content: ReactNode, allowScaling: boolean) => {
-  if (!isValidElement<{ allowScaling?: boolean }>(content)) {
+const withScalingPreference = (
+  content: ReactNode,
+  allowScaling: boolean,
+  registerForNavbarCapture: boolean,
+) => {
+  if (!isValidElement<{ allowScaling?: boolean; registerForNavbarCapture?: boolean }>(content)) {
     return content;
   }
 
   return cloneElement(content, {
     allowScaling,
+    registerForNavbarCapture,
   });
 };
 
@@ -115,7 +120,7 @@ const SidebySideArt = ({ contents }: SidebySideArtProps): ReactNode => {
               : "flex min-h-0 w-full flex-1 items-start justify-center"
           }
         >
-          {withScalingPreference(content, false)}
+          {withScalingPreference(content, false, !probe)}
         </div>
       ))}
     </div>
@@ -178,7 +183,7 @@ const SidebySideArt = ({ contents }: SidebySideArtProps): ReactNode => {
                 key={`mobile-sidebyside-${index}`}
                 className="flex h-full min-h-0 min-w-full items-center justify-center"
               >
-                {withScalingPreference(content, true)}
+                {withScalingPreference(content, true, true)}
               </div>
             ))}
           </div>

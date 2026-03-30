@@ -8,23 +8,32 @@ import { ModelArtContainer } from "./ModelArtContainer";
 import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
 import { scenario } from "@/types";
 import { Image } from "@/components/General/Image/Image";
-import { DiffModelToggleContent } from "@/components/General/FloatingActionButton";
+import {
+  DiffModelToggleContent,
+  FloatingActionButton,
+} from "@/components/General/FloatingActionButton";
 import { DraggableFloatingPanel } from "@/components/General/DraggableFloatingPanel";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useOptionalDrawboardNavbarCapture } from "@/components/ArtBoards/DrawboardNavbarCaptureContext";
 import { toggleShowModelSolution } from "@/store/slices/levels.slice";
 import { useLevelMetaSync } from "@/lib/collaboration/hooks/useLevelMetaSync";
 import { Button } from "@/components/ui/button";
 import PoppingTitle from "@/components/General/PoppingTitle";
-import { ImageIcon, MousePointer } from "lucide-react";
+import { Camera, ImageIcon, MousePointer } from "lucide-react";
+import type { FrameHandle } from "@/components/ArtBoards/Frame";
+import { useGameRuntimeConfig } from "@/hooks/useGameRuntimeConfig";
 
 type ScenarioModelProps = {
   scenario: scenario;
   allowScaling?: boolean;
+  /** When true, registers with creator navbar Grade (visible artboards only; not used on player game nav). */
+  registerForNavbarCapture?: boolean;
 };
 
 export const ScenarioModel = ({
   scenario,
   allowScaling = false,
+  registerForNavbarCapture = false,
 }: ScenarioModelProps): React.ReactNode => {
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const level = useAppSelector((state) => state.levels[currentLevel - 1]);
@@ -38,6 +47,38 @@ export const ScenarioModel = ({
   const [showInteractivePreview, setShowInteractivePreview] = useState(false);
   const [hasExplicitPreviewChoice, setHasExplicitPreviewChoice] = useState(false);
   const [modelToolbarDragStarted, setModelToolbarDragStarted] = useState(false);
+  const [solutionCaptureBusy, setSolutionCaptureBusy] = useState(false);
+  const solutionFrameRef = useRef<FrameHandle | null>(null);
+  const captureNav = useOptionalDrawboardNavbarCapture();
+  const { manualDrawboardCapture } = useGameRuntimeConfig();
+
+  const bindSolutionFrame = useCallback(
+    (instance: FrameHandle | null) => {
+      solutionFrameRef.current = instance;
+      if (registerForNavbarCapture) {
+        captureNav?.registerSolutionFrame(instance);
+      }
+    },
+    [registerForNavbarCapture, captureNav],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (registerForNavbarCapture) {
+        captureNav?.registerSolutionFrame(null);
+      }
+    };
+  }, [registerForNavbarCapture, captureNav]);
+
+  const handleSolutionCaptureBusy = useCallback(
+    (busy: boolean) => {
+      setSolutionCaptureBusy(busy);
+      if (registerForNavbarCapture) {
+        captureNav?.notifySolutionBusy(busy);
+      }
+    },
+    [captureNav, registerForNavbarCapture],
+  );
   const shouldShowInteractivePreview =
     isCreator && (showInteractivePreview || (!hasExplicitPreviewChoice && !solutionUrl));
 
@@ -57,8 +98,19 @@ export const ScenarioModel = ({
           <ModelArtContainer
             scenario={scenario}
             showInteractivePreview={shouldShowInteractivePreview}
+            frameRef={bindSolutionFrame}
+            onCaptureBusyChange={handleSolutionCaptureBusy}
+            isCreator={isCreator}
+            solutionUrl={solutionUrl}
           >
-            <div className="relative">
+            <div
+              className="relative"
+              style={{
+                width: scenario.dimensions.width,
+                height: scenario.dimensions.height,
+           
+              }}
+            >
               {isCreator && (
                 <DraggableFloatingPanel
                   showOnHover
@@ -83,6 +135,42 @@ export const ScenarioModel = ({
                         </Button>
                       </PoppingTitle>
                     </div>
+                    {manualDrawboardCapture && shouldShowInteractivePreview && (
+                      <>
+                        <div className="h-8 w-px shrink-0 bg-border/60" aria-hidden />
+                        <PoppingTitle topTitle="Capture picture from solution preview">
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="secondary"
+                            className="h-7 w-7"
+                            disabled={solutionCaptureBusy}
+                            aria-label="Capture picture from solution preview"
+                            onClick={() => solutionFrameRef.current?.requestCapture()}
+                          >
+                            <Camera className="h-4 w-4" />
+                          </Button>
+                        </PoppingTitle>
+                      </>
+                    )}
+                    {manualDrawboardCapture && !shouldShowInteractivePreview && (
+                      <>
+                        <div className="h-8 w-px shrink-0 bg-border/60" aria-hidden />
+                        <PoppingTitle topTitle="Capture picture from solution (static view)">
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="secondary"
+                            className="h-7 w-7"
+                            disabled={solutionCaptureBusy}
+                            aria-label="Capture picture from solution (static view)"
+                            onClick={() => solutionFrameRef.current?.requestCapture()}
+                          >
+                            <Camera className="h-4 w-4" />
+                          </Button>
+                        </PoppingTitle>
+                      </>
+                    )}
                     {!shouldShowInteractivePreview && (
                       <>
                         <div className="h-8 w-px shrink-0 bg-border/60" aria-hidden />
@@ -100,19 +188,39 @@ export const ScenarioModel = ({
                   </div>
                 </DraggableFloatingPanel>
               )}
+              {!isCreator && !shouldShowInteractivePreview && (
+                <FloatingActionButton
+                  showOnHover
+                  storageKey={`floating-diff-model-game-${scenario.scenarioId}`}
+                  leftLabel="diff"
+                  rightLabel="model"
+                  checked={showModel}
+                  onCheckedChange={handleSwitchModel}
+                />
+              )}
               {!shouldShowInteractivePreview && (
-                <>
+                <div className="relative z-[1]">
                   {showModel && solutionUrl ? (
                     <Image
                       name="solution"
                       imageUrl={solutionUrl}
                       height={scenario.dimensions.height}
                       width={scenario.dimensions.width}
+                      loadingMessage="Loading reference image…"
                     />
                   ) : (
                     <Diff scenario={scenario} />
                   )}
-                </>
+                </div>
+              )}
+              {solutionCaptureBusy && (
+                <div
+                  className="absolute inset-0 z-20 flex items-center justify-center bg-background/55 backdrop-blur-[1px]"
+                  aria-busy
+                  aria-label="Generating picture"
+                >
+                  <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
+                </div>
               )}
             </div>
           </ModelArtContainer>

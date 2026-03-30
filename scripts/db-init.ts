@@ -39,7 +39,7 @@ const DUPLICATE_USERS_MIGRATION = resolve(SCRIPT_DIR, "sql/duplicate-users-migra
 
 // Extract database name from DATABASE_URL for creation check
 const dbUrlMatch = DATABASE_URL.match(/\/([^/?]+)(\?|$)/);
-const targetDbName = dbUrlMatch ? dbUrlMatch[1] : 'ui_designer_dev';
+const targetDbName = dbUrlMatch ? dbUrlMatch[1] : "ui_designer";
 
 // Create connection to postgres database (default) for database creation
 const postgresUrl = DATABASE_URL.replace(/\/[^/?]+(\?|$)/, '/postgres$1');
@@ -285,7 +285,8 @@ async function initializeDatabase() {
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     console.log("✅ Database initialized successfully!");
     console.log("");
-    console.log("💡 Run 'pnpm tsx scripts/db-check.ts' to verify the setup");
+    console.log("💡 Run `pnpm db:migrate` to apply Drizzle versioned migrations (e.g. projects.group_id, lti_credentials).");
+    console.log("💡 Then: `pnpm db:verify-migrations` and `pnpm db:check`");
     console.log("");
   } catch (error) {
     console.error("❌ Error initializing database:", error);

@@ -58,7 +58,8 @@ export function Combobox({
     meta: { context: "menu" | "value"; selectValue: readonly ComboboxOption[] }
   ) => {
     if (meta.context === "value") {
-      return renderValue ? renderValue(selected) : option.label;
+      // Use `option` here — it is the value row react-select is rendering; `selected` from useMemo can lag.
+      return renderValue ? renderValue(option) : option.label;
     }
 
     const isSelected = meta.selectValue.some((item) => item.value === option.value);
@@ -82,6 +83,7 @@ export function Combobox({
       isDisabled={disabled}
       isSearchable
       isClearable={false}
+      blurInputOnSelect
       placeholder={placeholder}
       noOptionsMessage={() => emptyText}
       loadingMessage={() => loadingText}

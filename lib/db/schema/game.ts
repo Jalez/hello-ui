@@ -74,6 +74,10 @@ export const projects = pgTable(
     accessKey: text("access_key"),
     collaborationMode: text("collaboration_mode").default("individual").notNull(),
     allowDuplicateUsers: boolean("allow_duplicate_users").default(true).notNull(),
+    drawboardCaptureMode: text("drawboard_capture_mode").notNull().default("browser"),
+    manualDrawboardCapture: boolean("manual_drawboard_capture").notNull().default(false),
+    remoteSyncDebounceMs: integer("remote_sync_debounce_ms").notNull().default(500),
+    groupId: uuid("group_id").references(() => groups.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -85,6 +89,7 @@ export const projects = pgTable(
     index("idx_projects_is_public").on(table.isPublic),
     index("idx_projects_share_token").on(table.shareToken),
     index("idx_projects_access_window_enabled").on(table.accessWindowEnabled),
+    index("idx_projects_group_id").on(table.groupId),
   ]
 );
 

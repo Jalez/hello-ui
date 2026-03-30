@@ -1,17 +1,45 @@
 /** @format */
-'use client';
+"use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from "react";
 import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
 import { scenario } from "@/types";
 import { addSolutionUrl } from "@/store/slices/solutionUrls.slice";
 import { addDrawingUrl } from "@/store/slices/drawingUrls.slice";
 import { cn } from "@/lib/utils/cn";
 import { apiUrl } from "@/lib/apiUrl";
-import { LOCAL_REDUX_UPDATE_DEBOUNCE_MS } from "@/components/Editors/CodeEditor/constants";
 import { dataUrlFromRawRgba } from "@/lib/utils/drawboardSnapshot";
+import { useGameRuntimeConfig } from "@/hooks/useGameRuntimeConfig";
 
-const DRAWBOARD_CAPTURE_MODE = process.env.NEXT_PUBLIC_DRAWBOARD_CAPTURE_MODE ?? "playwright";
+/** Coalesce rapid Redux/Yjs template updates into one iframe reload + one capture burst. */
+const IFRAME_RELOAD_DEBOUNCE_MS = 48;
+
+/**
+ * Module-level capture dedup. SidebySideArt renders each content element multiple times
+ * (probes + layout modes), creating several Frame instances for the same name+scenarioId.
+ * The event.source guard handles per-message isolation, but all instances still process
+ * their own iframe independently. This content-aware dedup ensures only one API call per
+ * unique snapshot, collapsing duplicates from the redundant instances.
+ */
+const _lastCapture = new Map<string, { time: number; contentKey: string }>();
+const CAPTURE_DEDUP_MS = 100;
+/** Below Playwright layout follow-up interval so a second identical snapshot can refresh captures after fonts settle. */
+const CAPTURE_SAME_CONTENT_WINDOW_MS = 320;
+
+function shouldCapture(key: string, contentKey: string): boolean {
+  const now = Date.now();
+  const last = _lastCapture.get(key);
+  if (last) {
+    if (last.contentKey === contentKey && now - last.time < CAPTURE_SAME_CONTENT_WINDOW_MS) return false;
+    if (now - last.time < CAPTURE_DEDUP_MS) return false;
+  }
+  _lastCapture.set(key, { time: now, contentKey });
+  return true;
+}
+
+export type FrameHandle = {
+  requestCapture: () => void;
+};
 
 interface FrameProps {
   newHtml: string;
@@ -23,34 +51,51 @@ interface FrameProps {
   frameUrl?: string;
   scenario: scenario;
   hiddenFromView?: boolean;
+  onCaptureBusyChange?: (busy: boolean) => void;
 }
 
-export const Frame = ({
-  id,
-  newHtml,
-  newCss,
-  newJs,
-  name,
-  events,
-  scenario,
-  frameUrl = process.env.NEXT_PUBLIC_DRAWBOARD_URL || "http://localhost:3500",
-  hiddenFromView = false,
-}: FrameProps) => {
+export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
+  {
+    id,
+    newHtml,
+    newCss,
+    newJs,
+    name,
+    events,
+    scenario,
+    frameUrl = process.env.NEXT_PUBLIC_DRAWBOARD_URL || "http://localhost:3500",
+    hiddenFromView = false,
+    onCaptureBusyChange,
+  },
+  ref,
+) {
+  const { drawboardCaptureMode, manualDrawboardCapture, remoteSyncDebounceMs } = useGameRuntimeConfig();
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const renderReadyCaptureTimeoutRef = useRef<number | null>(null);
+  const iframeReloadDebounceRef = useRef<number | null>(null);
   const dispatch = useAppDispatch();
   const { currentLevel } = useAppSelector((state: { currentLevel: { currentLevel: number } }) => state.currentLevel);
   const isCreator = useAppSelector((state) => state.options.creator);
-  const counterRef = useRef({ reloads: 0, mounts: 0, data: 0, lastLog: Date.now() });
-
   const level = useAppSelector((state: { levels: Array<{ interactive: boolean }> }) => state.levels[currentLevel - 1]);
   const interactive = level.interactive;
+
+  const notifyCaptureBusy = useCallback(
+    (busy: boolean) => {
+      onCaptureBusyChange?.(busy);
+    },
+    [onCaptureBusyChange],
+  );
 
   const captureFrame = useCallback(
     async (
       snapshot: { css: string; snapshotHtml: string },
-      includeDataUrl = name === "solutionUrl" || (name === "drawingUrl" && isCreator),
+      /** Always ask for HiDPI PNG so solution vs drawing static images use the same asset (browser scales identically). Game mode used to omit this for drawingUrl only, which made the two boards look different despite identical Playwright input. */
+      includeDataUrl = true,
     ) => {
+      const dedupKey = `${name}:${scenario.scenarioId}`;
+      const contentKey = `${snapshot.snapshotHtml.length}:${snapshot.css.length}:${snapshot.snapshotHtml.slice(0, 64)}`;
+      if (!shouldCapture(dedupKey, contentKey)) return;
+      notifyCaptureBusy(true);
       try {
         const response = await fetch(apiUrl("/api/drawboard/render"), {
           method: "POST",
@@ -72,7 +117,7 @@ export const Frame = ({
           throw new Error(`Drawboard render failed with status ${response.status}`);
         }
 
-        const payload = await response.json() as {
+        const payload = (await response.json()) as {
           scenarioId: string;
           urlName: string;
           width: number;
@@ -122,9 +167,35 @@ export const Frame = ({
         }
       } catch (error) {
         console.error(`[Frame:${name}] Failed to capture frame`, error);
+      } finally {
+        notifyCaptureBusy(false);
       }
     },
-    [dispatch, isCreator, name, scenario.dimensions.height, scenario.dimensions.width, scenario.scenarioId],
+    [dispatch, name, notifyCaptureBusy, scenario.dimensions.height, scenario.dimensions.width, scenario.scenarioId],
+  );
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      requestCapture: () => {
+        const win = iframeRef.current?.contentWindow;
+        if (!win) {
+          return;
+        }
+        if (drawboardCaptureMode === "browser") {
+          notifyCaptureBusy(true);
+        }
+        win.postMessage(
+          {
+            message: "request-capture",
+            name,
+            scenarioId: scenario.scenarioId,
+          },
+          "*",
+        );
+      },
+    }),
+    [drawboardCaptureMode, name, notifyCaptureBusy, scenario.scenarioId],
   );
 
   const clearPendingRenderReadyCapture = useCallback(() => {
@@ -136,12 +207,18 @@ export const Frame = ({
 
   useEffect(() => {
     const resendDataAfterMount = (event: MessageEvent) => {
-      if (event.data === "mounted") {
-        counterRef.current.mounts++;
-        const now = Date.now();
-        if (now - counterRef.current.lastLog > 5000) {
-          console.log(`[Frame:${name}] 5s stats: reloads=${counterRef.current.reloads} mounts=${counterRef.current.mounts} data=${counterRef.current.data}`);
-          counterRef.current = { reloads: 0, mounts: 0, data: 0, lastLog: now };
+      const mountedPayload =
+        typeof event.data === "object" && event.data !== null ? event.data : null;
+      const isStructuredMounted =
+        mountedPayload?.message === "mounted"
+        && typeof mountedPayload.name === "string"
+        && typeof mountedPayload.scenarioId === "string";
+      const isLegacyMountedString = event.data === "mounted";
+
+      if (isStructuredMounted || isLegacyMountedString) {
+        const childWin = iframeRef.current?.contentWindow;
+        if (!childWin || event.source !== childWin) {
+          return;
         }
         iframeRef.current?.contentWindow?.postMessage(
           {
@@ -154,19 +231,24 @@ export const Frame = ({
             interactive,
             isCreator,
           },
-          "*"
+          "*",
         );
         return;
       }
 
       if (
-        event.data?.name === name
+        event.source === iframeRef.current?.contentWindow
+        && event.data?.name === name
         && event.data?.scenarioId === scenario.scenarioId
         && (event.data?.message === "render-ready" || event.data?.message === "capture-request")
         && typeof event.data?.css === "string"
         && typeof event.data?.snapshotHtml === "string"
       ) {
-        if (DRAWBOARD_CAPTURE_MODE === "browser") {
+        if (drawboardCaptureMode === "browser") {
+          return;
+        }
+
+        if (manualDrawboardCapture && event.data.message === "render-ready") {
           return;
         }
 
@@ -185,7 +267,7 @@ export const Frame = ({
         renderReadyCaptureTimeoutRef.current = window.setTimeout(() => {
           renderReadyCaptureTimeoutRef.current = null;
           void captureFrame(snapshot);
-        }, LOCAL_REDUX_UPDATE_DEBOUNCE_MS);
+        }, remoteSyncDebounceMs);
       }
     };
 
@@ -195,7 +277,21 @@ export const Frame = ({
       clearPendingRenderReadyCapture();
       window.removeEventListener("message", resendDataAfterMount);
     };
-  }, [captureFrame, clearPendingRenderReadyCapture, dispatch, events, interactive, isCreator, name, newCss, newHtml, newJs, scenario]);
+  }, [
+    captureFrame,
+    clearPendingRenderReadyCapture,
+    events,
+    interactive,
+    isCreator,
+    drawboardCaptureMode,
+    manualDrawboardCapture,
+    name,
+    newCss,
+    newHtml,
+    newJs,
+    remoteSyncDebounceMs,
+    scenario.scenarioId,
+  ]);
 
   useEffect(() => {
     const handleDisplayUrlFromIframe = (event: MessageEvent) => {
@@ -205,8 +301,7 @@ export const Frame = ({
       if (event.data.urlName !== name || event.data.scenarioId !== scenario.scenarioId) {
         return;
       }
-      const includeDataUrl = name === "solutionUrl" || (name === "drawingUrl" && isCreator);
-      if (!includeDataUrl) {
+      if (name !== "solutionUrl" && name !== "drawingUrl") {
         return;
       }
       if (name === "solutionUrl") {
@@ -225,28 +320,100 @@ export const Frame = ({
           }),
         );
       }
+      if (drawboardCaptureMode === "browser") {
+        notifyCaptureBusy(false);
+      }
     };
 
     window.addEventListener("message", handleDisplayUrlFromIframe);
     return () => {
       window.removeEventListener("message", handleDisplayUrlFromIframe);
     };
-  }, [dispatch, isCreator, name, scenario.scenarioId]);
+  }, [dispatch, drawboardCaptureMode, name, notifyCaptureBusy, scenario.scenarioId]);
 
   useEffect(() => {
-    const iframe = iframeRef.current;
-    counterRef.current.reloads++;
-    clearPendingRenderReadyCapture();
-    if (iframe) {
-      iframeRef.current?.contentWindow?.postMessage(
-        {
-          message: "reload",
-          name,
-        },
-        "*"
-      );
+    if (drawboardCaptureMode !== "browser") {
+      return;
     }
-  }, [clearPendingRenderReadyCapture, newHtml, newCss, iframeRef, newJs, name, interactive]);
+    const onPixels = (event: MessageEvent) => {
+      if (event.data?.message !== "pixels") {
+        return;
+      }
+      if (event.data.urlName !== name || event.data.scenarioId !== scenario.scenarioId) {
+        return;
+      }
+      notifyCaptureBusy(false);
+    };
+    window.addEventListener("message", onPixels);
+    return () => {
+      window.removeEventListener("message", onPixels);
+    };
+  }, [drawboardCaptureMode, name, notifyCaptureBusy, scenario.scenarioId]);
+
+  /** When only interactive/creator flags change, patch the iframe instead of full reload (reload was syncing captures on static toggle by accident). */
+  const optionsPatchKeyRef = useRef<string | null>(null);
+  const optionsPatchScenarioIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!scenario) {
+      return;
+    }
+    if (optionsPatchScenarioIdRef.current !== scenario.scenarioId) {
+      optionsPatchScenarioIdRef.current = scenario.scenarioId;
+      optionsPatchKeyRef.current = null;
+    }
+    const win = iframeRef.current?.contentWindow;
+    if (!win) {
+      return;
+    }
+    const key = `${interactive}:${isCreator}`;
+    if (optionsPatchKeyRef.current === null) {
+      optionsPatchKeyRef.current = key;
+      return;
+    }
+    if (optionsPatchKeyRef.current === key) {
+      return;
+    }
+    optionsPatchKeyRef.current = key;
+    win.postMessage(
+      {
+        message: "options-patch",
+        name,
+        scenarioId: scenario.scenarioId,
+        interactive,
+        isCreator,
+      },
+      "*",
+    );
+  }, [scenario, scenario.scenarioId, interactive, isCreator, name]);
+
+  useEffect(() => {
+    if (iframeReloadDebounceRef.current) {
+      window.clearTimeout(iframeReloadDebounceRef.current);
+      iframeReloadDebounceRef.current = null;
+    }
+    iframeReloadDebounceRef.current = window.setTimeout(() => {
+      iframeReloadDebounceRef.current = null;
+      const iframe = iframeRef.current;
+      clearPendingRenderReadyCapture();
+      if (iframe) {
+        iframeRef.current?.contentWindow?.postMessage(
+          {
+            message: "reload",
+            name,
+          },
+          "*",
+        );
+      }
+    }, IFRAME_RELOAD_DEBOUNCE_MS);
+    return () => {
+      if (iframeReloadDebounceRef.current) {
+        window.clearTimeout(iframeReloadDebounceRef.current);
+        iframeReloadDebounceRef.current = null;
+      }
+    };
+  }, [clearPendingRenderReadyCapture, newHtml, newCss, iframeRef, newJs, name]);
+
   if (!scenario) {
     return <div>Scenario not found</div>;
   }
@@ -256,8 +423,11 @@ export const Frame = ({
     scenarioId: scenario.scenarioId,
     width: String(scenario.dimensions.width),
     height: String(scenario.dimensions.height),
-    captureMode: DRAWBOARD_CAPTURE_MODE,
+    captureMode: drawboardCaptureMode,
   });
+  if (manualDrawboardCapture) {
+    iframeSearch.set("manualCapture", "1");
+  }
 
   return (
     <iframe
@@ -267,15 +437,20 @@ export const Frame = ({
       width={scenario.dimensions.width}
       height={scenario.dimensions.height}
       className={cn(
-        "overflow-hidden m-0 p-0 border-none bg-secondary absolute top-0 left-0 z-0 transition-[z-index] duration-300 ease-in-out",
-        hiddenFromView && "pointer-events-none opacity-0"
+        "overflow-hidden m-0 p-0 border-none bg-secondary absolute top-0 left-0 z-0 transition-[opacity] duration-300 ease-in-out",
+        hiddenFromView && "pointer-events-none",
+        // Always hide visually when covered by a static <img>; otherwise Playwright leaves the
+        // iframe fully opaque and the live solution/drawing can leak through gaps or spinners.
+        hiddenFromView && "opacity-0",
       )}
       aria-hidden={hiddenFromView}
       style={{
         width: `${scenario.dimensions.width}px`,
         height: `${scenario.dimensions.height}px`,
-        visibility: hiddenFromView ? "hidden" : "visible",
+        visibility: "visible",
       }}
     />
   );
-};
+});
+
+Frame.displayName = "Frame";

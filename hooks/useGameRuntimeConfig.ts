@@ -1,0 +1,25 @@
+import { useGameStore } from "@/components/default/games";
+import {
+  resolveDrawboardCaptureMode,
+  resolveManualDrawboardCapture,
+  resolveRemoteSyncDebounceMs,
+  type DrawboardCaptureMode,
+} from "@/lib/gameRuntimeConfig";
+
+export type GameRuntimeConfig = {
+  drawboardCaptureMode: DrawboardCaptureMode;
+  manualDrawboardCapture: boolean;
+  remoteSyncDebounceMs: number;
+};
+
+export function useGameRuntimeConfig(): GameRuntimeConfig {
+  const game = useGameStore((s) =>
+    s.currentGameId ? s.games.find((g) => g.id === s.currentGameId) ?? null : null,
+  );
+
+  return {
+    drawboardCaptureMode: resolveDrawboardCaptureMode(game ?? undefined),
+    manualDrawboardCapture: resolveManualDrawboardCapture(game ?? undefined),
+    remoteSyncDebounceMs: resolveRemoteSyncDebounceMs(game ?? undefined),
+  };
+}

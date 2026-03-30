@@ -11,7 +11,7 @@ import { useCallback, useEffect, useRef } from "react";
 import EditorTabs from "./EditorTabs";
 import { useOptionalCollaboration, useYjsLevelCodeSnapshot } from "@/lib/collaboration/CollaborationProvider";
 import { store } from "@/store/store";
-import { LOCAL_REDUX_UPDATE_DEBOUNCE_MS } from "./CodeEditor/constants";
+import { useGameRuntimeConfig } from "@/hooks/useGameRuntimeConfig";
 import { apiUrl } from "@/lib/apiUrl";
 
 const Editors = (): React.ReactNode => {
@@ -20,6 +20,7 @@ const Editors = (): React.ReactNode => {
   const levels = useAppSelector((state) => state.levels);
   const isCreator = useAppSelector((state) => state.options.creator);
   const collaboration = useOptionalCollaboration();
+  const { remoteSyncDebounceMs } = useGameRuntimeConfig();
   const getYText = collaboration?.getYText;
   const getYSolutionText = collaboration?.getYSolutionText;
   const yjsReady = collaboration?.yjsReady === true;
@@ -107,7 +108,7 @@ const Editors = (): React.ReactNode => {
       const timeout = setTimeout(() => {
         remoteSyncTimeouts.delete(key);
         syncEditorToRedux(levelIndex, editorType);
-      }, LOCAL_REDUX_UPDATE_DEBOUNCE_MS);
+      }, remoteSyncDebounceMs);
 
       remoteSyncTimeouts.set(key, timeout);
     };
@@ -139,7 +140,7 @@ const Editors = (): React.ReactNode => {
       solutionPersistTimeoutsRef.current.clear();
       unobserveCallbacks.forEach((unobserve) => unobserve());
     };
-  }, [dispatch, getYText, levels.length, yjsDocGeneration, yjsReady]);
+  }, [dispatch, getYText, levels.length, remoteSyncDebounceMs, yjsDocGeneration, yjsReady]);
 
   // Creator-only: keep solutions in sync via Yjs and persist them to DB.
   useEffect(() => {

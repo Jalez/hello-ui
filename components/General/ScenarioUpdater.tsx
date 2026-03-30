@@ -4,7 +4,6 @@ import { useEffect, useRef } from "react";
 import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
 import { updateLevelAccuracyByIndexThunk } from "@/store/actions/score.actions";
 import { addDifferenceUrl } from "@/store/slices/differenceUrls.slice";
-import { getPixelData } from "@/lib/utils/imageTools/getPixelData";
 import { batch } from "react-redux";
 import { scenario } from "@/types";
 
@@ -19,61 +18,14 @@ type ScenarioUpdaterProps = {
   scenario: scenario;
   drawingPixels?: ImageData | undefined;
   solutionPixels?: ImageData | undefined;
-  handleSolutionPixelUpdate: (scenarioId: string, pixels: ImageData) => void;
-  handleDrawingPixelUpdate: (scenarioId: string, pixels: ImageData) => void;
 };
 
-export const ScenarioUpdater = ({
-  scenario,
-  drawingPixels,
-  solutionPixels,
-  handleSolutionPixelUpdate,
-  handleDrawingPixelUpdate,
-}: ScenarioUpdaterProps) => {
+export const ScenarioUpdater = ({ scenario, drawingPixels, solutionPixels }: ScenarioUpdaterProps) => {
   const dispatch = useAppDispatch();
-  const solutionUrls = useAppSelector((state) => state.solutionUrls);
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const currentLevelRef = useRef(currentLevel);
   currentLevelRef.current = currentLevel;
   const scenarioId = scenario.scenarioId;
-  const lastLoadedSolutionUrlRef = useRef<string | null>(null);
-
-  // Select only primitive dimension values to avoid reference-change re-renders
-  const dimWidth = useAppSelector((state) => {
-    const levelData = state.levels[state.currentLevel.currentLevel - 1];
-    const found = levelData?.scenarios?.find((s) => s.scenarioId === scenario.scenarioId);
-    return found?.dimensions?.width ?? scenario.dimensions.width;
-  });
-  const dimHeight = useAppSelector((state) => {
-    const levelData = state.levels[state.currentLevel.currentLevel - 1];
-    const found = levelData?.scenarios?.find((s) => s.scenarioId === scenario.scenarioId);
-    return found?.dimensions?.height ?? scenario.dimensions.height;
-  });
-
-  useEffect(() => {
-    const solutionUrl = solutionUrls[scenario.scenarioId];
-
-    if (!solutionUrl) {
-      lastLoadedSolutionUrlRef.current = null;
-      return;
-    }
-
-    // Reload solution pixels when the screenshot URL changes.
-    if (lastLoadedSolutionUrlRef.current === solutionUrl) {
-      return;
-    }
-    lastLoadedSolutionUrlRef.current = solutionUrl;
-
-    const img = new Image();
-    img.onerror = (e) => {
-      console.error("ScenarioUpdater: Failed to load solution image", e);
-    };
-    img.src = solutionUrl;
-    img.onload = () => {
-      const imageData = getPixelData(img, dimWidth, dimHeight);
-      handleSolutionPixelUpdate(scenario.scenarioId, imageData);
-    };
-  }, [solutionUrls, dimWidth, dimHeight, handleSolutionPixelUpdate, scenario.scenarioId]);
 
   const workerRunningRef = useRef(false);
 

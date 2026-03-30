@@ -16,6 +16,9 @@ export interface UpdateGameOptions {
   accessKey?: string | null;
   collaborationMode?: "individual" | "group";
   allowDuplicateUsers?: boolean;
+  drawboardCaptureMode?: "browser" | "playwright";
+  manualDrawboardCapture?: boolean;
+  remoteSyncDebounceMs?: number;
   regenerateAccessKey?: boolean;
   regenerateShareToken?: boolean;
 }

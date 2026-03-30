@@ -109,8 +109,16 @@ export const ArtBoards = (): React.ReactNode => {
             <SidebySideArt
               key={selectedScenario.scenarioId}
               contents={[
-                <ScenarioModel key={`${selectedScenario.scenarioId}-model`} scenario={selectedScenario} />,
-                <ScenarioDrawing key={`${selectedScenario.scenarioId}-draw`} scenario={selectedScenario} />,
+                <ScenarioModel
+                  key={`${selectedScenario.scenarioId}-model`}
+                  scenario={selectedScenario}
+                  registerForNavbarCapture
+                />,
+                <ScenarioDrawing
+                  key={`${selectedScenario.scenarioId}-draw`}
+                  scenario={selectedScenario}
+                  registerForNavbarCapture
+                />,
               ]}
             />
           </section>

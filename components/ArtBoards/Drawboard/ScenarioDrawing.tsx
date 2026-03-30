@@ -10,22 +10,30 @@ import { BoardContainer } from "../BoardContainer";
 import { Board } from "../Board";
 import { Button } from "@/components/ui/button";
 import { scenario } from "@/types";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useOptionalDrawboardNavbarCapture } from "@/components/ArtBoards/DrawboardNavbarCaptureContext";
 import { toggleImageInteractivity } from "@/store/slices/levels.slice";
-import { MousePointer, ImageIcon } from "lucide-react";
+import { Camera, Loader2, MousePointer, ImageIcon } from "lucide-react";
+import type { FrameHandle } from "@/components/ArtBoards/Frame";
 import PoppingTitle from "@/components/General/PoppingTitle";
+import { useGameRuntimeConfig } from "@/hooks/useGameRuntimeConfig";
 import { ScenarioDimensionsWrapper } from "./ScenarioDimensionsWrapper";
 import { ScenarioHoverContainer } from "./ScenarioHoverContainer";
 import { useLevelMetaSync } from "@/lib/collaboration/hooks/useLevelMetaSync";
 
+/** One bootstrap per level across all mounted clones (SidebySideArt mounts several instances). */
+let playwrightGameInteractiveBootstrappedLevel: number | null = null;
+
 type ScenarioDrawingProps = {
   scenario: scenario;
   allowScaling?: boolean;
+  registerForNavbarCapture?: boolean;
 };
 
 export const ScenarioDrawing = ({
   scenario,
   allowScaling = false,
+  registerForNavbarCapture = false,
 }: ScenarioDrawingProps): React.ReactNode => {
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const level = useAppSelector((state) => state.levels[currentLevel - 1]);
@@ -39,6 +47,38 @@ export const ScenarioDrawing = ({
   const isCreator = options.creator;
   const [showInteractivePreview, setShowInteractivePreview] = useState(false);
   const [hasExplicitPreviewChoice, setHasExplicitPreviewChoice] = useState(false);
+  const [drawingCaptureBusy, setDrawingCaptureBusy] = useState(false);
+  const drawingFrameRef = useRef<FrameHandle | null>(null);
+  const captureNav = useOptionalDrawboardNavbarCapture();
+  const { drawboardCaptureMode, manualDrawboardCapture } = useGameRuntimeConfig();
+
+  const bindDrawingFrame = useCallback(
+    (instance: FrameHandle | null) => {
+      drawingFrameRef.current = instance;
+      if (registerForNavbarCapture) {
+        captureNav?.registerDrawingFrame(instance);
+      }
+    },
+    [registerForNavbarCapture, captureNav],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (registerForNavbarCapture) {
+        captureNav?.registerDrawingFrame(null);
+      }
+    };
+  }, [registerForNavbarCapture, captureNav]);
+
+  const handleDrawingCaptureBusy = useCallback(
+    (busy: boolean) => {
+      setDrawingCaptureBusy(busy);
+      if (registerForNavbarCapture) {
+        captureNav?.notifyDrawingBusy(busy);
+      }
+    },
+    [captureNav, registerForNavbarCapture],
+  );
   const css = level?.code.css ?? "";
   const html = level?.code.html ?? "";
   const js = level?.code.js ?? "";
@@ -55,6 +95,26 @@ export const ScenarioDrawing = ({
     }
   }, [currentLevel, dispatch, isCreator, syncLevelFields]);
   const interactive = level?.interactive ?? false;
+
+  useEffect(() => {
+    if (!level) {
+      return;
+    }
+    if (isCreator) {
+      return;
+    }
+    if (drawboardCaptureMode !== "playwright") {
+      return;
+    }
+    if (playwrightGameInteractiveBootstrappedLevel === currentLevel) {
+      return;
+    }
+    if (!level.interactive) {
+      dispatch(toggleImageInteractivity(currentLevel));
+      syncLevelFields(currentLevel - 1, ["interactive"]);
+    }
+    playwrightGameInteractiveBootstrappedLevel = currentLevel;
+  }, [currentLevel, dispatch, drawboardCaptureMode, isCreator, level, syncLevelFields]);
 
   if (!level) return null;
 
@@ -96,7 +156,7 @@ export const ScenarioDrawing = ({
                 </ScenarioHoverContainer>
               )}
               {!isCreator && (
-                <div className="absolute top-2 right-2 z-10">
+                <div className="absolute top-2 right-2 z-10 flex flex-col items-end gap-2">
                   <PoppingTitle topTitle={interactive ? "Switch to Static" : "Switch to Interactive"}>
                     <Button
                       size="icon"
@@ -107,6 +167,21 @@ export const ScenarioDrawing = ({
                       {interactive ? <ImageIcon className="h-4 w-4" /> : <MousePointer className="h-4 w-4" />}
                     </Button>
                   </PoppingTitle>
+                  {manualDrawboardCapture && interactive && (
+                    <PoppingTitle topTitle="Capture picture from your preview">
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="secondary"
+                        className="h-7 w-7 bg-background/90 shadow-sm"
+                        disabled={drawingCaptureBusy}
+                        aria-label="Capture picture from your preview"
+                        onClick={() => drawingFrameRef.current?.requestCapture()}
+                      >
+                        <Camera className="h-4 w-4" />
+                      </Button>
+                    </PoppingTitle>
+                  )}
                 </div>
               )}
               <SlideShower
@@ -117,6 +192,7 @@ export const ScenarioDrawing = ({
                     imageUrl={solutionUrl}
                     height={scenario.dimensions.height}
                     width={scenario.dimensions.width}
+                    loadingMessage="Loading reference image…"
                   />
                 }
                 slidingComponent={
@@ -130,6 +206,7 @@ export const ScenarioDrawing = ({
                     {isCreator ? (
                       <>
                         <Frame
+                          ref={bindDrawingFrame}
                           id="DrawBoard"
                           events={level.events || []}
                           newCss={css}
@@ -138,26 +215,90 @@ export const ScenarioDrawing = ({
                           scenario={scenario}
                           name="drawingUrl"
                           hiddenFromView={!shouldShowInteractivePreview}
+                          onCaptureBusyChange={handleDrawingCaptureBusy}
                         />
                         {!shouldShowInteractivePreview && (
-                          <Image
-                            name="drawing"
-                            imageUrl={drawingUrl}
-                            height={scenario.dimensions.height}
-                            width={scenario.dimensions.width}
-                          />
+                          <div className="relative z-[1]">
+                            <Image
+                              name="drawing"
+                              imageUrl={drawingUrl}
+                              height={scenario.dimensions.height}
+                              width={scenario.dimensions.width}
+                              loadingMessage="Loading your design…"
+                            />
+                          </div>
+                        )}
+                        {manualDrawboardCapture && !shouldShowInteractivePreview && (
+                          <div className="absolute top-2 right-2 z-30">
+                            <PoppingTitle topTitle="Capture picture from your design">
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="secondary"
+                                className="h-7 w-7 bg-background/90 shadow-sm"
+                                disabled={drawingCaptureBusy}
+                                aria-label="Capture picture from your design"
+                                onClick={() => drawingFrameRef.current?.requestCapture()}
+                              >
+                                <Camera className="h-4 w-4" />
+                              </Button>
+                            </PoppingTitle>
+                          </div>
+                        )}
+                        {manualDrawboardCapture && shouldShowInteractivePreview && (
+                          <div className="absolute top-2 right-2 z-30">
+                            <PoppingTitle topTitle="Capture picture from your preview">
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="secondary"
+                                className="h-7 w-7 bg-background/90 shadow-sm"
+                                disabled={drawingCaptureBusy}
+                                aria-label="Capture picture from your preview"
+                                onClick={() => drawingFrameRef.current?.requestCapture()}
+                              >
+                                <Camera className="h-4 w-4" />
+                              </Button>
+                            </PoppingTitle>
+                          </div>
                         )}
                       </>
                     ) : (
-                      <Frame
-                        id="DrawBoard"
-                        events={level.events || []}
-                        newCss={css}
-                        newHtml={html}
-                        newJs={js + "\n" + scenario.js}
-                        scenario={scenario}
-                        name="drawingUrl"
-                      />
+                      <>
+                        <Frame
+                          ref={bindDrawingFrame}
+                          id="DrawBoard"
+                          events={level.events || []}
+                          newCss={css}
+                          newHtml={html}
+                          newJs={js + "\n" + scenario.js}
+                          scenario={scenario}
+                          name="drawingUrl"
+                          hiddenFromView={!interactive}
+                          onCaptureBusyChange={handleDrawingCaptureBusy}
+                        />
+                        {!interactive && (
+                          <div className="relative z-[1]">
+                            <Image
+                              name="drawing"
+                              imageUrl={drawingUrl}
+                              height={scenario.dimensions.height}
+                              width={scenario.dimensions.width}
+                              loadingMessage="Loading your design…"
+                            />
+                          </div>
+                        )}
+                      </>
+                    )}
+                    {drawingCaptureBusy
+                      && (!isCreator || shouldShowInteractivePreview) && (
+                      <div
+                        className="absolute inset-0 z-20 flex items-center justify-center bg-background/55 backdrop-blur-[1px]"
+                        aria-busy
+                        aria-label="Generating picture"
+                      >
+                        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                      </div>
                     )}
                   </div>
                 }

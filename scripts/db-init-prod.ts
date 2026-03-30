@@ -162,7 +162,7 @@ async function initializeProductionDatabase() {
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     console.log("✅ Production database initialized successfully!");
     console.log("");
-    console.log("💡 Run 'pnpm tsx scripts/db-check.ts' to verify the production setup");
+    console.log("💡 Run `pnpm db:migrate` then `pnpm db:verify-migrations` and `pnpm db:check` to verify.");
     console.log("");
   } catch (error) {
     console.error("❌ Error initializing production database:", error);
