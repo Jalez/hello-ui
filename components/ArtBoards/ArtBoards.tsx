@@ -13,7 +13,6 @@ import {
   Select,
   SelectContent,
   SelectItem,
-  SelectItemText,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -83,7 +82,7 @@ export const ArtBoards = (): React.ReactNode => {
             <SelectContent>
               {scenarios.map((scenario, index) => (
                 <SelectItem key={scenario.scenarioId} value={scenario.scenarioId}>
-                  <SelectItemText>Scenario {index + 1}</SelectItemText>
+                  Scenario {index + 1}
                 </SelectItem>
               ))}
             </SelectContent>
