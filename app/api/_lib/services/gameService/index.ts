@@ -120,6 +120,15 @@ function evaluateShareAccess(game: Game, accessKey?: string | null): ShareAccess
 }
 
 export function evaluateGameRouteAccess(game: Game, accessKey?: string | null): ShareAccessError | undefined {
+  const windowError = evaluateWindowAccess(game);
+  if (windowError) {
+    return windowError;
+  }
+
+  if (game.can_edit) {
+    return undefined;
+  }
+
   return evaluateShareAccess(game, accessKey);
 }
 
