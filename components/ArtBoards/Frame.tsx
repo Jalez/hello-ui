@@ -77,6 +77,15 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
   const { currentLevel } = useAppSelector((state: { currentLevel: { currentLevel: number } }) => state.currentLevel);
   const isCreator = useAppSelector((state) => state.options.creator);
   const level = useAppSelector((state: { levels: Array<{ interactive: boolean }> }) => state.levels[currentLevel - 1]);
+  const existingImageUrl = useAppSelector((state) => {
+    if (name === "solutionUrl") {
+      return (state.solutionUrls as Record<string, string | undefined>)[scenario.scenarioId];
+    }
+    if (name === "drawingUrl") {
+      return (state.drawingUrls as Record<string, string | undefined>)[scenario.scenarioId];
+    }
+    return undefined;
+  });
   const interactive = level.interactive;
 
   const notifyCaptureBusy = useCallback(
@@ -248,7 +257,9 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
           return;
         }
 
-        if (manualDrawboardCapture && event.data.message === "render-ready") {
+        // Manual mode still needs the first render-ready snapshot to bootstrap the static board image.
+        // After a scenario already has a stored image URL, later updates stay behind the manual button.
+        if (manualDrawboardCapture && event.data.message === "render-ready" && existingImageUrl) {
           return;
         }
 
@@ -284,6 +295,7 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
     interactive,
     isCreator,
     drawboardCaptureMode,
+    existingImageUrl,
     manualDrawboardCapture,
     name,
     newCss,
