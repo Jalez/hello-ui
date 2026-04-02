@@ -30,13 +30,14 @@ import { useSession } from "next-auth/react";
 import type { Mode } from "@/store/slices/options.slice";
 import { useOptionalCollaboration } from "@/lib/collaboration/CollaborationProvider";
 import { apiUrl, stripBasePath } from "@/lib/apiUrl";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
+import { useDefaultLayout } from "react-resizable-panels";
+import type { PanelImperativeHandle } from "react-resizable-panels";
 
 export const allLevels: Level[] = [];
 type SolutionsByLevelName = Record<string, { html: string; css: string; js: string }>;
 const MIN_EDITOR_PANE_WIDTH = 420;
 const ARTBOARD_PANE_CHROME_WIDTH = 56;
-const MIN_STACKED_ARTBOARDS_HEIGHT = 220;
-const MIN_STACKED_EDITOR_HEIGHT = 260;
 
 function normalizeRoomStateLevels(
   levels: Array<Record<string, unknown>>,
@@ -89,8 +90,9 @@ function App() {
   const lastRoomIdRef = useRef<string | null>(null);
   const lastRoomStateSignatureRef = useRef<string | null>(null);
   const contentRowRef = useRef<HTMLDivElement | null>(null);
+  const editorPanelRef = useRef<PanelImperativeHandle | null>(null);
   const [contentRowWidth, setContentRowWidth] = useState(0);
-  const [stackedArtboardsHeight, setStackedArtboardsHeight] = useState<number | null>(null);
+  const [isEditorCollapsed, setIsEditorCollapsed] = useState(false);
   const setIsLoadingAsync = (value: boolean) => {
     queueMicrotask(() => setIsLoading(value));
   };
@@ -111,6 +113,16 @@ function App() {
     contentRowWidth > 0
       ? contentRowWidth < maxScenarioWidth + ARTBOARD_PANE_CHROME_WIDTH + MIN_EDITOR_PANE_WIDTH
       : false;
+  const groupOrientation = shouldStackGameLayout ? "vertical" : "horizontal";
+  const horizontalLayout = useDefaultLayout({
+    id: "game-layout-horizontal",
+    panelIds: ["artboards", "editor"],
+  });
+  const verticalLayout = useDefaultLayout({
+    id: "game-layout-vertical",
+    panelIds: ["artboards", "editor"],
+  });
+  const activeLayout = shouldStackGameLayout ? verticalLayout : horizontalLayout;
 
   useEffect(() => {
     const target = contentRowRef.current;
@@ -139,46 +151,8 @@ function App() {
     collaboration?.roomId,
     collaboration?.codeSyncReady,
     collaboration?.initialRoomState,
+    collaboration?.getYCodeSnapshot,
   ]);
-
-  useEffect(() => {
-    if (!shouldStackGameLayout) {
-      return;
-    }
-
-    const container = contentRowRef.current;
-    if (!container) {
-      return;
-    }
-
-    const availableHeight = container.clientHeight;
-    if (availableHeight <= 0) {
-      return;
-    }
-
-    const maxAllowedArtboardsHeight = Math.max(
-      MIN_STACKED_ARTBOARDS_HEIGHT,
-      availableHeight - MIN_STACKED_EDITOR_HEIGHT,
-    );
-    const preferredHeight = Math.round(availableHeight * 0.48);
-    const nextHeight = Math.min(
-      maxAllowedArtboardsHeight,
-      Math.max(MIN_STACKED_ARTBOARDS_HEIGHT, preferredHeight),
-    );
-
-    setStackedArtboardsHeight((currentValue) => {
-      if (currentValue === null) {
-        return nextHeight;
-      }
-
-      const clampedCurrentValue = Math.min(
-        maxAllowedArtboardsHeight,
-        Math.max(MIN_STACKED_ARTBOARDS_HEIGHT, currentValue),
-      );
-
-      return clampedCurrentValue === currentValue ? currentValue : clampedCurrentValue;
-    });
-  }, [shouldStackGameLayout, contentRowWidth]);
 
   useEffect(() => {
     hasFetchedRef.current = false;
@@ -423,6 +397,7 @@ function App() {
     collaboration?.roomId,
     collaboration?.codeSyncReady,
     collaboration?.initialRoomState,
+    collaboration?.getYCodeSnapshot,
   ]);
 
   const isWaitingForSharedCode =
@@ -433,6 +408,22 @@ function App() {
       !collaboration.codeSyncReady ||
       !collaboration.initialRoomState
     );
+
+  const expandEditorPanel = () => {
+    editorPanelRef.current?.expand();
+  };
+
+  const collapseEditorPanel = () => {
+    editorPanelRef.current?.collapse();
+  };
+
+  const toggleEditorPanel = () => {
+    if (isEditorCollapsed) {
+      expandEditorPanel();
+    } else {
+      collapseEditorPanel();
+    }
+  };
 
   // Request enough height from parent LTI iframe to prevent scrollbars
   useEffect(() => {
@@ -472,32 +463,45 @@ function App() {
                 <Navbar />
                 <div
                   ref={contentRowRef}
-                  className={`flex w-full flex-1 items-stretch ${
-                    shouldStackGameLayout
-                      ? "flex-col justify-start overflow-hidden"
-                      : "flex-row overflow-hidden"
-                  }`}
+                  className="relative flex w-full flex-1 items-stretch overflow-hidden"
                 >
-                  <div className={`flex w-full flex-1 min-h-0 items-center justify-center ${
-                    shouldStackGameLayout
-                      ? "flex-none overflow-auto"
-                      : "min-w-0 flex-1 overflow-hidden"
-                  }`}
+                  <ResizablePanelGroup
+                    orientation={groupOrientation}
+                    defaultLayout={activeLayout.defaultLayout}
+                    onLayoutChanged={activeLayout.onLayoutChanged}
+                    className="h-full w-full"
                   >
-                    <ArtBoards />
-                  </div>
-                  <div className={`flex w-full ${
-                    shouldStackGameLayout
-                      ? "min-h-0 flex-1 overflow-hidden"
-                      : "min-h-0 min-w-0 flex-1 overflow-hidden"
-                  }`}
-                  style={
-                    shouldStackGameLayout
-                      ? { minHeight: `${MIN_STACKED_EDITOR_HEIGHT}px` }
-                      : undefined
-                  }>
-                    <Editors />
-                  </div>
+                    <ResizablePanel
+                      id="artboards"
+                      defaultSize={shouldStackGameLayout ? 56 : 60}
+                      minSize={shouldStackGameLayout ? 28 : 38}
+                      className="min-h-0 min-w-0"
+                    >
+                      <div className="flex h-full w-full min-h-0 min-w-0 items-center justify-center overflow-hidden">
+                        <ArtBoards />
+                      </div>
+                    </ResizablePanel>
+                    <ResizableHandle
+                      withHandle
+                      groupOrientation={groupOrientation}
+                      isPanelCollapsed={isEditorCollapsed}
+                      onTogglePanel={toggleEditorPanel}
+                    />
+                    <ResizablePanel
+                      id="editor"
+                      panelRef={editorPanelRef}
+                      collapsible
+                      collapsedSize={0}
+                      minSize={shouldStackGameLayout ? 20 : 24}
+                      defaultSize={shouldStackGameLayout ? 44 : 40}
+                      onResize={(panelSize) => setIsEditorCollapsed(panelSize.asPercentage === 0)}
+                      className="min-h-0 min-w-0"
+                    >
+                      <div className="flex h-full w-full min-h-0 min-w-0 overflow-hidden">
+                        <Editors />
+                      </div>
+                    </ResizablePanel>
+                  </ResizablePanelGroup>
                 </div>
                 <Footer />
               </DrawboardNavbarCaptureProvider>

@@ -192,7 +192,7 @@ function EditorTabs({
 
   return (
     <div
-      className="flex flex-col justify-start items-stretch m-0 p-0 flex-1 min-h-[300px] h-full w-full relative border border-border/50"
+      className="flex flex-col justify-start items-stretch m-0 p-0 flex-1 min-h-[300px] h-full w-full relative border border-border/70"
     >
       <div className="flex flex-col justify-start items-stretch m-0 p-0 flex-1 h-full w-full relative ">
         <Tabs value={activeLanguage} onValueChange={handleLanguageChange} className="w-full h-full flex flex-col">
