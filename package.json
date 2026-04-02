@@ -25,6 +25,7 @@
     "pw:ws-recovery-harsh": "PLAYWRIGHT_SCENARIO=ws_recovery PLAYWRIGHT_ALLOW_WS_CRASH=true PLAYWRIGHT_WS_RESTART_DELAY_MS=2500 PLAYWRIGHT_WS_RECOVERY_POST_STRESS_ROUNDS=3 PLAYWRIGHT_WS_RECOVERY_EXTRA_RELOAD=true PLAYWRIGHT_WS_RECOVERY_VERIFY_STABILITY=true PLAYWRIGHT_WS_DROP_YJS_UPDATES=60 PLAYWRIGHT_WS_RECEIVE_DELAY_MS=100 node scripts/playwright-local-group-smoke.mjs",
     "pw:ws-recovery-extreme": "PLAYWRIGHT_SCENARIO=ws_recovery PLAYWRIGHT_ALLOW_WS_CRASH=true PLAYWRIGHT_WS_RESTART_DELAY_MS=3500 PLAYWRIGHT_WS_RECOVERY_POST_STRESS_ROUNDS=4 PLAYWRIGHT_WS_RECOVERY_EXTRA_RELOAD=true PLAYWRIGHT_WS_RECOVERY_VERIFY_STABILITY=true PLAYWRIGHT_WS_DROP_YJS_UPDATES=75 PLAYWRIGHT_WS_RECEIVE_DELAY_MS=150 PLAYWRIGHT_WS_RECONNECT_WINDOW_MS=45000 node scripts/playwright-local-group-smoke.mjs",
     "pw:ai-generation": "node scripts/playwright-ai-generation-smoke.mjs",
+    "pw:interaction-events": "node scripts/playwright-interaction-events-smoke.mjs",
     "pw:prod-replay": "node scripts/prod-replay.mjs",
     "db:purge": "tsx scripts/db-purge.ts",
     "db:create-database": "tsx scripts/db-create-database.ts",

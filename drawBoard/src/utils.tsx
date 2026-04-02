@@ -21,6 +21,55 @@ export const getPixelData = (
   return imgData;
 };
 
+export type InteractionEventType = "click" | "change" | "input" | "submit" | "keydown";
+
+export type InteractionTrigger = {
+  id: string;
+  eventType: InteractionEventType;
+  selector?: string;
+  keyFilter?: string;
+  label?: string;
+};
+
+export type VerifiedInteraction = {
+  id: string;
+  triggerId: string;
+  eventType: InteractionEventType;
+  label?: string;
+  selector?: string;
+  targetSummary?: string;
+  keyFilter?: string;
+  keyPressed?: string;
+  sequence: number;
+  createdAt: string;
+  preHash: string;
+  postHash: string;
+  verificationSource: "dom" | "pixel";
+};
+
+export type DrawboardSnapshotPayload = {
+  css: string;
+  snapshotHtml: string;
+  width: number;
+  height: number;
+};
+
+export type EventSequenceStep = {
+  id: string;
+  scenarioId: string;
+  order: number;
+  eventType: InteractionEventType;
+  selector?: string;
+  keyFilter?: string;
+  label: string;
+  instruction: string;
+  targetSummary?: string;
+  verificationSource: "dom" | "pixel";
+  preHash: string;
+  postHash: string;
+  snapshot: DrawboardSnapshotPayload;
+};
+
 export function loadImage(base64Url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -28,6 +77,162 @@ export function loadImage(base64Url: string): Promise<HTMLImageElement> {
     img.onerror = reject;
     img.src = base64Url;
   });
+}
+
+const SUPPORTED_EVENT_TYPES: InteractionEventType[] = ["click", "change", "input", "submit", "keydown"];
+
+const stableTrim = (value: string | undefined): string | undefined => {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+};
+
+export function normalizeInteractionTriggers(rawEvents: string | string[] | unknown): InteractionTrigger[] {
+  let parsed: unknown = rawEvents;
+  if (typeof rawEvents === "string") {
+    try {
+      parsed = JSON.parse(rawEvents);
+    } catch {
+      parsed = [rawEvents];
+    }
+  }
+
+  if (!Array.isArray(parsed)) {
+    return [];
+  }
+
+  const seenIds = new Set<string>();
+  return parsed.flatMap((entry, index) => {
+    let next: InteractionTrigger | null = null;
+
+    if (typeof entry === "string") {
+      const eventType = entry.trim() as InteractionEventType;
+      if (!SUPPORTED_EVENT_TYPES.includes(eventType)) {
+        return [];
+      }
+      next = {
+        id: `legacy-${eventType}-${index}`,
+        eventType,
+        label: eventType,
+      };
+    } else if (entry && typeof entry === "object") {
+      const candidate = entry as Partial<InteractionTrigger>;
+      const eventType = candidate.eventType?.trim() as InteractionEventType | undefined;
+      if (!eventType || !SUPPORTED_EVENT_TYPES.includes(eventType)) {
+        return [];
+      }
+      next = {
+        id: stableTrim(candidate.id) || `trigger-${eventType}-${index}`,
+        eventType,
+        selector: stableTrim(candidate.selector),
+        keyFilter: stableTrim(candidate.keyFilter),
+        label: stableTrim(candidate.label) || eventType,
+      };
+    }
+
+    if (!next) {
+      return [];
+    }
+
+    let id = next.id;
+    let suffix = 1;
+    while (seenIds.has(id)) {
+      suffix += 1;
+      id = `${next.id}-${suffix}`;
+    }
+    seenIds.add(id);
+    return [{ ...next, id }];
+  });
+}
+
+export function normalizeSnapshotMarkup(snapshotHtml: string): string {
+  return snapshotHtml
+    .replace(/\sdata-drawboard-ui="[^"]*"/g, "")
+    .replace(/\sdata-interactive="[^"]*"/g, "")
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function hashString(value: string): string {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+export function hashDrawboardSnapshot(css: string, snapshotHtml: string): string {
+  return hashString(`${css}\u0000${normalizeSnapshotMarkup(snapshotHtml)}`);
+}
+
+export function summarizeEventTarget(target: EventTarget | null): string | undefined {
+  if (!(target instanceof Element)) {
+    return undefined;
+  }
+
+  const parts = [target.tagName.toLowerCase()];
+  if (target.id) {
+    parts.push(`#${target.id}`);
+  }
+  const classes = Array.from(target.classList).slice(0, 2);
+  classes.forEach((cls) => parts.push(`.${cls}`));
+  return parts.join("");
+}
+
+export function selectorFromEventTarget(target: EventTarget | null): string | undefined {
+  if (!(target instanceof Element)) {
+    return undefined;
+  }
+
+  if (target.id) {
+    return `#${target.id}`;
+  }
+
+  const classNames = Array.from(target.classList)
+    .filter(Boolean)
+    .slice(0, 2);
+  const tagName = target.tagName.toLowerCase();
+  if (classNames.length > 0) {
+    return `${tagName}${classNames.map((className) => `.${className}`).join("")}`;
+  }
+
+  return tagName;
+}
+
+export function buildDraftEventStepCopy(
+  eventType: InteractionEventType,
+  targetSummary?: string,
+): { label: string; instruction: string } {
+  const targetLabel = targetSummary?.replace(/\s+/g, " ").trim() || "target";
+  const action = eventType === "input"
+    ? "Update"
+    : eventType === "change"
+      ? "Change"
+      : eventType === "submit"
+        ? "Submit"
+        : eventType === "keydown"
+          ? "Press key on"
+          : "Click";
+
+  return {
+    label: `${action} ${targetLabel}`,
+    instruction: `${action} ${targetLabel}`,
+  };
+}
+
+export function computePixelSignature(imageData: ImageData): string {
+  const data = imageData.data;
+  let hash = 0;
+  const stride = Math.max(16, Math.floor(data.length / 512));
+  for (let index = 0; index < data.length; index += stride) {
+    const r = data[index] ?? 0;
+    const g = data[index + 1] ?? 0;
+    const b = data[index + 2] ?? 0;
+    const a = data[index + 3] ?? 0;
+    hash = Math.imul(hash ^ ((r << 24) ^ (g << 16) ^ (b << 8) ^ a), 16777619);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
 }
 
 export const sendToParent = (
@@ -153,6 +358,15 @@ export const createDrawboardSnapshot = () => {
   return {
     css: style?.textContent || "",
     snapshotHtml: snapshotBody.innerHTML,
+  };
+};
+
+export const createSnapshotPayload = (width: number, height: number): DrawboardSnapshotPayload => {
+  const snapshot = createDrawboardSnapshot();
+  return {
+    ...snapshot,
+    width,
+    height,
   };
 };
 

@@ -5,16 +5,27 @@ import { useState, useEffect, useRef, ReactNode } from "react";
 type ScenarioHoverContainerProps = {
   children: ReactNode;
   onShowChange?: (show: boolean) => void;
+  enabled?: boolean;
 };
 
 export const ScenarioHoverContainer = ({
   children,
   onShowChange,
+  enabled = true,
 }: ScenarioHoverContainerProps) => {
   const [showContent, setShowContent] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (!enabled) {
+      setShowContent(false);
+      onShowChange?.(false);
+    }
+  }, [enabled, onShowChange]);
+
+  useEffect(() => {
+    if (!enabled) return;
+
     const parent = wrapperRef.current?.parentElement;
     if (!parent) return;
 
@@ -44,10 +55,12 @@ export const ScenarioHoverContainer = ({
       parent.removeEventListener('mouseenter', handleMouseEnter);
       parent.removeEventListener('mouseleave', handleMouseLeave);
     };
-  }, [onShowChange]);
+  }, [enabled, onShowChange]);
+
+  if (!enabled) return null;
 
   return (
-    <div ref={wrapperRef} data-scenario-hover-wrapper className="absolute inset-0 pointer-events-none z-50">
+    <div ref={wrapperRef} data-scenario-hover-wrapper className="absolute inset-0 pointer-events-none z-50" id="scenario-hover-container">
       {showContent && (
         <div data-scenario-hover-content className="pointer-events-auto relative h-full w-full min-h-[1px]">
           {children}

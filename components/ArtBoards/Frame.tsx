@@ -3,16 +3,15 @@
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from "react";
 import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
-import { scenario } from "@/types";
+import { EventSequenceStep, InteractionTrigger, VerifiedInteraction, scenario } from "@/types";
 import { addSolutionUrl } from "@/store/slices/solutionUrls.slice";
 import { addDrawingUrl } from "@/store/slices/drawingUrls.slice";
+import { appendEventSequenceStep, recordVerifiedInteraction } from "@/store/slices/levels.slice";
 import { cn } from "@/lib/utils/cn";
 import { apiUrl } from "@/lib/apiUrl";
 import { dataUrlFromRawRgba } from "@/lib/utils/drawboardSnapshot";
 import { useGameRuntimeConfig } from "@/hooks/useGameRuntimeConfig";
-
-/** Coalesce rapid Redux/Yjs template updates into one iframe reload + one capture burst. */
-const IFRAME_RELOAD_DEBOUNCE_MS = 48;
+import { useLevelMetaSync } from "@/lib/collaboration/hooks/useLevelMetaSync";
 
 /**
  * Module-level capture dedup. SidebySideArt renders each content element multiple times
@@ -22,6 +21,7 @@ const IFRAME_RELOAD_DEBOUNCE_MS = 48;
  * unique snapshot, collapsing duplicates from the redundant instances.
  */
 const _lastCapture = new Map<string, { time: number; contentKey: string }>();
+const _lastVerifiedInteraction = new Map<string, number>();
 const CAPTURE_DEDUP_MS = 100;
 /** Below Playwright layout follow-up interval so a second identical snapshot can refresh captures after fonts settle. */
 const CAPTURE_SAME_CONTENT_WINDOW_MS = 320;
@@ -37,6 +37,14 @@ function shouldCapture(key: string, contentKey: string): boolean {
   return true;
 }
 
+function shouldStoreVerifiedInteraction(key: string): boolean {
+  const now = Date.now();
+  const last = _lastVerifiedInteraction.get(key);
+  if (last && now - last < 250) return false;
+  _lastVerifiedInteraction.set(key, now);
+  return true;
+}
+
 export type FrameHandle = {
   requestCapture: () => void;
 };
@@ -45,13 +53,15 @@ interface FrameProps {
   newHtml: string;
   newCss: string;
   newJs: string;
-  events: string[];
+  events: InteractionTrigger[];
   id: string;
   name: string;
   frameUrl?: string;
   scenario: scenario;
   hiddenFromView?: boolean;
   onCaptureBusyChange?: (busy: boolean) => void;
+  recordingSequence?: boolean;
+  onVerifiedInteraction?: (interaction: VerifiedInteraction) => void;
 }
 
 export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
@@ -66,14 +76,17 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
     frameUrl = process.env.NEXT_PUBLIC_DRAWBOARD_URL || "http://localhost:3500",
     hiddenFromView = false,
     onCaptureBusyChange,
+    recordingSequence = false,
+    onVerifiedInteraction,
   },
   ref,
 ) {
-  const { drawboardCaptureMode, manualDrawboardCapture, remoteSyncDebounceMs } = useGameRuntimeConfig();
+  const { drawboardCaptureMode, manualDrawboardCapture, remoteSyncDebounceMs, drawboardReloadDebounceMs } = useGameRuntimeConfig();
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const renderReadyCaptureTimeoutRef = useRef<number | null>(null);
   const iframeReloadDebounceRef = useRef<number | null>(null);
   const dispatch = useAppDispatch();
+  const { syncLevelFields } = useLevelMetaSync();
   const { currentLevel } = useAppSelector((state: { currentLevel: { currentLevel: number } }) => state.currentLevel);
   const isCreator = useAppSelector((state) => state.options.creator);
   const level = useAppSelector((state: { levels: Array<{ interactive: boolean }> }) => state.levels[currentLevel - 1]);
@@ -239,6 +252,7 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
             name,
             interactive,
             isCreator,
+            recordingSequence,
           },
           "*",
         );
@@ -301,9 +315,89 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
     newCss,
     newHtml,
     newJs,
+    recordingSequence,
     remoteSyncDebounceMs,
     scenario.scenarioId,
   ]);
+
+  useEffect(() => {
+    const handleVerifiedInteraction = (event: MessageEvent) => {
+      if (event.source !== iframeRef.current?.contentWindow) {
+        return;
+      }
+      if (event.data?.message !== "verified-interaction") {
+        return;
+      }
+      if (event.data?.urlName !== name || event.data?.scenarioId !== scenario.scenarioId) {
+        return;
+      }
+      if (!isCreator || name !== "drawingUrl") {
+        return;
+      }
+
+      const interaction = event.data?.interaction as VerifiedInteraction | undefined;
+      if (!interaction?.id) {
+        return;
+      }
+
+      const dedupKey = `${scenario.scenarioId}:${interaction.id}`;
+      if (!shouldStoreVerifiedInteraction(dedupKey)) {
+        return;
+      }
+
+      onVerifiedInteraction?.(interaction);
+
+      dispatch(
+        recordVerifiedInteraction({
+          levelId: currentLevel,
+          scenarioId: scenario.scenarioId,
+          interaction,
+        }),
+      );
+      syncLevelFields(currentLevel - 1, ["interactionArtifacts"]);
+    };
+
+    window.addEventListener("message", handleVerifiedInteraction);
+    return () => {
+      window.removeEventListener("message", handleVerifiedInteraction);
+    };
+  }, [currentLevel, dispatch, isCreator, name, onVerifiedInteraction, scenario.scenarioId, syncLevelFields]);
+
+  useEffect(() => {
+    const handleRecordedSequenceStep = (event: MessageEvent) => {
+      if (event.source !== iframeRef.current?.contentWindow) {
+        return;
+      }
+      if (event.data?.message !== "recorded-event-sequence-step") {
+        return;
+      }
+      if (event.data?.urlName !== name || event.data?.scenarioId !== scenario.scenarioId) {
+        return;
+      }
+      if (!isCreator || name !== "drawingUrl") {
+        return;
+      }
+
+      const step = event.data?.step as EventSequenceStep | undefined;
+      if (!step?.id) {
+        return;
+      }
+
+      dispatch(
+        appendEventSequenceStep({
+          levelId: currentLevel,
+          scenarioId: scenario.scenarioId,
+          step,
+        }),
+      );
+      syncLevelFields(currentLevel - 1, ["eventSequence"]);
+    };
+
+    window.addEventListener("message", handleRecordedSequenceStep);
+    return () => {
+      window.removeEventListener("message", handleRecordedSequenceStep);
+    };
+  }, [currentLevel, dispatch, isCreator, name, scenario.scenarioId, syncLevelFields]);
 
   useEffect(() => {
     const handleDisplayUrlFromIframe = (event: MessageEvent) => {
@@ -378,7 +472,7 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
     if (!win) {
       return;
     }
-    const key = `${interactive}:${isCreator}`;
+    const key = `${interactive}:${isCreator}:${recordingSequence}:${JSON.stringify(events)}`;
     if (optionsPatchKeyRef.current === null) {
       optionsPatchKeyRef.current = key;
       return;
@@ -394,10 +488,12 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
         scenarioId: scenario.scenarioId,
         interactive,
         isCreator,
+        recordingSequence,
+        events: JSON.stringify(events),
       },
       "*",
     );
-  }, [scenario, scenario.scenarioId, interactive, isCreator, name]);
+  }, [scenario, scenario.scenarioId, interactive, isCreator, name, recordingSequence, events]);
 
   useEffect(() => {
     if (iframeReloadDebounceRef.current) {
@@ -417,14 +513,14 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
           "*",
         );
       }
-    }, IFRAME_RELOAD_DEBOUNCE_MS);
+    }, drawboardReloadDebounceMs);
     return () => {
       if (iframeReloadDebounceRef.current) {
         window.clearTimeout(iframeReloadDebounceRef.current);
         iframeReloadDebounceRef.current = null;
       }
     };
-  }, [clearPendingRenderReadyCapture, newHtml, newCss, iframeRef, newJs, name]);
+  }, [clearPendingRenderReadyCapture, drawboardReloadDebounceMs, newHtml, newCss, iframeRef, newJs, name]);
 
   if (!scenario) {
     return <div>Scenario not found</div>;

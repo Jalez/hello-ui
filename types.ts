@@ -29,6 +29,68 @@ export type scenario = {
 
 export type difficulty = "easy" | "medium" | "hard";
 
+export type InteractionEventType =
+  | "click"
+  | "change"
+  | "input"
+  | "submit"
+  | "keydown";
+
+export interface InteractionTrigger {
+  id: string;
+  eventType: InteractionEventType;
+  selector?: string;
+  keyFilter?: string;
+  label?: string;
+}
+
+export interface VerifiedInteraction {
+  id: string;
+  triggerId: string;
+  eventType: InteractionEventType;
+  label?: string;
+  selector?: string;
+  targetSummary?: string;
+  keyFilter?: string;
+  keyPressed?: string;
+  sequence: number;
+  createdAt: string;
+  preHash: string;
+  postHash: string;
+  verificationSource: "dom" | "pixel";
+}
+
+export interface InteractionArtifacts {
+  byScenarioId: Record<string, VerifiedInteraction[]>;
+}
+
+export interface DrawboardSnapshotPayload {
+  css: string;
+  snapshotHtml: string;
+  width: number;
+  height: number;
+}
+
+export interface EventSequenceStep {
+  id: string;
+  scenarioId: string;
+  order: number;
+  eventType: InteractionEventType;
+  selector?: string;
+  keyFilter?: string;
+  label: string;
+  instruction: string;
+  targetSummary?: string;
+  verificationSource: "dom" | "pixel";
+  preHash: string;
+  postHash: string;
+  snapshot: DrawboardSnapshotPayload;
+}
+
+export interface EventSequence {
+  byScenarioId: Record<string, EventSequenceStep[]>;
+}
+
 type instructionSection = {
   title: string;
   content: string[];
@@ -85,7 +147,9 @@ export interface Level {
   interactive: boolean;
   showScenarioModel: boolean;
   showHotkeys: boolean;
-  events: string[];
+  eventSequence?: EventSequence;
+  events: InteractionTrigger[];
+  interactionArtifacts?: InteractionArtifacts;
   percentageTreshold: number;
   percentageFullPointsTreshold: number;
   pointsThresholds?: { accuracy: number; pointsPercent: number }[];
@@ -98,7 +162,7 @@ export type generator = () => {
   SCSS: string;
   TJS?: string;
   SJS?: string;
-  events?: string[];
+  events?: Array<string | InteractionTrigger>;
   instructions: instructions;
   question_and_answer: question_and_answer;
   difficulty: difficulty;

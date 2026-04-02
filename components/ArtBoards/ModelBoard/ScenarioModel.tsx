@@ -19,7 +19,7 @@ import { toggleShowModelSolution } from "@/store/slices/levels.slice";
 import { useLevelMetaSync } from "@/lib/collaboration/hooks/useLevelMetaSync";
 import { Button } from "@/components/ui/button";
 import PoppingTitle from "@/components/General/PoppingTitle";
-import { Camera, ImageIcon, MousePointer } from "lucide-react";
+import { Camera } from "lucide-react";
 import type { FrameHandle } from "@/components/ArtBoards/Frame";
 import { useGameRuntimeConfig } from "@/hooks/useGameRuntimeConfig";
 
@@ -28,12 +28,16 @@ type ScenarioModelProps = {
   allowScaling?: boolean;
   /** When true, registers with creator navbar Grade (visible artboards only; not used on player game nav). */
   registerForNavbarCapture?: boolean;
+  creatorPreviewInteractive?: boolean;
+  creatorMode?: boolean;
 };
 
 export const ScenarioModel = ({
   scenario,
   allowScaling = false,
   registerForNavbarCapture = false,
+  creatorPreviewInteractive,
+  creatorMode,
 }: ScenarioModelProps): React.ReactNode => {
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const level = useAppSelector((state) => state.levels[currentLevel - 1]);
@@ -43,9 +47,7 @@ export const ScenarioModel = ({
   const solutionUrls = useAppSelector((state) => state.solutionUrls as Record<string, string>);
   const solutionUrl = solutionUrls[scenario.scenarioId];
   const options = useAppSelector((state) => state.options);
-  const isCreator = options.creator;
-  const [showInteractivePreview, setShowInteractivePreview] = useState(false);
-  const [hasExplicitPreviewChoice, setHasExplicitPreviewChoice] = useState(false);
+  const isCreator = creatorMode ?? options.creator;
   const [modelToolbarDragStarted, setModelToolbarDragStarted] = useState(false);
   const [solutionCaptureBusy, setSolutionCaptureBusy] = useState(false);
   const solutionFrameRef = useRef<FrameHandle | null>(null);
@@ -79,8 +81,7 @@ export const ScenarioModel = ({
     },
     [captureNav, registerForNavbarCapture],
   );
-  const shouldShowInteractivePreview =
-    isCreator && (showInteractivePreview || (!hasExplicitPreviewChoice && !solutionUrl));
+  const shouldShowInteractivePreview = isCreator && (creatorPreviewInteractive ?? !solutionUrl);
 
   const handleSwitchModel = useCallback(() => {
     dispatch(toggleShowModelSolution(currentLevel));
@@ -108,10 +109,10 @@ export const ScenarioModel = ({
               style={{
                 width: scenario.dimensions.width,
                 height: scenario.dimensions.height,
-           
+                pointerEvents: shouldShowInteractivePreview ? "none" : "auto",
               }}
             >
-              {isCreator && (
+              {isCreator && !shouldShowInteractivePreview && (
                 <DraggableFloatingPanel
                   showOnHover
                   storageKey={`floating-button-model-${scenario.scenarioId}`}
@@ -119,41 +120,7 @@ export const ScenarioModel = ({
                   onDragStateChange={setModelToolbarDragStarted}
                 >
                   <div className="flex flex-row items-center gap-3 rounded-lg border border-border/60 bg-background/85 px-3 py-2 text-foreground shadow-lg backdrop-blur-sm transition-colors hover:bg-background/95">
-                    <div className="shrink-0">
-                      <PoppingTitle topTitle={showInteractivePreview ? "Switch to Static" : "Switch to Interactive"}>
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="ghost"
-                          className="h-7 w-7"
-                          onClick={() => {
-                            setHasExplicitPreviewChoice(true);
-                            setShowInteractivePreview((currentValue) => !currentValue);
-                          }}
-                        >
-                          {showInteractivePreview ? <ImageIcon className="h-4 w-4" /> : <MousePointer className="h-4 w-4" />}
-                        </Button>
-                      </PoppingTitle>
-                    </div>
-                    {manualDrawboardCapture && shouldShowInteractivePreview && (
-                      <>
-                        <div className="h-8 w-px shrink-0 bg-border/60" aria-hidden />
-                        <PoppingTitle topTitle="Capture picture from solution preview">
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant="secondary"
-                            className="h-7 w-7"
-                            disabled={solutionCaptureBusy}
-                            aria-label="Capture picture from solution preview"
-                            onClick={() => solutionFrameRef.current?.requestCapture()}
-                          >
-                            <Camera className="h-4 w-4" />
-                          </Button>
-                        </PoppingTitle>
-                      </>
-                    )}
-                    {manualDrawboardCapture && !shouldShowInteractivePreview && (
+                    {manualDrawboardCapture && (
                       <>
                         <div className="h-8 w-px shrink-0 bg-border/60" aria-hidden />
                         <PoppingTitle topTitle="Capture picture from solution (static view)">
@@ -171,20 +138,18 @@ export const ScenarioModel = ({
                         </PoppingTitle>
                       </>
                     )}
-                    {!shouldShowInteractivePreview && (
-                      <>
-                        <div className="h-8 w-px shrink-0 bg-border/60" aria-hidden />
-                        <div className="min-w-0 flex-1">
-                          <DiffModelToggleContent
-                            dragStarted={modelToolbarDragStarted}
-                            leftLabel="diff"
-                            rightLabel="model"
-                            checked={showModel}
-                            onCheckedChange={handleSwitchModel}
-                          />
-                        </div>
-                      </>
-                    )}
+                    <>
+                      <div className="h-8 w-px shrink-0 bg-border/60" aria-hidden />
+                      <div className="min-w-0 flex-1">
+                        <DiffModelToggleContent
+                          dragStarted={modelToolbarDragStarted}
+                          leftLabel="diff"
+                          rightLabel="model"
+                          checked={showModel}
+                          onCheckedChange={handleSwitchModel}
+                        />
+                      </div>
+                    </>
                   </div>
                 </DraggableFloatingPanel>
               )}

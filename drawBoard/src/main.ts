@@ -1,5 +1,20 @@
 import { domToPng } from "modern-screenshot";
-import { createDrawboardSnapshot, getPixelData, loadImage, setStyles } from "./utils";
+import {
+  buildDraftEventStepCopy,
+  computePixelSignature,
+  createDrawboardSnapshot,
+  createSnapshotPayload,
+  EventSequenceStep,
+  getPixelData,
+  hashDrawboardSnapshot,
+  InteractionTrigger,
+  loadImage,
+  normalizeInteractionTriggers,
+  selectorFromEventTarget,
+  setStyles,
+  summarizeEventTarget,
+  VerifiedInteraction,
+} from "./utils";
 
 type ErrorObj = {
   message: string;
@@ -14,9 +29,21 @@ type DrawboardPayload = {
   html?: string;
   css?: string;
   js?: string;
-  events?: string | string[];
+  events?: unknown;
   interactive?: boolean;
   isCreator?: boolean;
+  recordingSequence?: boolean;
+};
+
+type VisualState = {
+  snapshotHash: string;
+  pixelHash: string | null;
+};
+
+type TriggerCandidate = {
+  trigger: InteractionTrigger;
+  targetSummary?: string;
+  keyPressed?: string;
 };
 
 const params = new URLSearchParams(window.location.search);
@@ -27,15 +54,12 @@ const scenarioHeight = parseInt(params.get("height") || "0", 10);
 const captureMode = params.get("captureMode") || "playwright";
 const isBrowserCapture = captureMode === "browser";
 const manualRaw = (params.get("manualCapture") || "").trim().toLowerCase();
-/** When true, `scheduleRenderReady` does not capture; parent sends `request-capture`. Level `events` still trigger capture. */
 const isManualCapture = manualRaw === "true" || manualRaw === "1";
 
-/** Playwright iframe waits before posting `render-ready` so DOM/fonts can settle. */
 const PLAYWRIGHT_RENDER_READY_DELAY_MS = 80;
-/** Second pass: fonts/layout often match server screenshot only after a short delay. */
 const PLAYWRIGHT_LAYOUT_FOLLOW_UP_MS = 400;
+const INTERACTION_SETTLE_DELAY_MS = 120;
 
-/** Scenario box on both roots — mirrors Playwright `buildRenderHtml` (drawboard-base-shell covers margin/padding/overflow/bg/position). */
 function applyScenarioDocumentBox() {
   const w = scenarioWidth ? `${scenarioWidth}px` : "100%";
   const h = scenarioHeight ? `${scenarioHeight}px` : "100%";
@@ -52,24 +76,27 @@ let dataReceived = false;
 let stylesCorrect = false;
 let jsCorrect = false;
 let interactive = false;
-let events: string[] = [];
+let triggers: InteractionTrigger[] = [];
+let recordingSequence = false;
 let mountedIntervalId: number | null = null;
 let renderReadyTimeoutId: number | null = null;
-/** Playwright: second `render-ready` after layout/fonts settle (dedup window allows it through). */
 let playwrightLayoutFollowUpId: number | null = null;
-let captureListener: (() => void) | null = null;
 let currentScript: HTMLScriptElement | null = null;
 let currentScriptUrl: string | null = null;
-let isCreatorFromParent = false;
-/**
- * Manual capture: one automatic capture when this iframe document first becomes ready.
- * Parent `reload` calls resetState() on every editor change — we must NOT reset this flag there,
- * or every keystroke would re-trigger auto capture.
- */
 let manualModeBootstrapCapturePending = true;
+let interactionVerificationTimeoutId: number | null = null;
+let interactionVerificationInFlight = false;
+let pendingCandidate: TriggerCandidate | null = null;
+let acceptedVisualState: VisualState | null = null;
+let interactionSequence = 0;
+let domMutationVersion = 0;
+let layoutMutationVersion = 0;
+let mutationObserver: MutationObserver | null = null;
+let resizeObserver: ResizeObserver | null = null;
 
 function updateInteractiveFlag() {
   document.body.dataset.interactive = interactive ? "true" : "false";
+  document.body.dataset.recordingSequence = recordingSequence ? "true" : "false";
 }
 
 function clearRenderReadyTimeout() {
@@ -86,18 +113,21 @@ function clearPlaywrightLayoutFollowUp() {
   }
 }
 
+function clearPendingInteractionVerification() {
+  if (interactionVerificationTimeoutId !== null) {
+    window.clearTimeout(interactionVerificationTimeoutId);
+    interactionVerificationTimeoutId = null;
+  }
+}
+
 function postMountedPing() {
-  window.parent.postMessage(
-    { message: "mounted", name: urlName, scenarioId },
-    "*",
-  );
+  window.parent.postMessage({ message: "mounted", name: urlName, scenarioId }, "*");
 }
 
 function startMountedPing() {
   if (mountedIntervalId !== null) {
     return;
   }
-
   postMountedPing();
   mountedIntervalId = window.setInterval(() => {
     postMountedPing();
@@ -182,51 +212,6 @@ function showError(error: ErrorObj) {
   }
 }
 
-function runCaptureNow() {
-  void (async () => {
-    try {
-      if (isBrowserCapture) {
-        void captureBrowser();
-        return;
-      }
-      await waitForPaintAfterCss();
-      const snapshot = createDrawboardSnapshot();
-      window.parent.postMessage(
-        {
-          ...snapshot,
-          message: "capture-request",
-          name: urlName,
-          scenarioId,
-        },
-        "*",
-      );
-    } catch (snapshotError) {
-      console.error("Drawboard: Failed to create snapshot", snapshotError);
-    }
-  })();
-}
-
-function syncEventListeners() {
-  if (captureListener) {
-    events.forEach((eventName) => {
-      document.body.removeEventListener(eventName, captureListener!);
-    });
-  }
-
-  captureListener = () => {
-    runCaptureNow();
-  };
-
-  events.forEach((eventName) => {
-    document.body.addEventListener(eventName, captureListener!);
-  });
-}
-
-/**
- * Browser: cap font wait (domToPng path should stay snappy).
- * Playwright: full `document.fonts.ready` + extra rAF so cloned HTML/CSS matches final layout;
- * otherwise solution vs drawing iframes often finish on different font epochs until “interactive”.
- */
 async function waitForPaintAfterCss() {
   const settleFonts = async () => {
     if (!document.fonts?.ready) {
@@ -236,7 +221,7 @@ async function waitForPaintAfterCss() {
       if (isBrowserCapture) {
         await Promise.race([
           document.fonts.ready,
-          new Promise<void>((r) => setTimeout(r, 32)),
+          new Promise<void>((resolve) => setTimeout(resolve, 32)),
         ]);
       } else {
         await document.fonts.ready;
@@ -247,12 +232,37 @@ async function waitForPaintAfterCss() {
   };
 
   await settleFonts();
-  await new Promise<void>((r) => requestAnimationFrame(() => r()));
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
   if (!isBrowserCapture) {
-    await new Promise<void>((r) => requestAnimationFrame(() => r()));
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     await settleFonts();
-    await new Promise<void>((r) => setTimeout(r, 56));
+    await new Promise<void>((resolve) => setTimeout(resolve, 56));
   }
+}
+
+async function captureCurrentPixelSignature() {
+  const w = scenarioWidth || Math.max(document.documentElement.clientWidth, 1);
+  const h = scenarioHeight || Math.max(document.documentElement.clientHeight, 1);
+  const dataUrl = await domToPng(document.documentElement, {
+    width: w,
+    height: h,
+    scale: 1,
+    maximumCanvasSize: 4096,
+  });
+  const img = await loadImage(dataUrl);
+  const imageData = getPixelData(img, w, h);
+  if (!imageData) {
+    return null;
+  }
+  return computePixelSignature(imageData);
+}
+
+async function buildVisualState(): Promise<VisualState> {
+  const snapshot = createDrawboardSnapshot();
+  return {
+    snapshotHash: hashDrawboardSnapshot(snapshot.css, snapshot.snapshotHtml),
+    pixelHash: await captureCurrentPixelSignature(),
+  };
 }
 
 async function captureBrowser() {
@@ -263,8 +273,6 @@ async function captureBrowser() {
   const h = scenarioHeight || 300;
   try {
     await waitForPaintAfterCss();
-    // Capture `<html>` so author rules on `html` (background, full-height, etc.)
-    // are included; `document.body` alone often misses that painting layer.
     const dataUrl = await domToPng(document.documentElement, {
       width: w,
       height: h,
@@ -290,14 +298,290 @@ async function captureBrowser() {
       "*",
       [bytes.buffer],
     );
-    // Match Playwright: always send PNG for both boards so Redux `drawingUrl` / `solutionUrl`
-    // update in game mode (domToPng path used to omit drawing for non-creator only).
-    const includeDataUrl = urlName === "solutionUrl" || urlName === "drawingUrl";
-    if (includeDataUrl) {
+    if (urlName === "solutionUrl" || urlName === "drawingUrl") {
       window.parent.postMessage({ dataURL: dataUrl, urlName, scenarioId, message: "data" }, "*");
     }
   } catch (error) {
     console.error("Drawboard: browser capture failed", error);
+  }
+}
+
+function runCaptureNow() {
+  void (async () => {
+    try {
+      if (isBrowserCapture) {
+        await captureBrowser();
+        return;
+      }
+      await waitForPaintAfterCss();
+      const snapshot = createDrawboardSnapshot();
+      window.parent.postMessage(
+        { ...snapshot, message: "capture-request", name: urlName, scenarioId },
+        "*",
+      );
+    } catch (snapshotError) {
+      console.error("Drawboard: Failed to create snapshot", snapshotError);
+    }
+  })();
+}
+
+function installObservers() {
+  mutationObserver?.disconnect();
+  resizeObserver?.disconnect();
+
+  if (typeof MutationObserver !== "undefined") {
+    mutationObserver = new MutationObserver((records) => {
+      if (
+        records.some((record) =>
+          record.type === "childList"
+          || record.type === "characterData"
+          || (record.type === "attributes" && record.attributeName !== "data-interactive"),
+        )
+      ) {
+        domMutationVersion += 1;
+      }
+    });
+    mutationObserver.observe(document.body, {
+      subtree: true,
+      childList: true,
+      characterData: true,
+      attributes: true,
+    });
+  }
+
+  if (typeof ResizeObserver !== "undefined") {
+    resizeObserver = new ResizeObserver(() => {
+      layoutMutationVersion += 1;
+    });
+    resizeObserver.observe(document.body);
+    resizeObserver.observe(document.documentElement);
+  }
+}
+
+function clearObservers() {
+  mutationObserver?.disconnect();
+  mutationObserver = null;
+  resizeObserver?.disconnect();
+  resizeObserver = null;
+}
+
+function triggerMatchesEvent(trigger: InteractionTrigger, event: Event): boolean {
+  if (trigger.eventType !== event.type) {
+    return false;
+  }
+
+  const target = event.target;
+  if (!(target instanceof Element)) {
+    return false;
+  }
+
+  if (trigger.selector) {
+    const match = target.closest(trigger.selector);
+    if (!match || !document.body.contains(match)) {
+      return false;
+    }
+  }
+
+  if (trigger.eventType === "keydown" && trigger.keyFilter) {
+    const keyPressed = (event as KeyboardEvent).key?.trim().toLowerCase();
+    return keyPressed === trigger.keyFilter.trim().toLowerCase();
+  }
+
+  return true;
+}
+
+function buildCandidateTrigger(event: Event): InteractionTrigger | null {
+  const eventType = event.type as InteractionTrigger["eventType"];
+  const selector = selectorFromEventTarget(event.target);
+  const targetSummary = summarizeEventTarget(event.target);
+  const copy = buildDraftEventStepCopy(eventType, targetSummary);
+  return {
+    id: `recorded-${eventType}-${Date.now()}`,
+    eventType,
+    selector,
+    keyFilter: event instanceof KeyboardEvent ? event.key : undefined,
+    label: copy.label,
+  };
+}
+
+async function verifyTriggeredInteraction(candidate: TriggerCandidate) {
+  if (!stylesCorrect || !jsCorrect || errorOverlay) {
+    return;
+  }
+
+  const baseline = acceptedVisualState ?? (() => {
+    const currentSnapshot = createDrawboardSnapshot();
+    return {
+      snapshotHash: hashDrawboardSnapshot(currentSnapshot.css, currentSnapshot.snapshotHtml),
+      pixelHash: null,
+    };
+  })();
+  if (!acceptedVisualState) {
+    acceptedVisualState = baseline;
+  }
+
+  const startDomMutationVersion = domMutationVersion;
+  const startLayoutMutationVersion = layoutMutationVersion;
+
+  if (recordingSequence) {
+    await new Promise<void>((resolve) => setTimeout(resolve, 48));
+  } else {
+    await waitForPaintAfterCss();
+    await new Promise<void>((resolve) => setTimeout(resolve, 24));
+  }
+
+  const snapshot = createDrawboardSnapshot();
+  const postHash = hashDrawboardSnapshot(snapshot.css, snapshot.snapshotHtml);
+  let verificationSource: VerifiedInteraction["verificationSource"] | null = null;
+  let pixelHash: string | null = baseline.pixelHash;
+
+  if (postHash !== baseline.snapshotHash) {
+    verificationSource = "dom";
+  } else {
+    const mutated = domMutationVersion !== startDomMutationVersion || layoutMutationVersion !== startLayoutMutationVersion;
+    if (!mutated) {
+      return;
+    }
+    if (recordingSequence) {
+      return;
+    }
+    pixelHash = await captureCurrentPixelSignature();
+    if (pixelHash && pixelHash !== baseline.pixelHash) {
+      verificationSource = "pixel";
+    }
+  }
+
+  if (!verificationSource) {
+    return;
+  }
+
+  interactionSequence += 1;
+  const interaction: VerifiedInteraction = {
+    id: `${candidate.trigger.id}:${interactionSequence}:${baseline.snapshotHash}:${postHash}`,
+    triggerId: candidate.trigger.id,
+    eventType: candidate.trigger.eventType,
+    label: candidate.trigger.label,
+    selector: candidate.trigger.selector,
+    targetSummary: candidate.targetSummary,
+    keyFilter: candidate.trigger.keyFilter,
+    keyPressed: candidate.keyPressed,
+    sequence: interactionSequence,
+    createdAt: new Date().toISOString(),
+    preHash: baseline.snapshotHash,
+    postHash: verificationSource === "pixel" && pixelHash ? `${postHash}:${pixelHash}` : postHash,
+    verificationSource,
+  };
+
+  acceptedVisualState = {
+    snapshotHash: postHash,
+    pixelHash: pixelHash ?? baseline.pixelHash,
+  };
+
+  if (recordingSequence) {
+    const copy = buildDraftEventStepCopy(candidate.trigger.eventType, candidate.targetSummary);
+    const step: EventSequenceStep = {
+      id: `step-${scenarioId}-${Date.now()}-${interactionSequence}`,
+      scenarioId,
+      order: interactionSequence - 1,
+      eventType: candidate.trigger.eventType,
+      selector: candidate.trigger.selector,
+      keyFilter: candidate.trigger.keyFilter,
+      label: copy.label,
+      instruction: copy.instruction,
+      targetSummary: candidate.targetSummary,
+      verificationSource,
+      preHash: interaction.preHash,
+      postHash: interaction.postHash,
+      snapshot: createSnapshotPayload(scenarioWidth || Math.max(document.documentElement.clientWidth, 1), scenarioHeight || Math.max(document.documentElement.clientHeight, 1)),
+    };
+
+    window.parent.postMessage(
+      {
+        message: "recorded-event-sequence-step",
+        urlName,
+        scenarioId,
+        step,
+      },
+      "*",
+    );
+    return;
+  }
+
+  window.parent.postMessage(
+    {
+      message: "verified-interaction",
+      urlName,
+      scenarioId,
+      interaction,
+    },
+    "*",
+  );
+}
+
+function scheduleInteractionVerification(candidate: TriggerCandidate) {
+  if ((!interactive && !recordingSequence) || errorOverlay) {
+    return;
+  }
+  pendingCandidate = candidate;
+  clearPendingInteractionVerification();
+  interactionVerificationTimeoutId = window.setTimeout(() => {
+    interactionVerificationTimeoutId = null;
+    const nextCandidate = pendingCandidate;
+    pendingCandidate = null;
+    if (!nextCandidate || interactionVerificationInFlight) {
+      return;
+    }
+    interactionVerificationInFlight = true;
+    void verifyTriggeredInteraction(nextCandidate)
+      .catch((error) => {
+        console.error("Drawboard: interaction verification failed", error);
+      })
+      .finally(() => {
+        interactionVerificationInFlight = false;
+      });
+  }, INTERACTION_SETTLE_DELAY_MS);
+}
+
+function handleTriggeredEvent(event: Event) {
+  if ((!interactive && !recordingSequence) || errorOverlay) {
+    return;
+  }
+
+  const matchedTrigger = recordingSequence
+    ? buildCandidateTrigger(event)
+    : triggers.find((trigger) => triggerMatchesEvent(trigger, event));
+  if (!matchedTrigger) {
+    return;
+  }
+
+  scheduleInteractionVerification({
+    trigger: matchedTrigger,
+    targetSummary: summarizeEventTarget(event.target),
+    keyPressed: event instanceof KeyboardEvent ? event.key : undefined,
+  });
+}
+
+function syncEventListeners() {
+  const eventTypes = recordingSequence
+    ? new Set<InteractionTrigger["eventType"]>(["click", "change", "input", "submit", "keydown"])
+    : new Set(triggers.map((trigger) => trigger.eventType));
+  (["click", "change", "input", "submit", "keydown"] as const).forEach((eventType) => {
+    document.body.removeEventListener(eventType, handleTriggeredEvent, true);
+    if (eventTypes.has(eventType)) {
+      document.body.addEventListener(eventType, handleTriggeredEvent, true);
+    }
+  });
+}
+
+async function refreshAcceptedVisualState() {
+  if (!stylesCorrect || !jsCorrect || errorOverlay) {
+    return;
+  }
+  try {
+    await waitForPaintAfterCss();
+    acceptedVisualState = await buildVisualState();
+  } catch (error) {
+    console.error("Drawboard: failed to refresh accepted visual state", error);
   }
 }
 
@@ -308,20 +592,19 @@ function scheduleRenderReady() {
     return;
   }
 
-  /**
-   * Browser: `setTimeout(0)` — like the old React `useEffect` after commit (no fixed 50ms sleep).
-   * Playwright: delay so the DOM settles before we clone HTML/CSS for the parent API.
-   */
   const delayMs = isBrowserCapture ? 0 : PLAYWRIGHT_RENDER_READY_DELAY_MS;
 
   renderReadyTimeoutId = window.setTimeout(() => {
     void (async () => {
       if (isManualCapture && !manualModeBootstrapCapturePending) {
+        await refreshAcceptedVisualState();
         return;
       }
+
       if (isBrowserCapture) {
         try {
           await captureBrowser();
+          await refreshAcceptedVisualState();
           if (isManualCapture) {
             manualModeBootstrapCapturePending = false;
           }
@@ -330,16 +613,16 @@ function scheduleRenderReady() {
         }
         return;
       }
+
       try {
         await waitForPaintAfterCss();
         const snapshot = createDrawboardSnapshot();
+        acceptedVisualState = {
+          snapshotHash: hashDrawboardSnapshot(snapshot.css, snapshot.snapshotHtml),
+          pixelHash: await captureCurrentPixelSignature(),
+        };
         window.parent.postMessage(
-          {
-            ...snapshot,
-            message: "render-ready",
-            name: urlName,
-            scenarioId,
-          },
+          { ...snapshot, message: "render-ready", name: urlName, scenarioId },
           "*",
         );
         if (isManualCapture) {
@@ -360,13 +643,12 @@ function scheduleRenderReady() {
             try {
               await waitForPaintAfterCss();
               const followSnapshot = createDrawboardSnapshot();
+              acceptedVisualState = {
+                snapshotHash: hashDrawboardSnapshot(followSnapshot.css, followSnapshot.snapshotHtml),
+                pixelHash: await captureCurrentPixelSignature(),
+              };
               window.parent.postMessage(
-                {
-                  ...followSnapshot,
-                  message: "render-ready",
-                  name: urlName,
-                  scenarioId,
-                },
+                { ...followSnapshot, message: "render-ready", name: urlName, scenarioId },
                 "*",
               );
             } catch (snapshotError) {
@@ -381,6 +663,7 @@ function scheduleRenderReady() {
 
 function applyHtml(html: string) {
   document.body.innerHTML = html;
+  applyScenarioDocumentBox();
 }
 
 function applyCss(css: string) {
@@ -423,6 +706,7 @@ function applyJs(js: string) {
 function resetState() {
   clearRenderReadyTimeout();
   clearPlaywrightLayoutFollowUp();
+  clearPendingInteractionVerification();
   clearUserScript();
   hideError();
   document.body.innerHTML = "";
@@ -431,27 +715,19 @@ function resetState() {
   stylesCorrect = false;
   jsCorrect = false;
   interactive = false;
-  events = [];
+  triggers = [];
+  recordingSequence = false;
   dataReceived = false;
-  isCreatorFromParent = false;
+  pendingCandidate = null;
+  acceptedVisualState = null;
+  interactionSequence = 0;
+  domMutationVersion = 0;
+  layoutMutationVersion = 0;
   updateInteractiveFlag();
   syncEventListeners();
+  clearObservers();
+  installObservers();
   startMountedPing();
-}
-
-function parseEvents(rawEvents: string | string[] | undefined): string[] {
-  if (!rawEvents) {
-    return [];
-  }
-  if (Array.isArray(rawEvents)) {
-    return rawEvents;
-  }
-  try {
-    const parsed = JSON.parse(rawEvents);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
 }
 
 window.onerror = (message, _source, lineno, colno) => {
@@ -462,6 +738,8 @@ window.onerror = (message, _source, lineno, colno) => {
   });
   return true;
 };
+
+installObservers();
 
 window.addEventListener("message", (event: MessageEvent<DrawboardPayload>) => {
   if (urlName !== event.data?.name) {
@@ -474,14 +752,12 @@ window.addEventListener("message", (event: MessageEvent<DrawboardPayload>) => {
   }
 
   if (event.data?.message === "options-patch") {
-    if (event.data.name !== urlName) {
-      return;
-    }
     if (event.data.scenarioId !== undefined && event.data.scenarioId !== scenarioId) {
       return;
     }
     interactive = Boolean(event.data.interactive);
-    isCreatorFromParent = Boolean(event.data.isCreator);
+    recordingSequence = Boolean(event.data.recordingSequence);
+    triggers = normalizeInteractionTriggers(event.data?.events);
     updateInteractiveFlag();
     syncEventListeners();
     if (stylesCorrect && jsCorrect && !errorOverlay) {
@@ -506,12 +782,13 @@ window.addEventListener("message", (event: MessageEvent<DrawboardPayload>) => {
   const nextCss = event.data?.css || "";
   const nextJs = event.data?.js || "";
   interactive = Boolean(event.data?.interactive);
-  isCreatorFromParent = Boolean(event.data?.isCreator);
-  events = parseEvents(event.data?.events);
+  recordingSequence = Boolean(event.data?.recordingSequence);
+  triggers = normalizeInteractionTriggers(event.data?.events);
   updateInteractiveFlag();
-  syncEventListeners();
 
   applyHtml(nextHtml);
+  syncEventListeners();
+  installObservers();
   applyCss(nextCss);
   applyJs(nextJs);
 });

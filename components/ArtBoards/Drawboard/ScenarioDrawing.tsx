@@ -9,31 +9,101 @@ import { SlideShower } from "./ImageContainer/SlideShower";
 import { BoardContainer } from "../BoardContainer";
 import { Board } from "../Board";
 import { Button } from "@/components/ui/button";
-import { scenario } from "@/types";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { scenario, VerifiedInteraction } from "@/types";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useOptionalDrawboardNavbarCapture } from "@/components/ArtBoards/DrawboardNavbarCaptureContext";
-import { toggleImageInteractivity } from "@/store/slices/levels.slice";
-import { Camera, Loader2, MousePointer, ImageIcon } from "lucide-react";
+import {
+  clearEventSequenceForScenario,
+  removeEventSequenceStep,
+  toggleImageInteractivity,
+  updateEventSequenceStep,
+} from "@/store/slices/levels.slice";
+import { Camera, Loader2 } from "lucide-react";
 import type { FrameHandle } from "@/components/ArtBoards/Frame";
 import PoppingTitle from "@/components/General/PoppingTitle";
 import { useGameRuntimeConfig } from "@/hooks/useGameRuntimeConfig";
 import { ScenarioDimensionsWrapper } from "./ScenarioDimensionsWrapper";
 import { ScenarioHoverContainer } from "./ScenarioHoverContainer";
 import { useLevelMetaSync } from "@/lib/collaboration/hooks/useLevelMetaSync";
+import { EventSequencePanel } from "./EventSequencePanel";
+import { stepToInteractionTrigger } from "@/lib/drawboard/interactionEvents";
+import { apiUrl } from "@/lib/apiUrl";
 
 /** One bootstrap per level across all mounted clones (SidebySideArt mounts several instances). */
 let playwrightGameInteractiveBootstrappedLevel: number | null = null;
+
+type SequenceRuntimeState = {
+  recording: boolean;
+  activeIndex: number;
+  pendingStepId: string | null;
+  stepAccuracies: Record<string, number>;
+};
+
+const sequenceRuntimeStore = new Map<string, SequenceRuntimeState>();
+const sequenceRuntimeListeners = new Map<string, Set<() => void>>();
+
+function getSequenceRuntimeState(key: string): SequenceRuntimeState {
+  const existing = sequenceRuntimeStore.get(key);
+  if (existing) {
+    return existing;
+  }
+
+  const initialState: SequenceRuntimeState = {
+    recording: false,
+    activeIndex: 0,
+    pendingStepId: null,
+    stepAccuracies: {},
+  };
+  sequenceRuntimeStore.set(key, initialState);
+  return initialState;
+}
+
+function subscribeSequenceRuntime(key: string, listener: () => void) {
+  const listeners = sequenceRuntimeListeners.get(key) ?? new Set<() => void>();
+  listeners.add(listener);
+  sequenceRuntimeListeners.set(key, listeners);
+  return () => {
+    const current = sequenceRuntimeListeners.get(key);
+    current?.delete(listener);
+    if (current && current.size === 0) {
+      sequenceRuntimeListeners.delete(key);
+    }
+  };
+}
+
+function updateSequenceRuntimeState(
+  key: string,
+  updater: (current: SequenceRuntimeState) => SequenceRuntimeState,
+) {
+  const next = updater(getSequenceRuntimeState(key));
+  sequenceRuntimeStore.set(key, next);
+  sequenceRuntimeListeners.get(key)?.forEach((listener) => listener());
+}
+
+function resetSequenceRuntimeState(key: string) {
+  sequenceRuntimeStore.set(key, {
+    recording: false,
+    activeIndex: 0,
+    pendingStepId: null,
+    stepAccuracies: {},
+  });
+  sequenceRuntimeListeners.get(key)?.forEach((listener) => listener());
+}
 
 type ScenarioDrawingProps = {
   scenario: scenario;
   allowScaling?: boolean;
   registerForNavbarCapture?: boolean;
+  creatorPreviewInteractive?: boolean;
+  creatorMode?: boolean;
 };
 
 export const ScenarioDrawing = ({
   scenario,
   allowScaling = false,
   registerForNavbarCapture = false,
+  creatorPreviewInteractive,
+  creatorMode,
 }: ScenarioDrawingProps): React.ReactNode => {
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const level = useAppSelector((state) => state.levels[currentLevel - 1]);
@@ -44,10 +114,10 @@ export const ScenarioDrawing = ({
   const dispatch = useAppDispatch();
   const { syncLevelFields } = useLevelMetaSync();
   const options = useAppSelector((state) => state.options);
-  const isCreator = options.creator;
-  const [showInteractivePreview, setShowInteractivePreview] = useState(false);
-  const [hasExplicitPreviewChoice, setHasExplicitPreviewChoice] = useState(false);
+  const isCreator = creatorMode ?? options.creator;
   const [drawingCaptureBusy, setDrawingCaptureBusy] = useState(false);
+  const [stepPreviewUrls, setStepPreviewUrls] = useState<Record<string, string>>({});
+  const stepPreviewUrlsRef = useRef<Record<string, string>>({});
   const drawingFrameRef = useRef<FrameHandle | null>(null);
   const captureNav = useOptionalDrawboardNavbarCapture();
   const { drawboardCaptureMode, manualDrawboardCapture } = useGameRuntimeConfig();
@@ -82,19 +152,34 @@ export const ScenarioDrawing = ({
   const css = level?.code.css ?? "";
   const html = level?.code.html ?? "";
   const js = level?.code.js ?? "";
-  const shouldShowInteractivePreview =
-    isCreator && (showInteractivePreview || (!hasExplicitPreviewChoice && !drawingUrl));
-
-  const handleSwitchDrawing = useCallback(() => {
-    if (isCreator) {
-      setHasExplicitPreviewChoice(true);
-      setShowInteractivePreview((currentValue) => !currentValue);
-    } else {
-      dispatch(toggleImageInteractivity(currentLevel));
-      syncLevelFields(currentLevel - 1, ["interactive"]);
-    }
-  }, [currentLevel, dispatch, isCreator, syncLevelFields]);
+  const shouldShowInteractivePreview = isCreator && (creatorPreviewInteractive ?? !drawingUrl);
   const interactive = level?.interactive ?? false;
+  const runtimeKey = useMemo(
+    () => `${currentLevel}:${scenario.scenarioId}:${isCreator ? "creator" : "game"}`,
+    [currentLevel, isCreator, scenario.scenarioId],
+  );
+  const sequenceRuntime = useSyncExternalStore(
+    useCallback((listener) => subscribeSequenceRuntime(runtimeKey, listener), [runtimeKey]),
+    useCallback(() => getSequenceRuntimeState(runtimeKey), [runtimeKey]),
+    useCallback(() => getSequenceRuntimeState(runtimeKey), [runtimeKey]),
+  );
+  const scenarioSequence = useMemo(
+    () => level?.eventSequence?.byScenarioId?.[scenario.scenarioId] ?? [],
+    [level?.eventSequence, scenario.scenarioId],
+  );
+  const normalizedActiveSequenceIndex = sequenceRuntime.activeIndex >= scenarioSequence.length ? 0 : sequenceRuntime.activeIndex;
+  const activeSequenceStep = scenarioSequence[normalizedActiveSequenceIndex] ?? null;
+  const isSequenceRecording = sequenceRuntime.recording && shouldShowInteractivePreview;
+  const frameEvents = useMemo(() => {
+    if (scenarioSequence.length > 0) {
+      if (isCreator) {
+        return isSequenceRecording ? [] : scenarioSequence.map((step) => stepToInteractionTrigger(step));
+      }
+      return interactive && activeSequenceStep ? [stepToInteractionTrigger(activeSequenceStep)] : [];
+    }
+
+    return level?.events || [];
+  }, [activeSequenceStep, interactive, isCreator, isSequenceRecording, level?.events, scenarioSequence]);
 
   useEffect(() => {
     if (!level) {
@@ -116,10 +201,217 @@ export const ScenarioDrawing = ({
     playwrightGameInteractiveBootstrappedLevel = currentLevel;
   }, [currentLevel, dispatch, drawboardCaptureMode, isCreator, level, syncLevelFields]);
 
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      resetSequenceRuntimeState(runtimeKey);
+    }, 0);
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [runtimeKey]);
+
+  useEffect(() => {
+    stepPreviewUrlsRef.current = stepPreviewUrls;
+  }, [stepPreviewUrls]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const renderPreviews = async () => {
+      if (!scenarioSequence.length) {
+      setStepPreviewUrls({});
+      return;
+      }
+
+      const missingSteps = scenarioSequence.filter((step) => !stepPreviewUrlsRef.current[step.id]);
+      if (missingSteps.length === 0) {
+        setStepPreviewUrls((current) => Object.fromEntries(
+          Object.entries(current).filter(([id]) => scenarioSequence.some((step) => step.id === id)),
+        ));
+        return;
+      }
+
+      const nextEntries = await Promise.all(missingSteps.map(async (step) => {
+        
+        const response = await fetch(apiUrl("/api/drawboard/render"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            css: step.snapshot.css,
+            snapshotHtml: step.snapshot.snapshotHtml,
+            width: step.snapshot.width,
+            height: step.snapshot.height,
+            scenarioId: step.scenarioId,
+            urlName: "solutionUrl",
+            includeDataUrl: true,
+          }),
+        });
+
+        if (!response.ok) {
+          return [step.id, ""] as const;
+        }
+
+        const payload = await response.json() as { dataUrl?: string };
+        return [step.id, payload.dataUrl || ""] as const;
+      }));
+
+      if (cancelled) {
+        return;
+      }
+
+      setStepPreviewUrls((current) => {
+        const next = { ...current };
+        nextEntries.forEach(([id, url]) => {
+          if (url) {
+            next[id] = url;
+          }
+        });
+        Object.keys(next).forEach((id) => {
+          if (!scenarioSequence.some((step) => step.id === id)) {
+            delete next[id];
+          }
+        });
+        return next;
+      });
+    };
+
+    void renderPreviews();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [scenarioSequence]);
+
+  useEffect(() => {
+    if (isCreator || !interactive || !activeSequenceStep || !drawingUrl || !stepPreviewUrls[activeSequenceStep.id]) {
+      return;
+    }
+
+    let cancelled = false;
+    const targetUrl = stepPreviewUrls[activeSequenceStep.id];
+
+    const compareCurrentStep = async () => {
+      const loadImageData = async (url: string) => {
+        const image = new window.Image();
+        image.crossOrigin = "anonymous";
+        image.src = url;
+        await new Promise<void>((resolve, reject) => {
+          image.onload = () => resolve();
+          image.onerror = () => reject(new Error(`Failed to load image: ${url.slice(0, 32)}`));
+        });
+        const canvas = document.createElement("canvas");
+        canvas.width = activeSequenceStep.snapshot.width;
+        canvas.height = activeSequenceStep.snapshot.height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          return null;
+        }
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+        return ctx.getImageData(0, 0, canvas.width, canvas.height);
+      };
+
+      const [drawingData, targetData] = await Promise.all([
+        loadImageData(drawingUrl),
+        loadImageData(targetUrl),
+      ]);
+      if (!drawingData || !targetData || cancelled) {
+        return;
+      }
+
+      const worker = new Worker(
+        new URL('../../../lib/utils/workers/imageComparisonWorker.ts', import.meta.url),
+        { type: 'module' },
+      );
+
+      const comparison = await new Promise<number>((resolve, reject) => {
+        worker.onmessage = ({ data }) => resolve(data.accuracy as number);
+        worker.onerror = reject;
+        const drawingBuffer = drawingData.data.buffer.slice(0);
+        const targetBuffer = targetData.data.buffer.slice(0);
+        worker.postMessage(
+          {
+            drawingBuffer,
+            solutionBuffer: targetBuffer,
+            width: drawingData.width,
+            height: drawingData.height,
+          },
+          [drawingBuffer, targetBuffer],
+        );
+      }).finally(() => {
+        worker.terminate();
+      });
+
+      if (cancelled) {
+        return;
+      }
+
+      updateSequenceRuntimeState(runtimeKey, (current) => {
+        const nextAccuracies = { ...current.stepAccuracies, [activeSequenceStep.id]: comparison };
+        if (current.pendingStepId === activeSequenceStep.id && comparison >= 99.5) {
+          nextAccuracies[activeSequenceStep.id] = 100;
+          return {
+            ...current,
+            stepAccuracies: nextAccuracies,
+            pendingStepId: null,
+            activeIndex: Math.min(current.activeIndex + 1, scenarioSequence.length),
+          };
+        }
+        return {
+          ...current,
+          stepAccuracies: nextAccuracies,
+        };
+      });
+    };
+
+    void compareCurrentStep().catch((error) => {
+      console.error("EventSequence: failed to compare current step", error);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSequenceStep, drawingUrl, interactive, isCreator, runtimeKey, scenarioSequence.length, stepPreviewUrls]);
+
+  const handleVerifiedInteraction = useCallback((interaction: VerifiedInteraction) => {
+    if (isCreator || !activeSequenceStep) {
+      return;
+    }
+    if (interaction.triggerId !== activeSequenceStep.id) {
+      return;
+    }
+    updateSequenceRuntimeState(runtimeKey, (current) => ({
+      ...current,
+      pendingStepId: activeSequenceStep.id,
+    }));
+  }, [activeSequenceStep, isCreator, runtimeKey]);
+
+  const handleClearSequence = useCallback(() => {
+    dispatch(clearEventSequenceForScenario({ levelId: currentLevel, scenarioId: scenario.scenarioId }));
+    syncLevelFields(currentLevel - 1, ["eventSequence"]);
+    setStepPreviewUrls({});
+    resetSequenceRuntimeState(runtimeKey);
+  }, [currentLevel, dispatch, runtimeKey, scenario.scenarioId, syncLevelFields]);
+
+  const handleUpdateSequenceStep = useCallback((stepId: string, field: "label" | "instruction", value: string) => {
+    dispatch(updateEventSequenceStep({
+      levelId: currentLevel,
+      scenarioId: scenario.scenarioId,
+      stepId,
+      changes: { [field]: value },
+    }));
+    syncLevelFields(currentLevel - 1, ["eventSequence"]);
+  }, [currentLevel, dispatch, scenario.scenarioId, syncLevelFields]);
+
+  const handleRemoveSequenceStep = useCallback((stepId: string) => {
+    dispatch(removeEventSequenceStep({ levelId: currentLevel, scenarioId: scenario.scenarioId, stepId }));
+    syncLevelFields(currentLevel - 1, ["eventSequence"]);
+  }, [currentLevel, dispatch, scenario.scenarioId, syncLevelFields]);
+
   if (!level) return null;
 
   return (
-    <div className="relative flex h-full min-h-0 w-full justify-center">
+    <div className="relative flex h-full min-h-0 w-full flex-col items-center">
       <BoardContainer
         width={scenario.dimensions.width}
         height={scenario.dimensions.height}
@@ -131,42 +423,19 @@ export const ScenarioDrawing = ({
           <ArtContainer>
             <div className="relative">
               {isCreator && (
-                <ScenarioHoverContainer>
+                <ScenarioHoverContainer enabled={!shouldShowInteractivePreview}>
                   <div className="relative h-full w-full min-h-[1px]">
                     <ScenarioDimensionsWrapper
                       scenario={scenario}
                       levelId={currentLevel}
                       showDimensions={true}
                       setShowDimensions={() => {}}
-                      toolbarEnd={
-                        <PoppingTitle topTitle={showInteractivePreview ? "Switch to Static" : "Switch to Interactive"}>
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant="ghost"
-                            className="h-7 w-7"
-                            onClick={handleSwitchDrawing}
-                          >
-                            {showInteractivePreview ? <ImageIcon className="h-4 w-4" /> : <MousePointer className="h-4 w-4" />}
-                          </Button>
-                        </PoppingTitle>
-                      }
                     />
                   </div>
                 </ScenarioHoverContainer>
               )}
               {!isCreator && (
                 <div className="absolute top-2 right-2 z-10 flex flex-col items-end gap-2">
-                  <PoppingTitle topTitle={interactive ? "Switch to Static" : "Switch to Interactive"}>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-7 w-7 bg-background/80 hover:bg-background"
-                      onClick={handleSwitchDrawing}
-                    >
-                      {interactive ? <ImageIcon className="h-4 w-4" /> : <MousePointer className="h-4 w-4" />}
-                    </Button>
-                  </PoppingTitle>
                   {manualDrawboardCapture && interactive && (
                     <PoppingTitle topTitle="Capture picture from your preview">
                       <Button
@@ -190,6 +459,7 @@ export const ScenarioDrawing = ({
                 staticComponent={
                   <Image
                     imageUrl={solutionUrl}
+                    alt="Reference image"
                     height={scenario.dimensions.height}
                     width={scenario.dimensions.width}
                     loadingMessage="Loading reference image…"
@@ -208,7 +478,7 @@ export const ScenarioDrawing = ({
                         <Frame
                           ref={bindDrawingFrame}
                           id="DrawBoard"
-                          events={level.events || []}
+                          events={frameEvents}
                           newCss={css}
                           newHtml={html}
                           newJs={js + "\n" + scenario.js}
@@ -216,12 +486,15 @@ export const ScenarioDrawing = ({
                           name="drawingUrl"
                           hiddenFromView={!shouldShowInteractivePreview}
                           onCaptureBusyChange={handleDrawingCaptureBusy}
+                          recordingSequence={isSequenceRecording}
+                          onVerifiedInteraction={handleVerifiedInteraction}
                         />
                         {!shouldShowInteractivePreview && (
                           <div className="relative z-[1]">
                             <Image
                               name="drawing"
                               imageUrl={drawingUrl}
+                              alt="Creator static preview"
                               height={scenario.dimensions.height}
                               width={scenario.dimensions.width}
                               loadingMessage="Loading your design…"
@@ -268,7 +541,7 @@ export const ScenarioDrawing = ({
                         <Frame
                           ref={bindDrawingFrame}
                           id="DrawBoard"
-                          events={level.events || []}
+                          events={frameEvents}
                           newCss={css}
                           newHtml={html}
                           newJs={js + "\n" + scenario.js}
@@ -276,12 +549,14 @@ export const ScenarioDrawing = ({
                           name="drawingUrl"
                           hiddenFromView={!interactive}
                           onCaptureBusyChange={handleDrawingCaptureBusy}
+                          onVerifiedInteraction={handleVerifiedInteraction}
                         />
                         {!interactive && (
                           <div className="relative z-[1]">
                             <Image
                               name="drawing"
                               imageUrl={drawingUrl}
+                              alt="Player static preview"
                               height={scenario.dimensions.height}
                               width={scenario.dimensions.width}
                               loadingMessage="Loading your design…"
@@ -307,6 +582,21 @@ export const ScenarioDrawing = ({
           </ArtContainer>
         </Board>
       </BoardContainer>
+      <EventSequencePanel
+        scenario={scenario}
+        creatorMode={isCreator}
+        interactivePreview={shouldShowInteractivePreview}
+        recording={isSequenceRecording}
+        steps={scenarioSequence}
+        activeStepIndex={normalizedActiveSequenceIndex}
+        stepAccuracies={sequenceRuntime.stepAccuracies}
+        previewUrls={stepPreviewUrls}
+        onStartRecording={() => updateSequenceRuntimeState(runtimeKey, (current) => ({ ...current, recording: true }))}
+        onStopRecording={() => updateSequenceRuntimeState(runtimeKey, (current) => ({ ...current, recording: false }))}
+        onClearSequence={handleClearSequence}
+        onUpdateStep={handleUpdateSequenceStep}
+        onRemoveStep={handleRemoveSequenceStep}
+      />
     </div>
   );
 };
