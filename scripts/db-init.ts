@@ -7,6 +7,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import * as readline from "node:readline";
+import { spawn } from "node:child_process";
 import * as dotenv from "dotenv";
 import { Pool } from "pg";
 
@@ -73,6 +74,36 @@ const pool = new Pool({
   connectionString: DATABASE_URL,
 });
 
+async function runDrizzleMigrate() {
+  console.log("");
+  console.log("🧭 Applying Drizzle migrations...");
+
+  await new Promise<void>((resolvePromise, rejectPromise) => {
+    const child = spawn(
+      "npx",
+      ["tsx", "scripts/run-drizzle-kit.ts", "migrate"],
+      {
+        cwd: resolve(__dirname, ".."),
+        stdio: "inherit",
+        env: process.env,
+        shell: process.platform === "win32",
+      },
+    );
+
+    child.on("exit", (code) => {
+      if (code === 0) {
+        resolvePromise();
+        return;
+      }
+      rejectPromise(new Error(`Drizzle migrate failed with exit code ${code ?? "unknown"}`));
+    });
+
+    child.on("error", rejectPromise);
+  });
+
+  console.log("✅ Drizzle migrations applied");
+}
+
 function askQuestion(query: string): Promise<string> {
   const rl = readline.createInterface({
     input: process.stdin,
@@ -92,6 +123,7 @@ async function initializeDatabase() {
   await ensureDatabaseExists();
   
   const client = await pool.connect();
+  let released = false;
 
   try {
     console.log("");
@@ -153,7 +185,8 @@ async function initializeDatabase() {
       await client.query(ltiCredentialsSQL);
       console.log("✅ LTI credentials schema applied");
     } catch (error: unknown) {
-      if (error instanceof Error && "code" in error && (error as any).code === "ENOENT") {
+      const code = error && typeof error === "object" && "code" in error ? String(error.code) : null;
+      if (error instanceof Error && code === "ENOENT") {
         console.log("⏭️  LTI credentials schema file not found, skipping...");
       } else {
         throw error;
@@ -281,19 +314,26 @@ async function initializeDatabase() {
     
     console.log("✅ Default 'all' map created");
 
+    await client.release();
+    released = true;
+    await pool.end();
+    await runDrizzleMigrate();
+
     console.log("");
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     console.log("✅ Database initialized successfully!");
     console.log("");
-    console.log("💡 Run `pnpm db:migrate` to apply Drizzle versioned migrations (e.g. projects.group_id, lti_credentials).");
-    console.log("💡 Then: `pnpm db:verify-migrations` and `pnpm db:check`");
+    console.log("💡 Next: `pnpm db:verify-migrations` and `pnpm db:check`");
     console.log("");
   } catch (error) {
     console.error("❌ Error initializing database:", error);
     throw error;
   } finally {
-    client.release();
-    await pool.end();
+    if (!released) {
+      client.release();
+      released = true;
+    }
+    await pool.end().catch(() => {});
   }
 }
 

@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS group_members (
 CREATE INDEX IF NOT EXISTS idx_groups_lti_context_id ON groups(lti_context_id);
 CREATE INDEX IF NOT EXISTS idx_groups_created_by ON groups(created_by);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_groups_join_key ON groups(join_key);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_group_members_group_user_unique ON group_members(group_id, user_id);
 CREATE INDEX IF NOT EXISTS idx_group_members_group_id ON group_members(group_id);
 CREATE INDEX IF NOT EXISTS idx_group_members_user_id ON group_members(user_id);
 

@@ -1,6 +1,8 @@
 import { chromium, expect, firefox, webkit } from "@playwright/test";
 import { Client } from "pg";
 import { readFileSync } from "fs";
+import dotenv from "dotenv";
+import path from "node:path";
 import net from "net";
 import tls from "tls";
 import { randomBytes } from "crypto";
@@ -9,7 +11,9 @@ import { promisify } from "util";
 
 const execFileAsync = promisify(execFile);
 
-const baseUrl = process.env.PLAYWRIGHT_BASE_URL || "http://127.0.0.1:3000";
+dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
+
+const baseUrl = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3000";
 const scenario = process.env.PLAYWRIGHT_SCENARIO || "baseline";
 const browserName = process.env.PLAYWRIGHT_BROWSER || "chromium";
 const routeKind = process.env.PLAYWRIGHT_ROUTE_KIND || (scenario === "prototype_yjs" ? "prototype-yjs" : "game");
@@ -21,7 +25,7 @@ const concurrentEditors = Math.max(2, Number.parseInt(process.env.PLAYWRIGHT_CON
 const timeoutMultiplier = Math.max(1, Number.parseFloat(process.env.PLAYWRIGHT_TIMEOUT_MULTIPLIER || "1"));
 const verboseYjsLogs = process.env.PLAYWRIGHT_VERBOSE_YJS === "true";
 const verboseBrowserLogs = process.env.PLAYWRIGHT_VERBOSE_BROWSER === "true";
-const dbUrl = process.env.PLAYWRIGHT_DATABASE_URL || process.env.DATABASE_URL || "postgresql://postgres:password@localhost:5432/ui_designer_dev";
+const dbUrl = process.env.PLAYWRIGHT_DATABASE_URL || process.env.DATABASE_URL || "postgresql://postgres:postgres@localhost:5433/ui_designer";
 let activeGameId = requestedGameId;
 const smokeViewport = {
   width: Number.parseInt(process.env.PLAYWRIGHT_VIEWPORT_WIDTH || "430", 10),
@@ -1282,9 +1286,50 @@ function summarizeSet(values) {
 
 async function signInDevUser(page, username) {
   await page.goto(new URL("/auth/signin", baseUrl).toString(), { waitUntil: "networkidle" });
-  await page.getByPlaceholder("alice").fill(username);
-  await page.getByRole("button", { name: "Use Local User" }).click();
-  await page.waitForURL((url) => !url.pathname.endsWith("/auth/signin"), { timeout: scaledTimeout(15000) });
+
+  const signInResult = await page.evaluate(async (nextUsername) => {
+    const csrfResponse = await fetch("/api/auth/csrf", { credentials: "include" });
+    const csrfPayload = await csrfResponse.json();
+    const params = new URLSearchParams({
+      csrfToken: csrfPayload.csrfToken,
+      username: nextUsername,
+      callbackUrl: "/",
+      json: "true",
+    });
+    const response = await fetch("/api/auth/callback/dev-user", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: params.toString(),
+      credentials: "include",
+    });
+
+    return {
+      ok: response.ok,
+      status: response.status,
+      text: await response.text(),
+    };
+  }, normalizeName(username));
+
+  if (!signInResult.ok) {
+    throw new Error(
+      `Local dev sign-in failed for ${username}: ${signInResult.status} ${signInResult.text}`,
+    );
+  }
+
+  await expect
+    .poll(async () => {
+      return page.evaluate(async () => {
+        const response = await fetch("/api/auth/session", { credentials: "include" });
+        const session = await response.json();
+        return Boolean(session?.user?.email);
+      });
+    }, {
+      timeout: scaledTimeout(15000),
+      message: `Expected authenticated session for ${username}`,
+    })
+    .toBe(true);
 }
 
 async function enableHttpLatency(context) {
@@ -1752,7 +1797,54 @@ async function getEditableContent(page) {
 }
 
 async function setEditorSelection(page, placement = "end", offset = 0) {
-  const positioned = await page.evaluate(({ nextPlacement, nextOffset }) => {
+  const maxAttempts = 8;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const positioned = await page.evaluate(({ nextPlacement, nextOffset }) => {
+      const editableContent = document.querySelector(".cm-content[contenteditable='true']");
+      if (!editableContent) {
+        return false;
+      }
+      const cmEl = editableContent.closest(".cm-editor");
+      let view = null;
+      try { view = cmEl?.cmView?.view; } catch {}
+      if (!view) {
+        try { view = editableContent.parentNode?.cmView?.view; } catch {}
+        if (!view) try { view = editableContent.cmView?.view; } catch {}
+      }
+      if (!view?.state?.doc) {
+        return false;
+      }
+      const docLength = view.state.doc.length;
+      const basePosition = nextPlacement === "start" ? 0 : docLength;
+      const anchor = Math.max(0, Math.min(docLength, basePosition + nextOffset));
+      view.dispatch({
+        selection: { anchor, head: anchor },
+        scrollIntoView: true,
+      });
+      view.focus();
+      return true;
+    }, { nextPlacement: placement, nextOffset: offset });
+
+    if (positioned) {
+      return;
+    }
+
+    await page.waitForTimeout(150);
+  }
+
+  const navigationModifier = process.platform === "darwin" ? "Meta" : "Control";
+  await page.locator(".cm-content[contenteditable='true']").first().click();
+  await page.keyboard.press(
+    placement === "start" ? `${navigationModifier}+ArrowUp` : `${navigationModifier}+ArrowDown`,
+  );
+  if (offset !== 0) {
+    const key = offset < 0 ? "ArrowLeft" : "ArrowRight";
+    for (let step = 0; step < Math.abs(offset); step += 1) {
+      await page.keyboard.press(key);
+    }
+  }
+
+  const confirmed = await page.evaluate(({ nextPlacement, nextOffset }) => {
     const editableContent = document.querySelector(".cm-content[contenteditable='true']");
     if (!editableContent) {
       return false;
@@ -1764,21 +1856,16 @@ async function setEditorSelection(page, placement = "end", offset = 0) {
       try { view = editableContent.parentNode?.cmView?.view; } catch {}
       if (!view) try { view = editableContent.cmView?.view; } catch {}
     }
-    if (!view?.state?.doc) {
-      return false;
+    if (!view?.state?.selection?.main) {
+      return true;
     }
     const docLength = view.state.doc.length;
-    const basePosition = nextPlacement === "start" ? 0 : docLength;
-    const anchor = Math.max(0, Math.min(docLength, basePosition + nextOffset));
-    view.dispatch({
-      selection: { anchor, head: anchor },
-      scrollIntoView: true,
-    });
-    view.focus();
-    return true;
+    const expectedBase = nextPlacement === "start" ? 0 : docLength;
+    const expectedAnchor = Math.max(0, Math.min(docLength, expectedBase + nextOffset));
+    return view.state.selection.main.anchor === expectedAnchor;
   }, { nextPlacement: placement, nextOffset: offset });
 
-  if (!positioned) {
+  if (!confirmed) {
     throw new Error(`Failed to position CodeMirror selection at ${placement}:${offset}`);
   }
 }

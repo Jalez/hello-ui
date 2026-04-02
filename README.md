@@ -69,8 +69,7 @@ An interactive, gamified platform for learning and mastering CSS, HTML, and mode
    ```bash
    # Ensure DATABASE_URL in .env.local points at your Postgres database, then:
    pnpm db:create-database   # optional: creates the DB if missing
-   pnpm db:init -- -y        # SQL bootstrap (scripts/sql)
-   pnpm db:migrate           # Drizzle versioned migrations (lib/db/migrations)
+   pnpm db:init -- -y        # SQL bootstrap + Drizzle migrations
    pnpm db:verify-migrations # optional: sanity-check migration chain + key columns
    ```
    See `docs/database-schema-inventory.md` for how SQL bootstrap and Drizzle migrations fit together.
@@ -196,8 +195,8 @@ pnpm lint         # Run ESLint
 
 # Database (PostgreSQL)
 pnpm db:create-database   # Create DB named in DATABASE_URL if missing
-pnpm db:init -- -y        # SQL bootstrap from scripts/sql
-pnpm db:migrate          # Apply Drizzle migrations (preferred over db:push in prod)
+pnpm db:init -- -y        # SQL bootstrap + Drizzle migrations
+pnpm db:migrate          # Apply new Drizzle migrations incrementally after init
 pnpm db:verify-migrations # Verify migrations + critical columns/tables
 pnpm db:check            # Inspect DB state
 pnpm db:seed-admin       # Grant admin (see script)

@@ -5,7 +5,7 @@ import { chromium } from "@playwright/test";
 
 dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
 
-const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || "http://127.0.0.1:3000";
+const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3000";
 const DEV_USERNAME = process.env.PLAYWRIGHT_DEV_USERNAME || "ai-smoke";
 const OPENROUTER_KEY = process.env.TEST_OPENROUTER_API_KEY || "";
 const TEST_TIMEOUT_MS = Number(process.env.PLAYWRIGHT_AI_TIMEOUT_MS || 120000);

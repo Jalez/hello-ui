@@ -5,11 +5,11 @@ This document tracks parity between **legacy SQL bootstrap** (`scripts/sql/`, `d
 ## Supported workflow
 
 1. **Create DB** (if needed): `pnpm db:create-database`
-2. **Legacy bootstrap** (Docker / local): SQL init creates the bulk of tables (until a full baseline migration exists).
-3. **Apply migrations**: `pnpm db:migrate` — **required** after init for columns/tables owned by Drizzle migrations (e.g. `projects.group_id`, `lti_credentials`, drawboard runtime columns).
+2. **Bootstrap DB**: `pnpm db:init -- -y` — applies legacy SQL bootstrap and then Drizzle migrations.
+3. **Apply new migrations later**: `pnpm db:migrate` for incremental schema changes after initial bootstrap.
 4. **Verify** (optional): `pnpm db:verify-schema` and `pnpm db:check`
 
-Production (`docker-up.sh` server path): DB init container runs SQL bootstrap; **app image runs `pnpm db:migrate`** (not `db:push`).
+Production (`docker-up.sh` server path): DB init container runs SQL bootstrap; the app/server path must still ensure Drizzle migrations run before serving traffic.
 
 ## Extensions
 
@@ -41,6 +41,6 @@ These remain owned by `scripts/sql/` until folded into a baseline or raw SQL mig
 
 ## Fresh database (future baseline)
 
-A **single** `drizzle migrate` on an empty database is not yet the full story: the repo still relies on SQL bootstrap for the historical table set. The goal is to converge to **extensions + migrate** only; until then, always run **`pnpm db:migrate` after SQL init**.
+A **single** `drizzle migrate` on an empty database is not yet the full story: the repo still relies on SQL bootstrap for the historical table set. The goal is to converge to **extensions + migrate** only; until then, use **`pnpm db:init -- -y`** so SQL bootstrap and Drizzle migrations stay coupled.
 
 After migrate, run **`pnpm db:verify-migrations`** (updates `EXPECTED_MIGRATION_COUNT` in `scripts/verify-drizzle-migration-chain.ts` when you add journal entries).
