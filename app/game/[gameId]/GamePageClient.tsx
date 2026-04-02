@@ -254,18 +254,14 @@ export default function GamePage({ params }: GamePageProps) {
 
   useEffect(() => {
     const storedAccessKey = readStoredAccessKey(gameId);
-    queueMicrotask(() => {
-      setAccessKeyInput(storedAccessKey);
-      setSubmittedAccessKey(storedAccessKey);
-      setAccessKeyReady(true);
-    });
+    setAccessKeyInput(storedAccessKey);
+    setSubmittedAccessKey(storedAccessKey);
+    setAccessKeyReady(true);
   }, [gameId]);
 
   useEffect(() => {
     if (hasUser) {
-      queueMicrotask(() => {
-        setGuestId("");
-      });
+      setGuestId("");
       return;
     }
     const storageKey = "ui-designer-guest-id";
@@ -274,9 +270,7 @@ export default function GamePage({ params }: GamePageProps) {
       nextGuestId = crypto.randomUUID();
       localStorage.setItem(storageKey, nextGuestId);
     }
-    queueMicrotask(() => {
-      setGuestId(nextGuestId);
-    });
+    setGuestId(nextGuestId);
   }, [hasUser]);
 
   useEffect(() => {
