@@ -19,6 +19,7 @@ export interface UpdateGameOptions {
   drawboardCaptureMode?: "browser" | "playwright";
   manualDrawboardCapture?: boolean;
   remoteSyncDebounceMs?: number;
+  drawboardReloadDebounceMs?: number;
   regenerateAccessKey?: boolean;
   regenerateShareToken?: boolean;
 }

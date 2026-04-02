@@ -68,6 +68,7 @@ export const Navbar = () => {
   const { recordReset } = useGameplayTelemetry();
   const canEditCurrentGame = Boolean(currentGame?.canEdit ?? currentGame?.isOwner);
   const isGameRoute = normalizedPathname.startsWith("/game/");
+  const isGroupGame = currentGame?.collaborationMode === "group";
   const shouldHideSidebarForPlayers = isGameRoute && Boolean(currentGame?.hideSidebar) && !canEditCurrentGame;
   const showCreatorGameMenus =
     isGameRoute &&
@@ -167,7 +168,7 @@ export const Navbar = () => {
   }, []);
 
   const openGameLobby = useCallback(() => {
-    if (!currentGame?.id) {
+    if (!currentGame?.id || !isGroupGame) {
       return;
     }
 
@@ -176,7 +177,7 @@ export const Navbar = () => {
     params.delete("groupId");
     const query = params.toString();
     router.push(apiUrl(`/game/${currentGame.id}${query ? `?${query}` : ""}`));
-  }, [currentGame?.id, router, searchParams]);
+  }, [currentGame?.id, isGroupGame, router, searchParams]);
 
   const handleResetGameInstances = useCallback(async () => {
     if (!currentGame?.id) {
@@ -261,7 +262,7 @@ export const Navbar = () => {
       <DropdownMenuContent align="start" className="w-72 border-0 shadow-lg">
         <DropdownMenuLabel>Game Tools</DropdownMenuLabel>
         <DropdownMenuSeparator />
-        {isGameRoute && currentGame?.id && (
+        {isGameRoute && currentGame?.id && isGroupGame && (
           <>
             <DropdownMenuItem onSelect={openGameLobby}>
               <Users className="h-4 w-4 mr-2" />
@@ -387,18 +388,20 @@ export const Navbar = () => {
                       {points.allPoints || 0}/{points.allMaxPoints || 0}
                     </div>
                   </div>
-                  <div className="mt-3 rounded-md bg-background/80 px-3 py-2">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="w-full justify-center gap-2"
-                      onClick={openGameLobby}
-                    >
-                      <Users className="h-4 w-4" />
-                      <span>To lobby</span>
-                    </Button>
-                  </div>
+                  {isGroupGame && (
+                    <div className="mt-3 rounded-md bg-background/80 px-3 py-2">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="w-full justify-center gap-2"
+                        onClick={openGameLobby}
+                      >
+                        <Users className="h-4 w-4" />
+                        <span>To lobby</span>
+                      </Button>
+                    </div>
+                  )}
                   <div className="mt-3 rounded-md bg-background/80 px-3 py-2">
                     <AplusSubmitButton
                       displayMode="icon-label"
@@ -438,18 +441,20 @@ export const Navbar = () => {
       <div className="flex flex-none">
         <InfoGamePoints />
       </div>
-      <div className="flex flex-none">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="justify-center gap-2"
-          onClick={openGameLobby}
-        >
-          <Users className="h-4 w-4" />
-          <span>To lobby</span>
-        </Button>
-      </div>
+      {isGroupGame && (
+        <div className="flex flex-none">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="justify-center gap-2"
+            onClick={openGameLobby}
+          >
+            <Users className="h-4 w-4" />
+            <span>To lobby</span>
+          </Button>
+        </div>
+      )}
       <div className="flex flex-none">
         <AplusSubmitButton displayMode="icon-label" shouldShake={shouldEmphasizeFinishGame} />
       </div>

@@ -46,6 +46,7 @@ export async function GET(_request: NextRequest) {
         drawboardCaptureMode: g.drawboard_capture_mode,
         manualDrawboardCapture: g.manual_drawboard_capture,
         remoteSyncDebounceMs: g.remote_sync_debounce_ms,
+        drawboardReloadDebounceMs: g.drawboard_reload_debounce_ms,
         isOwner: Boolean(g.is_owner),
         isCollaborator: Boolean(g.is_collaborator),
         canEdit: Boolean(g.can_edit),

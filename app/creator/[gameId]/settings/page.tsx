@@ -43,6 +43,7 @@ import {
   DEFAULT_DRAWBOARD_CAPTURE_MODE,
   DEFAULT_MANUAL_DRAWBOARD_CAPTURE,
   DEFAULT_REMOTE_SYNC_DEBOUNCE_MS,
+  DEFAULT_DRAWBOARD_RELOAD_DEBOUNCE_MS,
 } from "@/lib/gameRuntimeConfig";
 
 type Collaborator = {
@@ -72,6 +73,7 @@ type SettingsDraft = {
   drawboardCaptureMode: "browser" | "playwright";
   manualDrawboardCapture: boolean;
   remoteSyncDebounceMs: number;
+  drawboardReloadDebounceMs: number;
 };
 
 function createAccessKey(): string {
@@ -113,6 +115,7 @@ function createDraft(game: {
   drawboardCaptureMode?: "browser" | "playwright";
   manualDrawboardCapture?: boolean;
   remoteSyncDebounceMs?: number;
+  drawboardReloadDebounceMs?: number;
 }): SettingsDraft {
   const captureMode =
     game.drawboardCaptureMode === "playwright" || game.drawboardCaptureMode === "browser"
@@ -122,6 +125,10 @@ function createDraft(game: {
     typeof game.remoteSyncDebounceMs === "number" && Number.isFinite(game.remoteSyncDebounceMs)
       ? Math.min(10_000, Math.max(0, Math.round(game.remoteSyncDebounceMs)))
       : DEFAULT_REMOTE_SYNC_DEBOUNCE_MS;
+  const reloadDebounce =
+    typeof game.drawboardReloadDebounceMs === "number" && Number.isFinite(game.drawboardReloadDebounceMs)
+      ? Math.min(10_000, Math.max(0, Math.round(game.drawboardReloadDebounceMs)))
+      : DEFAULT_DRAWBOARD_RELOAD_DEBOUNCE_MS;
 
   return {
     description: game.description ?? "",
@@ -141,6 +148,7 @@ function createDraft(game: {
         ? game.manualDrawboardCapture
         : DEFAULT_MANUAL_DRAWBOARD_CAPTURE,
     remoteSyncDebounceMs: debounce,
+    drawboardReloadDebounceMs: reloadDebounce,
   };
 }
 
@@ -303,6 +311,7 @@ export default function CreatorSettingsPage({ params }: CreatorSettingsPageProps
         drawboardCaptureMode: draft.drawboardCaptureMode,
         manualDrawboardCapture: draft.manualDrawboardCapture,
         remoteSyncDebounceMs: draft.remoteSyncDebounceMs,
+        drawboardReloadDebounceMs: draft.drawboardReloadDebounceMs,
       });
 
       setInitialDraft(draft);
@@ -637,6 +646,29 @@ export default function CreatorSettingsPage({ params }: CreatorSettingsPageProps
                 />
                 <p className="text-xs text-muted-foreground">
                   Delay before Yjs and drawboard capture mirror into Redux (0–10000 ms). Default 500.
+                </p>
+              </div>
+              <div className="space-y-2 max-w-md">
+                <Label htmlFor="drawboard-reload-debounce">Drawboard reload debounce (ms)</Label>
+                <Input
+                  id="drawboard-reload-debounce"
+                  type="number"
+                  min={0}
+                  max={10_000}
+                  value={draft.drawboardReloadDebounceMs}
+                  onChange={(event) => {
+                    const parsed = Number.parseInt(event.target.value, 10);
+                    const next = Number.isFinite(parsed)
+                      ? Math.min(10_000, Math.max(0, parsed))
+                      : DEFAULT_DRAWBOARD_RELOAD_DEBOUNCE_MS;
+                    setDraft((current) =>
+                      current ? { ...current, drawboardReloadDebounceMs: next } : current,
+                    );
+                    setSaveSuccess(null);
+                  }}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Delay before the drawboard iframe reloads after editor changes (0–10000 ms). Default 48.
                 </p>
               </div>
             </CardContent>

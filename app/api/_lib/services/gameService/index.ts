@@ -56,6 +56,7 @@ function mapGame(row: typeof projects.$inferSelect): Game {
     drawboard_capture_mode: row.drawboardCaptureMode === "playwright" ? "playwright" : "browser",
     manual_drawboard_capture: row.manualDrawboardCapture ?? false,
     remote_sync_debounce_ms: row.remoteSyncDebounceMs ?? 500,
+    drawboard_reload_debounce_ms: row.drawboardReloadDebounceMs ?? 48,
     created_at: row.createdAt,
     updated_at: row.updatedAt,
   };
@@ -411,6 +412,14 @@ export async function updateGame(id: string, options: UpdateGameOptions): Promis
       throw new Error("Invalid remoteSyncDebounceMs: must be a number");
     }
     updateData.remoteSyncDebounceMs = Math.min(10_000, Math.max(0, n));
+  }
+
+  if (options.drawboardReloadDebounceMs !== undefined) {
+    const n = Math.round(Number(options.drawboardReloadDebounceMs));
+    if (!Number.isFinite(n)) {
+      throw new Error("Invalid drawboardReloadDebounceMs: must be a number");
+    }
+    updateData.drawboardReloadDebounceMs = Math.min(10_000, Math.max(0, n));
   }
 
   if (Object.keys(updateData).length === 0) {

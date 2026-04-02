@@ -15,6 +15,13 @@
       "when": 1740940800000,
       "tag": "0001_projects_group_id_lti_credentials",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1775149968762,
+      "tag": "0002_amusing_cassandra_nova",
+      "breakpoints": true
     }
   ]
 }

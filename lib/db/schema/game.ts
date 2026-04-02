@@ -77,6 +77,7 @@ export const projects = pgTable(
     drawboardCaptureMode: text("drawboard_capture_mode").notNull().default("browser"),
     manualDrawboardCapture: boolean("manual_drawboard_capture").notNull().default(false),
     remoteSyncDebounceMs: integer("remote_sync_debounce_ms").notNull().default(500),
+    drawboardReloadDebounceMs: integer("drawboard_reload_debounce_ms").notNull().default(48),
     groupId: uuid("group_id").references(() => groups.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),

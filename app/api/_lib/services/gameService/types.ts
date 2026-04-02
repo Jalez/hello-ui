@@ -21,6 +21,7 @@ export interface Game {
   drawboard_capture_mode: "browser" | "playwright";
   manual_drawboard_capture: boolean;
   remote_sync_debounce_ms: number;
+  drawboard_reload_debounce_ms: number;
   is_owner?: boolean;
   is_collaborator?: boolean;
   can_edit?: boolean;
@@ -55,6 +56,7 @@ export interface UpdateGameOptions {
   drawboardCaptureMode?: "browser" | "playwright";
   manualDrawboardCapture?: boolean;
   remoteSyncDebounceMs?: number;
+  drawboardReloadDebounceMs?: number;
 }
 
 export interface GameCollaborator {

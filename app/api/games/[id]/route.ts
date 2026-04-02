@@ -80,6 +80,7 @@ function buildGamePayload(game: Game | null) {
     drawboardCaptureMode: game.drawboard_capture_mode,
     manualDrawboardCapture: game.manual_drawboard_capture,
     remoteSyncDebounceMs: game.remote_sync_debounce_ms,
+    drawboardReloadDebounceMs: game.drawboard_reload_debounce_ms,
     isOwner: Boolean(game.is_owner),
     isCollaborator: Boolean(game.is_collaborator),
     canEdit: Boolean(game.can_edit),
@@ -212,6 +213,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       manualDrawboardCapture: body.manualDrawboardCapture,
       remoteSyncDebounceMs:
         body.remoteSyncDebounceMs === undefined ? undefined : Number(body.remoteSyncDebounceMs),
+      drawboardReloadDebounceMs:
+        body.drawboardReloadDebounceMs === undefined ? undefined : Number(body.drawboardReloadDebounceMs),
     });
 
     if (!game) {

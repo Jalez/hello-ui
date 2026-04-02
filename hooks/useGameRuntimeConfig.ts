@@ -1,6 +1,7 @@
 import { useGameStore } from "@/components/default/games";
 import {
   resolveDrawboardCaptureMode,
+  resolveDrawboardReloadDebounceMs,
   resolveManualDrawboardCapture,
   resolveRemoteSyncDebounceMs,
   type DrawboardCaptureMode,
@@ -10,6 +11,7 @@ export type GameRuntimeConfig = {
   drawboardCaptureMode: DrawboardCaptureMode;
   manualDrawboardCapture: boolean;
   remoteSyncDebounceMs: number;
+  drawboardReloadDebounceMs: number;
 };
 
 export function useGameRuntimeConfig(): GameRuntimeConfig {
@@ -21,5 +23,6 @@ export function useGameRuntimeConfig(): GameRuntimeConfig {
     drawboardCaptureMode: resolveDrawboardCaptureMode(game ?? undefined),
     manualDrawboardCapture: resolveManualDrawboardCapture(game ?? undefined),
     remoteSyncDebounceMs: resolveRemoteSyncDebounceMs(game ?? undefined),
+    drawboardReloadDebounceMs: resolveDrawboardReloadDebounceMs(game ?? undefined),
   };
 }

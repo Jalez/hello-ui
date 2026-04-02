@@ -23,7 +23,7 @@ export const useGameHandlers = ({ isAuthenticated, onGameClick }: UseGameHandler
   useEffect(() => {
     if (!creatingGameId) return;
     
-    if (normalizedPathname === `/game/${creatingGameId}`) {
+    if (normalizedPathname === `/creator/${creatingGameId}`) {
       const timer = setTimeout(() => {
         setIsCreating(false);
         setCreatingGameId(null);
@@ -31,8 +31,8 @@ export const useGameHandlers = ({ isAuthenticated, onGameClick }: UseGameHandler
       return () => clearTimeout(timer);
     } else if (
       normalizedPathname &&
-      normalizedPathname !== `/game/${creatingGameId}` &&
-      !normalizedPathname.startsWith(`/game/${creatingGameId}/`)
+      normalizedPathname !== `/creator/${creatingGameId}` &&
+      !normalizedPathname.startsWith(`/creator/${creatingGameId}/`)
     ) {
       const timer = setTimeout(() => {
         setIsCreating(false);
@@ -63,7 +63,7 @@ export const useGameHandlers = ({ isAuthenticated, onGameClick }: UseGameHandler
 
       setCurrentGameId(newGame.id);
       setCreatingGameId(newGame.id);
-      router.push(apiUrl(`/game/${newGame.id}`));
+      router.push(apiUrl(`/creator/${newGame.id}`));
       
       if (onGameClick) {
         onGameClick();

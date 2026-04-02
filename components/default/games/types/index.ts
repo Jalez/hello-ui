@@ -18,6 +18,7 @@ export interface Game {
   drawboardCaptureMode?: "browser" | "playwright";
   manualDrawboardCapture?: boolean;
   remoteSyncDebounceMs?: number;
+  drawboardReloadDebounceMs?: number;
   accessKey?: string | null;
   regenerateAccessKey?: boolean;
   regenerateShareToken?: boolean;
