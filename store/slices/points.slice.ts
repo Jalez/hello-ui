@@ -1,12 +1,6 @@
 import { PayloadAction, createSlice } from "@reduxjs/toolkit";
 import { Level, levelNames, scenarioAccuracy } from "@/types";
 import { numberTimeToMinutesAndSeconds } from "@/lib/utils/numberTimeToMinutesAndSeconds";
-import { backendStorage } from "@/lib/utils/backendStorage";
-
-type BasePoints = {
-  allPoints: number;
-  allMaxPoints: number;
-};
 
 type LevelPoints = {
   [K in levelNames]: {
@@ -107,16 +101,6 @@ export const pointsSlice = createSlice({
       levels.forEach((level) => {
         state.levels[level.name] = buildLevelPoints(level);
       });
-
-      // Save to backend as backup
-      if (typeof window !== 'undefined') {
-        const pointsStorage = backendStorage('points');
-        pointsStorage.setItem(pointsStorage.key, JSON.stringify(state));
-      }
-    },
-    restorePoints: (state, action: PayloadAction<Points>) => {
-      // Restore points from saved data (used in ProgressionSync)
-      return action.payload;
     },
     refreshPoints: (state) => {
       //go through the levels and their points, add them together and update allPoints
@@ -124,12 +108,6 @@ export const pointsSlice = createSlice({
         (acc, level) => acc + level.points,
         0
       );
-
-      // Save to backend as backup
-      if (typeof window !== 'undefined') {
-        const pointsStorage = backendStorage('points');
-        pointsStorage.setItem(pointsStorage.key, JSON.stringify(state));
-      }
     },
     updateMaxPoints: (state, action: PayloadAction<Level[]>) => {
       state.allMaxPoints = action.payload.reduce(
@@ -215,11 +193,6 @@ export const pointsSlice = createSlice({
       };
       state.allPoints = Object.values(state.levels).reduce((acc, item) => acc + item.points, 0);
       state.allMaxPoints = Object.values(state.levels).reduce((acc, item) => acc + item.maxPoints, 0);
-
-      if (typeof window !== "undefined") {
-        const pointsStorage = backendStorage("points");
-        pointsStorage.setItem(pointsStorage.key, JSON.stringify(state));
-      }
     },
     renameLevelKey: (state, action: PayloadAction<{ oldName: string; newName: string }>) => {
       const { oldName, newName } = action.payload;
@@ -258,17 +231,12 @@ export const pointsSlice = createSlice({
           level.scenarios = data.scenarios.map((s) => ({ scenarioId: s.scenarioId, accuracy: s.accuracy }));
       }
       state.allPoints = Object.values(state.levels).reduce((acc, l) => acc + l.points, 0);
-      if (typeof window !== "undefined") {
-        const pointsStorage = backendStorage("points");
-        pointsStorage.setItem(pointsStorage.key, JSON.stringify(state));
-      }
     },
   },
 });
 
 export const {
   initializePoints,
-  restorePoints,
   refreshPoints,
   updateMaxPoints,
   updateLevelPoints,

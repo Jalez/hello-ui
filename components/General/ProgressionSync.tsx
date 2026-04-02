@@ -4,7 +4,6 @@ import { useEffect, useRef } from 'react';
 import { useAppDispatch } from '@/store/hooks/hooks';
 import { setCurrentLevel } from '@/store/slices/currentLevel.slice';
 import { updateRoom } from '@/store/slices/room.slice';
-import { restorePoints } from '@/store/slices/points.slice';
 import { backendStorage } from '@/lib/utils/backendStorage';
 
 // Module-level flag to prevent duplicate syncs across component remounts
@@ -49,18 +48,6 @@ export function ProgressionSync() {
           }
         }
 
-        // Sync points (as backup in case levels don't have them)
-        const pointsStorage = backendStorage('points');
-        const pointsData = await pointsStorage.getItemAsync(pointsStorage.key);
-        if (pointsData) {
-          try {
-            const points = JSON.parse(pointsData);
-            dispatch(restorePoints(points));
-          } catch (e) {
-            console.error('Failed to parse points data:', e);
-          }
-        }
-
         // Mark as synced only after successful completion
         hasSynced = true;
       } finally {
@@ -80,4 +67,3 @@ export function ProgressionSync() {
 export const resetProgressionSync = () => {
   hasSynced = false;
 };
-
