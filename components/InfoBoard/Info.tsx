@@ -111,7 +111,7 @@ export function LevelFooterMenu() {
               <LevelDifficultySkulls iconClassName="h-4 w-4" />
             </CompactMenuItem>
             {hasAccuracy && (
-              <CompactMenuItem label="Accuracy">
+              <CompactMenuItem label="Mean accuracy">
                 <div className="text-sm font-semibold text-foreground">
                   {levelAccuracy}%
                 </div>
@@ -250,7 +250,7 @@ const Info = () => {
         {!isCreator && <InfoTime />}
         {hasAccuracy && (
           <InfoBox>
-            <PoppingTitle topTitle="Accuracy">
+            <PoppingTitle topTitle="Mean accuracy">
               <InfoText>{points.levels[level.name].accuracy}%</InfoText>
             </PoppingTitle>
           </InfoBox>

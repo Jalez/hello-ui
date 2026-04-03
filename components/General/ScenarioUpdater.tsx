@@ -23,9 +23,12 @@ type ScenarioUpdaterProps = {
 export const ScenarioUpdater = ({ scenario, drawingPixels, solutionPixels }: ScenarioUpdaterProps) => {
   const dispatch = useAppDispatch();
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
+  const level = useAppSelector((state) => state.levels[currentLevel - 1]);
   const currentLevelRef = useRef(currentLevel);
   currentLevelRef.current = currentLevel;
   const scenarioId = scenario.scenarioId;
+  const hasEventSequence =
+    Boolean(level?.eventSequence?.byScenarioId?.[scenarioId]?.length);
 
   const workerRunningRef = useRef(false);
 
@@ -61,14 +64,16 @@ export const ScenarioUpdater = ({ scenario, drawingPixels, solutionPixels }: Sce
 
           const levelIndex = currentLevelRef.current - 1;
           batch(() => {
-            dispatch(
-              updateLevelAccuracyByIndexThunk(levelIndex, scenarioId, accuracy)
-            );
+            if (!hasEventSequence) {
+              dispatch(
+                updateLevelAccuracyByIndexThunk(levelIndex, scenarioId, accuracy),
+              );
+            }
             dispatch(
               addDifferenceUrl({
                 scenarioId: scenarioId,
                 differenceUrl: diff,
-              })
+              }),
             );
           });
           if (worker) {
@@ -107,7 +112,7 @@ export const ScenarioUpdater = ({ scenario, drawingPixels, solutionPixels }: Sce
       clearTimeout(debounceTimer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [drawingPixels, solutionPixels, dispatch, scenarioId]);
+  }, [drawingPixels, solutionPixels, dispatch, scenarioId, hasEventSequence]);
 
   return <></>;
 };
