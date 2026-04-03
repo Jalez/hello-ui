@@ -97,6 +97,10 @@ let resizeObserver: ResizeObserver | null = null;
 let replaySequence: EventSequenceStep[] = [];
 let replayInFlight = false;
 let replayAppliedSignature = "";
+/** Baseline from the last full parent message; options-patch does not resend HTML/CSS/JS. */
+let lastAppliedHtml = "";
+let lastAppliedCss = "";
+let lastAppliedJs = "";
 
 function updateInteractiveFlag() {
   document.body.dataset.interactive = interactive ? "true" : "false";
@@ -277,11 +281,13 @@ function getReplayValueFromSnapshot(step: EventSequenceStep): { value?: string; 
 
 async function replaySequenceStep(step: EventSequenceStep) {
   if (!step.selector) {
+    console.log("[drawboard:replay] step has no selector, skipping", step.id);
     return;
   }
 
   const target = document.querySelector(step.selector);
   if (!(target instanceof Element)) {
+    console.warn("[drawboard:replay] querySelector missed", step.selector, "for step", step.id);
     return;
   }
 
@@ -323,8 +329,12 @@ async function replaySequenceStep(step: EventSequenceStep) {
 async function replaySequenceIfNeeded() {
   const signature = replaySequence.map((step) => step.id).join("|");
   if (!interactive || recordingSequence || replayInFlight || !signature || replayAppliedSignature === signature) {
+    if (signature) {
+      console.log("[drawboard:replay] skipped:", { interactive, recordingSequence, replayInFlight, signature, appliedSig: replayAppliedSignature });
+    }
     return;
   }
+  console.log("[drawboard:replay] starting replay, steps:", replaySequence.length, "signature:", signature);
 
   replayInFlight = true;
   try {
@@ -700,6 +710,8 @@ function scheduleRenderReady() {
 
       if (isBrowserCapture) {
         try {
+          await waitForPaintAfterCss();
+          await replaySequenceIfNeeded();
           await captureBrowser();
           await refreshAcceptedVisualState();
           if (isManualCapture) {
@@ -857,13 +869,64 @@ window.addEventListener("message", (event: MessageEvent<DrawboardPayload>) => {
     if (event.data.scenarioId !== undefined && event.data.scenarioId !== scenarioId) {
       return;
     }
+    const incomingReplay = normalizeReplaySequence(event.data?.replaySequence);
+    console.log("[drawboard:options-patch]", urlName, { interactive: event.data.interactive, recording: event.data.recordingSequence, replaySteps: incomingReplay.length, dataReceived });
+    const prevReplaySignature = replaySequence.map((step) => step.id).join("|");
+    const nextReplaySignature = incomingReplay.map((step) => step.id).join("|");
+    const replaySignatureChanged = prevReplaySignature !== nextReplaySignature;
+    const prevInteractive = interactive;
+    const prevRecording = recordingSequence;
+
     interactive = Boolean(event.data.interactive);
     recordingSequence = Boolean(event.data.recordingSequence);
     triggers = normalizeInteractionTriggers(event.data?.events);
-    replaySequence = normalizeReplaySequence(event.data?.replaySequence);
-    replayAppliedSignature = "";
+    replaySequence = incomingReplay;
+
+    /**
+     * Clearing replayAppliedSignature on every patch forced replay to run again even when the
+     * replay prefix was unchanged (e.g. React re-sending the same patch). That re-dispatched
+     * events on an already-mutated DOM (double replay). Only reset when replay or mode changed.
+     */
+    const interactiveChanged = prevInteractive !== interactive;
+    const recordingChanged = prevRecording !== recordingSequence;
+    if (replaySignatureChanged || interactiveChanged || recordingChanged) {
+      replayAppliedSignature = "";
+    }
+
     updateInteractiveFlag();
     syncEventListeners();
+
+    /**
+     * Full iframe reload is debounced on html/css/js only; step scrub sends options-patch.
+     * Without resetting the document, replay runs on DOM still mutated by the previous prefix
+     * (wrong baseline). Re-apply the last baseline, then scheduleRenderReady/replay as usual.
+     * Also reset when interactive toggles with a non-empty replay (otherwise replay runs twice
+     * on a mutated tree).
+     *
+     * Recording mutates the live DOM while replaySequence often stays [] (no prefix until scrub).
+     * When recording stops with an empty replay, signature does not change — re-apply baseline
+     * so the iframe matches template HTML again (e.g. #status back to initial Closed).
+     */
+    const recordingEnded = recordingChanged && prevRecording && !recordingSequence;
+    const needsBaselineReset =
+      replaySignatureChanged
+      || (interactiveChanged && incomingReplay.length > 0)
+      || (recordingEnded && incomingReplay.length === 0);
+    if (needsBaselineReset && dataReceived) {
+      console.log("[drawboard:options-patch] baseline reset for replay change");
+      clearRenderReadyTimeout();
+      clearPlaywrightLayoutFollowUp();
+      applyHtml(lastAppliedHtml);
+      syncEventListeners();
+      installObservers();
+      applyCss(lastAppliedCss);
+      applyJs(lastAppliedJs);
+      return;
+    }
+    if (needsBaselineReset && !dataReceived) {
+      console.warn("[drawboard:options-patch] replay changed but no data received yet — patch will be applied on next full payload");
+    }
+
     if (stylesCorrect && jsCorrect && !errorOverlay) {
       scheduleRenderReady();
     }
@@ -885,6 +948,9 @@ window.addEventListener("message", (event: MessageEvent<DrawboardPayload>) => {
   const nextHtml = event.data?.html || "";
   const nextCss = event.data?.css || "";
   const nextJs = event.data?.js || "";
+  lastAppliedHtml = nextHtml;
+  lastAppliedCss = nextCss;
+  lastAppliedJs = nextJs;
   interactive = Boolean(event.data?.interactive);
   recordingSequence = Boolean(event.data?.recordingSequence);
   triggers = normalizeInteractionTriggers(event.data?.events);
