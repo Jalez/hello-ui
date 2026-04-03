@@ -9,7 +9,7 @@ import { SlideShower } from "./ImageContainer/SlideShower";
 import { BoardContainer } from "../BoardContainer";
 import { Board } from "../Board";
 import { Button } from "@/components/ui/button";
-import { scenario, VerifiedInteraction } from "@/types";
+import { scenario, VerifiedInteraction, type EventSequenceStep } from "@/types";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useOptionalDrawboardNavbarCapture } from "@/components/ArtBoards/DrawboardNavbarCaptureContext";
 import { toggleImageInteractivity } from "@/store/slices/levels.slice";
@@ -20,7 +20,6 @@ import { useGameRuntimeConfig } from "@/hooks/useGameRuntimeConfig";
 import { ScenarioDimensionsWrapper } from "./ScenarioDimensionsWrapper";
 import { ScenarioHoverContainer } from "./ScenarioHoverContainer";
 import { useLevelMetaSync } from "@/lib/collaboration/hooks/useLevelMetaSync";
-import { stepToInteractionTrigger } from "@/lib/drawboard/interactionEvents";
 import { apiUrl } from "@/lib/apiUrl";
 import {
   getEventSequenceRuntimeKey,
@@ -30,6 +29,7 @@ import {
   subscribeSequenceRuntime,
   updateSequenceRuntimeState,
 } from "@/lib/drawboard/eventSequenceState";
+import { useEventSequencePreview } from "@/lib/drawboard/useEventSequencePreview";
 
 /** One bootstrap per level across all mounted clones (SidebySideArt mounts several instances). */
 let playwrightGameInteractiveBootstrappedLevel: number | null = null;
@@ -38,18 +38,26 @@ type ScenarioDrawingProps = {
   scenario: scenario;
   allowScaling?: boolean;
   registerForNavbarCapture?: boolean;
+  suppressHeavyLayoutEffects?: boolean;
   creatorPreviewInteractive?: boolean;
   creatorMode?: boolean;
   selectedEventSequenceStepId?: string | null;
+  /**
+   * When true (ArtBoards with an event sequence), interaction triggers match the replay depth only.
+   * When false (e.g. DrawBoard), all sequence triggers stay registered.
+   */
+  eventSequenceScopedTriggers?: boolean;
 };
 
 export const ScenarioDrawing = ({
   scenario,
   allowScaling = false,
   registerForNavbarCapture = false,
+  suppressHeavyLayoutEffects = false,
   creatorPreviewInteractive,
   creatorMode,
   selectedEventSequenceStepId,
+  eventSequenceScopedTriggers = false,
 }: ScenarioDrawingProps): React.ReactNode => {
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const level = useAppSelector((state) => state.levels[currentLevel - 1]);
@@ -98,7 +106,7 @@ export const ScenarioDrawing = ({
   const css = level?.code.css ?? "";
   const html = level?.code.html ?? "";
   const js = level?.code.js ?? "";
-  const shouldShowInteractivePreview = isCreator && (creatorPreviewInteractive ?? !drawingUrl);
+  const solutionCss = level?.solution?.css ?? "";
   const interactive = level?.interactive ?? false;
   const runtimeKey = useMemo(
     () => getEventSequenceRuntimeKey(currentLevel, scenario.scenarioId, isCreator),
@@ -113,25 +121,37 @@ export const ScenarioDrawing = ({
     () => level?.eventSequence?.byScenarioId?.[scenario.scenarioId] ?? [],
     [level?.eventSequence, scenario.scenarioId],
   );
+  /**
+   * Solution preview fetch + step accuracy compare: skip probes and hidden carousel clones
+   * (suppressHeavyLayoutEffects). When an event sequence exists, only the primary board
+   * (registerForNavbarCapture) runs metrics so we do not duplicate work or race updates.
+   */
+  const allowSequenceMetrics =
+    scenarioSequence.length > 0
+      ? registerForNavbarCapture && !suppressHeavyLayoutEffects
+      : !suppressHeavyLayoutEffects;
+  const suppressSequenceMetrics = !allowSequenceMetrics;
   const normalizedActiveSequenceIndex = sequenceRuntime.activeIndex >= scenarioSequence.length ? 0 : sequenceRuntime.activeIndex;
-  const activeSequenceStep = scenarioSequence[normalizedActiveSequenceIndex] ?? null;
-  const isSequenceRecording = sequenceRuntime.recordingMode !== "idle" && shouldShowInteractivePreview;
-  const selectedSequenceIndex = selectedEventSequenceStepId
-    ? scenarioSequence.findIndex((step) => step.id === selectedEventSequenceStepId)
-    : -1;
-  const replaySequence = isCreator && shouldShowInteractivePreview && selectedSequenceIndex >= 0
-    ? scenarioSequence.slice(0, selectedSequenceIndex + 1)
-    : [];
-  const frameEvents = useMemo(() => {
-    if (scenarioSequence.length > 0) {
-      if (isCreator) {
-        return isSequenceRecording ? [] : scenarioSequence.map((step) => stepToInteractionTrigger(step));
-      }
-      return interactive && activeSequenceStep ? [stepToInteractionTrigger(activeSequenceStep)] : [];
-    }
-
-    return level?.events || [];
-  }, [activeSequenceStep, interactive, isCreator, isSequenceRecording, level?.events, scenarioSequence]);
+  /** Gameplay progression (not timeline scrub) — used for grading advance + verified interactions. */
+  const gameplayActiveSequenceStep = scenarioSequence[normalizedActiveSequenceIndex] ?? null;
+  const fallbackEvents = useMemo(() => level?.events || [], [level?.events]);
+  const {
+    selectedSequenceIndex,
+    replaySequence,
+    interactionTriggers: frameEvents,
+    shouldShowInteractivePreview,
+    frameNeedsInteractive,
+    isSequenceRecording,
+  } = useEventSequencePreview({
+    isCreator,
+    scenarioSequence,
+    selectedEventSequenceStepId,
+    eventSequenceScopedTriggers,
+    recordingMode: sequenceRuntime.recordingMode,
+    creatorPreviewInteractive,
+    hasCapture: Boolean(drawingUrl),
+    fallbackEvents,
+  });
 
   useEffect(() => {
     if (!level) {
@@ -153,13 +173,15 @@ export const ScenarioDrawing = ({
     playwrightGameInteractiveBootstrappedLevel = currentLevel;
   }, [currentLevel, dispatch, drawboardCaptureMode, isCreator, level, syncLevelFields]);
 
+  const previousRuntimeKeyRef = useRef<string | null>(null);
   useEffect(() => {
-    const timeoutId = window.setTimeout(() => {
-      resetSequenceRuntimeState(runtimeKey);
-    }, 0);
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
+    const prev = previousRuntimeKeyRef.current;
+    previousRuntimeKeyRef.current = runtimeKey;
+    // Only reset when switching level/scenario — not on remount (e.g. SidebySideArt layout branch swap),
+    // or we clear recordingMode immediately after the user starts continuous recording.
+    if (prev !== null && prev !== runtimeKey) {
+      resetSequenceRuntimeState(prev);
+    }
   }, [runtimeKey]);
 
   useEffect(() => {
@@ -170,8 +192,12 @@ export const ScenarioDrawing = ({
     if (!isCreator) {
       return;
     }
-    setCreatorPreviewInteractiveForScenario(currentLevel, scenario.scenarioId, shouldShowInteractivePreview);
-  }, [currentLevel, isCreator, scenario.scenarioId, shouldShowInteractivePreview]);
+    setCreatorPreviewInteractiveForScenario(
+      currentLevel,
+      scenario.scenarioId,
+      Boolean(creatorPreviewInteractive ?? !drawingUrl),
+    );
+  }, [creatorPreviewInteractive, currentLevel, drawingUrl, isCreator, scenario.scenarioId]);
 
   const previousSequenceLengthRef = useRef(scenarioSequence.length);
 
@@ -189,16 +215,25 @@ export const ScenarioDrawing = ({
     previousSequenceLengthRef.current = scenarioSequence.length;
   }, [isCreator, runtimeKey, scenarioSequence.length, sequenceRuntime.recordingMode]);
 
+  /** Track CSS used for the last render batch so we re-render when solution CSS changes. */
+  const lastRenderedSolutionCssRef = useRef<string>("");
+
   useEffect(() => {
     let cancelled = false;
 
     const renderPreviews = async () => {
+      if (suppressSequenceMetrics) {
+        return;
+      }
       if (!scenarioSequence.length) {
-      setStepPreviewUrls({});
-      return;
+        setStepPreviewUrls({});
+        return;
       }
 
-      const missingSteps = scenarioSequence.filter((step) => !stepPreviewUrlsRef.current[step.id]);
+      const cssChanged = lastRenderedSolutionCssRef.current !== solutionCss;
+      const missingSteps = cssChanged
+        ? scenarioSequence
+        : scenarioSequence.filter((step) => !stepPreviewUrlsRef.current[step.id]);
       if (missingSteps.length === 0) {
         setStepPreviewUrls((current) => Object.fromEntries(
           Object.entries(current).filter(([id]) => scenarioSequence.some((step) => step.id === id)),
@@ -206,13 +241,14 @@ export const ScenarioDrawing = ({
         return;
       }
 
+      lastRenderedSolutionCssRef.current = solutionCss;
+
       const nextEntries = await Promise.all(missingSteps.map(async (step) => {
-        
         const response = await fetch(apiUrl("/api/drawboard/render"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            css: step.snapshot.css,
+            css: solutionCss,
             snapshotHtml: step.snapshot.snapshotHtml,
             width: step.snapshot.width,
             height: step.snapshot.height,
@@ -235,7 +271,7 @@ export const ScenarioDrawing = ({
       }
 
       setStepPreviewUrls((current) => {
-        const next = { ...current };
+        const next = cssChanged ? {} : { ...current };
         nextEntries.forEach(([id, url]) => {
           if (url) {
             next[id] = url;
@@ -255,111 +291,173 @@ export const ScenarioDrawing = ({
     return () => {
       cancelled = true;
     };
-  }, [scenarioSequence]);
+  }, [scenarioSequence, solutionCss, suppressSequenceMetrics]);
 
   useEffect(() => {
-    if (isCreator || !interactive || !activeSequenceStep || !drawingUrl || !stepPreviewUrls[activeSequenceStep.id]) {
+    if (suppressSequenceMetrics) {
       return;
     }
 
     let cancelled = false;
-    const targetUrl = stepPreviewUrls[activeSequenceStep.id];
 
-    const compareCurrentStep = async () => {
-      const loadImageData = async (url: string) => {
-        const image = new window.Image();
-        image.crossOrigin = "anonymous";
-        image.src = url;
-        await new Promise<void>((resolve, reject) => {
-          image.onload = () => resolve();
-          image.onerror = () => reject(new Error(`Failed to load image: ${url.slice(0, 32)}`));
-        });
-        const canvas = document.createElement("canvas");
-        canvas.width = activeSequenceStep.snapshot.width;
-        canvas.height = activeSequenceStep.snapshot.height;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) {
-          return null;
-        }
-        ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
-        return ctx.getImageData(0, 0, canvas.width, canvas.height);
-      };
-
-      const [drawingData, targetData] = await Promise.all([
-        loadImageData(drawingUrl),
-        loadImageData(targetUrl),
-      ]);
-      if (!drawingData || !targetData || cancelled) {
-        return;
-      }
-
-      const worker = new Worker(
-        new URL('../../../lib/utils/workers/imageComparisonWorker.ts', import.meta.url),
-        { type: 'module' },
-      );
-
-      const comparison = await new Promise<number>((resolve, reject) => {
-        worker.onmessage = ({ data }) => resolve(data.accuracy as number);
-        worker.onerror = reject;
-        const drawingBuffer = drawingData.data.buffer.slice(0);
-        const targetBuffer = targetData.data.buffer.slice(0);
-        worker.postMessage(
-          {
-            drawingBuffer,
-            solutionBuffer: targetBuffer,
-            width: drawingData.width,
-            height: drawingData.height,
-          },
-          [drawingBuffer, targetBuffer],
-        );
-      }).finally(() => {
-        worker.terminate();
+    const loadImageDataForSnapshot = async (url: string, width: number, height: number) => {
+      const image = new window.Image();
+      image.crossOrigin = "anonymous";
+      image.src = url;
+      await new Promise<void>((resolve, reject) => {
+        image.onload = () => resolve();
+        image.onerror = () => reject(new Error(`Failed to load image: ${url.slice(0, 32)}`));
       });
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        return null;
+      }
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+      return ctx.getImageData(0, 0, canvas.width, canvas.height);
+    };
 
+    const runWorkerCompare = async (
+      drawingData: ImageData,
+      targetData: ImageData,
+    ): Promise<number> => {
+      const worker = new Worker(
+        new URL("../../../lib/utils/workers/imageComparisonWorker.ts", import.meta.url),
+        { type: "module" },
+      );
+      try {
+        return await new Promise<number>((resolve, reject) => {
+          worker.onmessage = ({ data }) => resolve(data.accuracy as number);
+          worker.onerror = reject;
+          const drawingBuffer = drawingData.data.buffer.slice(0);
+          const targetBuffer = targetData.data.buffer.slice(0);
+          worker.postMessage(
+            {
+              drawingBuffer,
+              solutionBuffer: targetBuffer,
+              width: drawingData.width,
+              height: drawingData.height,
+            },
+            [drawingBuffer, targetBuffer],
+          );
+        });
+      } finally {
+        worker.terminate();
+      }
+    };
+
+    const compareAllStepsToDrawing = async (): Promise<Record<string, number> | null> => {
+      if (!drawingUrl || !scenarioSequence.length) {
+        return null;
+      }
+      const missingPreview = scenarioSequence.some((step) => !stepPreviewUrls[step.id]);
+      if (missingPreview) {
+        return null;
+      }
+      const comparisons = await Promise.all(
+        scenarioSequence.map(async (step) => {
+          const targetUrl = stepPreviewUrls[step.id];
+          const [drawingData, targetData] = await Promise.all([
+            loadImageDataForSnapshot(drawingUrl, step.snapshot.width, step.snapshot.height),
+            loadImageDataForSnapshot(targetUrl, step.snapshot.width, step.snapshot.height),
+          ]);
+          if (!drawingData || !targetData || cancelled) {
+            return [step.id, null] as const;
+          }
+          const comparison = await runWorkerCompare(drawingData, targetData);
+          return [step.id, comparison] as const;
+        }),
+      );
       if (cancelled) {
+        return null;
+      }
+      const nextAccuracies: Record<string, number> = {};
+      comparisons.forEach(([id, value]) => {
+        if (value !== null) {
+          nextAccuracies[id] = value;
+        }
+      });
+      return nextAccuracies;
+    };
+
+    const runCreatorComparisons = async () => {
+      const nextAccuracies = await compareAllStepsToDrawing();
+      if (!nextAccuracies || cancelled) {
         return;
       }
+      updateSequenceRuntimeState(runtimeKey, (current) => ({
+        ...current,
+        stepAccuracies: { ...current.stepAccuracies, ...nextAccuracies },
+      }));
+    };
 
+    const runGameComparisons = async () => {
+      if (!scenarioSequence.length) {
+        return;
+      }
+      const nextAccuracies = await compareAllStepsToDrawing();
+      if (!nextAccuracies || cancelled) {
+        return;
+      }
       updateSequenceRuntimeState(runtimeKey, (current) => {
-        const nextAccuracies = { ...current.stepAccuracies, [activeSequenceStep.id]: comparison };
-        if (current.pendingStepId === activeSequenceStep.id && comparison >= 99.5) {
-          nextAccuracies[activeSequenceStep.id] = 100;
-          return {
-            ...current,
-            stepAccuracies: nextAccuracies,
-            pendingStepId: null,
-            activeIndex: Math.min(current.activeIndex + 1, scenarioSequence.length),
-          };
+        const merged = { ...current.stepAccuracies, ...nextAccuracies };
+        const step = gameplayActiveSequenceStep;
+        if (step && current.pendingStepId === step.id) {
+          const comparison = nextAccuracies[step.id] ?? 0;
+          if (comparison >= 99.5) {
+            return {
+              ...current,
+              stepAccuracies: { ...merged, [step.id]: 100 },
+              pendingStepId: null,
+              activeIndex: Math.min(current.activeIndex + 1, scenarioSequence.length),
+            };
+          }
         }
         return {
           ...current,
-          stepAccuracies: nextAccuracies,
+          stepAccuracies: merged,
         };
       });
     };
 
-    void compareCurrentStep().catch((error) => {
-      console.error("EventSequence: failed to compare current step", error);
-    });
+    if (isCreator) {
+      void runCreatorComparisons().catch((error) => {
+        console.error("EventSequence: failed to compare steps (creator)", error);
+      });
+    } else {
+      void runGameComparisons().catch((error) => {
+        console.error("EventSequence: failed to compare steps (game)", error);
+      });
+    }
 
     return () => {
       cancelled = true;
     };
-  }, [activeSequenceStep, drawingUrl, interactive, isCreator, runtimeKey, scenarioSequence.length, stepPreviewUrls]);
+  }, [
+    drawingUrl,
+    gameplayActiveSequenceStep,
+    isCreator,
+    runtimeKey,
+    scenarioSequence,
+    stepPreviewUrls,
+    suppressSequenceMetrics,
+  ]);
 
   const handleVerifiedInteraction = useCallback((interaction: VerifiedInteraction) => {
-    if (isCreator || !activeSequenceStep) {
+    if (isCreator || !gameplayActiveSequenceStep) {
       return;
     }
-    if (interaction.triggerId !== activeSequenceStep.id) {
+    if (interaction.triggerId !== gameplayActiveSequenceStep.id) {
       return;
     }
     updateSequenceRuntimeState(runtimeKey, (current) => ({
       ...current,
-      pendingStepId: activeSequenceStep.id,
+      pendingStepId: gameplayActiveSequenceStep.id,
     }));
-  }, [activeSequenceStep, isCreator, runtimeKey]);
+  }, [gameplayActiveSequenceStep, isCreator, runtimeKey]);
 
   if (!level) return null;
 
@@ -439,9 +537,12 @@ export const ScenarioDrawing = ({
                           name="drawingUrl"
                           hiddenFromView={!shouldShowInteractivePreview}
                           onCaptureBusyChange={handleDrawingCaptureBusy}
-                          interactiveOverride={shouldShowInteractivePreview}
+                          interactiveOverride={frameNeedsInteractive}
                           recordingSequence={isSequenceRecording}
+                          persistRecordedSequenceStep={isSequenceRecording}
                           replaySequence={replaySequence}
+                          suppressHeavyLayoutEffects={suppressHeavyLayoutEffects}
+                          dataTestId={suppressHeavyLayoutEffects ? undefined : "creator-template-drawboard-frame"}
                           onVerifiedInteraction={handleVerifiedInteraction}
                         />
                         {!shouldShowInteractivePreview && (
@@ -502,11 +603,16 @@ export const ScenarioDrawing = ({
                           newJs={js + "\n" + scenario.js}
                           scenario={scenario}
                           name="drawingUrl"
-                          hiddenFromView={!interactive}
+                          hiddenFromView={!interactive && !frameNeedsInteractive}
                           onCaptureBusyChange={handleDrawingCaptureBusy}
+                          interactiveOverride={frameNeedsInteractive}
+                          recordingSequence={isSequenceRecording}
+                          persistRecordedSequenceStep={isSequenceRecording}
+                          replaySequence={replaySequence}
+                          suppressHeavyLayoutEffects={suppressHeavyLayoutEffects}
                           onVerifiedInteraction={handleVerifiedInteraction}
                         />
-                        {!interactive && (
+                        {!interactive && !frameNeedsInteractive && (
                           <div className="relative z-[1]">
                             <Image
                               name="drawing"
