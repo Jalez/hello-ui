@@ -5,6 +5,11 @@ import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { INITIAL_EVENT_SEQUENCE_STEP_ID, type EventSequenceRecordingMode } from "@/lib/drawboard/eventSequenceState";
 
+/** Show up to two decimal places; trim trailing zeros (e.g. 87.4% not 87.40%). */
+function formatStepAccuracyPercent(value: number): string {
+  return `${parseFloat(value.toFixed(2))}%`;
+}
+
 type EventSequencePanelProps = {
   creatorMode: boolean;
   interactivePreview: boolean;
@@ -27,7 +32,7 @@ function StepCircle({
   active: boolean;
   completed: boolean;
   percent: number;
-  /** When true, show the rounded percent (including 0%) instead of the step index. */
+  /** When true, show the accuracy percent (including 0%) instead of the step index. */
   showPercentLabel: boolean;
   children: React.ReactNode;
 }) {
@@ -42,7 +47,7 @@ function StepCircle({
             : "border-border bg-background text-foreground",
       ].join(" ")}
     >
-      {showPercentLabel ? `${Math.round(percent)}%` : children}
+      {showPercentLabel ? formatStepAccuracyPercent(percent) : children}
     </div>
   );
 }
@@ -112,16 +117,9 @@ export function EventSequencePanel({
           {displaySteps.map((step, index) => {
             const isInitialStep = step.id === INITIAL_EVENT_SEQUENCE_STEP_ID;
             const realStepIndex = index - 1;
-            const measured = !isInitialStep && step.id in stepAccuracies;
-            const percent = isInitialStep
-              ? 100
-              : measured
-                ? (stepAccuracies[step.id] ?? 0)
-                : (realStepIndex < activeStepIndex ? 100 : 0);
-            const showPercentLabel =
-              isInitialStep
-              || measured
-              || percent > 0;
+            const measured = step.id in stepAccuracies;
+            const percent = measured ? (stepAccuracies[step.id] ?? 0) : 0;
+            const showPercentLabel = measured;
             return (
               <Tooltip key={step.id}>
                 <TooltipTrigger asChild>

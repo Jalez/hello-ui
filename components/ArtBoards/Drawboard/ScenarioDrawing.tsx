@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { scenario, VerifiedInteraction, type EventSequenceStep } from "@/types";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useOptionalDrawboardNavbarCapture } from "@/components/ArtBoards/DrawboardNavbarCaptureContext";
+import { updateLevelAccuracyByIndexThunk } from "@/store/actions/score.actions";
 import { toggleImageInteractivity } from "@/store/slices/levels.slice";
 import { Camera, Loader2 } from "lucide-react";
 import type { FrameHandle } from "@/components/ArtBoards/Frame";
@@ -24,15 +25,80 @@ import { apiUrl } from "@/lib/apiUrl";
 import {
   getEventSequenceRuntimeKey,
   getSequenceRuntimeState,
+  INITIAL_EVENT_SEQUENCE_STEP_ID,
   resetSequenceRuntimeState,
   setCreatorPreviewInteractiveForScenario,
   subscribeSequenceRuntime,
   updateSequenceRuntimeState,
 } from "@/lib/drawboard/eventSequenceState";
+import { aggregateEventSequenceAccuracy } from "@/lib/drawboard/aggregateEventSequenceAccuracy";
+import {
+  getDrawboardPixelsPair,
+  subscribeDrawboardPixelsForScenario,
+} from "@/lib/drawboard/drawboardPixelsStore";
+import {
+  defaultTimelineStepIdForSolutionCapture,
+  resolveEventSequenceSolutionUrl,
+} from "@/lib/drawboard/eventSequenceSolutionUrls";
 import { useEventSequencePreview } from "@/lib/drawboard/useEventSequencePreview";
 
 /** One bootstrap per level across all mounted clones (SidebySideArt mounts several instances). */
 let playwrightGameInteractiveBootstrappedLevel: number | null = null;
+
+/**
+ * /api/drawboard/render returns a retina PNG in dataUrl but the logical-size RGBA buffer
+ * in pixelBufferBase64 (same downscale as server-side scoring). Comparing via dataUrl
+ * re-downscales in the browser and can disagree with iframe pixel diff + step truth.
+ */
+type DrawboardRenderPreviewPayload = {
+  dataUrl: string;
+  pixelBufferBase64: string;
+  width: number;
+  height: number;
+};
+
+function parseDrawboardRenderPreview(json: unknown): DrawboardRenderPreviewPayload | null {
+  if (!json || typeof json !== "object") {
+    return null;
+  }
+  const o = json as Record<string, unknown>;
+  const pixelBufferBase64 = typeof o.pixelBufferBase64 === "string" ? o.pixelBufferBase64 : "";
+  const dataUrl = typeof o.dataUrl === "string" ? o.dataUrl : "";
+  const width = typeof o.width === "number" ? o.width : 0;
+  const height = typeof o.height === "number" ? o.height : 0;
+  if (!pixelBufferBase64 || width < 1 || height < 1) {
+    return null;
+  }
+  return { pixelBufferBase64, dataUrl, width, height };
+}
+
+function imageDataFromScoringRgba(
+  base64: string,
+  width: number,
+  height: number,
+): ImageData | null {
+  try {
+    const binary = atob(base64);
+    const expected = width * height * 4;
+    if (binary.length !== expected) {
+      return null;
+    }
+    const bytes = new Uint8Array(expected);
+    for (let i = 0; i < expected; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return new ImageData(new Uint8ClampedArray(bytes.buffer), width, height);
+  } catch {
+    return null;
+  }
+}
+
+type LegacySolution = {
+  SCSS: string;
+  SHTML: string;
+  SJS: string;
+  drawn: boolean;
+};
 
 type ScenarioDrawingProps = {
   scenario: scenario;
@@ -61,17 +127,16 @@ export const ScenarioDrawing = ({
 }: ScenarioDrawingProps): React.ReactNode => {
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const level = useAppSelector((state) => state.levels[currentLevel - 1]);
-  const solutionUrls = useAppSelector((state) => state.solutionUrls as Record<string, string>);
+  const solutionUrls = useAppSelector((state) => state.solutionUrls as Record<string, string | undefined>);
   const drawingUrls = useAppSelector((state) => state.drawingUrls as Record<string, string>);
-  const solutionUrl = solutionUrls[scenario.scenarioId];
   const drawingUrl = drawingUrls[scenario.scenarioId];
   const dispatch = useAppDispatch();
   const { syncLevelFields } = useLevelMetaSync();
   const options = useAppSelector((state) => state.options);
   const isCreator = creatorMode ?? options.creator;
   const [drawingCaptureBusy, setDrawingCaptureBusy] = useState(false);
-  const [stepPreviewUrls, setStepPreviewUrls] = useState<Record<string, string>>({});
-  const stepPreviewUrlsRef = useRef<Record<string, string>>({});
+  const [stepPreviews, setStepPreviews] = useState<Record<string, DrawboardRenderPreviewPayload>>({});
+  const stepPreviewsRef = useRef<Record<string, DrawboardRenderPreviewPayload>>({});
   const drawingFrameRef = useRef<FrameHandle | null>(null);
   const captureNav = useOptionalDrawboardNavbarCapture();
   const { drawboardCaptureMode, manualDrawboardCapture } = useGameRuntimeConfig();
@@ -106,7 +171,25 @@ export const ScenarioDrawing = ({
   const css = level?.code.css ?? "";
   const html = level?.code.html ?? "";
   const js = level?.code.js ?? "";
-  const solutionCss = level?.solution?.css ?? "";
+  const solutions = useAppSelector((state) => state.solutions as unknown as Record<string, LegacySolution>);
+  const resolvedSolution = useMemo(() => {
+    if (!level) {
+      return { css: "", html: "" };
+    }
+    const defaultLevelSolutions = solutions[level.name]
+      ? {
+          css: solutions[level.name].SCSS,
+          html: solutions[level.name].SHTML,
+        }
+      : null;
+    const levelSolution = level.solution || { css: "", html: "", js: "" };
+    return {
+      css: levelSolution.css || defaultLevelSolutions?.css || "",
+      html: levelSolution.html || defaultLevelSolutions?.html || "",
+    };
+  }, [level, solutions]);
+  const resolvedSolutionCss = resolvedSolution.css;
+  const resolvedSolutionHtml = resolvedSolution.html;
   const interactive = level?.interactive ?? false;
   const runtimeKey = useMemo(
     () => getEventSequenceRuntimeKey(currentLevel, scenario.scenarioId, isCreator),
@@ -120,6 +203,16 @@ export const ScenarioDrawing = ({
   const scenarioSequence = useMemo(
     () => level?.eventSequence?.byScenarioId?.[scenario.scenarioId] ?? [],
     [level?.eventSequence, scenario.scenarioId],
+  );
+  const usePerStepSolutionKeys = !isCreator && scenarioSequence.length > 0;
+  const drawingTimelineStepId = defaultTimelineStepIdForSolutionCapture(selectedEventSequenceStepId);
+  const solutionUrl = useMemo(
+    () =>
+      resolveEventSequenceSolutionUrl(solutionUrls, scenario.scenarioId, {
+        usePerStepKeys: usePerStepSolutionKeys,
+        stepId: drawingTimelineStepId,
+      }),
+    [drawingTimelineStepId, scenario.scenarioId, solutionUrls, usePerStepSolutionKeys],
   );
   /**
    * Solution preview fetch + step accuracy compare: skip probes and hidden carousel clones
@@ -185,8 +278,8 @@ export const ScenarioDrawing = ({
   }, [runtimeKey]);
 
   useEffect(() => {
-    stepPreviewUrlsRef.current = stepPreviewUrls;
-  }, [stepPreviewUrls]);
+    stepPreviewsRef.current = stepPreviews;
+  }, [stepPreviews]);
 
   useEffect(() => {
     if (!isCreator) {
@@ -215,8 +308,8 @@ export const ScenarioDrawing = ({
     previousSequenceLengthRef.current = scenarioSequence.length;
   }, [isCreator, runtimeKey, scenarioSequence.length, sequenceRuntime.recordingMode]);
 
-  /** Track CSS used for the last render batch so we re-render when solution CSS changes. */
-  const lastRenderedSolutionCssRef = useRef<string>("");
+  /** Track solution CSS+HTML used for the last render batch (incl. baseline “initial” preview). */
+  const lastRenderedSolutionSourceRef = useRef<string>("");
 
   useEffect(() => {
     let cancelled = false;
@@ -226,63 +319,106 @@ export const ScenarioDrawing = ({
         return;
       }
       if (!scenarioSequence.length) {
-        setStepPreviewUrls({});
+        setStepPreviews({});
+        return;
+      }
+      if (drawboardCaptureMode === "browser") {
+        setStepPreviews({});
+        lastRenderedSolutionSourceRef.current = "";
         return;
       }
 
-      const cssChanged = lastRenderedSolutionCssRef.current !== solutionCss;
-      const missingSteps = cssChanged
+      const renderSourceKey = `${resolvedSolutionCss}\0${resolvedSolutionHtml}`;
+      const sourceChanged = lastRenderedSolutionSourceRef.current !== renderSourceKey;
+      const missingSteps = sourceChanged
         ? scenarioSequence
-        : scenarioSequence.filter((step) => !stepPreviewUrlsRef.current[step.id]);
-      if (missingSteps.length === 0) {
-        setStepPreviewUrls((current) => Object.fromEntries(
-          Object.entries(current).filter(([id]) => scenarioSequence.some((step) => step.id === id)),
-        ));
+        : scenarioSequence.filter((step) => !stepPreviewsRef.current[step.id]);
+      const needInitialPreview =
+        sourceChanged || !stepPreviewsRef.current[INITIAL_EVENT_SEQUENCE_STEP_ID];
+
+      const pruneStale = (current: Record<string, DrawboardRenderPreviewPayload>) =>
+        Object.fromEntries(
+          Object.entries(current).filter(([id]) => {
+            if (id === INITIAL_EVENT_SEQUENCE_STEP_ID) {
+              return true;
+            }
+            return scenarioSequence.some((step) => step.id === id);
+          }),
+        );
+
+      if (missingSteps.length === 0 && !needInitialPreview) {
+        setStepPreviews((current) => pruneStale(current));
         return;
       }
 
-      lastRenderedSolutionCssRef.current = solutionCss;
+      lastRenderedSolutionSourceRef.current = renderSourceKey;
 
-      const nextEntries = await Promise.all(missingSteps.map(async (step) => {
-        const response = await fetch(apiUrl("/api/drawboard/render"), {
+      const first = scenarioSequence[0];
+      const renderBody = (snapshotHtml: string, width: number, height: number) =>
+        fetch(apiUrl("/api/drawboard/render"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            css: solutionCss,
-            snapshotHtml: step.snapshot.snapshotHtml,
-            width: step.snapshot.width,
-            height: step.snapshot.height,
-            scenarioId: step.scenarioId,
+            css: resolvedSolutionCss,
+            snapshotHtml,
+            width,
+            height,
+            scenarioId: scenario.scenarioId,
             urlName: "solutionUrl",
             includeDataUrl: true,
           }),
         });
 
-        if (!response.ok) {
-          return [step.id, ""] as const;
-        }
+      const requests: Promise<readonly [string, DrawboardRenderPreviewPayload | null]>[] = [];
 
-        const payload = await response.json() as { dataUrl?: string };
-        return [step.id, payload.dataUrl || ""] as const;
-      }));
+      if (needInitialPreview) {
+        requests.push(
+          (async (): Promise<readonly [string, DrawboardRenderPreviewPayload | null]> => {
+            const response = await renderBody(
+              resolvedSolutionHtml,
+              first.snapshot.width,
+              first.snapshot.height,
+            );
+            if (!response.ok) {
+              return [INITIAL_EVENT_SEQUENCE_STEP_ID, null] as const;
+            }
+            const payload = parseDrawboardRenderPreview(await response.json());
+            return [INITIAL_EVENT_SEQUENCE_STEP_ID, payload] as const;
+          })(),
+        );
+      }
+
+      missingSteps.forEach((step) => {
+        requests.push(
+          (async (): Promise<readonly [string, DrawboardRenderPreviewPayload | null]> => {
+            const response = await renderBody(
+              step.snapshot.snapshotHtml,
+              step.snapshot.width,
+              step.snapshot.height,
+            );
+            if (!response.ok) {
+              return [step.id, null] as const;
+            }
+            const payload = parseDrawboardRenderPreview(await response.json());
+            return [step.id, payload] as const;
+          })(),
+        );
+      });
+
+      const nextEntries = await Promise.all(requests);
 
       if (cancelled) {
         return;
       }
 
-      setStepPreviewUrls((current) => {
-        const next = cssChanged ? {} : { ...current };
-        nextEntries.forEach(([id, url]) => {
-          if (url) {
-            next[id] = url;
+      setStepPreviews((current) => {
+        const next = sourceChanged ? {} : { ...current };
+        nextEntries.forEach(([id, entry]) => {
+          if (entry) {
+            next[id] = entry;
           }
         });
-        Object.keys(next).forEach((id) => {
-          if (!scenarioSequence.some((step) => step.id === id)) {
-            delete next[id];
-          }
-        });
-        return next;
+        return pruneStale(next);
       });
     };
 
@@ -291,7 +427,14 @@ export const ScenarioDrawing = ({
     return () => {
       cancelled = true;
     };
-  }, [scenarioSequence, solutionCss, suppressSequenceMetrics]);
+  }, [
+    drawboardCaptureMode,
+    scenarioSequence,
+    resolvedSolutionCss,
+    resolvedSolutionHtml,
+    scenario.scenarioId,
+    suppressSequenceMetrics,
+  ]);
 
   useEffect(() => {
     if (suppressSequenceMetrics) {
@@ -349,68 +492,189 @@ export const ScenarioDrawing = ({
       }
     };
 
-    const compareAllStepsToDrawing = async (): Promise<Record<string, number> | null> => {
+    /**
+     * Compare the drawing only to the timeline-focused step (selectedEventSequenceStepId).
+     * In game mode, also compare the active gameplay step when it is pending verification
+     * and the player is scrubbed to a different step, so advancement still sees a fresh score.
+     */
+    const compareFocusedStepsToDrawing = async (): Promise<Record<string, number> | null> => {
       if (!drawingUrl || !scenarioSequence.length) {
         return null;
       }
-      const missingPreview = scenarioSequence.some((step) => !stepPreviewUrls[step.id]);
-      if (missingPreview) {
+
+      const ids = new Set<string>();
+      const focus = selectedEventSequenceStepId?.trim();
+      if (focus) {
+        ids.add(focus);
+      }
+
+      const pendingId = getSequenceRuntimeState(runtimeKey).pendingStepId;
+      if (
+        !isCreator
+        && gameplayActiveSequenceStep
+        && pendingId === gameplayActiveSequenceStep.id
+        && !ids.has(gameplayActiveSequenceStep.id)
+      ) {
+        ids.add(gameplayActiveSequenceStep.id);
+      }
+
+      if (ids.size === 0) {
         return null;
       }
-      const comparisons = await Promise.all(
-        scenarioSequence.map(async (step) => {
-          const targetUrl = stepPreviewUrls[step.id];
-          const [drawingData, targetData] = await Promise.all([
-            loadImageDataForSnapshot(drawingUrl, step.snapshot.width, step.snapshot.height),
-            loadImageDataForSnapshot(targetUrl, step.snapshot.width, step.snapshot.height),
-          ]);
+
+      if (drawboardCaptureMode === "browser") {
+        const { drawing, solution } = getDrawboardPixelsPair(scenario.scenarioId);
+        if (
+          drawing
+          && solution
+          && drawing.width === solution.width
+          && drawing.height === solution.height
+        ) {
+          const comparison = await runWorkerCompare(drawing, solution);
+          if (cancelled) {
+            return null;
+          }
+          const nextAccuracies: Record<string, number> = {};
+          [...ids].forEach((id) => {
+            nextAccuracies[id] = comparison;
+          });
+          return nextAccuracies;
+        }
+        const w = scenario.dimensions.width;
+        const h = scenario.dimensions.height;
+        if (solutionUrl?.trim() && w > 0 && h > 0) {
+          try {
+            const targetData = await loadImageDataForSnapshot(solutionUrl, w, h);
+            const drawingData = await loadImageDataForSnapshot(drawingUrl, w, h);
+            if (
+              targetData
+              && drawingData
+              && !cancelled
+              && targetData.width === drawingData.width
+              && targetData.height === drawingData.height
+            ) {
+              const comparison = await runWorkerCompare(drawingData, targetData);
+              if (cancelled) {
+                return null;
+              }
+              const nextAccuracies: Record<string, number> = {};
+              [...ids].forEach((id) => {
+                nextAccuracies[id] = comparison;
+              });
+              return nextAccuracies;
+            }
+          } catch {
+            /* fall through to server-render path */
+          }
+        }
+      }
+
+      const compareOne = async (stepId: string): Promise<readonly [string, number | null]> => {
+        if (stepId === INITIAL_EVENT_SEQUENCE_STEP_ID) {
+          const targetPreview = stepPreviews[INITIAL_EVENT_SEQUENCE_STEP_ID];
+          if (!targetPreview) {
+            return [stepId, null] as const;
+          }
+          const targetData = imageDataFromScoringRgba(
+            targetPreview.pixelBufferBase64,
+            targetPreview.width,
+            targetPreview.height,
+          );
+          const drawingData = await loadImageDataForSnapshot(
+            drawingUrl,
+            targetPreview.width,
+            targetPreview.height,
+          );
           if (!drawingData || !targetData || cancelled) {
-            return [step.id, null] as const;
+            return [stepId, null] as const;
           }
           const comparison = await runWorkerCompare(drawingData, targetData);
-          return [step.id, comparison] as const;
-        }),
-      );
+          return [stepId, comparison] as const;
+        }
+
+        const step = scenarioSequence.find((s) => s.id === stepId);
+        if (!step) {
+          return [stepId, null] as const;
+        }
+        const targetPreview = stepPreviews[step.id];
+        if (!targetPreview) {
+          return [stepId, null] as const;
+        }
+        const targetData = imageDataFromScoringRgba(
+          targetPreview.pixelBufferBase64,
+          targetPreview.width,
+          targetPreview.height,
+        );
+        const drawingData = await loadImageDataForSnapshot(
+          drawingUrl,
+          targetPreview.width,
+          targetPreview.height,
+        );
+        if (!drawingData || !targetData || cancelled) {
+          return [stepId, null] as const;
+        }
+        const comparison = await runWorkerCompare(drawingData, targetData);
+        return [stepId, comparison] as const;
+      };
+
+      const results = await Promise.all([...ids].map((id) => compareOne(id)));
       if (cancelled) {
         return null;
       }
       const nextAccuracies: Record<string, number> = {};
-      comparisons.forEach(([id, value]) => {
+      results.forEach(([id, value]) => {
         if (value !== null) {
           nextAccuracies[id] = value;
         }
       });
-      return nextAccuracies;
+      return Object.keys(nextAccuracies).length > 0 ? nextAccuracies : null;
+    };
+
+    const pushFooterAccuracyForSequence = (mergedStepAccuracies: Record<string, number>) => {
+      if (!scenarioSequence.length) {
+        return;
+      }
+      const agg = aggregateEventSequenceAccuracy(scenarioSequence, mergedStepAccuracies);
+      if (agg === null) {
+        return;
+      }
+      dispatch(updateLevelAccuracyByIndexThunk(currentLevel - 1, scenario.scenarioId, agg));
     };
 
     const runCreatorComparisons = async () => {
-      const nextAccuracies = await compareAllStepsToDrawing();
+      const nextAccuracies = await compareFocusedStepsToDrawing();
       if (!nextAccuracies || cancelled) {
         return;
       }
-      updateSequenceRuntimeState(runtimeKey, (current) => ({
-        ...current,
-        stepAccuracies: { ...current.stepAccuracies, ...nextAccuracies },
-      }));
+      let mergedSnapshot: Record<string, number> = {};
+      updateSequenceRuntimeState(runtimeKey, (current) => {
+        mergedSnapshot = { ...current.stepAccuracies, ...nextAccuracies };
+        return {
+          ...current,
+          stepAccuracies: mergedSnapshot,
+        };
+      });
+      pushFooterAccuracyForSequence(mergedSnapshot);
     };
 
     const runGameComparisons = async () => {
       if (!scenarioSequence.length) {
         return;
       }
-      const nextAccuracies = await compareAllStepsToDrawing();
+      const nextAccuracies = await compareFocusedStepsToDrawing();
       if (!nextAccuracies || cancelled) {
         return;
       }
+      let mergedSnapshot: Record<string, number> = {};
       updateSequenceRuntimeState(runtimeKey, (current) => {
-        const merged = { ...current.stepAccuracies, ...nextAccuracies };
+        mergedSnapshot = { ...current.stepAccuracies, ...nextAccuracies };
         const step = gameplayActiveSequenceStep;
         if (step && current.pendingStepId === step.id) {
           const comparison = nextAccuracies[step.id] ?? 0;
           if (comparison >= 99.5) {
             return {
               ...current,
-              stepAccuracies: { ...merged, [step.id]: 100 },
+              stepAccuracies: mergedSnapshot,
               pendingStepId: null,
               activeIndex: Math.min(current.activeIndex + 1, scenarioSequence.length),
             };
@@ -418,31 +682,55 @@ export const ScenarioDrawing = ({
         }
         return {
           ...current,
-          stepAccuracies: merged,
+          stepAccuracies: mergedSnapshot,
         };
       });
+      pushFooterAccuracyForSequence(mergedSnapshot);
     };
 
-    if (isCreator) {
-      void runCreatorComparisons().catch((error) => {
-        console.error("EventSequence: failed to compare steps (creator)", error);
-      });
-    } else {
-      void runGameComparisons().catch((error) => {
-        console.error("EventSequence: failed to compare steps (game)", error);
-      });
-    }
+    const runComparisons = () => {
+      if (isCreator) {
+        void runCreatorComparisons().catch((error) => {
+          console.error("EventSequence: failed to compare steps (creator)", error);
+        });
+      } else {
+        void runGameComparisons().catch((error) => {
+          console.error("EventSequence: failed to compare steps (game)", error);
+        });
+      }
+    };
+
+    runComparisons();
+
+    const unsubIframePixels =
+      drawboardCaptureMode === "browser"
+        ? subscribeDrawboardPixelsForScenario(scenario.scenarioId, () => {
+            if (!cancelled) {
+              runComparisons();
+            }
+          })
+        : null;
 
     return () => {
       cancelled = true;
+      unsubIframePixels?.();
     };
   }, [
+    currentLevel,
+    dispatch,
+    drawboardCaptureMode,
     drawingUrl,
     gameplayActiveSequenceStep,
     isCreator,
     runtimeKey,
+    scenario.dimensions.height,
+    scenario.dimensions.width,
+    scenario.scenarioId,
     scenarioSequence,
-    stepPreviewUrls,
+    selectedEventSequenceStepId,
+    sequenceRuntime.pendingStepId,
+    solutionUrl,
+    stepPreviews,
     suppressSequenceMetrics,
   ]);
 

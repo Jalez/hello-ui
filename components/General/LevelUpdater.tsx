@@ -6,6 +6,12 @@ import { sendScoreToParentFrame } from "@/store/actions/score.actions";
 import { ScenarioUpdater } from "./ScenarioUpdater";
 import { updateDrawnState } from "@/store/slices/solutions.slice";
 import { imageDataFromRawRgba } from "@/lib/utils/drawboardSnapshot";
+import {
+  clearDrawboardPixelsStore,
+  clearStoredSolutionSide,
+  notifyDrawboardPixels,
+} from "@/lib/drawboard/drawboardPixelsStore";
+import { subscribeLiveSolutionFrameRemoved } from "@/lib/drawboard/solutionFrameLifecycle";
 
 // drawingPixels, solutionPixels should be objects, where key is the scenarioId and value is the ImageData
 type scenarioData = {
@@ -29,6 +35,7 @@ export const LevelUpdater = () => {
     queueMicrotask(() => {
       setDrawingPixels({});
       setSolutionPixels({});
+      clearDrawboardPixelsStore();
     });
 
     const handlePixelsFromIframe = (event: MessageEvent) => {
@@ -44,12 +51,14 @@ export const LevelUpdater = () => {
           ...prev,
           [event.data.scenarioId]: imageData,
         }));
+        notifyDrawboardPixels(event.data.scenarioId, "solution", imageData);
         return;
       } else if (event.data.urlName === "drawingUrl") {
         setDrawingPixels((prev) => ({
           ...prev,
           [event.data.scenarioId]: imageData,
         }));
+        notifyDrawboardPixels(event.data.scenarioId, "drawing", imageData);
       }
     };
 
@@ -62,6 +71,20 @@ export const LevelUpdater = () => {
   useEffect(() => {
     dispatch(sendScoreToParentFrame());
   }, [points.allPoints, dispatch]);
+
+  useEffect(() => {
+    return subscribeLiveSolutionFrameRemoved((scenarioId) => {
+      setSolutionPixels((prev) => {
+        if (!(scenarioId in prev)) {
+          return prev;
+        }
+        const next = { ...prev };
+        delete next[scenarioId];
+        return next;
+      });
+      clearStoredSolutionSide(scenarioId);
+    });
+  }, []);
 
   const solutions = useAppSelector((state) => state.solutions);
 
