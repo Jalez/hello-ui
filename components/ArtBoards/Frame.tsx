@@ -1,8 +1,8 @@
 /** @format */
 "use client";
 
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from "react";
-import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { useAppDispatch, useAppSelector, useAppStore } from "@/store/hooks/hooks";
 import { EventSequenceStep, InteractionTrigger, VerifiedInteraction, scenario } from "@/types";
 import { addSolutionUrl } from "@/store/slices/solutionUrls.slice";
 import { addDrawingUrl } from "@/store/slices/drawingUrls.slice";
@@ -25,6 +25,8 @@ const _lastVerifiedInteraction = new Map<string, number>();
 const CAPTURE_DEDUP_MS = 100;
 /** Below Playwright layout follow-up interval so a second identical snapshot can refresh captures after fonts settle. */
 const CAPTURE_SAME_CONTENT_WINDOW_MS = 320;
+/** Debounce PUTs so recording many steps does not spam the API; keyed by level identifier. */
+const _eventSequencePersistTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
 
 function shouldCapture(key: string, contentKey: string): boolean {
   const now = Date.now();
@@ -65,6 +67,10 @@ interface FrameProps {
   onVerifiedInteraction?: (interaction: VerifiedInteraction) => void;
   persistRecordedSequenceStep?: boolean;
   replaySequence?: EventSequenceStep[];
+  /** Skip iframe reload/options-patch storms for SidebySideArt probes and hidden layout clones. */
+  suppressHeavyLayoutEffects?: boolean;
+  /** Stable selector for E2E (omit on probe/hidden clones). */
+  dataTestId?: string;
 }
 
 export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
@@ -84,14 +90,18 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
     onVerifiedInteraction,
     persistRecordedSequenceStep = false,
     replaySequence = [],
+    suppressHeavyLayoutEffects = false,
+    dataTestId,
   },
   ref,
 ) {
   const { drawboardCaptureMode, manualDrawboardCapture, remoteSyncDebounceMs, drawboardReloadDebounceMs } = useGameRuntimeConfig();
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [iframeLoadGeneration, setIframeLoadGeneration] = useState(0);
   const renderReadyCaptureTimeoutRef = useRef<number | null>(null);
   const iframeReloadDebounceRef = useRef<number | null>(null);
   const dispatch = useAppDispatch();
+  const store = useAppStore();
   const { syncLevelFields } = useLevelMetaSync();
   const { currentLevel } = useAppSelector((state: { currentLevel: { currentLevel: number } }) => state.currentLevel);
   const isCreator = useAppSelector((state) => state.options.creator);
@@ -339,12 +349,17 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
       if (event.data?.urlName !== name || event.data?.scenarioId !== scenario.scenarioId) {
         return;
       }
-      if (!isCreator || name !== "drawingUrl") {
+      if (name !== "drawingUrl") {
         return;
       }
 
       const interaction = event.data?.interaction as VerifiedInteraction | undefined;
       if (!interaction?.id) {
+        return;
+      }
+
+      if (!isCreator) {
+        onVerifiedInteraction?.(interaction);
         return;
       }
 
@@ -399,13 +414,41 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
         }),
       );
       syncLevelFields(currentLevel - 1, ["eventSequence"]);
+
+      const levelIndex = currentLevel - 1;
+      const levelAfter = store.getState().levels[levelIndex];
+      if (!levelAfter?.identifier) {
+        return;
+      }
+      const persistKey = levelAfter.identifier;
+      const prevTimeout = _eventSequencePersistTimeouts.get(persistKey);
+      if (prevTimeout) {
+        clearTimeout(prevTimeout);
+      }
+      const timeout = setTimeout(() => {
+        _eventSequencePersistTimeouts.delete(persistKey);
+        const fresh = store.getState().levels[levelIndex];
+        if (!fresh?.identifier || !fresh.eventSequence) {
+          return;
+        }
+        const by = fresh.eventSequence.byScenarioId;
+        if (!by || Object.keys(by).length === 0) {
+          return;
+        }
+        fetch(apiUrl(`/api/levels/${fresh.identifier}`), {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ eventSequence: fresh.eventSequence }),
+        }).catch(() => {});
+      }, 500);
+      _eventSequencePersistTimeouts.set(persistKey, timeout);
     };
 
     window.addEventListener("message", handleRecordedSequenceStep);
     return () => {
       window.removeEventListener("message", handleRecordedSequenceStep);
     };
-  }, [currentLevel, dispatch, isCreator, name, persistRecordedSequenceStep, scenario.scenarioId, syncLevelFields]);
+  }, [currentLevel, dispatch, isCreator, name, persistRecordedSequenceStep, scenario.scenarioId, store, syncLevelFields]);
 
   useEffect(() => {
     const handleDisplayUrlFromIframe = (event: MessageEvent) => {
@@ -464,31 +507,35 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
     };
   }, [drawboardCaptureMode, name, notifyCaptureBusy, scenario.scenarioId]);
 
-  /** When only interactive/creator flags change, patch the iframe instead of full reload (reload was syncing captures on static toggle by accident). */
-  const optionsPatchKeyRef = useRef<string | null>(null);
+  /**
+   * Patch iframe options (incl. replaySequence) without reloading. Uses last-posted key dedup:
+   * the previous "first run stores key only" approach skipped the initial patch when contentWindow
+   * was null and never re-ran, and also skipped the first successful run (no postMessage).
+   * iframeLoadGeneration re-runs the effect after the iframe fires onLoad so we post once win exists.
+   */
+  const lastPostedOptionsPatchKeyRef = useRef<string | null>(null);
   const optionsPatchScenarioIdRef = useRef<string | null>(null);
 
   useEffect(() => {
+    if (suppressHeavyLayoutEffects) {
+      return;
+    }
     if (!scenario) {
       return;
     }
     if (optionsPatchScenarioIdRef.current !== scenario.scenarioId) {
       optionsPatchScenarioIdRef.current = scenario.scenarioId;
-      optionsPatchKeyRef.current = null;
+      lastPostedOptionsPatchKeyRef.current = null;
     }
     const win = iframeRef.current?.contentWindow;
     if (!win) {
       return;
     }
     const key = `${interactive}:${isCreator}:${recordingSequence}:${JSON.stringify(events)}:${JSON.stringify(replaySequence.map((step) => step.id))}`;
-    if (optionsPatchKeyRef.current === null) {
-      optionsPatchKeyRef.current = key;
+    if (lastPostedOptionsPatchKeyRef.current === key) {
       return;
     }
-    if (optionsPatchKeyRef.current === key) {
-      return;
-    }
-    optionsPatchKeyRef.current = key;
+    lastPostedOptionsPatchKeyRef.current = key;
     win.postMessage(
       {
         message: "options-patch",
@@ -502,9 +549,27 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
       },
       "*",
     );
-  }, [scenario, scenario.scenarioId, interactive, isCreator, name, recordingSequence, events, replaySequence]);
+  }, [
+    scenario,
+    scenario.scenarioId,
+    interactive,
+    isCreator,
+    iframeLoadGeneration,
+    name,
+    recordingSequence,
+    events,
+    replaySequence,
+    suppressHeavyLayoutEffects,
+  ]);
 
   useEffect(() => {
+    if (suppressHeavyLayoutEffects) {
+      if (iframeReloadDebounceRef.current) {
+        window.clearTimeout(iframeReloadDebounceRef.current);
+        iframeReloadDebounceRef.current = null;
+      }
+      return;
+    }
     if (iframeReloadDebounceRef.current) {
       window.clearTimeout(iframeReloadDebounceRef.current);
       iframeReloadDebounceRef.current = null;
@@ -529,7 +594,16 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
         iframeReloadDebounceRef.current = null;
       }
     };
-  }, [clearPendingRenderReadyCapture, drawboardReloadDebounceMs, newHtml, newCss, iframeRef, newJs, name, replaySequence]);
+  }, [
+    clearPendingRenderReadyCapture,
+    drawboardReloadDebounceMs,
+    newHtml,
+    newCss,
+    iframeRef,
+    newJs,
+    name,
+    suppressHeavyLayoutEffects,
+  ]);
 
   if (!scenario) {
     return <div>Scenario not found</div>;
@@ -550,7 +624,11 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
     <iframe
       id={id}
       ref={iframeRef}
+      data-testid={dataTestId}
       src={`${frameUrl}?${iframeSearch.toString()}`}
+      onLoad={() => {
+        setIframeLoadGeneration((g) => g + 1);
+      }}
       width={scenario.dimensions.width}
       height={scenario.dimensions.height}
       className={cn(
