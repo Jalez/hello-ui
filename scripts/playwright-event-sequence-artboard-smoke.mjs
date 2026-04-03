@@ -227,6 +227,32 @@ async function findVisibleDrawboardFrame(page) {
   return frame;
 }
 
+/**
+ * After event steps are persisted, scrub the EventSequencePanel and assert the template drawboard
+ * reflects replayed DOM (regression for step scrub / interactive preview).
+ */
+async function assertArtboardStepScrubAfterPersist(page) {
+  const stepInitial = page.locator('button[aria-label="Event step 1"]');
+  await stepInitial.waitFor({ state: "visible", timeout: TIMEOUT_MS });
+  await stepInitial.click();
+  await page.waitForTimeout(500);
+
+  const drawingBaseline = await findVisibleDrawboardFrame(page);
+  await expect(drawingBaseline.locator("#status")).toHaveText("Closed", { timeout: TIMEOUT_MS });
+
+  const stepAfterFirstInteraction = page.locator('button[aria-label="Event step 2"]');
+  await stepAfterFirstInteraction.waitFor({ state: "visible", timeout: TIMEOUT_MS });
+  await stepAfterFirstInteraction.click();
+
+  await expect.poll(async () => {
+    const drawing = await findVisibleDrawboardFrame(page);
+    return (await drawing.locator("#status").textContent())?.trim() ?? "";
+  }, {
+    timeout: TIMEOUT_MS,
+    message: "Expected template drawboard to replay click and show Open after selecting step 2",
+  }).toBe("Open");
+}
+
 async function ensureCreatorInteractivePreview(page) {
   const toggle = page.locator('button[aria-label="Switch to interactive"]:visible').first();
   if (await toggle.count()) {
@@ -236,6 +262,7 @@ async function ensureCreatorInteractivePreview(page) {
   }
 }
 
+/** Interactions subnavbar: recording controls use "Start sequence" / "Stop & save" (see Navbar.tsx). */
 async function openCreatorInteractionsSubnav(page) {
   const interactionsTab = page.getByRole("button", { name: /^Interactions$/ }).first();
   await interactionsTab.waitFor({ state: "visible", timeout: TIMEOUT_MS });
@@ -243,6 +270,10 @@ async function openCreatorInteractionsSubnav(page) {
   await page.waitForTimeout(200);
 }
 
+/**
+ * Navbar only shows "Start sequence" when Interaction mode is on for the selected scenario.
+ * Must not toggle Interaction mode when it is already on — that stops recording (Navbar sets recordingMode idle).
+ */
 async function ensureInteractionModeForRecording(page) {
   const startSequence = page.locator('button:has-text("Start sequence"):visible').first();
   if (await startSequence.count()) {
@@ -253,6 +284,7 @@ async function ensureInteractionModeForRecording(page) {
     return;
   }
   const pressed = await modeBtn.getAttribute("aria-pressed");
+  // Only turn interaction mode on when explicitly off — "true" or missing means do not click (clicking toggles off and clears recording).
   if (pressed !== "false") {
     return;
   }
@@ -266,6 +298,7 @@ async function startSequenceRecording(page) {
   const startButton = page.locator('button:has-text("Start sequence"):visible').first();
   await startButton.waitFor({ state: "visible", timeout: TIMEOUT_MS });
   await startButton.click();
+  // Let React swap buttons; move pointer away from the subnavbar (Stop replaces Start in-place — stray events can hit Stop).
   await page.waitForTimeout(500);
   const vp = page.viewportSize() ?? { width: 1280, height: 720 };
   await page.mouse.move(vp.width - 2, vp.height - 2);
@@ -421,6 +454,10 @@ async function main() {
     await assertCreatorPersistence(context.request, level.identifier);
     console.log("creator persistence asserted");
 
+    await ensureCreatorInteractivePreview(page);
+    await assertArtboardStepScrubAfterPersist(page);
+    console.log("artboard step scrub assertions passed");
+
     const persistedBeforeGame = await fetchLevel(context.request, level.identifier);
     const persistedCountBeforeGame =
       persistedBeforeGame.eventSequence?.byScenarioId?.[SCENARIO_ID]?.length || 0;
@@ -438,7 +475,7 @@ async function main() {
       persistedAfterGame.eventSequence?.byScenarioId?.[SCENARIO_ID]?.length || 0;
     expect(persistedCountAfterGame).toBe(persistedCountBeforeGame);
 
-    console.log("Playwright interaction events smoke test passed.", {
+    console.log("Playwright event sequence artboard smoke test passed.", {
       gameId: game.id,
       levelIdentifier: level.identifier,
       verifiedInteractions: persistedCountAfterGame,
@@ -449,6 +486,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error("Playwright interaction events smoke test failed.", error);
+  console.error("Playwright event sequence artboard smoke test failed.", error);
   process.exitCode = 1;
 });
