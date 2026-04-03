@@ -6,8 +6,10 @@ import type { Ref } from "react";
 import { Frame, type FrameHandle } from "../Frame";
 import { ArtContainer } from "../ArtContainer";
 import { useAppSelector } from "@/store/hooks/hooks";
-import { DrawboardSnapshotPayload, EventSequenceStep, scenario } from "@/types";
+import { DrawboardSnapshotPayload, EventSequenceStep, InteractionTrigger, scenario } from "@/types";
 import { Spinner } from "@/components/General/Spinner/Spinner";
+
+const EMPTY_REPLAY_SEQUENCE: EventSequenceStep[] = [];
 
 type LegacySolution = {
   SCSS: string;
@@ -27,8 +29,11 @@ type ModelArtContainerProps = {
   solutionUrl?: string;
   recordingSequence?: boolean;
   replaySequence?: EventSequenceStep[];
+  /** When set, used as Frame `events` instead of `level.events` (event-sequence scrubbing). */
+  interactionTriggers?: InteractionTrigger[];
   interactiveOverride?: boolean;
   snapshotOverride?: DrawboardSnapshotPayload | null;
+  suppressHeavyLayoutEffects?: boolean;
 };
 
 export const ModelArtContainer = ({
@@ -40,9 +45,11 @@ export const ModelArtContainer = ({
   isCreator = true,
   solutionUrl = "",
   recordingSequence = false,
-  replaySequence = [],
+  replaySequence = EMPTY_REPLAY_SEQUENCE,
+  interactionTriggers,
   interactiveOverride,
   snapshotOverride = null,
+  suppressHeavyLayoutEffects = false,
 }: ModelArtContainerProps): React.ReactNode => {
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const level = useAppSelector((state) => state.levels[currentLevel - 1]);
@@ -62,9 +69,15 @@ export const ModelArtContainer = ({
   const solutionJS = levelSolution.js || defaultLevelSolutions?.js || "";
   const frameCss = snapshotOverride?.css ?? solutionCSS;
   const frameHtml = snapshotOverride?.snapshotHtml ?? solutionHTML;
+  const frameEvents = interactionTriggers ?? level.events ?? [];
 
   const hasSolutionCapture = Boolean(solutionUrl?.trim());
-  const mountSolutionFrame = isCreator || !hasSolutionCapture;
+  // Keep the frame mounted in game mode when there are replay steps so it can
+  // re-capture per step (the frame is hidden but interactive for background replay).
+  const hasActiveReplay = replaySequence.length > 0;
+  // Initial timeline step uses empty replay but still needs the iframe (capture + DOM reset).
+  const mountSolutionFrame =
+    isCreator || !hasSolutionCapture || hasActiveReplay || Boolean(interactiveOverride);
 
   return (
     <ArtContainer
@@ -78,7 +91,7 @@ export const ModelArtContainer = ({
           newCss={frameCss}
           newHtml={frameHtml}
           newJs={solutionJS + "\n" + scenario.js}
-          events={level.events || []}
+          events={frameEvents}
           scenario={scenario}
           name="solutionUrl"
           hiddenFromView={!showInteractivePreview}
@@ -87,6 +100,7 @@ export const ModelArtContainer = ({
           recordingSequence={recordingSequence}
           persistRecordedSequenceStep={recordingSequence}
           replaySequence={replaySequence}
+          suppressHeavyLayoutEffects={suppressHeavyLayoutEffects}
         />
       )}
       {children}

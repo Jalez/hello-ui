@@ -22,22 +22,25 @@ import PoppingTitle from "@/components/General/PoppingTitle";
 import { Camera } from "lucide-react";
 import type { FrameHandle } from "@/components/ArtBoards/Frame";
 import { useGameRuntimeConfig } from "@/hooks/useGameRuntimeConfig";
-import { apiUrl } from "@/lib/apiUrl";
 import {
-  INITIAL_EVENT_SEQUENCE_STEP_ID,
   getEventSequenceRuntimeKey,
   getSequenceRuntimeState,
   subscribeSequenceRuntime,
 } from "@/lib/drawboard/eventSequenceState";
+import { useEventSequencePreview } from "@/lib/drawboard/useEventSequencePreview";
 
 type ScenarioModelProps = {
   scenario: scenario;
   allowScaling?: boolean;
   /** When true, registers with creator navbar Grade (visible artboards only; not used on player game nav). */
   registerForNavbarCapture?: boolean;
+  /** When true, skip snapshot preview fetch (SidebySideArt probes/hidden branches). */
+  suppressHeavyLayoutEffects?: boolean;
   creatorPreviewInteractive?: boolean;
   creatorMode?: boolean;
   selectedEventSequenceStepId?: string | null;
+  /** Match ScenarioDrawing: scope interaction triggers to the replay prefix when scrubbing steps. */
+  eventSequenceScopedTriggers?: boolean;
 };
 
 const EMPTY_EVENT_SEQUENCE: EventSequenceStep[] = [];
@@ -46,9 +49,11 @@ export const ScenarioModel = ({
   scenario,
   allowScaling = false,
   registerForNavbarCapture = false,
+  suppressHeavyLayoutEffects = false,
   creatorPreviewInteractive,
   creatorMode,
   selectedEventSequenceStepId,
+  eventSequenceScopedTriggers = false,
 }: ScenarioModelProps): React.ReactNode => {
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const level = useAppSelector((state) => state.levels[currentLevel - 1]);
@@ -58,13 +63,8 @@ export const ScenarioModel = ({
   const solutionUrls = useAppSelector((state) => state.solutionUrls as Record<string, string>);
   const solutionUrl = solutionUrls[scenario.scenarioId];
   const scenarioSequence = level?.eventSequence?.byScenarioId?.[scenario.scenarioId] ?? EMPTY_EVENT_SEQUENCE;
-  const selectedSequenceIndex = selectedEventSequenceStepId && selectedEventSequenceStepId !== INITIAL_EVENT_SEQUENCE_STEP_ID
-    ? scenarioSequence.findIndex((step) => step.id === selectedEventSequenceStepId)
-    : -1;
-  const selectedEventSequenceStep = selectedSequenceIndex >= 0 ? scenarioSequence[selectedSequenceIndex] : null;
   const options = useAppSelector((state) => state.options);
   const isCreator = creatorMode ?? options.creator;
-  const shouldShowInteractivePreview = isCreator && (creatorPreviewInteractive ?? !solutionUrl);
   const [modelToolbarDragStarted, setModelToolbarDragStarted] = useState(false);
   const [solutionCaptureBusy, setSolutionCaptureBusy] = useState(false);
   const solutionFrameRef = useRef<FrameHandle | null>(null);
@@ -79,62 +79,42 @@ export const ScenarioModel = ({
     useCallback(() => getSequenceRuntimeState(runtimeKey), [runtimeKey]),
     useCallback(() => getSequenceRuntimeState(runtimeKey), [runtimeKey]),
   );
-  const isSequenceRecording = isCreator && shouldShowInteractivePreview && sequenceRuntime.recordingMode !== "idle";
+  const fallbackEvents = useMemo(() => level?.events || [], [level?.events]);
+  const {
+    selectedSequenceIndex,
+    replaySequence,
+    interactionTriggers,
+    shouldShowInteractivePreview,
+    frameNeedsInteractive,
+    isSequenceRecording,
+  } = useEventSequencePreview({
+    isCreator,
+    scenarioSequence,
+    selectedEventSequenceStepId,
+    eventSequenceScopedTriggers,
+    recordingMode: sequenceRuntime.recordingMode,
+    creatorPreviewInteractive,
+    hasCapture: Boolean(solutionUrl),
+    fallbackEvents,
+  });
   const effectiveShowInteractivePreview = shouldShowInteractivePreview;
-  const interactiveSnapshotOverride = useMemo(
-    () => (
-      isCreator
-      && shouldShowInteractivePreview
-      && selectedEventSequenceStep
-        ? selectedEventSequenceStep.snapshot
-        : null
-    ),
-    [isCreator, selectedEventSequenceStep, shouldShowInteractivePreview],
-  );
-  const [selectedStepPreviewUrl, setSelectedStepPreviewUrl] = useState<string>("");
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadSelectedPreview = async () => {
-      if (!selectedEventSequenceStep || effectiveShowInteractivePreview) {
-        setSelectedStepPreviewUrl("");
-        return;
-      }
-
-      const response = await fetch(apiUrl("/api/drawboard/render"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          css: selectedEventSequenceStep.snapshot.css,
-          snapshotHtml: selectedEventSequenceStep.snapshot.snapshotHtml,
-          width: selectedEventSequenceStep.snapshot.width,
-          height: selectedEventSequenceStep.snapshot.height,
-          scenarioId: selectedEventSequenceStep.scenarioId,
-          urlName: "solutionUrl",
-          includeDataUrl: true,
-        }),
-      });
-
-      if (!response.ok) {
-        if (!cancelled) {
-          setSelectedStepPreviewUrl("");
-        }
-        return;
-      }
-
-      const payload = await response.json() as { dataUrl?: string };
-      if (!cancelled) {
-        setSelectedStepPreviewUrl(payload.dataUrl || "");
-      }
-    };
-
-    void loadSelectedPreview();
-    return () => {
-      cancelled = true;
-    };
-  }, [effectiveShowInteractivePreview, selectedEventSequenceStep]);
-
+  const selectedEventSequenceStep = selectedSequenceIndex >= 0 ? scenarioSequence[selectedSequenceIndex] : null;
+  const useLiveSolutionForStepScrub =
+    isCreator && frameNeedsInteractive && scenarioSequence.length > 0;
+  const interactiveSnapshotOverride = useMemo(() => {
+    if (useLiveSolutionForStepScrub) {
+      return null;
+    }
+    if (isCreator && shouldShowInteractivePreview && selectedEventSequenceStep) {
+      return selectedEventSequenceStep.snapshot;
+    }
+    return null;
+  }, [
+    isCreator,
+    selectedEventSequenceStep,
+    shouldShowInteractivePreview,
+    useLiveSolutionForStepScrub,
+  ]);
   const bindSolutionFrame = useCallback(
     (instance: FrameHandle | null) => {
       solutionFrameRef.current = instance;
@@ -182,10 +162,12 @@ export const ScenarioModel = ({
           onCaptureBusyChange={handleSolutionCaptureBusy}
           isCreator={isCreator}
           solutionUrl={solutionUrl}
-          interactiveOverride={effectiveShowInteractivePreview}
+          interactiveOverride={frameNeedsInteractive}
           recordingSequence={isSequenceRecording}
-          replaySequence={[]}
+          replaySequence={replaySequence}
+          interactionTriggers={interactionTriggers}
           snapshotOverride={interactiveSnapshotOverride}
+          suppressHeavyLayoutEffects={suppressHeavyLayoutEffects}
         >
             <div
               className="relative"
@@ -248,10 +230,10 @@ export const ScenarioModel = ({
               )}
               {!effectiveShowInteractivePreview && (
                 <div className="relative z-[1]">
-                  {showModel && (selectedStepPreviewUrl || solutionUrl) ? (
+                  {showModel && (solutionUrl) ? (
                     <Image
                       name="solution"
-                      imageUrl={selectedStepPreviewUrl || solutionUrl}
+                      imageUrl={solutionUrl}
                       alt="Reference solution"
                       height={scenario.dimensions.height}
                       width={scenario.dimensions.width}
