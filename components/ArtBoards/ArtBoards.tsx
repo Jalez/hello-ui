@@ -146,6 +146,10 @@ export const ArtBoards = (): React.ReactNode => {
   const effectiveSelectedSequenceStepId = isCreatorContext && isSequencePanelOpen
     ? (selectedSequenceStepId ?? INITIAL_EVENT_SEQUENCE_STEP_ID)
     : selectedSequenceStepId;
+  /** In game mode, the active step drives the solution artboard image (no user step-click). */
+  const gameActiveStepId = !isCreatorContext && selectedScenarioSequence.length > 0
+    ? selectedScenarioSequence[normalizedActiveStepIndex]?.id ?? null
+    : null;
 
   useEffect(() => {
     setSelectedScenarioIdForLevel(currentLevel, selectedScenario?.scenarioId ?? null);
@@ -228,7 +232,7 @@ export const ArtBoards = (): React.ReactNode => {
                 }));
                 syncLevelFields(currentLevel - 1, ["eventSequence"]);
               }}
-              selectedStepId={effectiveSelectedSequenceStepId}
+              selectedStepId={effectiveSelectedSequenceStepId ?? gameActiveStepId}
               onSelectStep={(stepId) => setSelectedEventSequenceStepId(currentLevel, selectedScenario.scenarioId, stepId)}
             />
           </div>
@@ -248,7 +252,8 @@ export const ArtBoards = (): React.ReactNode => {
                   scenario={selectedScenario}
                   creatorMode={isCreatorContext}
                   creatorPreviewInteractive={creatorPreviewInteractive}
-                  selectedEventSequenceStepId={effectiveSelectedSequenceStepId}
+                  selectedEventSequenceStepId={effectiveSelectedSequenceStepId ?? gameActiveStepId}
+                  eventSequenceScopedTriggers={selectedScenarioSequence.length > 0}
                   registerForNavbarCapture
                 />,
                 <ScenarioDrawing
@@ -256,7 +261,8 @@ export const ArtBoards = (): React.ReactNode => {
                   scenario={selectedScenario}
                   creatorMode={isCreatorContext}
                   creatorPreviewInteractive={creatorPreviewInteractive}
-                  selectedEventSequenceStepId={effectiveSelectedSequenceStepId}
+                  selectedEventSequenceStepId={effectiveSelectedSequenceStepId ?? gameActiveStepId}
+                  eventSequenceScopedTriggers={selectedScenarioSequence.length > 0}
                   registerForNavbarCapture
                 />,
               ]}
