@@ -21,11 +21,14 @@ function StepCircle({
   active,
   completed,
   percent,
+  showPercentLabel,
   children,
 }: {
   active: boolean;
   completed: boolean;
   percent: number;
+  /** When true, show the rounded percent (including 0%) instead of the step index. */
+  showPercentLabel: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -39,7 +42,7 @@ function StepCircle({
             : "border-border bg-background text-foreground",
       ].join(" ")}
     >
-      {percent > 0 ? `${Math.round(percent)}%` : children}
+      {showPercentLabel ? `${Math.round(percent)}%` : children}
     </div>
   );
 }
@@ -109,9 +112,16 @@ export function EventSequencePanel({
           {displaySteps.map((step, index) => {
             const isInitialStep = step.id === INITIAL_EVENT_SEQUENCE_STEP_ID;
             const realStepIndex = index - 1;
+            const measured = !isInitialStep && step.id in stepAccuracies;
             const percent = isInitialStep
               ? 100
-              : stepAccuracies[step.id] ?? (realStepIndex < activeStepIndex ? 100 : 0);
+              : measured
+                ? (stepAccuracies[step.id] ?? 0)
+                : (realStepIndex < activeStepIndex ? 100 : 0);
+            const showPercentLabel =
+              isInitialStep
+              || measured
+              || percent > 0;
             return (
               <Tooltip key={step.id}>
                 <TooltipTrigger asChild>
@@ -125,6 +135,7 @@ export function EventSequencePanel({
                       active={step.id === selectedStepId || (!selectedStepId && isInitialStep)}
                       completed={isInitialStep || realStepIndex < activeStepIndex}
                       percent={percent}
+                      showPercentLabel={showPercentLabel}
                     >
                       {index}
                     </StepCircle>
