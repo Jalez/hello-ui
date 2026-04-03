@@ -23,16 +23,27 @@ const hasOverflow = (element: HTMLDivElement | null): boolean => {
 
 const withScalingPreference = (
   content: ReactNode,
-  allowScaling: boolean,
-  registerForNavbarCapture: boolean,
+  opts: {
+    allowScaling: boolean;
+    registerForNavbarCapture: boolean;
+    /** Skip drawboard preview fetches and other heavy work (probes, hidden layout branches, off-screen carousel slides). */
+    suppressHeavyLayoutEffects: boolean;
+  },
 ) => {
-  if (!isValidElement<{ allowScaling?: boolean; registerForNavbarCapture?: boolean }>(content)) {
+  if (
+    !isValidElement<{
+      allowScaling?: boolean;
+      registerForNavbarCapture?: boolean;
+      suppressHeavyLayoutEffects?: boolean;
+    }>(content)
+  ) {
     return content;
   }
 
   return cloneElement(content, {
-    allowScaling,
-    registerForNavbarCapture,
+    allowScaling: opts.allowScaling,
+    registerForNavbarCapture: opts.registerForNavbarCapture,
+    suppressHeavyLayoutEffects: opts.suppressHeavyLayoutEffects,
   });
 };
 
@@ -105,26 +116,40 @@ const SidebySideArt = ({ contents }: SidebySideArtProps): ReactNode => {
     };
   }, [contents.length]);
 
-  const dualItems = (direction: "row" | "column", probe = false) => (
-    <div
-      className={`flex h-full w-full min-h-0 items-stretch justify-center gap-4 px-2 py-2 ${
-        direction === "row" ? "flex-row" : "flex-col"
-      }`}
-    >
-      {contents.map((content, index) => (
-        <div
-          key={`${probe ? "probe" : "visible"}-${direction}-${index}`}
-          className={
-            direction === "row"
-              ? "flex min-w-0 flex-1 items-start justify-center"
-              : "flex min-h-0 w-full flex-1 items-start justify-center"
-          }
-        >
-          {withScalingPreference(content, false, !probe)}
-        </div>
-      ))}
-    </div>
-  );
+  const dualItems = (direction: "row" | "column", probe = false) => {
+    const rowColumnBranchActive =
+      (layoutMode === "row" && direction === "row")
+      || (layoutMode === "column" && direction === "column");
+    const suppressHeavyLayoutEffects =
+      probe
+      || layoutMode === "single"
+      || !rowColumnBranchActive;
+
+    return (
+      <div
+        className={`flex h-full w-full min-h-0 items-stretch justify-center gap-4 px-2 py-2 ${
+          direction === "row" ? "flex-row" : "flex-col"
+        }`}
+      >
+        {contents.map((content, index) => (
+          <div
+            key={`${probe ? "probe" : "visible"}-${direction}-${index}`}
+            className={
+              direction === "row"
+                ? "flex min-w-0 flex-1 items-start justify-center"
+                : "flex min-h-0 w-full flex-1 items-start justify-center"
+            }
+          >
+            {withScalingPreference(content, {
+              allowScaling: false,
+              registerForNavbarCapture: !probe,
+              suppressHeavyLayoutEffects,
+            })}
+          </div>
+        ))}
+      </div>
+    );
+  };
 
   return (
     <div ref={containerRef} className="relative flex h-full w-full min-h-0 flex-col items-center justify-center gap-3">
@@ -183,7 +208,11 @@ const SidebySideArt = ({ contents }: SidebySideArtProps): ReactNode => {
                 key={`mobile-sidebyside-${index}`}
                 className="flex h-full min-h-0 min-w-full items-center justify-center"
               >
-                {withScalingPreference(content, true, true)}
+                {withScalingPreference(content, {
+                  allowScaling: true,
+                  registerForNavbarCapture: true,
+                  suppressHeavyLayoutEffects: layoutMode !== "single" || index !== visibleIndex,
+                })}
               </div>
             ))}
           </div>
