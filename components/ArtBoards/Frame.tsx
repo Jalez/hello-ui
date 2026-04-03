@@ -12,6 +12,7 @@ import { apiUrl } from "@/lib/apiUrl";
 import { dataUrlFromRawRgba } from "@/lib/utils/drawboardSnapshot";
 import { useGameRuntimeConfig } from "@/hooks/useGameRuntimeConfig";
 import { useLevelMetaSync } from "@/lib/collaboration/hooks/useLevelMetaSync";
+import { eventSequenceSolutionStorageKey } from "@/lib/drawboard/eventSequenceSolutionUrls";
 
 /**
  * Module-level capture dedup. SidebySideArt renders each content element multiple times
@@ -71,6 +72,8 @@ interface FrameProps {
   suppressHeavyLayoutEffects?: boolean;
   /** Stable selector for E2E (omit on probe/hidden clones). */
   dataTestId?: string;
+  /** Game + event sequence: tag captures so Redux can store one image per timeline step. */
+  eventSequenceSolutionStepId?: string | null;
 }
 
 export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
@@ -92,6 +95,7 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
     replaySequence = [],
     suppressHeavyLayoutEffects = false,
     dataTestId,
+    eventSequenceSolutionStepId = null,
   },
   ref,
 ) {
@@ -108,7 +112,12 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
   const level = useAppSelector((state: { levels: Array<{ interactive: boolean }> }) => state.levels[currentLevel - 1]);
   const existingImageUrl = useAppSelector((state) => {
     if (name === "solutionUrl") {
-      return (state.solutionUrls as Record<string, string | undefined>)[scenario.scenarioId];
+      const raw = state.solutionUrls as Record<string, string | undefined>;
+      if (eventSequenceSolutionStepId) {
+        return raw[eventSequenceSolutionStorageKey(scenario.scenarioId, eventSequenceSolutionStepId)]
+          ?? raw[scenario.scenarioId];
+      }
+      return raw[scenario.scenarioId];
     }
     if (name === "drawingUrl") {
       return (state.drawingUrls as Record<string, string | undefined>)[scenario.scenarioId];
@@ -130,7 +139,7 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
       /** Always ask for HiDPI PNG so solution vs drawing static images use the same asset (browser scales identically). Game mode used to omit this for drawingUrl only, which made the two boards look different despite identical Playwright input. */
       includeDataUrl = true,
     ) => {
-      const dedupKey = `${name}:${scenario.scenarioId}`;
+      const dedupKey = `${name}:${scenario.scenarioId}:${eventSequenceSolutionStepId ?? ""}`;
       const contentKey = `${snapshot.snapshotHtml.length}:${snapshot.css.length}:${snapshot.snapshotHtml.slice(0, 64)}`;
       if (!shouldCapture(dedupKey, contentKey)) return;
       notifyCaptureBusy(true);
@@ -191,6 +200,7 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
             addSolutionUrl({
               solutionUrl: displayDataUrl,
               scenarioId: payload.scenarioId,
+              eventSequenceStepId: eventSequenceSolutionStepId ?? undefined,
             }),
           );
         }
@@ -209,8 +219,19 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
         notifyCaptureBusy(false);
       }
     },
-    [dispatch, name, notifyCaptureBusy, scenario.dimensions.height, scenario.dimensions.width, scenario.scenarioId],
+    [
+      dispatch,
+      eventSequenceSolutionStepId,
+      name,
+      notifyCaptureBusy,
+      scenario.dimensions.height,
+      scenario.dimensions.width,
+      scenario.scenarioId,
+    ],
   );
+
+  const eventSequenceSolutionStepIdRef = useRef(eventSequenceSolutionStepId);
+  eventSequenceSolutionStepIdRef.current = eventSequenceSolutionStepId;
 
   useImperativeHandle(
     ref,
@@ -462,10 +483,12 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
         return;
       }
       if (name === "solutionUrl") {
+        const stepId = eventSequenceSolutionStepIdRef.current;
         dispatch(
           addSolutionUrl({
             solutionUrl: event.data.dataURL,
             scenarioId: scenario.scenarioId,
+            eventSequenceStepId: stepId ?? undefined,
           }),
         );
       }
@@ -517,9 +540,9 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
   const optionsPatchScenarioIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (suppressHeavyLayoutEffects) {
-      return;
-    }
+    // Always patch replay/events (lightweight postMessage). Skipping when `suppressHeavyLayoutEffects`
+    // left hidden SidebySideArt slides / probes with stale replay while the visible drawing iframe
+    // advanced — diff and per-step solution captures disagreed. Reload debouncing below stays suppressed.
     if (!scenario) {
       return;
     }
@@ -559,7 +582,6 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
     recordingSequence,
     events,
     replaySequence,
-    suppressHeavyLayoutEffects,
   ]);
 
   useEffect(() => {

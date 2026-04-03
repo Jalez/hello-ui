@@ -2,12 +2,13 @@
 "use client";
 
 // ModelArtContainer.tsx
-import type { Ref } from "react";
+import { useEffect, useRef, type Ref } from "react";
 import { Frame, type FrameHandle } from "../Frame";
 import { ArtContainer } from "../ArtContainer";
 import { useAppSelector } from "@/store/hooks/hooks";
 import { DrawboardSnapshotPayload, EventSequenceStep, InteractionTrigger, scenario } from "@/types";
 import { Spinner } from "@/components/General/Spinner/Spinner";
+import { announceLiveSolutionFrameRemoved } from "@/lib/drawboard/solutionFrameLifecycle";
 
 const EMPTY_REPLAY_SEQUENCE: EventSequenceStep[] = [];
 
@@ -24,12 +25,21 @@ type ModelArtContainerProps = {
   showInteractivePreview?: boolean;
   frameRef?: Ref<FrameHandle>;
   onCaptureBusyChange?: (busy: boolean) => void;
-  /** When false (game), the solution iframe is removed after the first capture so the live solution is never visible. */
   isCreator?: boolean;
+  scenarioSequenceLength?: number;
   solutionUrl?: string;
+  /**
+   * Game + event sequence: timeline step id for the current reference (drives per-step Redux keys).
+   * Omitted in creator mode.
+   */
+  eventSequenceSolutionStepId?: string | null;
+  /**
+   * When false (SidebySideArt probes / hidden slides), do not mount a transient solution iframe so
+   * only the visible artboard performs capture.
+   */
+  allowTransientSolutionIframe?: boolean;
   recordingSequence?: boolean;
   replaySequence?: EventSequenceStep[];
-  /** When set, used as Frame `events` instead of `level.events` (event-sequence scrubbing). */
   interactionTriggers?: InteractionTrigger[];
   interactiveOverride?: boolean;
   snapshotOverride?: DrawboardSnapshotPayload | null;
@@ -43,7 +53,10 @@ export const ModelArtContainer = ({
   frameRef,
   onCaptureBusyChange,
   isCreator = true,
+  scenarioSequenceLength = 0,
   solutionUrl = "",
+  eventSequenceSolutionStepId = null,
+  allowTransientSolutionIframe = true,
   recordingSequence = false,
   replaySequence = EMPTY_REPLAY_SEQUENCE,
   interactionTriggers,
@@ -54,6 +67,24 @@ export const ModelArtContainer = ({
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const level = useAppSelector((state) => state.levels[currentLevel - 1]);
   const solutions = useAppSelector((state) => state.solutions as unknown as Record<string, LegacySolution>);
+
+  const hasSolutionCapture = Boolean(solutionUrl?.trim());
+  const usePerStepGameCapture = !isCreator && scenarioSequenceLength > 0;
+
+  const mountSolutionFrame =
+    isCreator
+    || (!usePerStepGameCapture && !hasSolutionCapture)
+    || (usePerStepGameCapture && allowTransientSolutionIframe && !hasSolutionCapture);
+
+  const prevMountedSolutionFrameRef = useRef(mountSolutionFrame);
+  useEffect(() => {
+    const prev = prevMountedSolutionFrameRef.current;
+    if (prev && !mountSolutionFrame && !isCreator) {
+      announceLiveSolutionFrameRemoved(scenario.scenarioId);
+    }
+    prevMountedSolutionFrameRef.current = mountSolutionFrame;
+  }, [isCreator, mountSolutionFrame, scenario.scenarioId]);
+
   if (!level) return null;
 
   const defaultLevelSolutions = solutions[level.name]
@@ -70,14 +101,6 @@ export const ModelArtContainer = ({
   const frameCss = snapshotOverride?.css ?? solutionCSS;
   const frameHtml = snapshotOverride?.snapshotHtml ?? solutionHTML;
   const frameEvents = interactionTriggers ?? level.events ?? [];
-
-  const hasSolutionCapture = Boolean(solutionUrl?.trim());
-  // Keep the frame mounted in game mode when there are replay steps so it can
-  // re-capture per step (the frame is hidden but interactive for background replay).
-  const hasActiveReplay = replaySequence.length > 0;
-  // Initial timeline step uses empty replay but still needs the iframe (capture + DOM reset).
-  const mountSolutionFrame =
-    isCreator || !hasSolutionCapture || hasActiveReplay || Boolean(interactiveOverride);
 
   return (
     <ArtContainer
@@ -101,6 +124,7 @@ export const ModelArtContainer = ({
           persistRecordedSequenceStep={recordingSequence}
           replaySequence={replaySequence}
           suppressHeavyLayoutEffects={suppressHeavyLayoutEffects}
+          eventSequenceSolutionStepId={usePerStepGameCapture ? eventSequenceSolutionStepId : null}
         />
       )}
       {children}

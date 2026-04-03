@@ -27,6 +27,10 @@ import {
   getSequenceRuntimeState,
   subscribeSequenceRuntime,
 } from "@/lib/drawboard/eventSequenceState";
+import {
+  defaultTimelineStepIdForSolutionCapture,
+  resolveEventSequenceSolutionUrl,
+} from "@/lib/drawboard/eventSequenceSolutionUrls";
 import { useEventSequencePreview } from "@/lib/drawboard/useEventSequencePreview";
 
 type ScenarioModelProps = {
@@ -60,11 +64,18 @@ export const ScenarioModel = ({
   const showModel = level.showModelPicture;
   const dispatch = useAppDispatch();
   const { syncLevelFields } = useLevelMetaSync();
-  const solutionUrls = useAppSelector((state) => state.solutionUrls as Record<string, string>);
-  const solutionUrl = solutionUrls[scenario.scenarioId];
   const scenarioSequence = level?.eventSequence?.byScenarioId?.[scenario.scenarioId] ?? EMPTY_EVENT_SEQUENCE;
   const options = useAppSelector((state) => state.options);
   const isCreator = creatorMode ?? options.creator;
+  const usePerStepSolutionKeys = !isCreator && scenarioSequence.length > 0;
+  const eventSequenceCaptureStepId = defaultTimelineStepIdForSolutionCapture(selectedEventSequenceStepId);
+  const solutionUrl = useAppSelector((state) =>
+    resolveEventSequenceSolutionUrl(
+      state.solutionUrls as Record<string, string | undefined>,
+      scenario.scenarioId,
+      { usePerStepKeys: usePerStepSolutionKeys, stepId: eventSequenceCaptureStepId },
+    ),
+  );
   const [modelToolbarDragStarted, setModelToolbarDragStarted] = useState(false);
   const [solutionCaptureBusy, setSolutionCaptureBusy] = useState(false);
   const solutionFrameRef = useRef<FrameHandle | null>(null);
@@ -79,7 +90,7 @@ export const ScenarioModel = ({
     useCallback(() => getSequenceRuntimeState(runtimeKey), [runtimeKey]),
     useCallback(() => getSequenceRuntimeState(runtimeKey), [runtimeKey]),
   );
-  const fallbackEvents = useMemo(() => level?.events || [], [level?.events]);
+  const fallbackEvents = useMemo(() => level?.events ?? [], [level]);
   const {
     selectedSequenceIndex,
     replaySequence,
@@ -158,17 +169,20 @@ export const ScenarioModel = ({
           <ModelArtContainer
             scenario={scenario}
             showInteractivePreview={effectiveShowInteractivePreview}
-          frameRef={bindSolutionFrame}
-          onCaptureBusyChange={handleSolutionCaptureBusy}
-          isCreator={isCreator}
-          solutionUrl={solutionUrl}
-          interactiveOverride={frameNeedsInteractive}
-          recordingSequence={isSequenceRecording}
-          replaySequence={replaySequence}
-          interactionTriggers={interactionTriggers}
-          snapshotOverride={interactiveSnapshotOverride}
-          suppressHeavyLayoutEffects={suppressHeavyLayoutEffects}
-        >
+            frameRef={bindSolutionFrame}
+            onCaptureBusyChange={handleSolutionCaptureBusy}
+            isCreator={isCreator}
+            scenarioSequenceLength={scenarioSequence.length}
+            solutionUrl={solutionUrl}
+            eventSequenceSolutionStepId={usePerStepSolutionKeys ? eventSequenceCaptureStepId : null}
+            allowTransientSolutionIframe={!suppressHeavyLayoutEffects}
+            interactiveOverride={frameNeedsInteractive}
+            recordingSequence={isSequenceRecording}
+            replaySequence={replaySequence}
+            interactionTriggers={interactionTriggers}
+            snapshotOverride={interactiveSnapshotOverride}
+            suppressHeavyLayoutEffects={suppressHeavyLayoutEffects}
+          >
             <div
               className="relative"
               style={{
