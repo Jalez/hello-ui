@@ -12,12 +12,7 @@ import { Button } from "@/components/ui/button";
 import { scenario, VerifiedInteraction } from "@/types";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useOptionalDrawboardNavbarCapture } from "@/components/ArtBoards/DrawboardNavbarCaptureContext";
-import {
-  clearEventSequenceForScenario,
-  removeEventSequenceStep,
-  toggleImageInteractivity,
-  updateEventSequenceStep,
-} from "@/store/slices/levels.slice";
+import { toggleImageInteractivity } from "@/store/slices/levels.slice";
 import { Camera, Loader2 } from "lucide-react";
 import type { FrameHandle } from "@/components/ArtBoards/Frame";
 import PoppingTitle from "@/components/General/PoppingTitle";
@@ -25,70 +20,19 @@ import { useGameRuntimeConfig } from "@/hooks/useGameRuntimeConfig";
 import { ScenarioDimensionsWrapper } from "./ScenarioDimensionsWrapper";
 import { ScenarioHoverContainer } from "./ScenarioHoverContainer";
 import { useLevelMetaSync } from "@/lib/collaboration/hooks/useLevelMetaSync";
-import { EventSequencePanel } from "./EventSequencePanel";
 import { stepToInteractionTrigger } from "@/lib/drawboard/interactionEvents";
 import { apiUrl } from "@/lib/apiUrl";
+import {
+  getEventSequenceRuntimeKey,
+  getSequenceRuntimeState,
+  resetSequenceRuntimeState,
+  setCreatorPreviewInteractiveForScenario,
+  subscribeSequenceRuntime,
+  updateSequenceRuntimeState,
+} from "@/lib/drawboard/eventSequenceState";
 
 /** One bootstrap per level across all mounted clones (SidebySideArt mounts several instances). */
 let playwrightGameInteractiveBootstrappedLevel: number | null = null;
-
-type SequenceRuntimeState = {
-  recording: boolean;
-  activeIndex: number;
-  pendingStepId: string | null;
-  stepAccuracies: Record<string, number>;
-};
-
-const sequenceRuntimeStore = new Map<string, SequenceRuntimeState>();
-const sequenceRuntimeListeners = new Map<string, Set<() => void>>();
-
-function getSequenceRuntimeState(key: string): SequenceRuntimeState {
-  const existing = sequenceRuntimeStore.get(key);
-  if (existing) {
-    return existing;
-  }
-
-  const initialState: SequenceRuntimeState = {
-    recording: false,
-    activeIndex: 0,
-    pendingStepId: null,
-    stepAccuracies: {},
-  };
-  sequenceRuntimeStore.set(key, initialState);
-  return initialState;
-}
-
-function subscribeSequenceRuntime(key: string, listener: () => void) {
-  const listeners = sequenceRuntimeListeners.get(key) ?? new Set<() => void>();
-  listeners.add(listener);
-  sequenceRuntimeListeners.set(key, listeners);
-  return () => {
-    const current = sequenceRuntimeListeners.get(key);
-    current?.delete(listener);
-    if (current && current.size === 0) {
-      sequenceRuntimeListeners.delete(key);
-    }
-  };
-}
-
-function updateSequenceRuntimeState(
-  key: string,
-  updater: (current: SequenceRuntimeState) => SequenceRuntimeState,
-) {
-  const next = updater(getSequenceRuntimeState(key));
-  sequenceRuntimeStore.set(key, next);
-  sequenceRuntimeListeners.get(key)?.forEach((listener) => listener());
-}
-
-function resetSequenceRuntimeState(key: string) {
-  sequenceRuntimeStore.set(key, {
-    recording: false,
-    activeIndex: 0,
-    pendingStepId: null,
-    stepAccuracies: {},
-  });
-  sequenceRuntimeListeners.get(key)?.forEach((listener) => listener());
-}
 
 type ScenarioDrawingProps = {
   scenario: scenario;
@@ -96,6 +40,7 @@ type ScenarioDrawingProps = {
   registerForNavbarCapture?: boolean;
   creatorPreviewInteractive?: boolean;
   creatorMode?: boolean;
+  selectedEventSequenceStepId?: string | null;
 };
 
 export const ScenarioDrawing = ({
@@ -104,6 +49,7 @@ export const ScenarioDrawing = ({
   registerForNavbarCapture = false,
   creatorPreviewInteractive,
   creatorMode,
+  selectedEventSequenceStepId,
 }: ScenarioDrawingProps): React.ReactNode => {
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const level = useAppSelector((state) => state.levels[currentLevel - 1]);
@@ -155,7 +101,7 @@ export const ScenarioDrawing = ({
   const shouldShowInteractivePreview = isCreator && (creatorPreviewInteractive ?? !drawingUrl);
   const interactive = level?.interactive ?? false;
   const runtimeKey = useMemo(
-    () => `${currentLevel}:${scenario.scenarioId}:${isCreator ? "creator" : "game"}`,
+    () => getEventSequenceRuntimeKey(currentLevel, scenario.scenarioId, isCreator),
     [currentLevel, isCreator, scenario.scenarioId],
   );
   const sequenceRuntime = useSyncExternalStore(
@@ -169,7 +115,13 @@ export const ScenarioDrawing = ({
   );
   const normalizedActiveSequenceIndex = sequenceRuntime.activeIndex >= scenarioSequence.length ? 0 : sequenceRuntime.activeIndex;
   const activeSequenceStep = scenarioSequence[normalizedActiveSequenceIndex] ?? null;
-  const isSequenceRecording = sequenceRuntime.recording && shouldShowInteractivePreview;
+  const isSequenceRecording = sequenceRuntime.recordingMode !== "idle" && shouldShowInteractivePreview;
+  const selectedSequenceIndex = selectedEventSequenceStepId
+    ? scenarioSequence.findIndex((step) => step.id === selectedEventSequenceStepId)
+    : -1;
+  const replaySequence = isCreator && shouldShowInteractivePreview && selectedSequenceIndex >= 0
+    ? scenarioSequence.slice(0, selectedSequenceIndex + 1)
+    : [];
   const frameEvents = useMemo(() => {
     if (scenarioSequence.length > 0) {
       if (isCreator) {
@@ -213,6 +165,29 @@ export const ScenarioDrawing = ({
   useEffect(() => {
     stepPreviewUrlsRef.current = stepPreviewUrls;
   }, [stepPreviewUrls]);
+
+  useEffect(() => {
+    if (!isCreator) {
+      return;
+    }
+    setCreatorPreviewInteractiveForScenario(currentLevel, scenario.scenarioId, shouldShowInteractivePreview);
+  }, [currentLevel, isCreator, scenario.scenarioId, shouldShowInteractivePreview]);
+
+  const previousSequenceLengthRef = useRef(scenarioSequence.length);
+
+  useEffect(() => {
+    if (
+      isCreator
+      && previousSequenceLengthRef.current < scenarioSequence.length
+      && sequenceRuntime.recordingMode === "single"
+    ) {
+      updateSequenceRuntimeState(runtimeKey, (current) => ({
+        ...current,
+        recordingMode: "idle",
+      }));
+    }
+    previousSequenceLengthRef.current = scenarioSequence.length;
+  }, [isCreator, runtimeKey, scenarioSequence.length, sequenceRuntime.recordingMode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -386,28 +361,6 @@ export const ScenarioDrawing = ({
     }));
   }, [activeSequenceStep, isCreator, runtimeKey]);
 
-  const handleClearSequence = useCallback(() => {
-    dispatch(clearEventSequenceForScenario({ levelId: currentLevel, scenarioId: scenario.scenarioId }));
-    syncLevelFields(currentLevel - 1, ["eventSequence"]);
-    setStepPreviewUrls({});
-    resetSequenceRuntimeState(runtimeKey);
-  }, [currentLevel, dispatch, runtimeKey, scenario.scenarioId, syncLevelFields]);
-
-  const handleUpdateSequenceStep = useCallback((stepId: string, field: "label" | "instruction", value: string) => {
-    dispatch(updateEventSequenceStep({
-      levelId: currentLevel,
-      scenarioId: scenario.scenarioId,
-      stepId,
-      changes: { [field]: value },
-    }));
-    syncLevelFields(currentLevel - 1, ["eventSequence"]);
-  }, [currentLevel, dispatch, scenario.scenarioId, syncLevelFields]);
-
-  const handleRemoveSequenceStep = useCallback((stepId: string) => {
-    dispatch(removeEventSequenceStep({ levelId: currentLevel, scenarioId: scenario.scenarioId, stepId }));
-    syncLevelFields(currentLevel - 1, ["eventSequence"]);
-  }, [currentLevel, dispatch, scenario.scenarioId, syncLevelFields]);
-
   if (!level) return null;
 
   return (
@@ -486,7 +439,9 @@ export const ScenarioDrawing = ({
                           name="drawingUrl"
                           hiddenFromView={!shouldShowInteractivePreview}
                           onCaptureBusyChange={handleDrawingCaptureBusy}
+                          interactiveOverride={shouldShowInteractivePreview}
                           recordingSequence={isSequenceRecording}
+                          replaySequence={replaySequence}
                           onVerifiedInteraction={handleVerifiedInteraction}
                         />
                         {!shouldShowInteractivePreview && (
@@ -582,21 +537,6 @@ export const ScenarioDrawing = ({
           </ArtContainer>
         </Board>
       </BoardContainer>
-      <EventSequencePanel
-        scenario={scenario}
-        creatorMode={isCreator}
-        interactivePreview={shouldShowInteractivePreview}
-        recording={isSequenceRecording}
-        steps={scenarioSequence}
-        activeStepIndex={normalizedActiveSequenceIndex}
-        stepAccuracies={sequenceRuntime.stepAccuracies}
-        previewUrls={stepPreviewUrls}
-        onStartRecording={() => updateSequenceRuntimeState(runtimeKey, (current) => ({ ...current, recording: true }))}
-        onStopRecording={() => updateSequenceRuntimeState(runtimeKey, (current) => ({ ...current, recording: false }))}
-        onClearSequence={handleClearSequence}
-        onUpdateStep={handleUpdateSequenceStep}
-        onRemoveStep={handleRemoveSequenceStep}
-      />
     </div>
   );
 };

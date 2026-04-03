@@ -33,6 +33,7 @@ type DrawboardPayload = {
   interactive?: boolean;
   isCreator?: boolean;
   recordingSequence?: boolean;
+  replaySequence?: EventSequenceStep[];
 };
 
 type VisualState = {
@@ -93,6 +94,9 @@ let domMutationVersion = 0;
 let layoutMutationVersion = 0;
 let mutationObserver: MutationObserver | null = null;
 let resizeObserver: ResizeObserver | null = null;
+let replaySequence: EventSequenceStep[] = [];
+let replayInFlight = false;
+let replayAppliedSignature = "";
 
 function updateInteractiveFlag() {
   document.body.dataset.interactive = interactive ? "true" : "false";
@@ -139,6 +143,18 @@ function stopMountedPing() {
     window.clearInterval(mountedIntervalId);
     mountedIntervalId = null;
   }
+}
+
+function normalizeReplaySequence(raw: unknown): EventSequenceStep[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  return raw.filter((entry): entry is EventSequenceStep => (
+    Boolean(entry)
+    && typeof entry === "object"
+    && typeof (entry as EventSequenceStep).id === "string"
+    && typeof (entry as EventSequenceStep).eventType === "string"
+  ));
 }
 
 function clearUserScript() {
@@ -237,6 +253,90 @@ async function waitForPaintAfterCss() {
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     await settleFonts();
     await new Promise<void>((resolve) => setTimeout(resolve, 56));
+  }
+}
+
+function getReplayValueFromSnapshot(step: EventSequenceStep): { value?: string; checked?: boolean } {
+  if (!step.selector) {
+    return {};
+  }
+  try {
+    const parsed = new DOMParser().parseFromString(step.snapshot.snapshotHtml, "text/html");
+    const snapshotTarget = parsed.querySelector(step.selector);
+    if (snapshotTarget instanceof HTMLInputElement) {
+      return { value: snapshotTarget.value, checked: snapshotTarget.checked };
+    }
+    if (snapshotTarget instanceof HTMLTextAreaElement || snapshotTarget instanceof HTMLSelectElement) {
+      return { value: snapshotTarget.value };
+    }
+  } catch (error) {
+    console.error("Drawboard: Failed to derive replay value from snapshot", error);
+  }
+  return {};
+}
+
+async function replaySequenceStep(step: EventSequenceStep) {
+  if (!step.selector) {
+    return;
+  }
+
+  const target = document.querySelector(step.selector);
+  if (!(target instanceof Element)) {
+    return;
+  }
+
+  if (step.eventType === "click") {
+    target.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
+  } else if (step.eventType === "submit") {
+    const form = target instanceof HTMLFormElement ? target : target.closest("form");
+    if (form instanceof HTMLFormElement) {
+      form.requestSubmit();
+    } else {
+      target.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    }
+  } else if (step.eventType === "keydown") {
+    const key = step.keyFilter || "Enter";
+    if (target instanceof HTMLElement) {
+      target.focus();
+    }
+    target.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+  } else if (step.eventType === "input" || step.eventType === "change") {
+    const { value, checked } = getReplayValueFromSnapshot(step);
+    if (target instanceof HTMLInputElement) {
+      if (typeof checked === "boolean") {
+        target.checked = checked;
+      }
+      if (typeof value === "string") {
+        target.value = value;
+      }
+    } else if (target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) {
+      if (typeof value === "string") {
+        target.value = value;
+      }
+    }
+    target.dispatchEvent(new Event(step.eventType, { bubbles: true, cancelable: true }));
+  }
+
+  await waitForPaintAfterCss();
+}
+
+async function replaySequenceIfNeeded() {
+  const signature = replaySequence.map((step) => step.id).join("|");
+  if (!interactive || recordingSequence || replayInFlight || !signature || replayAppliedSignature === signature) {
+    return;
+  }
+
+  replayInFlight = true;
+  try {
+    for (const step of replaySequence) {
+      await replaySequenceStep(step);
+    }
+    acceptedVisualState = await buildVisualState();
+    replayAppliedSignature = signature;
+  } catch (error) {
+    console.error("Drawboard: replay sequence failed", error);
+  } finally {
+    replayInFlight = false;
   }
 }
 
@@ -442,9 +542,6 @@ async function verifyTriggeredInteraction(candidate: TriggerCandidate) {
     if (!mutated) {
       return;
     }
-    if (recordingSequence) {
-      return;
-    }
     pixelHash = await captureCurrentPixelSignature();
     if (pixelHash && pixelHash !== baseline.pixelHash) {
       verificationSource = "pixel";
@@ -543,7 +640,7 @@ function scheduleInteractionVerification(candidate: TriggerCandidate) {
 }
 
 function handleTriggeredEvent(event: Event) {
-  if ((!interactive && !recordingSequence) || errorOverlay) {
+  if ((!interactive && !recordingSequence) || errorOverlay || replayInFlight) {
     return;
   }
 
@@ -621,6 +718,7 @@ function scheduleRenderReady() {
           snapshotHash: hashDrawboardSnapshot(snapshot.css, snapshot.snapshotHtml),
           pixelHash: await captureCurrentPixelSignature(),
         };
+        await replaySequenceIfNeeded();
         window.parent.postMessage(
           { ...snapshot, message: "render-ready", name: urlName, scenarioId },
           "*",
@@ -647,6 +745,7 @@ function scheduleRenderReady() {
                 snapshotHash: hashDrawboardSnapshot(followSnapshot.css, followSnapshot.snapshotHtml),
                 pixelHash: await captureCurrentPixelSignature(),
               };
+              await replaySequenceIfNeeded();
               window.parent.postMessage(
                 { ...followSnapshot, message: "render-ready", name: urlName, scenarioId },
                 "*",
@@ -717,6 +816,9 @@ function resetState() {
   interactive = false;
   triggers = [];
   recordingSequence = false;
+  replaySequence = [];
+  replayInFlight = false;
+  replayAppliedSignature = "";
   dataReceived = false;
   pendingCandidate = null;
   acceptedVisualState = null;
@@ -758,6 +860,8 @@ window.addEventListener("message", (event: MessageEvent<DrawboardPayload>) => {
     interactive = Boolean(event.data.interactive);
     recordingSequence = Boolean(event.data.recordingSequence);
     triggers = normalizeInteractionTriggers(event.data?.events);
+    replaySequence = normalizeReplaySequence(event.data?.replaySequence);
+    replayAppliedSignature = "";
     updateInteractiveFlag();
     syncEventListeners();
     if (stylesCorrect && jsCorrect && !errorOverlay) {
@@ -784,6 +888,8 @@ window.addEventListener("message", (event: MessageEvent<DrawboardPayload>) => {
   interactive = Boolean(event.data?.interactive);
   recordingSequence = Boolean(event.data?.recordingSequence);
   triggers = normalizeInteractionTriggers(event.data?.events);
+  replaySequence = normalizeReplaySequence(event.data?.replaySequence);
+  replayAppliedSignature = "";
   updateInteractiveFlag();
 
   applyHtml(nextHtml);

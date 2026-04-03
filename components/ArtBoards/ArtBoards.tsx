@@ -8,7 +8,7 @@ import ScenarioRemover from "./ScenarioRemover";
 import SidebySideArt from "./SidebySideArt";
 import { ScenarioDrawing } from "./Drawboard/ScenarioDrawing";
 import { ScenarioModel } from "./ModelBoard/ScenarioModel";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
 import {
   Select,
@@ -20,9 +20,25 @@ import {
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, ImageIcon, MousePointer } from "lucide-react";
 import { scenario } from "@/types";
-import { toggleImageInteractivity } from "@/store/slices/levels.slice";
+import {
+  toggleImageInteractivity,
+  updateEventSequenceStep,
+} from "@/store/slices/levels.slice";
 import { useLevelMetaSync } from "@/lib/collaboration/hooks/useLevelMetaSync";
 import PoppingTitle from "@/components/General/PoppingTitle";
+import {
+  EMPTY_SEQUENCE_RUNTIME_STATE,
+  INITIAL_EVENT_SEQUENCE_STEP_ID,
+  getEventSequenceScenarioUiKey,
+  getEventSequenceRuntimeKey,
+  getSequenceRuntimeState,
+  setCreatorPreviewInteractiveForScenario,
+  setSelectedEventSequenceStepId,
+  setSelectedScenarioIdForLevel,
+  subscribeSequenceRuntime,
+  useEventSequenceUiState,
+} from "@/lib/drawboard/eventSequenceState";
+import { EventSequencePanel } from "./Drawboard/EventSequencePanel";
 
 const EMPTY_SCENARIOS: scenario[] = [];
 
@@ -32,12 +48,10 @@ export const ArtBoards = (): React.ReactNode => {
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const level = useAppSelector((state) => state.levels[currentLevel - 1]);
   const drawingUrls = useAppSelector((state) => state.drawingUrls as Record<string, string | undefined>);
-  const isCreator = useAppSelector((state) => state.options.creator);
   const isCreatorRoute = pathname?.startsWith("/creator/") ?? false;
-  const isCreatorContext = isCreator || isCreatorRoute;
+  const isCreatorContext = isCreatorRoute;
   const { syncLevelFields } = useLevelMetaSync();
   const [selectedScenarioId, setSelectedScenarioId] = useState<string | null>(null);
-  const [creatorPreviewByScenarioId, setCreatorPreviewByScenarioId] = useState<Record<string, boolean | undefined>>({});
   const showHotkeys = level?.showHotkeys ?? false;
   const scenarios = level?.scenarios ?? EMPTY_SCENARIOS;
 
@@ -55,9 +69,32 @@ export const ArtBoards = (): React.ReactNode => {
     : -1;
 
   const selectedScenarioDrawingUrl = selectedScenario ? drawingUrls[selectedScenario.scenarioId] : undefined;
-  const selectedScenarioPreviewChoice = selectedScenario
-    ? creatorPreviewByScenarioId[selectedScenario.scenarioId]
-    : undefined;
+  const selectedScenarioPreviewChoice = useEventSequenceUiState(
+    useCallback((state) => {
+      if (!selectedScenario) {
+        return undefined;
+      }
+      return state.creatorPreviewInteractiveByScenario[
+        getEventSequenceScenarioUiKey(currentLevel, selectedScenario.scenarioId)
+      ];
+    }, [currentLevel, selectedScenario]),
+  );
+  const isSequencePanelOpen = useEventSequenceUiState(
+    useCallback((state) => {
+      if (!selectedScenario) {
+        return false;
+      }
+      return state.panelOpenByScenario[getEventSequenceScenarioUiKey(currentLevel, selectedScenario.scenarioId)] ?? false;
+    }, [currentLevel, selectedScenario]),
+  );
+  const selectedSequenceStepId = useEventSequenceUiState(
+    useCallback((state) => {
+      if (!selectedScenario) {
+        return null;
+      }
+      return state.selectedStepIdByScenario[getEventSequenceScenarioUiKey(currentLevel, selectedScenario.scenarioId)] ?? null;
+    }, [currentLevel, selectedScenario]),
+  );
   const creatorPreviewInteractive = selectedScenario
     ? (selectedScenarioPreviewChoice ?? !selectedScenarioDrawingUrl)
     : false;
@@ -74,10 +111,7 @@ export const ArtBoards = (): React.ReactNode => {
   const handleSwitchInteractiveStatic = () => {
     if (isCreatorContext) {
       if (!selectedScenario) return;
-      setCreatorPreviewByScenarioId((currentValue) => ({
-        ...currentValue,
-        [selectedScenario.scenarioId]: !creatorPreviewInteractive,
-      }));
+      setCreatorPreviewInteractiveForScenario(currentLevel, selectedScenario.scenarioId, !creatorPreviewInteractive);
       return;
     }
 
@@ -88,6 +122,41 @@ export const ArtBoards = (): React.ReactNode => {
   const interactive = level?.interactive ?? false;
   const showSwitch = Boolean(selectedScenario);
   const switchIsInteractive = isCreatorContext ? creatorPreviewInteractive : interactive;
+  const selectedRuntimeKey = selectedScenario
+    ? getEventSequenceRuntimeKey(currentLevel, selectedScenario.scenarioId, isCreatorContext)
+    : null;
+  const sequenceRuntime = useSyncExternalStore(
+    useCallback(
+      (listener) => (selectedRuntimeKey ? subscribeSequenceRuntime(selectedRuntimeKey, listener) : () => {}),
+      [selectedRuntimeKey],
+    ),
+    useCallback(
+      () => (selectedRuntimeKey ? getSequenceRuntimeState(selectedRuntimeKey) : EMPTY_SEQUENCE_RUNTIME_STATE),
+      [selectedRuntimeKey],
+    ),
+    useCallback(
+      () => (selectedRuntimeKey ? getSequenceRuntimeState(selectedRuntimeKey) : EMPTY_SEQUENCE_RUNTIME_STATE),
+      [selectedRuntimeKey],
+    ),
+  );
+  const selectedScenarioSequence = selectedScenario
+    ? level?.eventSequence?.byScenarioId?.[selectedScenario.scenarioId] ?? []
+    : [];
+  const normalizedActiveStepIndex = sequenceRuntime.activeIndex >= selectedScenarioSequence.length ? 0 : sequenceRuntime.activeIndex;
+  const effectiveSelectedSequenceStepId = isCreatorContext && isSequencePanelOpen
+    ? (selectedSequenceStepId ?? INITIAL_EVENT_SEQUENCE_STEP_ID)
+    : selectedSequenceStepId;
+
+  useEffect(() => {
+    setSelectedScenarioIdForLevel(currentLevel, selectedScenario?.scenarioId ?? null);
+  }, [currentLevel, selectedScenario?.scenarioId]);
+
+  useEffect(() => {
+    if (!selectedScenario || !isCreatorContext) {
+      return;
+    }
+    setCreatorPreviewInteractiveForScenario(currentLevel, selectedScenario.scenarioId, creatorPreviewInteractive);
+  }, [creatorPreviewInteractive, currentLevel, isCreatorContext, selectedScenario]);
 
   // Early return if level doesn't exist - parent handles loading state
   if (!level) {
@@ -141,8 +210,36 @@ export const ArtBoards = (): React.ReactNode => {
       ) : null}
 
       <div className="flex min-h-0 flex-1 w-full flex-col">
+        {selectedScenario && (isSequencePanelOpen || sequenceRuntime.recordingMode !== "idle" || selectedScenarioSequence.length > 0) ? (
+          <div className="flex flex-none justify-center px-3">
+            <EventSequencePanel
+              creatorMode={isCreatorContext}
+              interactivePreview={creatorPreviewInteractive}
+              recordingMode={sequenceRuntime.recordingMode}
+              steps={selectedScenarioSequence}
+              activeStepIndex={normalizedActiveStepIndex}
+              stepAccuracies={sequenceRuntime.stepAccuracies}
+              onUpdateStep={(stepId, field, value) => {
+                dispatch(updateEventSequenceStep({
+                  levelId: currentLevel,
+                  scenarioId: selectedScenario.scenarioId,
+                  stepId,
+                  changes: { [field]: value },
+                }));
+                syncLevelFields(currentLevel - 1, ["eventSequence"]);
+              }}
+              selectedStepId={effectiveSelectedSequenceStepId}
+              onSelectStep={(stepId) => setSelectedEventSequenceStepId(currentLevel, selectedScenario.scenarioId, stepId)}
+            />
+          </div>
+        ) : null}
         {selectedScenario ? (
-          <section className="flex min-h-0 flex-1 w-full items-center justify-center">
+          <section className="relative flex min-h-0 flex-1 w-full items-center justify-center">
+            {sequenceRuntime.recordingMode !== "idle" ? (
+              <div className="pointer-events-none absolute left-1/2 top-3 z-[90] -translate-x-1/2 rounded-full bg-red-500/95 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white shadow-sm">
+                Recording
+              </div>
+            ) : null}
             <SidebySideArt
               key={selectedScenario.scenarioId}
               contents={[
@@ -151,6 +248,7 @@ export const ArtBoards = (): React.ReactNode => {
                   scenario={selectedScenario}
                   creatorMode={isCreatorContext}
                   creatorPreviewInteractive={creatorPreviewInteractive}
+                  selectedEventSequenceStepId={effectiveSelectedSequenceStepId}
                   registerForNavbarCapture
                 />,
                 <ScenarioDrawing
@@ -158,6 +256,7 @@ export const ArtBoards = (): React.ReactNode => {
                   scenario={selectedScenario}
                   creatorMode={isCreatorContext}
                   creatorPreviewInteractive={creatorPreviewInteractive}
+                  selectedEventSequenceStepId={effectiveSelectedSequenceStepId}
                   registerForNavbarCapture
                 />,
               ]}

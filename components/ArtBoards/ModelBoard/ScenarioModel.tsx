@@ -6,14 +6,14 @@ import { BoardContainer } from "../BoardContainer";
 import { Board } from "../Board";
 import { ModelArtContainer } from "./ModelArtContainer";
 import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
-import { scenario } from "@/types";
+import { EventSequenceStep, scenario } from "@/types";
 import { Image } from "@/components/General/Image/Image";
 import {
   DiffModelToggleContent,
   FloatingActionButton,
 } from "@/components/General/FloatingActionButton";
 import { DraggableFloatingPanel } from "@/components/General/DraggableFloatingPanel";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useOptionalDrawboardNavbarCapture } from "@/components/ArtBoards/DrawboardNavbarCaptureContext";
 import { toggleShowModelSolution } from "@/store/slices/levels.slice";
 import { useLevelMetaSync } from "@/lib/collaboration/hooks/useLevelMetaSync";
@@ -22,6 +22,13 @@ import PoppingTitle from "@/components/General/PoppingTitle";
 import { Camera } from "lucide-react";
 import type { FrameHandle } from "@/components/ArtBoards/Frame";
 import { useGameRuntimeConfig } from "@/hooks/useGameRuntimeConfig";
+import { apiUrl } from "@/lib/apiUrl";
+import {
+  INITIAL_EVENT_SEQUENCE_STEP_ID,
+  getEventSequenceRuntimeKey,
+  getSequenceRuntimeState,
+  subscribeSequenceRuntime,
+} from "@/lib/drawboard/eventSequenceState";
 
 type ScenarioModelProps = {
   scenario: scenario;
@@ -30,7 +37,10 @@ type ScenarioModelProps = {
   registerForNavbarCapture?: boolean;
   creatorPreviewInteractive?: boolean;
   creatorMode?: boolean;
+  selectedEventSequenceStepId?: string | null;
 };
+
+const EMPTY_EVENT_SEQUENCE: EventSequenceStep[] = [];
 
 export const ScenarioModel = ({
   scenario,
@@ -38,6 +48,7 @@ export const ScenarioModel = ({
   registerForNavbarCapture = false,
   creatorPreviewInteractive,
   creatorMode,
+  selectedEventSequenceStepId,
 }: ScenarioModelProps): React.ReactNode => {
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const level = useAppSelector((state) => state.levels[currentLevel - 1]);
@@ -46,13 +57,83 @@ export const ScenarioModel = ({
   const { syncLevelFields } = useLevelMetaSync();
   const solutionUrls = useAppSelector((state) => state.solutionUrls as Record<string, string>);
   const solutionUrl = solutionUrls[scenario.scenarioId];
+  const scenarioSequence = level?.eventSequence?.byScenarioId?.[scenario.scenarioId] ?? EMPTY_EVENT_SEQUENCE;
+  const selectedSequenceIndex = selectedEventSequenceStepId && selectedEventSequenceStepId !== INITIAL_EVENT_SEQUENCE_STEP_ID
+    ? scenarioSequence.findIndex((step) => step.id === selectedEventSequenceStepId)
+    : -1;
+  const selectedEventSequenceStep = selectedSequenceIndex >= 0 ? scenarioSequence[selectedSequenceIndex] : null;
   const options = useAppSelector((state) => state.options);
   const isCreator = creatorMode ?? options.creator;
+  const shouldShowInteractivePreview = isCreator && (creatorPreviewInteractive ?? !solutionUrl);
   const [modelToolbarDragStarted, setModelToolbarDragStarted] = useState(false);
   const [solutionCaptureBusy, setSolutionCaptureBusy] = useState(false);
   const solutionFrameRef = useRef<FrameHandle | null>(null);
   const captureNav = useOptionalDrawboardNavbarCapture();
   const { manualDrawboardCapture } = useGameRuntimeConfig();
+  const runtimeKey = useMemo(
+    () => getEventSequenceRuntimeKey(currentLevel, scenario.scenarioId, isCreator),
+    [currentLevel, isCreator, scenario.scenarioId],
+  );
+  const sequenceRuntime = useSyncExternalStore(
+    useCallback((listener) => subscribeSequenceRuntime(runtimeKey, listener), [runtimeKey]),
+    useCallback(() => getSequenceRuntimeState(runtimeKey), [runtimeKey]),
+    useCallback(() => getSequenceRuntimeState(runtimeKey), [runtimeKey]),
+  );
+  const isSequenceRecording = isCreator && shouldShowInteractivePreview && sequenceRuntime.recordingMode !== "idle";
+  const effectiveShowInteractivePreview = shouldShowInteractivePreview;
+  const interactiveSnapshotOverride = useMemo(
+    () => (
+      isCreator
+      && shouldShowInteractivePreview
+      && selectedEventSequenceStep
+        ? selectedEventSequenceStep.snapshot
+        : null
+    ),
+    [isCreator, selectedEventSequenceStep, shouldShowInteractivePreview],
+  );
+  const [selectedStepPreviewUrl, setSelectedStepPreviewUrl] = useState<string>("");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadSelectedPreview = async () => {
+      if (!selectedEventSequenceStep || effectiveShowInteractivePreview) {
+        setSelectedStepPreviewUrl("");
+        return;
+      }
+
+      const response = await fetch(apiUrl("/api/drawboard/render"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          css: selectedEventSequenceStep.snapshot.css,
+          snapshotHtml: selectedEventSequenceStep.snapshot.snapshotHtml,
+          width: selectedEventSequenceStep.snapshot.width,
+          height: selectedEventSequenceStep.snapshot.height,
+          scenarioId: selectedEventSequenceStep.scenarioId,
+          urlName: "solutionUrl",
+          includeDataUrl: true,
+        }),
+      });
+
+      if (!response.ok) {
+        if (!cancelled) {
+          setSelectedStepPreviewUrl("");
+        }
+        return;
+      }
+
+      const payload = await response.json() as { dataUrl?: string };
+      if (!cancelled) {
+        setSelectedStepPreviewUrl(payload.dataUrl || "");
+      }
+    };
+
+    void loadSelectedPreview();
+    return () => {
+      cancelled = true;
+    };
+  }, [effectiveShowInteractivePreview, selectedEventSequenceStep]);
 
   const bindSolutionFrame = useCallback(
     (instance: FrameHandle | null) => {
@@ -81,8 +162,6 @@ export const ScenarioModel = ({
     },
     [captureNav, registerForNavbarCapture],
   );
-  const shouldShowInteractivePreview = isCreator && (creatorPreviewInteractive ?? !solutionUrl);
-
   const handleSwitchModel = useCallback(() => {
     dispatch(toggleShowModelSolution(currentLevel));
     syncLevelFields(currentLevel - 1, ["showModelPicture"]);
@@ -98,21 +177,25 @@ export const ScenarioModel = ({
         <Board>
           <ModelArtContainer
             scenario={scenario}
-            showInteractivePreview={shouldShowInteractivePreview}
-            frameRef={bindSolutionFrame}
-            onCaptureBusyChange={handleSolutionCaptureBusy}
-            isCreator={isCreator}
-            solutionUrl={solutionUrl}
-          >
+            showInteractivePreview={effectiveShowInteractivePreview}
+          frameRef={bindSolutionFrame}
+          onCaptureBusyChange={handleSolutionCaptureBusy}
+          isCreator={isCreator}
+          solutionUrl={solutionUrl}
+          interactiveOverride={effectiveShowInteractivePreview}
+          recordingSequence={isSequenceRecording}
+          replaySequence={[]}
+          snapshotOverride={interactiveSnapshotOverride}
+        >
             <div
               className="relative"
               style={{
                 width: scenario.dimensions.width,
                 height: scenario.dimensions.height,
-                pointerEvents: shouldShowInteractivePreview ? "none" : "auto",
+                pointerEvents: effectiveShowInteractivePreview ? "none" : "auto",
               }}
             >
-              {isCreator && !shouldShowInteractivePreview && (
+              {isCreator && !effectiveShowInteractivePreview && (
                 <DraggableFloatingPanel
                   showOnHover
                   storageKey={`floating-button-model-${scenario.scenarioId}`}
@@ -153,7 +236,7 @@ export const ScenarioModel = ({
                   </div>
                 </DraggableFloatingPanel>
               )}
-              {!isCreator && !shouldShowInteractivePreview && (
+              {!isCreator && !effectiveShowInteractivePreview && (
                 <FloatingActionButton
                   showOnHover
                   storageKey={`floating-diff-model-game-${scenario.scenarioId}`}
@@ -163,12 +246,13 @@ export const ScenarioModel = ({
                   onCheckedChange={handleSwitchModel}
                 />
               )}
-              {!shouldShowInteractivePreview && (
+              {!effectiveShowInteractivePreview && (
                 <div className="relative z-[1]">
-                  {showModel && solutionUrl ? (
+                  {showModel && (selectedStepPreviewUrl || solutionUrl) ? (
                     <Image
                       name="solution"
-                      imageUrl={solutionUrl}
+                      imageUrl={selectedStepPreviewUrl || solutionUrl}
+                      alt="Reference solution"
                       height={scenario.dimensions.height}
                       width={scenario.dimensions.width}
                       loadingMessage="Loading reference image…"

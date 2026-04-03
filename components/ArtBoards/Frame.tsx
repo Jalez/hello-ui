@@ -60,8 +60,11 @@ interface FrameProps {
   scenario: scenario;
   hiddenFromView?: boolean;
   onCaptureBusyChange?: (busy: boolean) => void;
+  interactiveOverride?: boolean;
   recordingSequence?: boolean;
   onVerifiedInteraction?: (interaction: VerifiedInteraction) => void;
+  persistRecordedSequenceStep?: boolean;
+  replaySequence?: EventSequenceStep[];
 }
 
 export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
@@ -76,8 +79,11 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
     frameUrl = process.env.NEXT_PUBLIC_DRAWBOARD_URL || "http://localhost:3500",
     hiddenFromView = false,
     onCaptureBusyChange,
+    interactiveOverride,
     recordingSequence = false,
     onVerifiedInteraction,
+    persistRecordedSequenceStep = false,
+    replaySequence = [],
   },
   ref,
 ) {
@@ -99,7 +105,7 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
     }
     return undefined;
   });
-  const interactive = level.interactive;
+  const interactive = interactiveOverride ?? level.interactive;
 
   const notifyCaptureBusy = useCallback(
     (busy: boolean) => {
@@ -253,6 +259,7 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
             interactive,
             isCreator,
             recordingSequence,
+            replaySequence,
           },
           "*",
         );
@@ -316,6 +323,7 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
     newHtml,
     newJs,
     recordingSequence,
+    replaySequence,
     remoteSyncDebounceMs,
     scenario.scenarioId,
   ]);
@@ -374,7 +382,7 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
       if (event.data?.urlName !== name || event.data?.scenarioId !== scenario.scenarioId) {
         return;
       }
-      if (!isCreator || name !== "drawingUrl") {
+      if (!isCreator || !persistRecordedSequenceStep) {
         return;
       }
 
@@ -397,7 +405,7 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
     return () => {
       window.removeEventListener("message", handleRecordedSequenceStep);
     };
-  }, [currentLevel, dispatch, isCreator, name, scenario.scenarioId, syncLevelFields]);
+  }, [currentLevel, dispatch, isCreator, name, persistRecordedSequenceStep, scenario.scenarioId, syncLevelFields]);
 
   useEffect(() => {
     const handleDisplayUrlFromIframe = (event: MessageEvent) => {
@@ -472,7 +480,7 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
     if (!win) {
       return;
     }
-    const key = `${interactive}:${isCreator}:${recordingSequence}:${JSON.stringify(events)}`;
+    const key = `${interactive}:${isCreator}:${recordingSequence}:${JSON.stringify(events)}:${JSON.stringify(replaySequence.map((step) => step.id))}`;
     if (optionsPatchKeyRef.current === null) {
       optionsPatchKeyRef.current = key;
       return;
@@ -490,10 +498,11 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
         isCreator,
         recordingSequence,
         events: JSON.stringify(events),
+        replaySequence,
       },
       "*",
     );
-  }, [scenario, scenario.scenarioId, interactive, isCreator, name, recordingSequence, events]);
+  }, [scenario, scenario.scenarioId, interactive, isCreator, name, recordingSequence, events, replaySequence]);
 
   useEffect(() => {
     if (iframeReloadDebounceRef.current) {
@@ -520,7 +529,7 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
         iframeReloadDebounceRef.current = null;
       }
     };
-  }, [clearPendingRenderReadyCapture, drawboardReloadDebounceMs, newHtml, newCss, iframeRef, newJs, name]);
+  }, [clearPendingRenderReadyCapture, drawboardReloadDebounceMs, newHtml, newCss, iframeRef, newJs, name, replaySequence]);
 
   if (!scenario) {
     return <div>Scenario not found</div>;

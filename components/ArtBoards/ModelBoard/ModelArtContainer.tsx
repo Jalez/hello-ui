@@ -6,7 +6,7 @@ import type { Ref } from "react";
 import { Frame, type FrameHandle } from "../Frame";
 import { ArtContainer } from "../ArtContainer";
 import { useAppSelector } from "@/store/hooks/hooks";
-import { scenario } from "@/types";
+import { DrawboardSnapshotPayload, EventSequenceStep, scenario } from "@/types";
 import { Spinner } from "@/components/General/Spinner/Spinner";
 
 type LegacySolution = {
@@ -25,6 +25,10 @@ type ModelArtContainerProps = {
   /** When false (game), the solution iframe is removed after the first capture so the live solution is never visible. */
   isCreator?: boolean;
   solutionUrl?: string;
+  recordingSequence?: boolean;
+  replaySequence?: EventSequenceStep[];
+  interactiveOverride?: boolean;
+  snapshotOverride?: DrawboardSnapshotPayload | null;
 };
 
 export const ModelArtContainer = ({
@@ -35,6 +39,10 @@ export const ModelArtContainer = ({
   onCaptureBusyChange,
   isCreator = true,
   solutionUrl = "",
+  recordingSequence = false,
+  replaySequence = [],
+  interactiveOverride,
+  snapshotOverride = null,
 }: ModelArtContainerProps): React.ReactNode => {
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const level = useAppSelector((state) => state.levels[currentLevel - 1]);
@@ -52,6 +60,8 @@ export const ModelArtContainer = ({
   const solutionCSS = levelSolution.css || defaultLevelSolutions?.css || "";
   const solutionHTML = levelSolution.html || defaultLevelSolutions?.html || "";
   const solutionJS = levelSolution.js || defaultLevelSolutions?.js || "";
+  const frameCss = snapshotOverride?.css ?? solutionCSS;
+  const frameHtml = snapshotOverride?.snapshotHtml ?? solutionHTML;
 
   const hasSolutionCapture = Boolean(solutionUrl?.trim());
   const mountSolutionFrame = isCreator || !hasSolutionCapture;
@@ -65,14 +75,18 @@ export const ModelArtContainer = ({
         <Frame
           ref={frameRef}
           id="DrawBoard"
-          newCss={solutionCSS}
-          newHtml={solutionHTML}
+          newCss={frameCss}
+          newHtml={frameHtml}
           newJs={solutionJS + "\n" + scenario.js}
           events={level.events || []}
           scenario={scenario}
           name="solutionUrl"
           hiddenFromView={!showInteractivePreview}
           onCaptureBusyChange={onCaptureBusyChange}
+          interactiveOverride={interactiveOverride}
+          recordingSequence={recordingSequence}
+          persistRecordedSequenceStep={recordingSequence}
+          replaySequence={replaySequence}
         />
       )}
       {children}
