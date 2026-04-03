@@ -47,6 +47,7 @@ export function SubNavbar({
                 variant={item.active ? "secondary" : (item.variant ?? "outline")}
                 disabled={item.disabled}
                 onClick={item.onClick}
+                aria-pressed={typeof item.active === "boolean" ? item.active : undefined}
                 className="h-7 gap-1 border-0 px-2 shadow-none"
               >
                 {Icon ? <Icon className="h-4 w-4" /> : null}
