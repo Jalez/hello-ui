@@ -2,11 +2,11 @@
 
 import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
 import { Button } from "@/components/ui/button";
-import { RotateCcw, PanelLeft, Map, Flag, Settings, Trash2, Loader2, Gamepad2, BarChart3, Users, ImageIcon } from "lucide-react";
+import { RotateCcw, PanelLeft, Map, Flag, Settings, Trash2, Loader2, Gamepad2, BarChart3, Users, MousePointer, CircleDot, Square } from "lucide-react";
 import { LevelSelect } from "@/components/General/LevelControls/LevelControls";
 import { setCurrentLevel } from "@/store/slices/currentLevel.slice";
-import { resetLevel } from "@/store/slices/levels.slice";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { clearEventSequenceForScenario, removeEventSequenceStep, resetLevel } from "@/store/slices/levels.slice";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import CreatorControls from "@/components/CreatorControls/CreatorControls";
 import MapEditor, { MapEditorRef } from "@/components/CreatorControls/MapEditor";
 import { useSidebarCollapse } from "@/components/default/sidebar/context/SidebarCollapseContext";
@@ -28,6 +28,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import InfoGamePoints from "../InfoBoard/InfoGamePoints";
 import { ModeToggleButton } from "./ModeToggleButton";
 import { AplusSubmitButton } from "./AplusSubmitButton";
@@ -42,8 +43,62 @@ import Shaker from "@/components/General/Shaker/Shaker";
 import { CompactMenuButton, compactMenuButtonClass, compactMenuLabelClass } from "@/components/General/CompactMenuButton";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils/cn";
-import { resolveManualDrawboardCapture } from "@/lib/gameRuntimeConfig";
-import { useOptionalDrawboardNavbarCapture } from "@/components/ArtBoards/DrawboardNavbarCaptureContext";
+import { useLevelMetaSync } from "@/lib/collaboration/hooks/useLevelMetaSync";
+import { SubNavbar, type SubNavbarItem } from "./SubNavbar";
+import {
+  EMPTY_SEQUENCE_RUNTIME_STATE,
+  INITIAL_EVENT_SEQUENCE_STEP_ID,
+  getEventSequenceRuntimeKey,
+  getEventSequenceScenarioUiKey,
+  getSequenceRuntimeState,
+  resetSequenceRuntimeState,
+  setCreatorPreviewInteractiveForScenario,
+  setEventSequencePanelOpen,
+  setSelectedScenarioIdForLevel,
+  setSelectedEventSequenceStepId,
+  subscribeSequenceRuntime,
+  updateSequenceRuntimeState,
+  useEventSequenceUiState,
+} from "@/lib/drawboard/eventSequenceState";
+
+type CreatorWorkbenchSubnavTabId = "creator" | "interactions" | "game";
+
+const CREATOR_WORKBENCH_SUBNAV_TODOS: Record<Exclude<CreatorWorkbenchSubnavTabId, "interactions">, string[]> = {
+  creator: [
+    "Move creator controls into inline subnavbar actions.",
+    "Replace legacy creator dropdown with direct action buttons.",
+  ],
+  game: [
+    "Move game reset and settings actions into inline subnavbar actions.",
+    "Replace legacy game dropdown with direct action buttons.",
+  ],
+};
+
+const CREATOR_WORKBENCH_SUBNAV_TABS: Array<{
+  id: CreatorWorkbenchSubnavTabId;
+  label: string;
+  tooltip: string;
+  icon: typeof Settings;
+}> = [
+  {
+    id: "creator",
+    label: "Creator",
+    tooltip: "Creator tools are still being moved into this inline subnavbar.",
+    icon: Settings,
+  },
+  {
+    id: "interactions",
+    label: "Interactions",
+    tooltip: "Record an event sequence for the selected scenario.",
+    icon: MousePointer,
+  },
+  {
+    id: "game",
+    label: "Game",
+    tooltip: "Game actions are still being moved into this inline subnavbar.",
+    icon: Gamepad2,
+  },
+];
 
 export const Navbar = () => {
   const dispatch = useAppDispatch();
@@ -90,15 +145,69 @@ export const Navbar = () => {
 
   const level = levels[currentLevel - 1];
   const points = useAppSelector((state) => state.points);
-  const drawboardNavbarCapture = useOptionalDrawboardNavbarCapture();
-  const showBoardPicturesNavButton =
-    resolveManualDrawboardCapture(currentGame) && Boolean(drawboardNavbarCapture);
+  const { syncLevelFields } = useLevelMetaSync();
   const shouldEmphasizeFinishGame = points.allMaxPoints > 0 && points.allPoints >= points.allMaxPoints;
   const mapEditorRef = useRef<MapEditorRef>(null);
   const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
   const [resetScope, setResetScope] = useState<"level" | "game">("level");
   const [isResettingInstances, setIsResettingInstances] = useState(false);
   const [hasDismissedCompactGameShake, setHasDismissedCompactGameShake] = useState(false);
+  const [creatorWorkbenchTab, setCreatorWorkbenchTab] = useState<CreatorWorkbenchSubnavTabId>("interactions");
+  const storedSelectedSequenceScenarioId = useEventSequenceUiState(
+    useCallback((state) => state.selectedScenarioIdsByLevel[currentLevel] ?? null, [currentLevel]),
+  );
+  const selectedSequenceScenarioId = storedSelectedSequenceScenarioId ?? level?.scenarios?.[0]?.scenarioId ?? null;
+  const selectedSequenceScenarioInteractive = useEventSequenceUiState(
+    useCallback((state) => {
+      if (!selectedSequenceScenarioId) {
+        return false;
+      }
+      return state.creatorPreviewInteractiveByScenario[
+        getEventSequenceScenarioUiKey(currentLevel, selectedSequenceScenarioId)
+      ] ?? false;
+    }, [currentLevel, selectedSequenceScenarioId]),
+  );
+  const selectedSequenceRuntimeKey = useMemo(
+    () => (
+      selectedSequenceScenarioId
+        ? getEventSequenceRuntimeKey(currentLevel, selectedSequenceScenarioId, true)
+        : null
+    ),
+    [currentLevel, selectedSequenceScenarioId],
+  );
+  const selectedSequenceRuntime = useSyncExternalStore(
+    useCallback(
+      (listener) => (selectedSequenceRuntimeKey ? subscribeSequenceRuntime(selectedSequenceRuntimeKey, listener) : () => {}),
+      [selectedSequenceRuntimeKey],
+    ),
+    useCallback(
+      () => (selectedSequenceRuntimeKey ? getSequenceRuntimeState(selectedSequenceRuntimeKey) : EMPTY_SEQUENCE_RUNTIME_STATE),
+      [selectedSequenceRuntimeKey],
+    ),
+    useCallback(
+      () => (selectedSequenceRuntimeKey ? getSequenceRuntimeState(selectedSequenceRuntimeKey) : EMPTY_SEQUENCE_RUNTIME_STATE),
+      [selectedSequenceRuntimeKey],
+    ),
+  );
+  const selectedSequenceSteps = selectedSequenceScenarioId
+    ? level?.eventSequence?.byScenarioId?.[selectedSequenceScenarioId] ?? []
+    : [];
+  const selectedSequenceStepId = useEventSequenceUiState(
+    useCallback((state) => {
+      if (!selectedSequenceScenarioId) {
+        return null;
+      }
+      return state.selectedStepIdByScenario[getEventSequenceScenarioUiKey(currentLevel, selectedSequenceScenarioId)] ?? null;
+    }, [currentLevel, selectedSequenceScenarioId]),
+  );
+  const selectedSequenceStep = selectedSequenceStepId && selectedSequenceStepId !== INITIAL_EVENT_SEQUENCE_STEP_ID
+    ? selectedSequenceSteps.find((step) => step.id === selectedSequenceStepId) ?? null
+    : null;
+  const selectedSequenceStepIsLast = Boolean(
+    selectedSequenceStep
+    && selectedSequenceSteps.length > 0
+    && selectedSequenceSteps[selectedSequenceSteps.length - 1]?.id === selectedSequenceStep.id,
+  );
 
   useEffect(() => {
     if (!shouldEmphasizeFinishGame) {
@@ -253,6 +362,89 @@ export const Navbar = () => {
     setIsResetDialogOpen(false);
   }, []);
 
+  const handleStartSingleStepRecording = useCallback(() => {
+    if (!selectedSequenceRuntimeKey || !selectedSequenceScenarioId) {
+      return;
+    }
+    setSelectedScenarioIdForLevel(currentLevel, selectedSequenceScenarioId);
+    setEventSequencePanelOpen(currentLevel, selectedSequenceScenarioId, true);
+    updateSequenceRuntimeState(selectedSequenceRuntimeKey, (current) => ({
+      ...current,
+      recordingMode: "single",
+    }));
+  }, [currentLevel, selectedSequenceRuntimeKey, selectedSequenceScenarioId]);
+
+  const handleStartContinuousRecording = useCallback(() => {
+    if (!selectedSequenceRuntimeKey || !selectedSequenceScenarioId) {
+      return;
+    }
+    setSelectedScenarioIdForLevel(currentLevel, selectedSequenceScenarioId);
+    setEventSequencePanelOpen(currentLevel, selectedSequenceScenarioId, true);
+    updateSequenceRuntimeState(selectedSequenceRuntimeKey, (current) => ({
+      ...current,
+      recordingMode: "continuous",
+    }));
+  }, [currentLevel, selectedSequenceRuntimeKey, selectedSequenceScenarioId]);
+
+  const handleStopSequenceRecording = useCallback(() => {
+    if (!selectedSequenceRuntimeKey) {
+      return;
+    }
+    updateSequenceRuntimeState(selectedSequenceRuntimeKey, (current) => ({
+      ...current,
+      recordingMode: "idle",
+    }));
+  }, [selectedSequenceRuntimeKey]);
+
+  const handleClearSelectedSequence = useCallback(() => {
+    if (!selectedSequenceScenarioId) {
+      return;
+    }
+    dispatch(clearEventSequenceForScenario({ levelId: currentLevel, scenarioId: selectedSequenceScenarioId }));
+    syncLevelFields(currentLevel - 1, ["eventSequence"]);
+    if (selectedSequenceRuntimeKey) {
+      resetSequenceRuntimeState(selectedSequenceRuntimeKey);
+    }
+    setSelectedEventSequenceStepId(currentLevel, selectedSequenceScenarioId, INITIAL_EVENT_SEQUENCE_STEP_ID);
+  }, [currentLevel, dispatch, selectedSequenceRuntimeKey, selectedSequenceScenarioId, syncLevelFields]);
+
+  const handleOpenSequencePanel = useCallback(() => {
+    if (!selectedSequenceScenarioId) {
+      return;
+    }
+    setSelectedScenarioIdForLevel(currentLevel, selectedSequenceScenarioId);
+    setEventSequencePanelOpen(currentLevel, selectedSequenceScenarioId, true);
+  }, [currentLevel, selectedSequenceScenarioId]);
+
+  const handleRemoveSelectedStep = useCallback(() => {
+    if (!selectedSequenceScenarioId || !selectedSequenceStep || !selectedSequenceStepIsLast) {
+      return;
+    }
+    dispatch(removeEventSequenceStep({
+      levelId: currentLevel,
+      scenarioId: selectedSequenceScenarioId,
+      stepId: selectedSequenceStep.id,
+    }));
+    syncLevelFields(currentLevel - 1, ["eventSequence"]);
+    setSelectedEventSequenceStepId(currentLevel, selectedSequenceScenarioId, INITIAL_EVENT_SEQUENCE_STEP_ID);
+  }, [currentLevel, dispatch, selectedSequenceScenarioId, selectedSequenceStep, selectedSequenceStepIsLast, syncLevelFields]);
+
+  const handleSetSelectedScenarioInteractive = useCallback((checked: boolean) => {
+    if (!selectedSequenceScenarioId) {
+      return;
+    }
+    setSelectedScenarioIdForLevel(currentLevel, selectedSequenceScenarioId);
+    setCreatorPreviewInteractiveForScenario(currentLevel, selectedSequenceScenarioId, checked);
+    if (checked) {
+      setEventSequencePanelOpen(currentLevel, selectedSequenceScenarioId, true);
+    }
+    if (!checked && selectedSequenceRuntimeKey) {
+      updateSequenceRuntimeState(selectedSequenceRuntimeKey, (current) => ({
+        ...current,
+        recordingMode: "idle",
+      }));
+    }
+  }, [currentLevel, selectedSequenceRuntimeKey, selectedSequenceScenarioId]);
 
   const renderGameMenu = () => (
     <DropdownMenu>
@@ -526,11 +718,44 @@ export const Navbar = () => {
         </div>
       ) : null}
       <div className="flex flex-none">
-        <CreatorControls displayMode="menu" />
-      </div>
-      <div className="flex flex-none">
         <div className="rounded-md px-2 py-1.5">
-          {renderGameMenu()}
+          <TooltipProvider>
+            <div className="flex items-center gap-1 overflow-x-auto">
+              {CREATOR_WORKBENCH_SUBNAV_TABS.map((tab) => {
+                const Icon = tab.icon;
+                return (
+                  <Tooltip key={tab.id}>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className={cn(
+                          compactMenuButtonClass,
+                          "h-auto min-w-[72px] rounded-none border-b-2 border-transparent px-3",
+                          creatorWorkbenchTab === tab.id && "border-primary bg-muted/40 text-foreground",
+                        )}
+                        onClick={() => setCreatorWorkbenchTab(tab.id)}
+                      >
+                        <span className={cn(compactMenuLabelClass, "min-[520px]:hidden")}>
+                          {tab.label}
+                        </span>
+                        <Icon className="h-4 w-4" />
+                        <span className="hidden min-[520px]:inline text-xs font-medium">
+                          {tab.label}
+                        </span>
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">
+                      <div className="max-w-[240px] text-xs">
+                        {tab.tooltip}
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                );
+              })}
+            </div>
+          </TooltipProvider>
         </div>
       </div>
       <div className="flex flex-1 min-w-0">
@@ -543,79 +768,149 @@ export const Navbar = () => {
     </>
   );
 
+  const isSequenceRecording = selectedSequenceRuntime.recordingMode !== "idle";
+  const creatorWorkbenchSubnavItems: SubNavbarItem[] = creatorWorkbenchTab === "interactions"
+    ? [
+        ...(selectedSequenceScenarioId ? [{
+          id: "interaction-mode",
+          label: "Interaction mode",
+          icon: MousePointer,
+          onClick: () => handleSetSelectedScenarioInteractive(!selectedSequenceScenarioInteractive),
+          active: selectedSequenceScenarioInteractive,
+          variant: "secondary" as const,
+        }] : []),
+        ...(selectedSequenceScenarioInteractive && !isSequenceRecording ? [{
+          id: "next-step",
+          label: "Next step",
+          icon: CircleDot,
+          onClick: handleStartSingleStepRecording,
+        }, {
+          id: "start-sequence",
+          label: "Start sequence",
+          icon: CircleDot,
+          onClick: handleStartContinuousRecording,
+        }] : []),
+        ...(isSequenceRecording ? [{
+          id: "stop-recording",
+          label: "Stop & save",
+          icon: Square,
+          onClick: handleStopSequenceRecording,
+        }] : []),
+        ...(selectedSequenceScenarioInteractive ? [{
+          id: "open-sequence",
+          label: "Open sequence",
+          icon: MousePointer,
+          onClick: handleOpenSequencePanel,
+          variant: "outline" as const,
+        }] : []),
+        ...(selectedSequenceSteps.length > 0 ? [{
+          id: "clear-steps",
+          label: "Clear steps",
+          icon: Trash2,
+          onClick: handleClearSelectedSequence,
+          variant: "ghost" as const,
+        }] : []),
+        ...(selectedSequenceStep ? [{
+          id: "remove-step",
+          label: "Remove step",
+          icon: Trash2,
+          onClick: handleRemoveSelectedStep,
+          disabled: !selectedSequenceStepIsLast,
+          tooltip: selectedSequenceStepIsLast
+            ? undefined
+            : "Only the last recorded step can be removed.",
+          variant: "ghost" as const,
+        }] : []),
+      ]
+    : CREATOR_WORKBENCH_SUBNAV_TODOS[creatorWorkbenchTab as Exclude<CreatorWorkbenchSubnavTabId, "interactions">].map((label, index) => ({
+        id: `${creatorWorkbenchTab}-todo-${index}`,
+        label,
+        kind: "badge" as const,
+      }));
+
   if (!level) return null;
 
   return (
-    <div
-      className="flex w-full flex-wrap items-center justify-around gap-2 border-b bg-background/80 px-3 py-2 2xl:flex-nowrap 2xl:justify-between"
-    >
-      {(isGameRoute || isCreatorWorkbenchContext) && (
-        <div className={`${isMobile ? "flex" : "hidden"} w-full min-w-0 items-center gap-1`}>
-          {!showCreatorGameMenus && shouldShowMobileSidebarToggle && (
-            <div className="flex-none rounded-md px-2 py-1.5">
-                <CompactMenuButton
-                  icon={PanelLeft}
-                  label="Sidebar"
-                  text="Sidebar"
-                  onClick={openOverlay}
-                  title="Open sidebar"
-                />
+    <>
+      <div
+        className="flex w-full flex-wrap items-center justify-around gap-2 border-b bg-background/80 px-3 py-2 2xl:flex-nowrap 2xl:justify-between"
+      >
+        {(isGameRoute || isCreatorWorkbenchContext) && (
+          <div className={`${isMobile ? "flex" : "hidden"} w-full min-w-0 items-center gap-1`}>
+            {!showCreatorGameMenus && shouldShowMobileSidebarToggle && (
+              <div className="flex-none rounded-md px-2 py-1.5">
+                  <CompactMenuButton
+                    icon={PanelLeft}
+                    label="Sidebar"
+                    text="Sidebar"
+                    onClick={openOverlay}
+                    title="Open sidebar"
+                  />
+              </div>
+            )}
+            <div className="flex min-w-0 flex-1 items-center gap-1">
+              {showCreatorGameMenus
+                ? renderCompactCreatorMenus()
+                : isCreatorWorkbenchContext
+                  ? renderCompactCreatorWorkbenchMenus()
+                  : renderCompactPlayerMenus()}
             </div>
-          )}
-          <div className="flex min-w-0 flex-1 items-center gap-1">
-            {showCreatorGameMenus
-              ? renderCompactCreatorMenus()
-              : isCreatorWorkbenchContext
-                ? renderCompactCreatorWorkbenchMenus()
-                : renderCompactPlayerMenus()}
           </div>
+        )}
+
+        {/* Compact nav: text-first menus (no icon-only mode). Hide Game and Level menus on game route. */}
+        <div className={`${isMobile ? "hidden" : "flex"} flex-1 min-w-0 items-center gap-1`}>
+          {showCreatorGameMenus && currentGame?.id ? (
+            renderCompactCreatorMenus()
+          ) : isCreatorWorkbenchContext ? (
+            renderCompactCreatorWorkbenchMenus()
+          ) : !isCreatorRoute && !isGameRoute ? (
+            <ModeToggleButton displayMode="icon-label" />
+          ) : null}
+
+          {isGameRoute && !showCreatorGameMenus ? (
+            <>
+              <div className={`${isMobile ? "hidden" : "flex"} flex-1 min-w-0 items-center gap-2`}>
+                {renderInlinePlayerMenus()}
+              </div>
+              <div className={`${isMobile ? "flex" : "hidden"} flex-1 min-w-0 items-center gap-1`}>
+                {renderCompactPlayerMenus()}
+              </div>
+            </>
+          ) : !showCreatorGameMenus ? (
+            <>
+              <InfoGamePoints />
+              {!showCreatorGameMenus && <AplusSubmitButton displayMode="icon-label" />}
+            </>
+          ) : null}
         </div>
-      )}
 
-      {/* Compact nav: text-first menus (no icon-only mode). Hide Game and Level menus on game route. */}
-      <div className={`${isMobile ? "hidden" : "flex"} flex-1 min-w-0 items-center gap-1`}>
-        {showCreatorGameMenus && currentGame?.id ? (
-          renderCompactCreatorMenus()
-        ) : isCreatorWorkbenchContext ? (
-          renderCompactCreatorWorkbenchMenus()
-        ) : !isCreatorRoute && !isGameRoute ? (
-          <ModeToggleButton displayMode="icon-label" />
-        ) : null}
-
-        {isGameRoute && !showCreatorGameMenus ? (
-          <>
-            <div className={`${isMobile ? "hidden" : "flex"} flex-1 min-w-0 items-center gap-2`}>
-              {renderInlinePlayerMenus()}
-            </div>
-            <div className={`${isMobile ? "flex" : "hidden"} flex-1 min-w-0 items-center gap-1`}>
-              {renderCompactPlayerMenus()}
-            </div>
-          </>
-        ) : !showCreatorGameMenus ? (
-          <>
-            <InfoGamePoints />
-            {!showCreatorGameMenus && <AplusSubmitButton displayMode="icon-label" />}
-          </>
-        ) : null}
+        {/* Game Levels dialog controlled from navbar menu */}
+        <MapEditor ref={mapEditorRef} renderButton={false} />
+        {/* Dialog for reset confirmation */}
+        <NavPopper
+          open={isResetDialogOpen}
+          paragraph={
+            showCreatorGameMenus && resetScope === "game"
+              ? "This resets the shared game instance for the current room back to the original template code. All saved progress for that room will be lost."
+              : showCreatorGameMenus
+                ? "This resets only the current level in the shared game instance back to that level's original template code."
+              : "This is an irreversible action. All progress will be lost, but timer is not affected. Are you sure you want to reset the level?"
+          }
+          title={showCreatorGameMenus ? (resetScope === "game" ? "Reset Game" : "Reset Level") : "Reset Level"}
+          handleConfirmation={shouldUseSharedReset ? () => handleSharedReset(resetScope) : handleLevelReset}
+          resetAnchorEl={handleAnchorElReset}
+        />
       </div>
-
-      {/* Game Levels dialog controlled from navbar menu */}
-      <MapEditor ref={mapEditorRef} renderButton={false} />
-      {/* Dialog for reset confirmation */}
-      <NavPopper
-        open={isResetDialogOpen}
-        paragraph={
-          showCreatorGameMenus && resetScope === "game"
-            ? "This resets the shared game instance for the current room back to the original template code. All saved progress for that room will be lost."
-            : showCreatorGameMenus
-              ? "This resets only the current level in the shared game instance back to that level's original template code."
-            : "This is an irreversible action. All progress will be lost, but timer is not affected. Are you sure you want to reset the level?"
-        }
-        title={showCreatorGameMenus ? (resetScope === "game" ? "Reset Game" : "Reset Level") : "Reset Level"}
-        handleConfirmation={shouldUseSharedReset ? () => handleSharedReset(resetScope) : handleLevelReset}
-        resetAnchorEl={handleAnchorElReset}
-      />
-    </div>
+      {isCreatorWorkbenchContext ? (
+        <SubNavbar
+          items={creatorWorkbenchSubnavItems}
+        >
+          {creatorWorkbenchTab === "creator" ? <CreatorControls displayMode="menu" /> : null}
+          {creatorWorkbenchTab === "game" ? renderGameMenu() : null}
+        </SubNavbar>
+      ) : null}
+    </>
   );
 };
 

@@ -525,7 +525,22 @@ const levelsSlice = createSlice({
         level.eventSequence = { byScenarioId: {} };
       }
       const existing = level.eventSequence.byScenarioId[scenarioId] ?? [];
-      if (existing.some((entry) => entry.id === step.id)) {
+      if (
+        existing.some((entry) =>
+          entry.id === step.id
+          || (
+            entry.eventType === step.eventType
+            && entry.selector === step.selector
+            && entry.postHash === step.postHash
+            && entry.keyFilter === step.keyFilter
+          )
+          || (
+            entry.postHash === step.postHash
+            && entry.label === step.label
+            && entry.instruction === step.instruction
+          ),
+        )
+      ) {
         return;
       }
       const nextStep = {
