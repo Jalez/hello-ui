@@ -27,6 +27,7 @@ const Editors = (): React.ReactNode => {
   const yjsDocGeneration = collaboration?.yjsDocGeneration ?? 0;
   const remoteSyncTimeoutsRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const solutionPersistTimeoutsRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const templatePersistTimeoutsRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
 
   useEffect(() => {
     console.log("[collab-loop] Editors mounted");
@@ -58,6 +59,7 @@ const Editors = (): React.ReactNode => {
   );
 
   useEffect(() => {
+    // Single source for template → Redux: keeps artboards (level.code) in sync with Yjs.
     // Do NOT mirror Yjs -> Redux until the doc is fully synced.
     // During handshake/reconnect the local Y.Texts can be empty; syncing those to Redux
     // can cause creator autosave to persist empty templates (and break game resets).
@@ -142,7 +144,7 @@ const Editors = (): React.ReactNode => {
     };
   }, [dispatch, getYText, levels.length, remoteSyncDebounceMs, yjsDocGeneration, yjsReady]);
 
-  // Creator-only: keep solutions in sync via Yjs and persist them to DB.
+  // Creator-only: keep solutions in sync via Yjs, update Redux, and persist solution to DB.
   useEffect(() => {
     if (!isCreator || !getYSolutionText || levels.length === 0) {
       return;
@@ -239,6 +241,107 @@ const Editors = (): React.ReactNode => {
       unobserveCallbacks.forEach((unobserve) => unobserve());
     };
   }, [dispatch, getYSolutionText, isCreator, levels.length, yjsDocGeneration]);
+
+  /**
+   * Creator-only: persist template (level.code) from Yjs to the DB, matching the solution path above.
+   * Full-level autosave reads Redux, which can lag Yjs; direct PUT keeps the API aligned with the CRDT.
+   * Redux is still updated only by the Yjs→Redux effect above (no duplicate updateCode here).
+   */
+  useEffect(() => {
+    if (!isCreator || !getYText || !yjsReady || levels.length === 0) {
+      return;
+    }
+
+    const editorTypes: Array<"html" | "css" | "js"> = ["html", "css", "js"];
+    const unobserveCallbacks: Array<() => void> = [];
+    const lastNonEmptyTemplateByKey = new Map<string, { html: string; css: string; js: string }>();
+
+    const persistTemplateFromYjs = (levelIndex: number) => {
+      const yHtml = getYText("html", levelIndex);
+      const yCss = getYText("css", levelIndex);
+      const yJs = getYText("js", levelIndex);
+      if (!yHtml || !yCss || !yJs) {
+        return;
+      }
+
+      const nextCode = {
+        html: yHtml.toString(),
+        css: yCss.toString(),
+        js: yJs.toString(),
+      };
+
+      const stateLevels = store.getState().levels;
+      const targetLevel = stateLevels[levelIndex];
+      if (!targetLevel) {
+        return;
+      }
+
+      if (!targetLevel.identifier) {
+        return;
+      }
+
+      const currentCode = targetLevel.code || { html: "", css: "", js: "" };
+      const hasAnyContent =
+        nextCode.html.length > 0 || nextCode.css.length > 0 || nextCode.js.length > 0;
+      const hadAnyContent =
+        (currentCode.html?.length ?? 0) > 0 ||
+        (currentCode.css?.length ?? 0) > 0 ||
+        (currentCode.js?.length ?? 0) > 0;
+
+      // Never persist an all-empty template over a previously non-empty one (reconnect/handshake).
+      if (!hasAnyContent && hadAnyContent) {
+        return;
+      }
+
+      const persistKey = `${targetLevel.identifier}:${levelIndex}`;
+      if (hasAnyContent) {
+        lastNonEmptyTemplateByKey.set(persistKey, nextCode);
+      }
+      const existingTimeout = templatePersistTimeoutsRef.current.get(persistKey);
+      if (existingTimeout) {
+        clearTimeout(existingTimeout);
+      }
+      const timeout = setTimeout(() => {
+        templatePersistTimeoutsRef.current.delete(persistKey);
+        const payload = hasAnyContent ? nextCode : lastNonEmptyTemplateByKey.get(persistKey);
+        if (!payload) {
+          return;
+        }
+        const latestLevel = store.getState().levels[levelIndex];
+        const eventSequence = latestLevel?.eventSequence;
+        fetch(apiUrl(`/api/levels/${targetLevel.identifier}`), {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            code: payload,
+            ...(eventSequence && Object.keys(eventSequence.byScenarioId ?? {}).length > 0 ? { eventSequence } : {}),
+          }),
+        }).catch(() => {});
+      }, 600);
+      templatePersistTimeoutsRef.current.set(persistKey, timeout);
+    };
+
+    for (let levelIndex = 0; levelIndex < levels.length; levelIndex += 1) {
+      persistTemplateFromYjs(levelIndex);
+      for (const editorType of editorTypes) {
+        const yText = getYText(editorType, levelIndex);
+        if (!yText) {
+          continue;
+        }
+        const observer = () => {
+          persistTemplateFromYjs(levelIndex);
+        };
+        yText.observe(observer);
+        unobserveCallbacks.push(() => yText.unobserve(observer));
+      }
+    }
+
+    return () => {
+      unobserveCallbacks.forEach((unobserve) => unobserve());
+      templatePersistTimeoutsRef.current.forEach((t) => clearTimeout(t));
+      templatePersistTimeoutsRef.current.clear();
+    };
+  }, [getYText, isCreator, levels.length, yjsDocGeneration, yjsReady]);
 
   const level = levels[currentLevel - 1] as Level | undefined;
   const yjsLevelCode = useYjsLevelCodeSnapshot(currentLevel - 1, level?.code ?? { html: "", css: "", js: "" });
