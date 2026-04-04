@@ -476,6 +476,9 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
       if (event.data?.message !== "data" || typeof event.data?.dataURL !== "string") {
         return;
       }
+      if (event.source !== iframeRef.current?.contentWindow) {
+        return;
+      }
       if (event.data.urlName !== name || event.data.scenarioId !== scenario.scenarioId) {
         return;
       }
@@ -517,6 +520,9 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
     }
     const onPixels = (event: MessageEvent) => {
       if (event.data?.message !== "pixels") {
+        return;
+      }
+      if (event.source !== iframeRef.current?.contentWindow) {
         return;
       }
       if (event.data.urlName !== name || event.data.scenarioId !== scenario.scenarioId) {
@@ -631,6 +637,10 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
     return <div>Scenario not found</div>;
   }
 
+  if (suppressHeavyLayoutEffects) {
+    return null;
+  }
+
   const iframeSearch = new URLSearchParams({
     name,
     scenarioId: scenario.scenarioId,
@@ -656,8 +666,6 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
       className={cn(
         "overflow-hidden m-0 p-0 border-none bg-secondary absolute top-0 left-0 z-0 transition-[opacity] duration-300 ease-in-out",
         hiddenFromView && "pointer-events-none",
-        // Always hide visually when covered by a static <img>; otherwise Playwright leaves the
-        // iframe fully opaque and the live solution/drawing can leak through gaps or spinners.
         hiddenFromView && "opacity-0",
       )}
       aria-hidden={hiddenFromView}

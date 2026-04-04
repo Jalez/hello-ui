@@ -80,6 +80,8 @@ function App() {
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const normalizedPathname = stripBasePath(pathname);
+  const canEditCurrentGame = Boolean(currentGame?.canEdit ?? currentGame?.isOwner);
+  const isCreatorWorkbenchRoute = normalizedPathname.startsWith("/creator/") && canEditCurrentGame;
   const params = useParams<{ gameId?: string }>();
   const mode = searchParams.get('mode');
   const routeGameIdParam = params?.gameId;
@@ -465,12 +467,19 @@ function App() {
                   ref={contentRowRef}
                   className="relative flex w-full flex-1 items-stretch overflow-hidden"
                 >
-                  <ResizablePanelGroup
-                    orientation={groupOrientation}
-                    defaultLayout={activeLayout.defaultLayout}
-                    onLayoutChanged={activeLayout.onLayoutChanged}
-                    className="h-full w-full"
-                  >
+                  {isCreatorWorkbenchRoute ? (
+                    <div
+                      id="creator-workbench-sidebar-root"
+                      className="flex h-full max-h-full min-h-0 flex-none shrink-0 flex-col overflow-hidden"
+                    />
+                  ) : null}
+                  <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+                    <ResizablePanelGroup
+                      orientation={groupOrientation}
+                      defaultLayout={activeLayout.defaultLayout}
+                      onLayoutChanged={activeLayout.onLayoutChanged}
+                      className="h-full w-full"
+                    >
                     <ResizablePanel
                       id="artboards"
                       defaultSize={shouldStackGameLayout ? 56 : 60}
@@ -502,6 +511,7 @@ function App() {
                       </div>
                     </ResizablePanel>
                   </ResizablePanelGroup>
+                  </div>
                 </div>
                 <Footer />
               </DrawboardNavbarCaptureProvider>

@@ -3,7 +3,7 @@
 import { EventSequenceStep } from "@/types";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { INITIAL_EVENT_SEQUENCE_STEP_ID, type EventSequenceRecordingMode } from "@/lib/drawboard/eventSequenceState";
+import { INITIAL_EVENT_SEQUENCE_STEP_ID, type AutoReplayState, type EventSequenceRecordingMode } from "@/lib/drawboard/eventSequenceState";
 
 /** Show up to two decimal places; trim trailing zeros (e.g. 87.4% not 87.40%). */
 function formatStepAccuracyPercent(value: number): string {
@@ -17,6 +17,8 @@ type EventSequencePanelProps = {
   steps: EventSequenceStep[];
   activeStepIndex: number;
   stepAccuracies: Record<string, number>;
+  staleStepIds?: Set<string>;
+  autoReplay?: AutoReplayState | null;
   onUpdateStep: (stepId: string, field: "label" | "instruction", value: string) => void;
   selectedStepId?: string | null;
   onSelectStep?: (stepId: string) => void;
@@ -25,12 +27,20 @@ type EventSequencePanelProps = {
 function StepCircle({
   active,
   completed,
+  loading,
+  stale,
+  comparisonFailed,
   percent,
   showPercentLabel,
   children,
 }: {
   active: boolean;
   completed: boolean;
+  loading: boolean;
+  /** Accuracy was measured against an older drawing version. */
+  stale: boolean;
+  /** Comparison could not produce a result for this step. */
+  comparisonFailed: boolean;
   percent: number;
   /** When true, show the accuracy percent (including 0%) instead of the step index. */
   showPercentLabel: boolean;
@@ -39,15 +49,24 @@ function StepCircle({
   return (
     <div
       className={[
-        "flex h-11 w-11 items-center justify-center rounded-full border text-xs font-semibold transition-colors",
-        completed
-          ? "border-emerald-500 bg-emerald-500 text-white"
-          : active
-            ? "border-primary bg-primary text-primary-foreground"
-            : "border-border bg-background text-foreground",
+        "relative flex h-11 w-11 items-center justify-center rounded-full border text-xs font-semibold transition-colors",
+        comparisonFailed
+          ? "border-red-400 bg-red-50 text-red-500 dark:bg-red-950"
+          : completed
+            ? "border-emerald-500 bg-emerald-500 text-white"
+            : active
+              ? "border-primary bg-primary text-primary-foreground"
+              : "border-border bg-background text-foreground",
+        stale && showPercentLabel && !comparisonFailed ? "opacity-60" : "",
       ].join(" ")}
     >
-      {showPercentLabel ? formatStepAccuracyPercent(percent) : children}
+      {loading && (
+        <div className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-primary" />
+      )}
+      {stale && showPercentLabel && !loading && !comparisonFailed && (
+        <div className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-amber-400 ring-1 ring-background" />
+      )}
+      {comparisonFailed ? "!" : showPercentLabel ? formatStepAccuracyPercent(percent) : children}
     </div>
   );
 }
@@ -59,6 +78,8 @@ export function EventSequencePanel({
   steps,
   activeStepIndex,
   stepAccuracies,
+  staleStepIds,
+  autoReplay,
   onUpdateStep,
   selectedStepId,
   onSelectStep,
@@ -92,34 +113,20 @@ export function EventSequencePanel({
 
   return (
     <div className="mb-3 w-full max-w-[min(100%,720px)]">
-      {activeStep ? (
-        <div className="mt-2 flex items-center justify-center gap-2 text-sm text-center">
-          <div className="shrink-0 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Step {activeDisplayIndex}
-          </div>
-          {creatorMode && !recording && selectedRealStep ? (
-            <Input
-              value={selectedRealStep.instruction}
-              onChange={(event) => onUpdateStep(selectedRealStep.id, "instruction", event.target.value)}
-              placeholder="Instruction shown to players"
-              className="h-8 max-w-[420px] text-center"
-            />
-          ) : (
-            <div className="text-sm text-foreground">
-              {activeStep.instruction}
-            </div>
-          )}
-        </div>
-      ) : null}
+  
 
       <TooltipProvider>
         <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
           {displaySteps.map((step, index) => {
             const isInitialStep = step.id === INITIAL_EVENT_SEQUENCE_STEP_ID;
             const realStepIndex = index - 1;
-            const measured = step.id in stepAccuracies;
-            const percent = measured ? (stepAccuracies[step.id] ?? 0) : 0;
-            const showPercentLabel = measured;
+            const rawValue = stepAccuracies[step.id];
+            const loading = rawValue === -1;
+            const comparisonFailed = rawValue === -2;
+            const measured = rawValue !== undefined && rawValue >= 0;
+            const percent = measured ? rawValue : 0;
+            const showPercentLabel = measured || comparisonFailed;
+            const stale = Boolean(staleStepIds?.has(step.id));
             return (
               <Tooltip key={step.id}>
                 <TooltipTrigger asChild>
@@ -130,8 +137,11 @@ export function EventSequencePanel({
                     onClick={() => onSelectStep?.(step.id)}
                   >
                     <StepCircle
-                      active={step.id === selectedStepId || (!selectedStepId && isInitialStep)}
-                      completed={isInitialStep || realStepIndex < activeStepIndex}
+                      active={step.id === selectedStepId}
+                      completed={percent === 100}
+                      loading={loading}
+                      stale={stale}
+                      comparisonFailed={comparisonFailed}
                       percent={percent}
                       showPercentLabel={showPercentLabel}
                     >
@@ -161,6 +171,20 @@ export function EventSequencePanel({
           ) : null}
         </div>
       </TooltipProvider>
+
+      {autoReplay?.running && autoReplay.totalSteps > 0 ? (
+        <div className="mt-2 flex items-center justify-center gap-2">
+          <div className="h-1.5 w-32 overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full rounded-full bg-primary transition-all duration-300"
+              style={{ width: `${Math.round((autoReplay.stepIndex / autoReplay.totalSteps) * 100)}%` }}
+            />
+          </div>
+          <span className="text-xs text-muted-foreground">
+            Replaying {autoReplay.stepIndex}/{autoReplay.totalSteps}
+          </span>
+        </div>
+      ) : null}
     </div>
   );
 }

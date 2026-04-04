@@ -8,7 +8,7 @@ import ScenarioRemover from "./ScenarioRemover";
 import SidebySideArt from "./SidebySideArt";
 import { ScenarioDrawing } from "./Drawboard/ScenarioDrawing";
 import { ScenarioModel } from "./ModelBoard/ScenarioModel";
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
 import {
   Select,
@@ -32,6 +32,8 @@ import {
   getEventSequenceScenarioUiKey,
   getEventSequenceRuntimeKey,
   getSequenceRuntimeState,
+  isStepStale,
+  requestAutoReplay,
   setCreatorPreviewInteractiveForScenario,
   setSelectedEventSequenceStepId,
   setSelectedScenarioIdForLevel,
@@ -39,6 +41,7 @@ import {
   useEventSequenceUiState,
 } from "@/lib/drawboard/eventSequenceState";
 import { EventSequencePanel } from "./Drawboard/EventSequencePanel";
+import { useAutoReplaySequence } from "@/lib/drawboard/useAutoReplaySequence";
 
 const EMPTY_SCENARIOS: scenario[] = [];
 
@@ -93,6 +96,14 @@ export const ArtBoards = (): React.ReactNode => {
         return null;
       }
       return state.selectedStepIdByScenario[getEventSequenceScenarioUiKey(currentLevel, selectedScenario.scenarioId)] ?? null;
+    }, [currentLevel, selectedScenario]),
+  );
+  const autoReplayOnMount = useEventSequenceUiState(
+    useCallback((state) => {
+      if (!selectedScenario) {
+        return false;
+      }
+      return state.autoReplayOnMountByScenario[getEventSequenceScenarioUiKey(currentLevel, selectedScenario.scenarioId)] ?? false;
     }, [currentLevel, selectedScenario]),
   );
   const creatorPreviewInteractive = selectedScenario
@@ -162,6 +173,40 @@ export const ArtBoards = (): React.ReactNode => {
     setCreatorPreviewInteractiveForScenario(currentLevel, selectedScenario.scenarioId, creatorPreviewInteractive);
   }, [creatorPreviewInteractive, currentLevel, isCreatorContext, selectedScenario]);
 
+  // Trigger auto-replay on mount when the preference is enabled.
+  const autoReplayOnMountFiredRef = useRef(false);
+  useEffect(() => {
+    if (
+      autoReplayOnMount
+      && selectedRuntimeKey
+      && selectedScenarioSequence.length > 0
+      && !autoReplayOnMountFiredRef.current
+      && !sequenceRuntime.autoReplay?.running
+    ) {
+      autoReplayOnMountFiredRef.current = true;
+      requestAutoReplay(selectedRuntimeKey, selectedScenarioSequence.length + 1);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoReplayOnMount, selectedRuntimeKey, selectedScenarioSequence.length]);
+
+  useAutoReplaySequence({
+    runtimeKey: selectedRuntimeKey,
+    levelId: currentLevel,
+    scenarioId: selectedScenario?.scenarioId ?? null,
+    steps: selectedScenarioSequence,
+    autoReplay: sequenceRuntime.autoReplay,
+  });
+
+  const staleStepIds = useMemo(() => {
+    const set = new Set<string>();
+    for (const stepId of Object.keys(sequenceRuntime.stepAccuracyVersions)) {
+      if (isStepStale(sequenceRuntime, stepId)) {
+        set.add(stepId);
+      }
+    }
+    return set;
+  }, [sequenceRuntime]);
+
   // Early return if level doesn't exist - parent handles loading state
   if (!level) {
     return null;
@@ -223,6 +268,8 @@ export const ArtBoards = (): React.ReactNode => {
               steps={selectedScenarioSequence}
               activeStepIndex={normalizedActiveStepIndex}
               stepAccuracies={sequenceRuntime.stepAccuracies}
+              staleStepIds={staleStepIds}
+              autoReplay={sequenceRuntime.autoReplay}
               onUpdateStep={(stepId, field, value) => {
                 dispatch(updateEventSequenceStep({
                   levelId: currentLevel,

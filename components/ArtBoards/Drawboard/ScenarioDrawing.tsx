@@ -281,6 +281,18 @@ export const ScenarioDrawing = ({
     stepPreviewsRef.current = stepPreviews;
   }, [stepPreviews]);
 
+  // Bump drawingVersion when the drawing iframe re-renders so staleness can be tracked.
+  const prevDrawingUrlRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (prevDrawingUrlRef.current !== undefined && drawingUrl !== prevDrawingUrlRef.current) {
+      updateSequenceRuntimeState(runtimeKey, (current) => ({
+        ...current,
+        drawingVersion: current.drawingVersion + 1,
+      }));
+    }
+    prevDrawingUrlRef.current = drawingUrl;
+  }, [drawingUrl, runtimeKey]);
+
   useEffect(() => {
     if (!isCreator) {
       return;
@@ -440,7 +452,6 @@ export const ScenarioDrawing = ({
     if (suppressSequenceMetrics) {
       return;
     }
-
     let cancelled = false;
 
     const loadImageDataForSnapshot = async (url: string, width: number, height: number) => {
@@ -641,17 +652,34 @@ export const ScenarioDrawing = ({
       dispatch(updateLevelAccuracyByIndexThunk(currentLevel - 1, scenario.scenarioId, agg));
     };
 
+    /** Write -2 for the focused step when comparison produces no result. */
+    const markFocusedStepComparisonFailed = () => {
+      const focus = selectedEventSequenceStepId?.trim();
+      if (!focus) return;
+      updateSequenceRuntimeState(runtimeKey, (current) => {
+        if (current.stepAccuracies[focus] !== -1) return current;
+        return { ...current, stepAccuracies: { ...current.stepAccuracies, [focus]: -2 } };
+      });
+    };
+
     const runCreatorComparisons = async () => {
       const nextAccuracies = await compareFocusedStepsToDrawing();
-      if (!nextAccuracies || cancelled) {
+      if (cancelled) return;
+      if (!nextAccuracies) {
+        markFocusedStepComparisonFailed();
         return;
       }
       let mergedSnapshot: Record<string, number> = {};
       updateSequenceRuntimeState(runtimeKey, (current) => {
         mergedSnapshot = { ...current.stepAccuracies, ...nextAccuracies };
+        const mergedVersions = { ...current.stepAccuracyVersions };
+        for (const id of Object.keys(nextAccuracies)) {
+          mergedVersions[id] = current.drawingVersion;
+        }
         return {
           ...current,
           stepAccuracies: mergedSnapshot,
+          stepAccuracyVersions: mergedVersions,
         };
       });
       pushFooterAccuracyForSequence(mergedSnapshot);
@@ -662,12 +690,18 @@ export const ScenarioDrawing = ({
         return;
       }
       const nextAccuracies = await compareFocusedStepsToDrawing();
-      if (!nextAccuracies || cancelled) {
+      if (cancelled) return;
+      if (!nextAccuracies) {
+        markFocusedStepComparisonFailed();
         return;
       }
       let mergedSnapshot: Record<string, number> = {};
       updateSequenceRuntimeState(runtimeKey, (current) => {
         mergedSnapshot = { ...current.stepAccuracies, ...nextAccuracies };
+        const mergedVersions = { ...current.stepAccuracyVersions };
+        for (const id of Object.keys(nextAccuracies)) {
+          mergedVersions[id] = current.drawingVersion;
+        }
         const step = gameplayActiveSequenceStep;
         if (step && current.pendingStepId === step.id) {
           const comparison = nextAccuracies[step.id] ?? 0;
@@ -675,6 +709,7 @@ export const ScenarioDrawing = ({
             return {
               ...current,
               stepAccuracies: mergedSnapshot,
+              stepAccuracyVersions: mergedVersions,
               pendingStepId: null,
               activeIndex: Math.min(current.activeIndex + 1, scenarioSequence.length),
             };
@@ -683,6 +718,7 @@ export const ScenarioDrawing = ({
         return {
           ...current,
           stepAccuracies: mergedSnapshot,
+          stepAccuracyVersions: mergedVersions,
         };
       });
       pushFooterAccuracyForSequence(mergedSnapshot);
@@ -692,13 +728,27 @@ export const ScenarioDrawing = ({
       if (isCreator) {
         void runCreatorComparisons().catch((error) => {
           console.error("EventSequence: failed to compare steps (creator)", error);
+          markFocusedStepComparisonFailed();
         });
       } else {
         void runGameComparisons().catch((error) => {
           console.error("EventSequence: failed to compare steps (game)", error);
+          markFocusedStepComparisonFailed();
         });
       }
     };
+
+    // Mark the focused step as "comparing" (-1 sentinel) so the circle shows a
+    // loading indicator instead of briefly flashing the previous step's percentage.
+    const focusedId = selectedEventSequenceStepId?.trim();
+    if (focusedId) {
+      updateSequenceRuntimeState(runtimeKey, (current) => {
+        if (current.stepAccuracies[focusedId] === undefined || current.stepAccuracies[focusedId] === -1) {
+          return current;
+        }
+        return { ...current, stepAccuracies: { ...current.stepAccuracies, [focusedId]: -1 } };
+      });
+    }
 
     runComparisons();
 
