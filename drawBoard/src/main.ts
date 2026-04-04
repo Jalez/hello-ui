@@ -291,36 +291,42 @@ async function replaySequenceStep(step: EventSequenceStep) {
     return;
   }
 
-  if (step.eventType === "click") {
-    target.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
-  } else if (step.eventType === "submit") {
-    const form = target instanceof HTMLFormElement ? target : target.closest("form");
-    if (form instanceof HTMLFormElement) {
-      form.requestSubmit();
-    } else {
-      target.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-    }
-  } else if (step.eventType === "keydown") {
-    const key = step.keyFilter || "Enter";
-    if (target instanceof HTMLElement) {
-      target.focus();
-    }
-    target.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
-  } else if (step.eventType === "input" || step.eventType === "change") {
-    const { value, checked } = getReplayValueFromSnapshot(step);
-    if (target instanceof HTMLInputElement) {
-      if (typeof checked === "boolean") {
-        target.checked = checked;
+  try {
+    if (step.eventType === "click") {
+      target.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
+    } else if (step.eventType === "submit") {
+      const form = target instanceof HTMLFormElement ? target : target.closest("form");
+      if (form instanceof HTMLFormElement) {
+        form.requestSubmit();
+      } else {
+        target.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
       }
-      if (typeof value === "string") {
-        target.value = value;
+    } else if (step.eventType === "keydown") {
+      const key = step.keyFilter || "Enter";
+      if (target instanceof HTMLElement) {
+        target.focus();
       }
-    } else if (target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) {
-      if (typeof value === "string") {
-        target.value = value;
+      target.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+    } else if (step.eventType === "input" || step.eventType === "change") {
+      const { value, checked } = getReplayValueFromSnapshot(step);
+      if (target instanceof HTMLInputElement) {
+        if (typeof checked === "boolean") {
+          target.checked = checked;
+        }
+        if (typeof value === "string") {
+          target.value = value;
+        }
+      } else if (target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) {
+        if (typeof value === "string") {
+          target.value = value;
+        }
       }
+      target.dispatchEvent(new Event(step.eventType, { bubbles: true, cancelable: true }));
     }
-    target.dispatchEvent(new Event(step.eventType, { bubbles: true, cancelable: true }));
+  } catch (error) {
+    console.warn("[drawboard:replay] user code threw during event dispatch for step", step.id, error);
+    // Re-throw so replaySequenceIfNeeded can reset the DOM baseline.
+    throw error;
   }
 
   await waitForPaintAfterCss();
@@ -345,6 +351,17 @@ async function replaySequenceIfNeeded() {
     replayAppliedSignature = signature;
   } catch (error) {
     console.error("Drawboard: replay sequence failed", error);
+    // Reset DOM to a clean state so subsequent replays start fresh
+    // instead of operating on a half-applied / corrupted DOM.
+    try {
+      applyHtml(lastAppliedHtml);
+      syncEventListeners();
+      installObservers();
+      applyCss(lastAppliedCss);
+      applyJs(lastAppliedJs);
+    } catch (resetError) {
+      console.error("Drawboard: baseline reset after failed replay also failed", resetError);
+    }
   } finally {
     replayInFlight = false;
   }

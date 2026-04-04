@@ -3,11 +3,23 @@ import { useSyncExternalStore } from "react";
 export type EventSequenceRecordingMode = "idle" | "single" | "continuous";
 export const INITIAL_EVENT_SEQUENCE_STEP_ID = "__initial__";
 
+export type AutoReplayState = {
+  running: boolean;
+  stepIndex: number;
+  totalSteps: number;
+};
+
 export type SequenceRuntimeState = {
   recordingMode: EventSequenceRecordingMode;
   activeIndex: number;
   pendingStepId: string | null;
   stepAccuracies: Record<string, number>;
+  /** Monotonically increasing counter, bumped whenever the drawing iframe re-renders. */
+  drawingVersion: number;
+  /** The `drawingVersion` at which each step's accuracy was last measured. */
+  stepAccuracyVersions: Record<string, number>;
+  /** Non-null while an auto-replay cycle is in progress. */
+  autoReplay: AutoReplayState | null;
 };
 
 type EventSequenceUiState = {
@@ -15,6 +27,7 @@ type EventSequenceUiState = {
   creatorPreviewInteractiveByScenario: Record<string, boolean>;
   panelOpenByScenario: Record<string, boolean>;
   selectedStepIdByScenario: Record<string, string | null>;
+  autoReplayOnMountByScenario: Record<string, boolean>;
 };
 
 export const EMPTY_SEQUENCE_RUNTIME_STATE: SequenceRuntimeState = {
@@ -22,16 +35,41 @@ export const EMPTY_SEQUENCE_RUNTIME_STATE: SequenceRuntimeState = {
   activeIndex: 0,
   pendingStepId: null,
   stepAccuracies: {},
+  drawingVersion: 0,
+  stepAccuracyVersions: {},
+  autoReplay: null,
 };
 
 const sequenceRuntimeStore = new Map<string, SequenceRuntimeState>();
 const sequenceRuntimeListeners = new Map<string, Set<() => void>>();
+
+const AUTO_REPLAY_STORAGE_KEY = "eventSequence:autoReplayOnMount";
+
+function loadAutoReplayOnMount(): Record<string, boolean> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = localStorage.getItem(AUTO_REPLAY_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, boolean>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function persistAutoReplayOnMount(value: Record<string, boolean>) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(AUTO_REPLAY_STORAGE_KEY, JSON.stringify(value));
+  } catch {
+    /* quota exceeded — ignore */
+  }
+}
 
 let eventSequenceUiState: EventSequenceUiState = {
   selectedScenarioIdsByLevel: {},
   creatorPreviewInteractiveByScenario: {},
   panelOpenByScenario: {},
   selectedStepIdByScenario: {},
+  autoReplayOnMountByScenario: loadAutoReplayOnMount(),
 };
 const eventSequenceUiListeners = new Set<() => void>();
 
@@ -151,6 +189,19 @@ export function setSelectedEventSequenceStepId(
   }));
 }
 
+export function setAutoReplayOnMount(
+  levelId: number,
+  scenarioId: string,
+  enabled: boolean,
+) {
+  const key = getEventSequenceScenarioUiKey(levelId, scenarioId);
+  updateEventSequenceUiState((current) => {
+    const next = { ...current.autoReplayOnMountByScenario, [key]: enabled };
+    persistAutoReplayOnMount(next);
+    return { ...current, autoReplayOnMountByScenario: next };
+  });
+}
+
 export function useEventSequenceUiState<T>(
   selector: (state: EventSequenceUiState) => T,
 ): T {
@@ -159,4 +210,57 @@ export function useEventSequenceUiState<T>(
     () => selector(getEventSequenceUiState()),
     () => selector(getEventSequenceUiState()),
   );
+}
+
+// ---------------------------------------------------------------------------
+// Staleness helpers
+// ---------------------------------------------------------------------------
+
+export function isStepStale(state: SequenceRuntimeState, stepId: string): boolean {
+  const measuredVersion = state.stepAccuracyVersions[stepId];
+  return measuredVersion !== undefined && measuredVersion < state.drawingVersion;
+}
+
+// ---------------------------------------------------------------------------
+// Auto-replay helpers
+// ---------------------------------------------------------------------------
+
+export function requestAutoReplay(key: string, totalSteps: number) {
+  updateSequenceRuntimeState(key, (current) => ({
+    ...current,
+    autoReplay: { running: true, stepIndex: 0, totalSteps },
+  }));
+}
+
+export function cancelAutoReplay(key: string) {
+  updateSequenceRuntimeState(key, (current) => ({
+    ...current,
+    autoReplay: null,
+  }));
+}
+
+export function waitForStepAccuracy(
+  runtimeKey: string,
+  stepId: string,
+  timeoutMs = 10_000,
+): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      unsub();
+      reject(new Error(`Timeout waiting for step ${stepId} accuracy`));
+    }, timeoutMs);
+
+    const check = () => {
+      const state = getSequenceRuntimeState(runtimeKey);
+      const value = state.stepAccuracies[stepId];
+      if (value !== undefined && value !== -1) {
+        clearTimeout(timer);
+        unsub();
+        resolve(value);
+      }
+    };
+
+    const unsub = subscribeSequenceRuntime(runtimeKey, check);
+    check();
+  });
 }
