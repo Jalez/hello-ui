@@ -330,14 +330,14 @@ export const ArtBoards = (): React.ReactNode => {
 
       <div className="absolute bottom-0 right-0 z-[100] flex flex-row items-center gap-1 p-2">
         {showSwitch ? (
-          <PoppingTitle topTitle={switchIsInteractive ? "Switch to Static" : "Switch to Interactive"}>
+          <PoppingTitle topTitle={switchIsInteractive ? "Switch to Static" : "Switch to Live"}>
             <Button
               type="button"
               variant="ghost"
               size="icon"
               className="h-9 w-9"
               onClick={handleSwitchInteractiveStatic}
-              aria-label={switchIsInteractive ? "Switch to static" : "Switch to interactive"}
+              aria-label={switchIsInteractive ? "Switch to static" : "Switch to live"}
             >
               {switchIsInteractive ? <ImageIcon className="h-5 w-5" /> : <MousePointer className="h-5 w-5" />}
             </Button>
