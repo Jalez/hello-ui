@@ -1,9 +1,10 @@
 'use client';
 
 import { EventSequenceStep } from "@/types";
-import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { INITIAL_EVENT_SEQUENCE_STEP_ID, type AutoReplayState, type EventSequenceRecordingMode } from "@/lib/drawboard/eventSequenceState";
+import { cn } from "@/lib/utils";
+import { Loader2 } from "lucide-react";
 
 /** Show up to two decimal places; trim trailing zeros (e.g. 87.4% not 87.40%). */
 function formatStepAccuracyPercent(value: number): string {
@@ -37,18 +38,37 @@ function StepCircle({
   active: boolean;
   completed: boolean;
   loading: boolean;
-  /** Accuracy was measured against an older drawing version. */
+  /** Accuracy was measured against an older drawing / source version. */
   stale: boolean;
-  /** Comparison could not produce a result for this step. */
+  /** Comparison could not produce a result for this event. */
   comparisonFailed: boolean;
   percent: number;
-  /** When true, show the accuracy percent (including 0%) instead of the step index. */
+  /** When true, show the accuracy percent (including 0%) instead of the event index. */
   showPercentLabel: boolean;
   children: React.ReactNode;
 }) {
+  if (loading) {
+    return (
+      <div
+        className={cn(
+          "flex h-11 w-11 items-center justify-center rounded-full border-2 transition-colors",
+          active
+            ? "border-primary bg-primary/10 text-primary"
+            : "border-muted-foreground/30 bg-muted/50 text-muted-foreground",
+        )}
+        aria-busy
+        aria-label="Measuring accuracy"
+      >
+        <Loader2 className="h-5 w-5 shrink-0 animate-spin" />
+      </div>
+    );
+  }
+
+  const staleRing = stale && showPercentLabel && !comparisonFailed;
+
   return (
     <div
-      className={[
+      className={cn(
         "relative flex h-11 w-11 items-center justify-center rounded-full border text-xs font-semibold transition-colors",
         comparisonFailed
           ? "border-red-400 bg-red-50 text-red-500 dark:bg-red-950"
@@ -57,15 +77,10 @@ function StepCircle({
             : active
               ? "border-primary bg-primary text-primary-foreground"
               : "border-border bg-background text-foreground",
-        stale && showPercentLabel && !comparisonFailed ? "opacity-60" : "",
-      ].join(" ")}
+        staleRing && "ring-2 ring-amber-500/70 ring-offset-2 ring-offset-background dark:ring-amber-400/60",
+        staleRing ? "opacity-90" : "",
+      )}
     >
-      {loading && (
-        <div className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-primary" />
-      )}
-      {stale && showPercentLabel && !loading && !comparisonFailed && (
-        <div className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-amber-400 ring-1 ring-background" />
-      )}
       {comparisonFailed ? "!" : showPercentLabel ? formatStepAccuracyPercent(percent) : children}
     </div>
   );
@@ -113,13 +128,11 @@ export function EventSequencePanel({
 
   return (
     <div className="mb-3 w-full max-w-[min(100%,720px)]">
-  
 
       <TooltipProvider>
         <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
           {displaySteps.map((step, index) => {
             const isInitialStep = step.id === INITIAL_EVENT_SEQUENCE_STEP_ID;
-            const realStepIndex = index - 1;
             const rawValue = stepAccuracies[step.id];
             const loading = rawValue === -1;
             const comparisonFailed = rawValue === -2;
@@ -127,13 +140,16 @@ export function EventSequencePanel({
             const percent = measured ? rawValue : 0;
             const showPercentLabel = measured || comparisonFailed;
             const stale = Boolean(staleStepIds?.has(step.id));
+
+            const title = isInitialStep ? "Initial state" : `Event ${index}`;
+
             return (
               <Tooltip key={step.id}>
                 <TooltipTrigger asChild>
                   <button
                     type="button"
                     className="flex items-center gap-2 rounded-full bg-transparent p-0"
-                    aria-label={`Event step ${index + 1}`}
+                    aria-label={`Event ${index + 1}`}
                     onClick={() => onSelectStep?.(step.id)}
                   >
                     <StepCircle
@@ -149,13 +165,31 @@ export function EventSequencePanel({
                     </StepCircle>
                   </button>
                 </TooltipTrigger>
-                <TooltipContent side="top" className="max-w-[260px]">
-                  <div className="text-sm font-medium">
-                    {isInitialStep ? "Initial state" : `Step ${index}`}
-                  </div>
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    {step.instruction}
-                  </div>
+                <TooltipContent side="top" className="max-w-[280px]">
+                  <div className="text-sm font-medium">{title}</div>
+                  {loading ? (
+                    <p className="mt-1.5 text-xs text-muted-foreground">Measuring accuracy for this event…</p>
+                  ) : comparisonFailed ? (
+                    <p className="mt-1.5 text-xs text-destructive">
+                      Could not compare this event to your design. Try again or check the preview.
+                    </p>
+                  ) : measured ? (
+                    <p className="mt-1.5 text-xs">
+                      <span className="text-muted-foreground">Accuracy: </span>
+                      <span className="font-medium tabular-nums">{formatStepAccuracyPercent(percent)}</span>
+                    </p>
+                  ) : (
+                    <p className="mt-1.5 text-xs text-muted-foreground">
+                      No accuracy yet — select this event to measure against your design.
+                    </p>
+                  )}
+                  {measured && stale && !loading ? (
+                    <p className="mt-1.5 text-xs text-amber-700 dark:text-amber-400">
+                      Out of date: your code, solution, or sequence changed after this was measured. Select the event
+                      again to refresh.
+                    </p>
+                  ) : null}
+                  <p className="mt-1.5 text-xs text-muted-foreground">{step.instruction}</p>
                 </TooltipContent>
               </Tooltip>
             );
@@ -165,7 +199,7 @@ export function EventSequencePanel({
               {creatorMode
                 ? interactivePreview
                   ? "Use the Interactions subnavbar to record the intended event sequence."
-                  : "Switch to interactive preview to start recording an event sequence."
+                  : "Switch to live preview to start recording an event sequence."
                 : "No event sequence has been recorded for this scenario."}
             </div>
           ) : null}
@@ -181,7 +215,7 @@ export function EventSequencePanel({
             />
           </div>
           <span className="text-xs text-muted-foreground">
-            Replaying {autoReplay.stepIndex}/{autoReplay.totalSteps}
+            Running events {autoReplay.stepIndex}/{autoReplay.totalSteps}
           </span>
         </div>
       ) : null}

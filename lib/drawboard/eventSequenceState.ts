@@ -14,7 +14,7 @@ export type SequenceRuntimeState = {
   activeIndex: number;
   pendingStepId: string | null;
   stepAccuracies: Record<string, number>;
-  /** Monotonically increasing counter, bumped whenever the drawing iframe re-renders. */
+  /** Monotonically increasing counter: bumps on editor/solution/sequence fingerprint changes (not raw capture URL churn). */
   drawingVersion: number;
   /** The `drawingVersion` at which each step's accuracy was last measured. */
   stepAccuracyVersions: Record<string, number>;
@@ -247,7 +247,7 @@ export function waitForStepAccuracy(
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       unsub();
-      reject(new Error(`Timeout waiting for step ${stepId} accuracy`));
+      reject(new Error(`Timeout waiting for event ${stepId} accuracy`));
     }, timeoutMs);
 
     const check = () => {

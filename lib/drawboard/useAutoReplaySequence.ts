@@ -95,8 +95,8 @@ export function useAutoReplaySequence({
         try {
           await waitForStepAccuracy(runtimeKey, stepId, 15_000);
         } catch {
-          // Timeout — move on to the next step.
-          console.warn(`Auto-replay: timed out waiting for step ${stepId}`);
+          // Timeout — move on to the next event.
+          console.warn(`Auto-replay: timed out waiting for event ${stepId}`);
         }
 
         if (cancelledRef.current) {
@@ -107,7 +107,7 @@ export function useAutoReplaySequence({
       // Finished — clear auto-replay state.
       if (!cancelledRef.current) {
         cancelAutoReplay(runtimeKey);
-        // Stay on the last step so the user sees final results.
+        // Stay on the last event so the user sees final results.
         setSelectedEventSequenceStepId(levelId, scenarioId, displayStepIds[displayStepIds.length - 1] ?? originalStepId);
       }
     };

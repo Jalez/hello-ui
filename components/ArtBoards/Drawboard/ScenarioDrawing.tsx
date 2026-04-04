@@ -205,6 +205,12 @@ export const ScenarioDrawing = ({
     () => level?.eventSequence?.byScenarioId?.[scenario.scenarioId] ?? [],
     [level?.eventSequence, scenario.scenarioId],
   );
+  /** When this changes, live preview or solution truth changed — step accuracies are stale until re-measured. */
+  const compareSourcesFingerprint = useMemo(
+    () =>
+      `${css}\0${html}\0${js}\0${scenario.js ?? ""}\0${resolvedSolutionCss}\0${resolvedSolutionHtml}\0${JSON.stringify(scenarioSequence)}`,
+    [css, html, js, resolvedSolutionCss, resolvedSolutionHtml, scenario.js, scenarioSequence],
+  );
   const usePerStepSolutionKeys = !isCreator && scenarioSequence.length > 0;
   const drawingTimelineStepId = defaultTimelineStepIdForSolutionCapture(selectedEventSequenceStepId);
   const solutionUrl = useMemo(
@@ -225,6 +231,34 @@ export const ScenarioDrawing = ({
       ? registerForNavbarCapture && !suppressHeavyLayoutEffects
       : !suppressHeavyLayoutEffects;
   const suppressSequenceMetrics = !allowSequenceMetrics;
+
+  const prevFingerprintRuntimeKeyRef = useRef<string | null>(null);
+  const prevCompareSourcesFingerprintRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (scenarioSequence.length === 0 || !registerForNavbarCapture || suppressHeavyLayoutEffects) {
+      return;
+    }
+    if (prevFingerprintRuntimeKeyRef.current !== runtimeKey) {
+      prevFingerprintRuntimeKeyRef.current = runtimeKey;
+      prevCompareSourcesFingerprintRef.current = undefined;
+    }
+    const fp = compareSourcesFingerprint;
+    const prevFp = prevCompareSourcesFingerprintRef.current;
+    if (prevFp !== undefined && prevFp !== fp) {
+      updateSequenceRuntimeState(runtimeKey, (current) => ({
+        ...current,
+        drawingVersion: current.drawingVersion + 1,
+      }));
+    }
+    prevCompareSourcesFingerprintRef.current = fp;
+  }, [
+    compareSourcesFingerprint,
+    registerForNavbarCapture,
+    runtimeKey,
+    scenarioSequence.length,
+    suppressHeavyLayoutEffects,
+  ]);
+
   const normalizedActiveSequenceIndex = sequenceRuntime.activeIndex >= scenarioSequence.length ? 0 : sequenceRuntime.activeIndex;
   /** Gameplay progression (not timeline scrub) — used for grading advance + verified interactions. */
   const gameplayActiveSequenceStep = scenarioSequence[normalizedActiveSequenceIndex] ?? null;
@@ -282,17 +316,8 @@ export const ScenarioDrawing = ({
     stepPreviewsRef.current = stepPreviews;
   }, [stepPreviews]);
 
-  // Bump drawingVersion when the drawing iframe re-renders so staleness can be tracked.
-  const prevDrawingUrlRef = useRef<string | undefined>(undefined);
-  useEffect(() => {
-    if (prevDrawingUrlRef.current !== undefined && drawingUrl !== prevDrawingUrlRef.current) {
-      updateSequenceRuntimeState(runtimeKey, (current) => ({
-        ...current,
-        drawingVersion: current.drawingVersion + 1,
-      }));
-    }
-    prevDrawingUrlRef.current = drawingUrl;
-  }, [drawingUrl, runtimeKey]);
+  // drawingVersion is not tied to drawingUrl: repeated captures often produce new data URLs for the
+  // same pixels and would falsely mark all steps stale. Use compareSourcesFingerprint instead.
 
   useEffect(() => {
     if (!isCreator) {
@@ -744,12 +769,12 @@ export const ScenarioDrawing = ({
     const runComparisons = () => {
       if (isCreator) {
         void runCreatorComparisons().catch((error) => {
-          console.error("EventSequence: failed to compare steps (creator)", error);
+          console.error("EventSequence: failed to compare events (creator)", error);
           markFocusedStepComparisonFailed();
         });
       } else {
         void runGameComparisons().catch((error) => {
-          console.error("EventSequence: failed to compare steps (game)", error);
+          console.error("EventSequence: failed to compare events (game)", error);
           markFocusedStepComparisonFailed();
         });
       }
