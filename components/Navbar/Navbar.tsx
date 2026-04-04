@@ -2,11 +2,14 @@
 
 import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
 import { Button } from "@/components/ui/button";
-import { RotateCcw, PanelLeft, Map, Flag, Settings, Trash2, Loader2, Gamepad2, BarChart3, Users, MousePointer, CircleDot, Square } from "lucide-react";
+import { RotateCcw, PanelLeft, Map, Flag, Settings, Trash2, Loader2, Gamepad2, BarChart3, Users, MousePointer, Eye, Square, Play, Wrench, ListMinus, ListX, ListPlus, ListOrdered } from "lucide-react";
+import { AutoRunCircle } from "@/components/icons/AutoRunCircle";
 import { LevelSelect } from "@/components/General/LevelControls/LevelControls";
 import { setCurrentLevel } from "@/store/slices/currentLevel.slice";
 import { clearEventSequenceForScenario, removeEventSequenceStep, resetLevel } from "@/store/slices/levels.slice";
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
+import { CreatorAutosaveProvider } from "@/components/CreatorControls/CreatorAutosaveContext";
 import CreatorControls from "@/components/CreatorControls/CreatorControls";
 import MapEditor, { MapEditorRef } from "@/components/CreatorControls/MapEditor";
 import { useSidebarCollapse } from "@/components/default/sidebar/context/SidebarCollapseContext";
@@ -21,6 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
@@ -28,7 +32,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import InfoGamePoints from "../InfoBoard/InfoGamePoints";
 import { ModeToggleButton } from "./ModeToggleButton";
 import { AplusSubmitButton } from "./AplusSubmitButton";
@@ -44,7 +47,9 @@ import { CompactMenuButton, compactMenuButtonClass, compactMenuLabelClass } from
 import { toast } from "sonner";
 import { cn } from "@/lib/utils/cn";
 import { useLevelMetaSync } from "@/lib/collaboration/hooks/useLevelMetaSync";
-import { SubNavbar, type SubNavbarItem } from "./SubNavbar";
+import { CreatorWorkbenchSubSidebar, type CreatorWorkbenchSection } from "./CreatorWorkbenchSubSidebar";
+import { GameToolsSidebar } from "./GameToolsSidebar";
+import type { SubNavbarItem } from "./SubNavbar";
 import {
   EMPTY_SEQUENCE_RUNTIME_STATE,
   INITIAL_EVENT_SEQUENCE_STEP_ID,
@@ -59,20 +64,12 @@ import {
   subscribeSequenceRuntime,
   updateSequenceRuntimeState,
   useEventSequenceUiState,
+  requestAutoReplay,
+  cancelAutoReplay,
+  setAutoReplayOnMount,
 } from "@/lib/drawboard/eventSequenceState";
 
 type CreatorWorkbenchSubnavTabId = "creator" | "interactions" | "game";
-
-const CREATOR_WORKBENCH_SUBNAV_TODOS: Record<Exclude<CreatorWorkbenchSubnavTabId, "interactions">, string[]> = {
-  creator: [
-    "Move creator controls into inline subnavbar actions.",
-    "Replace legacy creator dropdown with direct action buttons.",
-  ],
-  game: [
-    "Move game reset and settings actions into inline subnavbar actions.",
-    "Replace legacy game dropdown with direct action buttons.",
-  ],
-};
 
 const CREATOR_WORKBENCH_SUBNAV_TABS: Array<{
   id: CreatorWorkbenchSubnavTabId;
@@ -82,8 +79,8 @@ const CREATOR_WORKBENCH_SUBNAV_TABS: Array<{
 }> = [
   {
     id: "creator",
-    label: "Creator",
-    tooltip: "Creator tools are still being moved into this inline subnavbar.",
+    label: "Levels",
+    tooltip: "Level save, generation, and map tools",
     icon: Settings,
   },
   {
@@ -95,7 +92,7 @@ const CREATOR_WORKBENCH_SUBNAV_TABS: Array<{
   {
     id: "game",
     label: "Game",
-    tooltip: "Game actions are still being moved into this inline subnavbar.",
+    tooltip: "Game navigation and settings",
     icon: Gamepad2,
   },
 ];
@@ -152,7 +149,13 @@ export const Navbar = () => {
   const [resetScope, setResetScope] = useState<"level" | "game">("level");
   const [isResettingInstances, setIsResettingInstances] = useState(false);
   const [hasDismissedCompactGameShake, setHasDismissedCompactGameShake] = useState(false);
-  const [creatorWorkbenchTab, setCreatorWorkbenchTab] = useState<CreatorWorkbenchSubnavTabId>("interactions");
+  const [creatorWorkbenchPanels, setCreatorWorkbenchPanels] = useState<
+    Record<CreatorWorkbenchSubnavTabId, boolean>
+  >({
+    creator: true,
+    interactions: true,
+    game: true,
+  });
   const storedSelectedSequenceScenarioId = useEventSequenceUiState(
     useCallback((state) => state.selectedScenarioIdsByLevel[currentLevel] ?? null, [currentLevel]),
   );
@@ -207,6 +210,14 @@ export const Navbar = () => {
     selectedSequenceStep
     && selectedSequenceSteps.length > 0
     && selectedSequenceSteps[selectedSequenceSteps.length - 1]?.id === selectedSequenceStep.id,
+  );
+  const autoReplayOnMount = useEventSequenceUiState(
+    useCallback((state) => {
+      if (!selectedSequenceScenarioId) {
+        return false;
+      }
+      return state.autoReplayOnMountByScenario[getEventSequenceScenarioUiKey(currentLevel, selectedSequenceScenarioId)] ?? false;
+    }, [currentLevel, selectedSequenceScenarioId]),
   );
 
   useEffect(() => {
@@ -408,13 +419,7 @@ export const Navbar = () => {
     setSelectedEventSequenceStepId(currentLevel, selectedSequenceScenarioId, INITIAL_EVENT_SEQUENCE_STEP_ID);
   }, [currentLevel, dispatch, selectedSequenceRuntimeKey, selectedSequenceScenarioId, syncLevelFields]);
 
-  const handleOpenSequencePanel = useCallback(() => {
-    if (!selectedSequenceScenarioId) {
-      return;
-    }
-    setSelectedScenarioIdForLevel(currentLevel, selectedSequenceScenarioId);
-    setEventSequencePanelOpen(currentLevel, selectedSequenceScenarioId, true);
-  }, [currentLevel, selectedSequenceScenarioId]);
+
 
   const handleRemoveSelectedStep = useCallback(() => {
     if (!selectedSequenceScenarioId || !selectedSequenceStep || !selectedSequenceStepIsLast) {
@@ -719,43 +724,43 @@ export const Navbar = () => {
       ) : null}
       <div className="flex flex-none">
         <div className="rounded-md px-2 py-1.5">
-          <TooltipProvider>
-            <div className="flex items-center gap-1 overflow-x-auto">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <CompactMenuButton
+                icon={Wrench}
+                label="Tools"
+                text="Tools"
+                title="Choose which sidebar tool panels to show"
+              />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-56 border-0 shadow-lg">
+              <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+                Sidebar panels
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
               {CREATOR_WORKBENCH_SUBNAV_TABS.map((tab) => {
                 const Icon = tab.icon;
                 return (
-                  <Tooltip key={tab.id}>
-                    <TooltipTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className={cn(
-                          compactMenuButtonClass,
-                          "h-auto min-w-[72px] rounded-none border-b-2 border-transparent px-3",
-                          creatorWorkbenchTab === tab.id && "border-primary bg-muted/40 text-foreground",
-                        )}
-                        onClick={() => setCreatorWorkbenchTab(tab.id)}
-                      >
-                        <span className={cn(compactMenuLabelClass, "min-[520px]:hidden")}>
-                          {tab.label}
-                        </span>
-                        <Icon className="h-4 w-4" />
-                        <span className="hidden min-[520px]:inline text-xs font-medium">
-                          {tab.label}
-                        </span>
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom">
-                      <div className="max-w-[240px] text-xs">
-                        {tab.tooltip}
-                      </div>
-                    </TooltipContent>
-                  </Tooltip>
+                  <DropdownMenuCheckboxItem
+                    key={tab.id}
+                    checked={creatorWorkbenchPanels[tab.id]}
+                    onCheckedChange={(checked) => {
+                      setCreatorWorkbenchPanels((prev) => ({
+                        ...prev,
+                        [tab.id]: checked === true,
+                      }));
+                    }}
+                    onSelect={(event) => event.preventDefault()}
+                    title={tab.tooltip}
+                    className="cursor-pointer"
+                  >
+                    <Icon className="mr-2 h-4 w-4 shrink-0" />
+                    {tab.label}
+                  </DropdownMenuCheckboxItem>
                 );
               })}
-            </div>
-          </TooltipProvider>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
       <div className="flex flex-1 min-w-0">
@@ -769,64 +774,172 @@ export const Navbar = () => {
   );
 
   const isSequenceRecording = selectedSequenceRuntime.recordingMode !== "idle";
-  const creatorWorkbenchSubnavItems: SubNavbarItem[] = creatorWorkbenchTab === "interactions"
-    ? [
-        ...(selectedSequenceScenarioId ? [{
-          id: "interaction-mode",
-          label: "Interaction mode",
-          icon: MousePointer,
-          onClick: () => handleSetSelectedScenarioInteractive(!selectedSequenceScenarioInteractive),
-          active: selectedSequenceScenarioInteractive,
-          variant: "secondary" as const,
-        }] : []),
-        ...(selectedSequenceScenarioInteractive && !isSequenceRecording ? [{
-          id: "next-step",
-          label: "Next step",
-          icon: CircleDot,
-          onClick: handleStartSingleStepRecording,
-        }, {
-          id: "start-sequence",
-          label: "Start sequence",
-          icon: CircleDot,
-          onClick: handleStartContinuousRecording,
-        }] : []),
-        ...(isSequenceRecording ? [{
-          id: "stop-recording",
-          label: "Stop & save",
-          icon: Square,
-          onClick: handleStopSequenceRecording,
-        }] : []),
-        ...(selectedSequenceScenarioInteractive ? [{
-          id: "open-sequence",
-          label: "Open sequence",
-          icon: MousePointer,
-          onClick: handleOpenSequencePanel,
-          variant: "outline" as const,
-        }] : []),
-        ...(selectedSequenceSteps.length > 0 ? [{
-          id: "clear-steps",
-          label: "Clear steps",
-          icon: Trash2,
-          onClick: handleClearSelectedSequence,
-          variant: "ghost" as const,
-        }] : []),
-        ...(selectedSequenceStep ? [{
-          id: "remove-step",
-          label: "Remove step",
-          icon: Trash2,
-          onClick: handleRemoveSelectedStep,
-          disabled: !selectedSequenceStepIsLast,
-          tooltip: selectedSequenceStepIsLast
-            ? undefined
-            : "Only the last recorded step can be removed.",
-          variant: "ghost" as const,
-        }] : []),
-      ]
-    : CREATOR_WORKBENCH_SUBNAV_TODOS[creatorWorkbenchTab as Exclude<CreatorWorkbenchSubnavTabId, "interactions">].map((label, index) => ({
-        id: `${creatorWorkbenchTab}-todo-${index}`,
-        label,
-        kind: "badge" as const,
-      }));
+  const interactionSubnavItems = useMemo((): SubNavbarItem[] => [
+    ...(selectedSequenceScenarioId ? [{
+      id: "interaction-mode",
+      label: selectedSequenceScenarioInteractive ? "Interactive mode" : "Static mode",
+      icon: selectedSequenceScenarioInteractive ? MousePointer : Eye,
+      onClick: () => handleSetSelectedScenarioInteractive(!selectedSequenceScenarioInteractive),
+      active: selectedSequenceScenarioInteractive,
+      variant: "secondary" as const,
+      tooltip: selectedSequenceScenarioInteractive
+        ? "Switch to static mode (read-only preview)."
+        : "Switch to interactive mode to drive the scenario and record sequences.",
+    }] : []),
+    ...(selectedSequenceScenarioId && !isSequenceRecording ? [{
+      id: "add-step",
+      label: "Add step",
+      icon: ListPlus,
+      onClick: handleStartSingleStepRecording,
+      disabled: !selectedSequenceScenarioInteractive,
+      tooltip: !selectedSequenceScenarioInteractive
+        ? "Turn on interaction mode to add a step."
+        : "Record the next interaction as a single step.",
+    }, {
+      id: "record-sequence",
+      label: selectedSequenceSteps.length > 0 ? "Recreate sequence" : "Create sequence",
+      icon: ListOrdered,
+      onClick: handleStartContinuousRecording,
+      disabled: !selectedSequenceScenarioInteractive,
+      tooltip: !selectedSequenceScenarioInteractive
+        ? "Turn on interaction mode to record a sequence."
+        : selectedSequenceSteps.length > 0
+          ? "Record a new sequence in one pass; saving replaces the current steps."
+          : "Record the full interaction sequence in one pass.",
+    }] : []),
+    ...(isSequenceRecording ? [{
+      id: "stop-recording",
+      label: "Stop & save",
+      icon: Square,
+      onClick: handleStopSequenceRecording,
+    }] : []),
+  
+    ...(selectedSequenceSteps.length > 0 ? [{
+      id: "clear-steps",
+      label: "Clear steps",
+      icon: ListX,
+      onClick: handleClearSelectedSequence,
+      variant: "ghost" as const,
+    }] : []),
+    ...(selectedSequenceStep ? [{
+      id: "remove-step",
+      label: "Remove step",
+      icon: ListMinus,
+      onClick: handleRemoveSelectedStep,
+      disabled: !selectedSequenceStepIsLast,
+      tooltip: selectedSequenceStepIsLast
+        ? undefined
+        : "Only the last recorded step can be removed.",
+      variant: "ghost" as const,
+    }] : []),
+    ...(selectedSequenceSteps.length > 0 && !isSequenceRecording ? [{
+      id: "auto-replay",
+      label: selectedSequenceRuntime.autoReplay?.running ? "Stop run" : "Run steps",
+      icon: selectedSequenceRuntime.autoReplay?.running ? Square : Play,
+      onClick: () => {
+        if (!selectedSequenceRuntimeKey) return;
+        if (selectedSequenceRuntime.autoReplay?.running) {
+          cancelAutoReplay(selectedSequenceRuntimeKey);
+        } else {
+          requestAutoReplay(selectedSequenceRuntimeKey, selectedSequenceSteps.length + 1);
+        }
+      },
+      active: Boolean(selectedSequenceRuntime.autoReplay?.running),
+    }] : []),
+    ...(selectedSequenceSteps.length > 0 && !isSequenceRecording ? [{
+      id: "auto-replay-on-mount",
+      label: "Automatically run",
+      icon: AutoRunCircle,
+      iconClassName: "!h-5 !w-5 !min-h-[1.25rem] !min-w-[1.25rem]",
+      onClick: () => {
+        if (!selectedSequenceScenarioId) return;
+        setAutoReplayOnMount(currentLevel, selectedSequenceScenarioId, !autoReplayOnMount);
+      },
+      active: autoReplayOnMount,
+      variant: "outline" as const,
+      tooltip: "Automatically run and compare all steps when the page loads.",
+    }] : []),
+  ], [
+    autoReplayOnMount,
+    currentLevel,
+    handleClearSelectedSequence,
+    handleRemoveSelectedStep,
+    handleSetSelectedScenarioInteractive,
+    handleStartContinuousRecording,
+    handleStartSingleStepRecording,
+    handleStopSequenceRecording,
+    isSequenceRecording,
+    selectedSequenceRuntime,
+    selectedSequenceRuntimeKey,
+    selectedSequenceScenarioId,
+    selectedSequenceScenarioInteractive,
+    selectedSequenceStep,
+    selectedSequenceStepIsLast,
+    selectedSequenceSteps.length,
+  ]);
+
+  const creatorWorkbenchSections = useMemo((): CreatorWorkbenchSection[] => [
+    {
+      id: "interactions",
+      visible: creatorWorkbenchPanels.interactions,
+      title: "Interactions",
+      items: interactionSubnavItems,
+    },
+    {
+      id: "creator",
+      visible: creatorWorkbenchPanels.creator,
+      title: "Levels",
+      children: <CreatorControls displayMode="sidebar" />,
+    },
+    {
+      id: "game",
+      visible: creatorWorkbenchPanels.game,
+      title: "Game",
+      children: (
+        <GameToolsSidebar
+          mapEditorRef={mapEditorRef}
+          isGameRoute={isGameRoute}
+          isCreatorRoute={isCreatorRoute}
+          currentGameId={currentGame?.id}
+          canEditCurrentGame={canEditCurrentGame}
+          showCreatorGameMenus={showCreatorGameMenus}
+          isGroupGame={isGroupGame}
+          openGameLobby={openGameLobby}
+          togglePopper={togglePopper}
+          handleResetGameInstances={handleResetGameInstances}
+          handleResetLeaderboard={handleResetLeaderboard}
+          isResettingInstances={isResettingInstances}
+          shouldEmphasizeFinishGame={shouldEmphasizeFinishGame}
+        />
+      ),
+    },
+  ], [
+    canEditCurrentGame,
+    creatorWorkbenchPanels.creator,
+    creatorWorkbenchPanels.game,
+    creatorWorkbenchPanels.interactions,
+    currentGame?.id,
+    interactionSubnavItems,
+    isCreatorRoute,
+    isGameRoute,
+    isGroupGame,
+    isResettingInstances,
+    openGameLobby,
+    showCreatorGameMenus,
+    shouldEmphasizeFinishGame,
+    togglePopper,
+    handleResetGameInstances,
+    handleResetLeaderboard,
+  ]);
+
+  const [creatorWorkbenchSidebarHost, setCreatorWorkbenchSidebarHost] = useState<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    if (!isCreatorWorkbenchContext) {
+      setCreatorWorkbenchSidebarHost(null);
+      return;
+    }
+    setCreatorWorkbenchSidebarHost(document.getElementById("creator-workbench-sidebar-root"));
+  }, [isCreatorWorkbenchContext]);
 
   if (!level) return null;
 
@@ -902,14 +1015,14 @@ export const Navbar = () => {
           resetAnchorEl={handleAnchorElReset}
         />
       </div>
-      {isCreatorWorkbenchContext ? (
-        <SubNavbar
-          items={creatorWorkbenchSubnavItems}
-        >
-          {creatorWorkbenchTab === "creator" ? <CreatorControls displayMode="menu" /> : null}
-          {creatorWorkbenchTab === "game" ? renderGameMenu() : null}
-        </SubNavbar>
-      ) : null}
+      {isCreatorWorkbenchContext && creatorWorkbenchSidebarHost
+        ? createPortal(
+            <CreatorAutosaveProvider>
+              <CreatorWorkbenchSubSidebar sections={creatorWorkbenchSections} />
+            </CreatorAutosaveProvider>,
+            creatorWorkbenchSidebarHost,
+          )
+        : null}
     </>
   );
 };
