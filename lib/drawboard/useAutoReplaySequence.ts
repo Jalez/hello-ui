@@ -2,7 +2,6 @@ import { useEffect, useRef } from "react";
 import {
   INITIAL_EVENT_SEQUENCE_STEP_ID,
   cancelAutoReplay,
-  getSequenceRuntimeState,
   setSelectedEventSequenceStepId,
   updateSequenceRuntimeState,
   waitForStepAccuracy,

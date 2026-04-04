@@ -34,6 +34,7 @@ import {
 import { aggregateEventSequenceAccuracy } from "@/lib/drawboard/aggregateEventSequenceAccuracy";
 import {
   getDrawboardPixelsPair,
+  getDrawboardPixelsSerial,
   subscribeDrawboardPixelsForScenario,
 } from "@/lib/drawboard/drawboardPixelsStore";
 import {
@@ -663,8 +664,16 @@ export const ScenarioDrawing = ({
     };
 
     const runCreatorComparisons = async () => {
+      const pixelsSerialAtCompareStart =
+        drawboardCaptureMode === "browser" ? getDrawboardPixelsSerial(scenario.scenarioId) : null;
       const nextAccuracies = await compareFocusedStepsToDrawing();
       if (cancelled) return;
+      if (
+        pixelsSerialAtCompareStart !== null
+        && getDrawboardPixelsSerial(scenario.scenarioId) !== pixelsSerialAtCompareStart
+      ) {
+        return;
+      }
       if (!nextAccuracies) {
         markFocusedStepComparisonFailed();
         return;
@@ -689,8 +698,16 @@ export const ScenarioDrawing = ({
       if (!scenarioSequence.length) {
         return;
       }
+      const pixelsSerialAtCompareStart =
+        drawboardCaptureMode === "browser" ? getDrawboardPixelsSerial(scenario.scenarioId) : null;
       const nextAccuracies = await compareFocusedStepsToDrawing();
       if (cancelled) return;
+      if (
+        pixelsSerialAtCompareStart !== null
+        && getDrawboardPixelsSerial(scenario.scenarioId) !== pixelsSerialAtCompareStart
+      ) {
+        return;
+      }
       if (!nextAccuracies) {
         markFocusedStepComparisonFailed();
         return;
@@ -750,6 +767,8 @@ export const ScenarioDrawing = ({
       });
     }
 
+    // Always run once when deps change. Stale async results are skipped when the drawboard
+    // pixel serial advances mid-compare (browser capture).
     runComparisons();
 
     const unsubIframePixels =

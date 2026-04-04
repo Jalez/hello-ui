@@ -54,6 +54,10 @@ export function getDrawboardPixelsPair(scenarioId: string): PixelPair {
   return pairsByScenario.get(scenarioId) ?? { drawing: null, solution: null };
 }
 
+export function getDrawboardPixelsSerial(scenarioId: string): number {
+  return serialByScenario.get(scenarioId) ?? 0;
+}
+
 /** Drop solution-side buffers after the live solution iframe is unmounted (e.g. game mode). */
 export function clearStoredSolutionSide(scenarioId: string): void {
   const pair = pairsByScenario.get(scenarioId);
