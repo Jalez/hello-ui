@@ -81,7 +81,10 @@ function App() {
   const pathname = usePathname();
   const normalizedPathname = stripBasePath(pathname);
   const canEditCurrentGame = Boolean(currentGame?.canEdit ?? currentGame?.isOwner);
-  const isCreatorWorkbenchRoute = normalizedPathname.startsWith("/creator/") && canEditCurrentGame;
+  /** Sidebar host for creator route or game route when the user can edit (editor / preview). */
+  const showEditorWorkbenchSidebar =
+    canEditCurrentGame &&
+    (normalizedPathname.startsWith("/creator/") || normalizedPathname.startsWith("/game/"));
   const params = useParams<{ gameId?: string }>();
   const mode = searchParams.get('mode');
   const routeGameIdParam = params?.gameId;
@@ -467,7 +470,7 @@ function App() {
                   ref={contentRowRef}
                   className="relative flex w-full flex-1 items-stretch overflow-hidden"
                 >
-                  {isCreatorWorkbenchRoute ? (
+                  {showEditorWorkbenchSidebar ? (
                     <div
                       id="creator-workbench-sidebar-root"
                       className="flex h-full max-h-full min-h-0 flex-none shrink-0 flex-col overflow-hidden"

@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Code2, Eye, Users } from "lucide-react";
-import { apiUrl, stripBasePath } from "@/lib/apiUrl";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Eye, Users } from "lucide-react";
+import { apiUrl } from "@/lib/apiUrl";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,14 +21,7 @@ interface CreatorMenuProps {
 
 export function CreatorMenu({ gameId, collaborationMode }: CreatorMenuProps) {
   const router = useRouter();
-  const pathname = usePathname();
-  const normalizedPathname = stripBasePath(pathname);
   const searchParams = useSearchParams();
-  const isCreatorRoute = normalizedPathname.startsWith("/creator/");
-
-  const openCreatorMode = useCallback(() => {
-    router.push(apiUrl(`/creator/${gameId}`));
-  }, [gameId, router]);
 
   const openCreatorPreview = useCallback(() => {
     const params = new URLSearchParams(searchParams.toString());
@@ -47,12 +40,6 @@ export function CreatorMenu({ gameId, collaborationMode }: CreatorMenuProps) {
       <DropdownMenuContent align="start" className="w-80 border-0 shadow-lg">
         <DropdownMenuLabel>Creator</DropdownMenuLabel>
         <DropdownMenuSeparator />
-        {!isCreatorRoute && (
-          <DropdownMenuItem onSelect={openCreatorMode}>
-            <Code2 className="mr-2 h-4 w-4" />
-            Switch to Creator Mode
-          </DropdownMenuItem>
-        )}
         {collaborationMode === "group" && (
           <DropdownMenuItem onSelect={openCreatorPreview}>
             <Eye className="mr-2 h-4 w-4" />

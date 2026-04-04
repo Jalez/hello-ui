@@ -2,7 +2,7 @@
 
 import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
 import { Button } from "@/components/ui/button";
-import { RotateCcw, PanelLeft, Map, Flag, Settings, Trash2, Loader2, Gamepad2, BarChart3, Users, MousePointer, Eye, Square, Play, Wrench, ListMinus, ListX, ListPlus, ListOrdered } from "lucide-react";
+import { RotateCcw, PanelLeft, Map, Flag, Settings, Gamepad2, BarChart3, Users, MousePointer, Eye, Square, Play, Wrench, ListMinus, ListX, ListPlus, ListOrdered } from "lucide-react";
 import { AutoRunCircle } from "@/components/icons/AutoRunCircle";
 import { LevelSelect } from "@/components/General/LevelControls/LevelControls";
 import { setCurrentLevel } from "@/store/slices/currentLevel.slice";
@@ -69,7 +69,7 @@ import {
   setAutoReplayOnMount,
 } from "@/lib/drawboard/eventSequenceState";
 
-type CreatorWorkbenchSubnavTabId = "creator" | "interactions" | "game";
+type CreatorWorkbenchSubnavTabId = "creator" | "events" | "game";
 
 const CREATOR_WORKBENCH_SUBNAV_TABS: Array<{
   id: CreatorWorkbenchSubnavTabId;
@@ -84,8 +84,8 @@ const CREATOR_WORKBENCH_SUBNAV_TABS: Array<{
     icon: Settings,
   },
   {
-    id: "interactions",
-    label: "Interactions",
+    id: "events",
+    label: "Events",
     tooltip: "Record an event sequence for the selected scenario.",
     icon: MousePointer,
   },
@@ -127,6 +127,8 @@ export const Navbar = () => {
     Boolean(currentGame?.id) &&
     canEditCurrentGame;
   const isCreatorWorkbenchContext = isCreatorRoute && canEditCurrentGame;
+  /** Editor workbench sidebar (creator route full rail, or game route Game tools rail). */
+  const hostEditorWorkbench = isCreatorWorkbenchContext || showCreatorGameMenus;
   const shouldShowMobileSidebarToggle =
     isGameRoute &&
     isVisible &&
@@ -147,13 +149,12 @@ export const Navbar = () => {
   const mapEditorRef = useRef<MapEditorRef>(null);
   const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
   const [resetScope, setResetScope] = useState<"level" | "game">("level");
-  const [isResettingInstances, setIsResettingInstances] = useState(false);
   const [hasDismissedCompactGameShake, setHasDismissedCompactGameShake] = useState(false);
   const [creatorWorkbenchPanels, setCreatorWorkbenchPanels] = useState<
     Record<CreatorWorkbenchSubnavTabId, boolean>
   >({
     creator: true,
-    interactions: true,
+    events: true,
     game: true,
   });
   const storedSelectedSequenceScenarioId = useEventSequenceUiState(
@@ -298,76 +299,6 @@ export const Navbar = () => {
     const query = params.toString();
     router.push(apiUrl(`/game/${currentGame.id}${query ? `?${query}` : ""}`));
   }, [currentGame?.id, isGroupGame, router, searchParams]);
-
-  const handleResetGameInstances = useCallback(async () => {
-    if (!currentGame?.id) {
-      return;
-    }
-
-    const confirmed = window.confirm(
-      "Reset all saved game instances for this game? This clears all individual and group gameplay progress and code snapshots.",
-    );
-    if (!confirmed) {
-      return;
-    }
-
-    try {
-      setIsResettingInstances(true);
-      const response = await fetch(apiUrl(`/api/games/${currentGame.id}/instances/reset`), {
-        method: "POST",
-      });
-      const data = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to reset game instances");
-      }
-
-      toast.success(
-        data.deletedCount > 0
-          ? `Reset ${data.deletedCount} saved game instance${data.deletedCount === 1 ? "" : "s"}.`
-          : "No saved game instances to reset.",
-      );
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to reset game instances");
-    } finally {
-      setIsResettingInstances(false);
-    }
-  }, [currentGame?.id]);
-
-  const handleResetLeaderboard = useCallback(async () => {
-    if (!currentGame?.id) {
-      return;
-    }
-
-    const confirmed = window.confirm(
-      "Reset all leaderboard data for this game? This deletes recorded attempt statistics but does not remove the game itself.",
-    );
-    if (!confirmed) {
-      return;
-    }
-
-    try {
-      setIsResettingInstances(true);
-      const response = await fetch(apiUrl(`/api/games/${currentGame.id}/leaderboard/reset`), {
-        method: "POST",
-      });
-      const data = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to reset leaderboard");
-      }
-
-      toast.success(
-        data.deletedAttempts > 0
-          ? `Reset leaderboard for ${data.deletedAttempts} attempt${data.deletedAttempts === 1 ? "" : "s"}.`
-          : "No leaderboard data to reset.",
-      );
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to reset leaderboard");
-    } finally {
-      setIsResettingInstances(false);
-    }
-  }, [currentGame?.id]);
 
   const handleAnchorElReset = useCallback(() => {
     setIsResetDialogOpen(false);
@@ -514,22 +445,6 @@ export const Navbar = () => {
                 <BarChart3 className="h-4 w-4 mr-2" />
                 Statistics
               </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={handleResetGameInstances} disabled={isResettingInstances}>
-              {isResettingInstances ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <Trash2 className="h-4 w-4 mr-2" />
-              )}
-              Reset Game Instances
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={handleResetLeaderboard} disabled={isResettingInstances}>
-              {isResettingInstances ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <Trash2 className="h-4 w-4 mr-2" />
-              )}
-              Reset Leaderboard
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
               <Link href={`/creator/${currentGame.id}/settings`}>
@@ -777,34 +692,34 @@ export const Navbar = () => {
   const interactionSubnavItems = useMemo((): SubNavbarItem[] => [
     ...(selectedSequenceScenarioId ? [{
       id: "interaction-mode",
-      label: selectedSequenceScenarioInteractive ? "Interactive mode" : "Static mode",
+      label: selectedSequenceScenarioInteractive ? "Live" : "Static",
       icon: selectedSequenceScenarioInteractive ? MousePointer : Eye,
       onClick: () => handleSetSelectedScenarioInteractive(!selectedSequenceScenarioInteractive),
       active: selectedSequenceScenarioInteractive,
       variant: "secondary" as const,
       tooltip: selectedSequenceScenarioInteractive
-        ? "Switch to static mode (read-only preview)."
-        : "Switch to interactive mode to drive the scenario and record sequences.",
+        ? "Switch to static (read-only preview)."
+        : "Switch to live mode to drive the scenario and record event sequences.",
     }] : []),
     ...(selectedSequenceScenarioId && !isSequenceRecording ? [{
-      id: "add-step",
-      label: "Add step",
+      id: "add-event",
+      label: "Add event",
       icon: ListPlus,
       onClick: handleStartSingleStepRecording,
       disabled: !selectedSequenceScenarioInteractive,
       tooltip: !selectedSequenceScenarioInteractive
-        ? "Turn on interaction mode to add a step."
-        : "Record the next interaction as a single step.",
+        ? "Turn on live mode to add an event."
+        : "Record the next interaction as a single event.",
     }, {
       id: "record-sequence",
-      label: selectedSequenceSteps.length > 0 ? "Recreate sequence" : "Create sequence",
+      label: selectedSequenceSteps.length > 0 ? "Set events" : "Create event sequence",
       icon: ListOrdered,
       onClick: handleStartContinuousRecording,
       disabled: !selectedSequenceScenarioInteractive,
       tooltip: !selectedSequenceScenarioInteractive
-        ? "Turn on interaction mode to record a sequence."
+        ? "Turn on live mode to record an event sequence."
         : selectedSequenceSteps.length > 0
-          ? "Record a new sequence in one pass; saving replaces the current steps."
+          ? "Record a new event sequence in one pass; saving replaces the current events."
           : "Record the full interaction sequence in one pass.",
     }] : []),
     ...(isSequenceRecording ? [{
@@ -815,26 +730,26 @@ export const Navbar = () => {
     }] : []),
   
     ...(selectedSequenceSteps.length > 0 ? [{
-      id: "clear-steps",
-      label: "Clear steps",
+      id: "clear-events",
+      label: "Clear events",
       icon: ListX,
       onClick: handleClearSelectedSequence,
       variant: "ghost" as const,
     }] : []),
     ...(selectedSequenceStep ? [{
-      id: "remove-step",
-      label: "Remove step",
+      id: "remove-event",
+      label: "Remove event",
       icon: ListMinus,
       onClick: handleRemoveSelectedStep,
       disabled: !selectedSequenceStepIsLast,
       tooltip: selectedSequenceStepIsLast
         ? undefined
-        : "Only the last recorded step can be removed.",
+        : "Only the last recorded event can be removed.",
       variant: "ghost" as const,
     }] : []),
     ...(selectedSequenceSteps.length > 0 && !isSequenceRecording ? [{
       id: "auto-replay",
-      label: selectedSequenceRuntime.autoReplay?.running ? "Stop run" : "Run steps",
+      label: selectedSequenceRuntime.autoReplay?.running ? "Stop run" : "Run events",
       icon: selectedSequenceRuntime.autoReplay?.running ? Square : Play,
       onClick: () => {
         if (!selectedSequenceRuntimeKey) return;
@@ -848,7 +763,7 @@ export const Navbar = () => {
     }] : []),
     ...(selectedSequenceSteps.length > 0 && !isSequenceRecording ? [{
       id: "auto-replay-on-mount",
-      label: "Automatically run",
+      label: "Auto-run events",
       icon: AutoRunCircle,
       iconClassName: "!h-5 !w-5 !min-h-[1.25rem] !min-w-[1.25rem]",
       onClick: () => {
@@ -857,7 +772,7 @@ export const Navbar = () => {
       },
       active: autoReplayOnMount,
       variant: "outline" as const,
-      tooltip: "Automatically run and compare all steps when the page loads.",
+      tooltip: "Automatically run and compare all events when the page loads.",
     }] : []),
   ], [
     autoReplayOnMount,
@@ -878,11 +793,62 @@ export const Navbar = () => {
     selectedSequenceSteps.length,
   ]);
 
+  const handleSwitchToCreator = useCallback(() => {
+    if (!currentGame?.id) {
+      return;
+    }
+    router.push(apiUrl(`/creator/${currentGame.id}`));
+  }, [currentGame?.id, router]);
+
+  const gameRouteInteractionRunItems = useMemo(
+    () =>
+      interactionSubnavItems.filter(
+        (item) => item.id === "auto-replay" || item.id === "auto-replay-on-mount",
+      ),
+    [interactionSubnavItems],
+  );
+
+  const gameRouteWorkbenchSections = useMemo((): CreatorWorkbenchSection[] => [
+    {
+      id: "game",
+      visible: true,
+      title: "Game",
+      children: (
+        <GameToolsSidebar
+          mapEditorRef={mapEditorRef}
+          isGameRoute={isGameRoute}
+          isCreatorRoute={isCreatorRoute}
+          currentGameId={currentGame?.id}
+          canEditCurrentGame={canEditCurrentGame}
+          showCreatorGameMenus={showCreatorGameMenus}
+          isGroupGame={isGroupGame}
+          openGameLobby={openGameLobby}
+          togglePopper={togglePopper}
+          shouldEmphasizeFinishGame={shouldEmphasizeFinishGame}
+          interactionRunItems={gameRouteInteractionRunItems}
+          onSwitchToCreator={handleSwitchToCreator}
+        />
+      ),
+    },
+  ], [
+    canEditCurrentGame,
+    currentGame?.id,
+    gameRouteInteractionRunItems,
+    handleSwitchToCreator,
+    isGameRoute,
+    isCreatorRoute,
+    isGroupGame,
+    openGameLobby,
+    showCreatorGameMenus,
+    shouldEmphasizeFinishGame,
+    togglePopper,
+  ]);
+
   const creatorWorkbenchSections = useMemo((): CreatorWorkbenchSection[] => [
     {
-      id: "interactions",
-      visible: creatorWorkbenchPanels.interactions,
-      title: "Interactions",
+      id: "events",
+      visible: creatorWorkbenchPanels.events,
+      title: "Events",
       items: interactionSubnavItems,
     },
     {
@@ -906,9 +872,6 @@ export const Navbar = () => {
           isGroupGame={isGroupGame}
           openGameLobby={openGameLobby}
           togglePopper={togglePopper}
-          handleResetGameInstances={handleResetGameInstances}
-          handleResetLeaderboard={handleResetLeaderboard}
-          isResettingInstances={isResettingInstances}
           shouldEmphasizeFinishGame={shouldEmphasizeFinishGame}
         />
       ),
@@ -917,29 +880,26 @@ export const Navbar = () => {
     canEditCurrentGame,
     creatorWorkbenchPanels.creator,
     creatorWorkbenchPanels.game,
-    creatorWorkbenchPanels.interactions,
+    creatorWorkbenchPanels.events,
     currentGame?.id,
     interactionSubnavItems,
     isCreatorRoute,
     isGameRoute,
     isGroupGame,
-    isResettingInstances,
     openGameLobby,
     showCreatorGameMenus,
     shouldEmphasizeFinishGame,
     togglePopper,
-    handleResetGameInstances,
-    handleResetLeaderboard,
   ]);
 
   const [creatorWorkbenchSidebarHost, setCreatorWorkbenchSidebarHost] = useState<HTMLElement | null>(null);
   useLayoutEffect(() => {
-    if (!isCreatorWorkbenchContext) {
+    if (!hostEditorWorkbench) {
       setCreatorWorkbenchSidebarHost(null);
       return;
     }
     setCreatorWorkbenchSidebarHost(document.getElementById("creator-workbench-sidebar-root"));
-  }, [isCreatorWorkbenchContext]);
+  }, [hostEditorWorkbench]);
 
   if (!level) return null;
 
@@ -1015,11 +975,15 @@ export const Navbar = () => {
           resetAnchorEl={handleAnchorElReset}
         />
       </div>
-      {isCreatorWorkbenchContext && creatorWorkbenchSidebarHost
+      {hostEditorWorkbench && creatorWorkbenchSidebarHost
         ? createPortal(
-            <CreatorAutosaveProvider>
-              <CreatorWorkbenchSubSidebar sections={creatorWorkbenchSections} />
-            </CreatorAutosaveProvider>,
+            isCreatorWorkbenchContext ? (
+              <CreatorAutosaveProvider>
+                <CreatorWorkbenchSubSidebar sections={creatorWorkbenchSections} />
+              </CreatorAutosaveProvider>
+            ) : (
+              <CreatorWorkbenchSubSidebar sections={gameRouteWorkbenchSections} />
+            ),
             creatorWorkbenchSidebarHost,
           )
         : null}

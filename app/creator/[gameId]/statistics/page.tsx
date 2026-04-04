@@ -4,6 +4,7 @@ import Link from "next/link";
 import { use, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { ArrowLeft, Loader2, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { useGameStore } from "@/components/default/games";
 import { apiUrl } from "@/lib/apiUrl";
 import { Button } from "@/components/ui/button";
@@ -116,6 +117,15 @@ export default function CreatorStatisticsPage({ params }: CreatorStatisticsPageP
     initializePage();
   }, [gameId, hasUser, loadGameById, setCurrentGameId]);
 
+  const refreshStatistics = async () => {
+    const refreshResponse = await fetch(apiUrl(`/api/games/${gameId}/statistics`));
+    const refreshData = await refreshResponse.json().catch(() => ({}));
+    if (!refreshResponse.ok) {
+      throw new Error(refreshData.error || "Failed to refresh statistics");
+    }
+    setPayload(refreshData);
+  };
+
   const handleResetLeaderboard = async () => {
     const confirmed = window.confirm(
       "Reset the leaderboard for this game? This deletes all recorded attempt statistics for the game.",
@@ -126,6 +136,7 @@ export default function CreatorStatisticsPage({ params }: CreatorStatisticsPageP
 
     try {
       setIsResetting(true);
+      setError(null);
       const response = await fetch(apiUrl(`/api/games/${gameId}/leaderboard/reset`), {
         method: "POST",
       });
@@ -134,14 +145,50 @@ export default function CreatorStatisticsPage({ params }: CreatorStatisticsPageP
         throw new Error(data.error || "Failed to reset leaderboard");
       }
 
-      const refreshResponse = await fetch(apiUrl(`/api/games/${gameId}/statistics`));
-      const refreshData = await refreshResponse.json().catch(() => ({}));
-      if (!refreshResponse.ok) {
-        throw new Error(refreshData.error || "Failed to refresh statistics");
-      }
-      setPayload(refreshData);
+      toast.success(
+        data.deletedAttempts > 0
+          ? `Reset leaderboard for ${data.deletedAttempts} attempt${data.deletedAttempts === 1 ? "" : "s"}.`
+          : "No leaderboard data to reset.",
+      );
+      await refreshStatistics();
     } catch (resetError) {
-      setError(resetError instanceof Error ? resetError.message : "Failed to reset leaderboard");
+      const message = resetError instanceof Error ? resetError.message : "Failed to reset leaderboard";
+      setError(message);
+      toast.error(message);
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
+  const handleResetGameInstances = async () => {
+    const confirmed = window.confirm(
+      "Reset all saved game instances for this game? This clears all individual and group gameplay progress and code snapshots.",
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setIsResetting(true);
+      setError(null);
+      const response = await fetch(apiUrl(`/api/games/${gameId}/instances/reset`), {
+        method: "POST",
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to reset game instances");
+      }
+
+      toast.success(
+        data.deletedCount > 0
+          ? `Reset ${data.deletedCount} saved game instance${data.deletedCount === 1 ? "" : "s"}.`
+          : "No saved game instances to reset.",
+      );
+      await refreshStatistics();
+    } catch (resetError) {
+      const message = resetError instanceof Error ? resetError.message : "Failed to reset game instances";
+      setError(message);
+      toast.error(message);
     } finally {
       setIsResetting(false);
     }
@@ -195,9 +242,13 @@ export default function CreatorStatisticsPage({ params }: CreatorStatisticsPageP
                 Back to Creator
               </Link>
             </Button>
+            <Button type="button" variant="outline" onClick={handleResetGameInstances} disabled={isResetting} className="gap-2">
+              {isResetting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              Reset game instances
+            </Button>
             <Button type="button" variant="outline" onClick={handleResetLeaderboard} disabled={isResetting} className="gap-2">
               {isResetting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-              Reset Leaderboard
+              Reset leaderboard
             </Button>
           </div>
         </div>

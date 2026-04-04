@@ -3,13 +3,12 @@
 import type { RefObject } from "react";
 import {
   BarChart3,
+  Code2,
   Flag,
   Gamepad2,
-  Loader2,
   Map,
   RotateCcw,
   Settings,
-  Trash2,
   Users,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -17,6 +16,7 @@ import type { MapEditorRef } from "@/components/CreatorControls/MapEditor";
 import { apiUrl } from "@/lib/apiUrl";
 import { AplusSubmitButton } from "./AplusSubmitButton";
 import { WorkbenchSidebarToolRow } from "./WorkbenchSidebarToolRow";
+import type { SubNavbarItem } from "./SubNavbar";
 
 export type GameToolsSidebarProps = {
   mapEditorRef: RefObject<MapEditorRef | null>;
@@ -28,10 +28,11 @@ export type GameToolsSidebarProps = {
   isGroupGame: boolean;
   openGameLobby: () => void;
   togglePopper: (scope: "level" | "game") => void;
-  handleResetGameInstances: () => void;
-  handleResetLeaderboard: () => void;
-  isResettingInstances: boolean;
   shouldEmphasizeFinishGame: boolean;
+  /** Run events / auto-run events (game route editor workbench). */
+  interactionRunItems?: SubNavbarItem[];
+  /** Shown in game route editor sidebar; opens creator for this game. */
+  onSwitchToCreator?: () => void;
 };
 
 function SidebarDivider() {
@@ -48,16 +49,19 @@ export function GameToolsSidebar({
   isGroupGame,
   openGameLobby,
   togglePopper,
-  handleResetGameInstances,
-  handleResetLeaderboard,
-  isResettingInstances,
   shouldEmphasizeFinishGame,
+  interactionRunItems,
+  onSwitchToCreator,
 }: GameToolsSidebarProps) {
   const router = useRouter();
 
   const hasTopSection =
     Boolean(isGameRoute && currentGameId && isGroupGame)
-    || Boolean(isCreatorRoute && currentGameId && canEditCurrentGame);
+    || Boolean(isCreatorRoute && currentGameId && canEditCurrentGame)
+    || Boolean(showCreatorGameMenus && !isCreatorRoute && currentGameId && onSwitchToCreator);
+
+  const showSwitchToCreatorInGameTools =
+    Boolean(showCreatorGameMenus && !isCreatorRoute && currentGameId && onSwitchToCreator);
 
   return (
     <div className="flex w-full flex-col gap-1">
@@ -68,6 +72,16 @@ export function GameToolsSidebar({
           tooltip="Back to Game Lobby"
           icon={Users}
           onClick={openGameLobby}
+        />
+      ) : null}
+
+      {showSwitchToCreatorInGameTools ? (
+        <WorkbenchSidebarToolRow
+          id="game-switch-creator"
+          label="Creator"
+          tooltip="Switch to Creator Mode"
+          icon={Code2}
+          onClick={onSwitchToCreator!}
         />
       ) : null}
 
@@ -101,6 +115,7 @@ export function GameToolsSidebar({
           />
           <AplusSubmitButton
             shouldShake={shouldEmphasizeFinishGame}
+            centerTrigger
             renderTrigger={({ openDialog }) => (
               <WorkbenchSidebarToolRow
                 id="game-finish"
@@ -116,6 +131,32 @@ export function GameToolsSidebar({
 
       {showCreatorGameMenus ? <SidebarDivider /> : null}
 
+      {interactionRunItems && interactionRunItems.length > 0 ? (
+        <>
+          {interactionRunItems.map((item) => {
+            if (!item.icon || !item.onClick) {
+              return null;
+            }
+            const Icon = item.icon;
+            return (
+              <WorkbenchSidebarToolRow
+                key={item.id}
+                id={`game-interaction-${item.id}`}
+                label={item.label}
+                tooltip={item.tooltip}
+                icon={Icon}
+                onClick={item.onClick}
+                disabled={item.disabled}
+                active={item.active}
+                variant={item.variant}
+                iconClassName={item.iconClassName}
+              />
+            );
+          })}
+          <SidebarDivider />
+        </>
+      ) : null}
+
       <WorkbenchSidebarToolRow
         id="game-levels-map"
         label="Levels"
@@ -130,27 +171,9 @@ export function GameToolsSidebar({
           <WorkbenchSidebarToolRow
             id="game-statistics"
             label="Stats"
-            tooltip="Statistics"
+            tooltip="Statistics (reset leaderboard & instances)"
             icon={BarChart3}
             onClick={() => router.push(apiUrl(`/creator/${currentGameId}/statistics`))}
-          />
-          <WorkbenchSidebarToolRow
-            id="game-reset-instances"
-            label="Instances"
-            tooltip="Reset Game Instances"
-            icon={isResettingInstances ? Loader2 : Trash2}
-            iconClassName={isResettingInstances ? "animate-spin" : undefined}
-            onClick={handleResetGameInstances}
-            disabled={isResettingInstances}
-          />
-          <WorkbenchSidebarToolRow
-            id="game-reset-leaderboard"
-            label="Leaderboard"
-            tooltip="Reset Leaderboard"
-            icon={isResettingInstances ? Loader2 : Trash2}
-            iconClassName={isResettingInstances ? "animate-spin" : undefined}
-            onClick={handleResetLeaderboard}
-            disabled={isResettingInstances}
           />
           <WorkbenchSidebarToolRow
             id="game-settings"

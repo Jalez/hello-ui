@@ -14,12 +14,15 @@ interface AplusSubmitButtonProps {
   displayMode?: NavbarActionDisplayMode;
   shouldShake?: boolean;
   renderTrigger?: (options: { openDialog: () => void }) => ReactNode;
+  /** When using renderTrigger in a narrow rail (e.g. workbench sidebar), center the trigger like other tool rows. */
+  centerTrigger?: boolean;
 }
 
 export const AplusSubmitButton = ({
   displayMode = "icon",
   shouldShake = false,
   renderTrigger,
+  centerTrigger = false,
 }: AplusSubmitButtonProps) => {
   const params = useParams();
   const pathname = usePathname();
@@ -72,7 +75,13 @@ export const AplusSubmitButton = ({
   return (
     <span
       className={cn(
-        renderTrigger || displayMode === "icon-label" ? "block w-full" : "inline-flex",
+        renderTrigger
+          ? centerTrigger
+            ? "flex w-full justify-center"
+            : "block w-full"
+          : displayMode === "icon-label"
+            ? "block w-full"
+            : "inline-flex",
         shouldShake && "animate-shake-burst",
       )}
     >
