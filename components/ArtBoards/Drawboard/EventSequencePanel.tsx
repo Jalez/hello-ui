@@ -106,7 +106,7 @@ export function EventSequencePanel({
     {
       id: INITIAL_EVENT_SEQUENCE_STEP_ID,
       label: "Initial state",
-      instruction: "View before any interactions are triggered.",
+      instruction: "View before any events are triggered.",
       eventType: "click",
       targetSummary: "initial state",
     },
@@ -198,7 +198,7 @@ export function EventSequencePanel({
             <div className="text-sm text-muted-foreground">
               {creatorMode
                 ? interactivePreview
-                  ? "Use the Interactions subnavbar to record the intended event sequence."
+                  ? "Use the Events panel in the sidebar to record the intended event sequence."
                   : "Switch to live preview to start recording an event sequence."
                 : "No event sequence has been recorded for this scenario."}
             </div>

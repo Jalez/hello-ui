@@ -262,11 +262,11 @@ async function ensureCreatorInteractivePreview(page) {
   }
 }
 
-/** Interactions subnavbar: recording controls use "Start sequence" / "Stop & save" (see Navbar.tsx). */
-async function openCreatorInteractionsSubnav(page) {
-  const interactionsTab = page.getByRole("button", { name: /^Interactions$/ }).first();
-  await interactionsTab.waitFor({ state: "visible", timeout: TIMEOUT_MS });
-  await interactionsTab.click();
+/** Events panel (sidebar): recording controls use "Set events" / "Stop & save" (see Navbar.tsx). */
+async function openCreatorEventsSubnav(page) {
+  const eventsTab = page.getByRole("button", { name: /^Events$/ }).first();
+  await eventsTab.waitFor({ state: "visible", timeout: TIMEOUT_MS });
+  await eventsTab.click();
   await page.waitForTimeout(200);
 }
 
@@ -293,7 +293,7 @@ async function ensureInteractionModeForRecording(page) {
 }
 
 async function startSequenceRecording(page) {
-  await openCreatorInteractionsSubnav(page);
+  await openCreatorEventsSubnav(page);
   await ensureInteractionModeForRecording(page);
   const startButton = page.locator('button:has-text("Start sequence"):visible').first();
   await startButton.waitFor({ state: "visible", timeout: TIMEOUT_MS });

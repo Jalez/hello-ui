@@ -10,7 +10,7 @@ const CreatorAutosaveContext = createContext<CreatorAutosaveContextValue | null>
 /**
  * Keeps level autosave running whenever the creator workbench is shown.
  * CreatorControls used to mount useLevelSaver directly; after the workbench
- * subnavbar defaulted to "Interactions", that hook was often unmounted while
+ * subnavbar defaulted to "Events", that hook was often unmounted while
  * users still edited scenarios — so changes were never persisted.
  */
 export function CreatorAutosaveProvider({ children }: { children: ReactNode }) {

@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils/cn";
 import type { SubNavbarItem } from "./SubNavbar";
 import { WorkbenchSidebarToolRow } from "./WorkbenchSidebarToolRow";
 
-export type CreatorWorkbenchPanelId = "interactions" | "creator" | "game";
+export type CreatorWorkbenchPanelId = "events" | "creator" | "game";
 
 export type CreatorWorkbenchSection = {
   id: CreatorWorkbenchPanelId;
