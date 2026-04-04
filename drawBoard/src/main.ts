@@ -790,6 +790,9 @@ function scheduleRenderReady() {
 }
 
 function applyHtml(html: string) {
+  // Clear stale errorOverlay reference — innerHTML wipe detaches it from the
+  // DOM but the variable still blocks event listeners, replay, and render-ready.
+  errorOverlay = null;
   document.body.innerHTML = html;
   applyScenarioDocumentBox();
 }
