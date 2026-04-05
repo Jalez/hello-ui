@@ -1226,6 +1226,11 @@ function createStarterLevel() {
     week: "playwright-local",
     percentageTreshold: 70,
     percentageFullPointsTreshold: 95,
+    pointsThresholds: [
+      { accuracy: 70, pointsPercent: 25 },
+      { accuracy: 85, pointsPercent: 60 },
+      { accuracy: 95, pointsPercent: 100 },
+    ],
     difficulty: "easy",
     instructions: [],
     question_and_answer: { question: "", answer: "" },
@@ -1330,6 +1335,25 @@ async function signInDevUser(page, username) {
       message: `Expected authenticated session for ${username}`,
     })
     .toBe(true);
+
+  // Pre-acknowledge all tour spots so the Joyride overlay never blocks interactions.
+  await page.evaluate(async () => {
+    const acks = {
+      "navbar.game_route_score": 1, "navbar.game_route_mobile_game_menu": 1,
+      "navbar.game_route_levels": 1, "navbar.game_route_lobby": 1,
+      "navbar.game_route_finish": 1, "navbar.creator_game_menu": 1,
+      "navbar.creator_workbench_tools": 1, "navbar.creator_levels": 1,
+      "creator.workbench_sidebar": 1, "footer.help": 1,
+      "footer.level_menu": 1, "footer.time_menu": 1,
+      "footer.info": 1, "footer.collaboration": 1,
+      "gameboard.events_strip": 2, "gameboard.scenario_run_controls": 2,
+    };
+    await fetch("/api/user/tour-spots", {
+      method: "PATCH", credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ acks }),
+    }).catch(() => {});
+  });
 }
 
 async function enableHttpLatency(context) {

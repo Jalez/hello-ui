@@ -98,6 +98,11 @@ function creatorStarterLevel() {
     week: "playwright-interaction",
     percentageTreshold: 70,
     percentageFullPointsTreshold: 95,
+    pointsThresholds: [
+      { accuracy: 70, pointsPercent: 25 },
+      { accuracy: 85, pointsPercent: 60 },
+      { accuracy: 95, pointsPercent: 100 },
+    ],
     difficulty: "easy",
     instructions: [],
     question_and_answer: { question: "", answer: "" },
@@ -458,6 +463,32 @@ async function deleteGame(request, gameId) {
   }
 }
 
+/** Pre-acknowledge every tour spot so the Joyride overlay never appears. */
+async function acknowledgeTourSpots(request) {
+  const acks = {
+    "navbar.game_route_score": 1,
+    "navbar.game_route_mobile_game_menu": 1,
+    "navbar.game_route_levels": 1,
+    "navbar.game_route_lobby": 1,
+    "navbar.game_route_finish": 1,
+    "navbar.creator_game_menu": 1,
+    "navbar.creator_workbench_tools": 1,
+    "navbar.creator_levels": 1,
+    "creator.workbench_sidebar": 1,
+    "footer.help": 1,
+    "footer.level_menu": 1,
+    "footer.time_menu": 1,
+    "footer.info": 1,
+    "footer.collaboration": 1,
+    "gameboard.events_strip": 2,
+    "gameboard.scenario_run_controls": 2,
+  };
+  const res = await request.patch(`${BASE_URL}/api/user/tour-spots`, { data: { acks } });
+  if (!res.ok()) {
+    console.warn("Failed to pre-ack tour spots:", res.status(), await res.text());
+  }
+}
+
 async function main() {
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
@@ -466,6 +497,7 @@ async function main() {
 
   try {
     await signInDevUser(page, DEV_USERNAME);
+    await acknowledgeTourSpots(context.request);
     console.log("signed in dev user");
     const { game, level } = await createGameWithLevel(context.request);
     gameId = game.id;
