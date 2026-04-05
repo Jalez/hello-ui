@@ -33,31 +33,14 @@ function getAverageScenarioAccuracy(level: Level, existingScenarios?: scenarioAc
 }
 
 function calculatePointsFromThresholds(level: Level, accuracy: number): number {
-  const pointsThresholds = level.pointsThresholds;
-
-  if (pointsThresholds && pointsThresholds.length > 0) {
-    const sorted = [...pointsThresholds].sort((a, b) => a.accuracy - b.accuracy);
-    let earnedPercent = 0;
-    for (const threshold of sorted) {
-      if (accuracy >= threshold.accuracy) {
-        earnedPercent = threshold.pointsPercent;
-      }
+  const sorted = [...level.pointsThresholds].sort((a, b) => a.accuracy - b.accuracy);
+  let earnedPercent = 0;
+  for (const threshold of sorted) {
+    if (accuracy >= threshold.accuracy) {
+      earnedPercent = threshold.pointsPercent;
     }
-    return Math.ceil((earnedPercent / 100) * level.maxPoints);
   }
-
-  const percentageTreshold = level.percentageTreshold || 90;
-  const percentageFullPointsTreshold = level.percentageFullPointsTreshold || 100;
-  if (accuracy < percentageTreshold) {
-    return 0;
-  }
-  if (accuracy >= percentageFullPointsTreshold) {
-    return level.maxPoints;
-  }
-
-  const coveredRange = Math.max(percentageFullPointsTreshold - percentageTreshold, 1);
-  const progress = (accuracy - percentageTreshold) / coveredRange;
-  return Math.ceil(progress * level.maxPoints);
+  return Math.ceil((earnedPercent / 100) * level.maxPoints);
 }
 
 function buildLevelPoints(level: Level) {

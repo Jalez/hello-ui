@@ -102,6 +102,12 @@ export type scenarioAccuracy = {
 };
 
 type instructions = instructionSection[];
+
+export type PointsThreshold = {
+  accuracy: number;
+  pointsPercent: number;
+};
+
 export interface Level {
   identifier?: levelIdentifier;
   week: string;
@@ -152,7 +158,7 @@ export interface Level {
   interactionArtifacts?: InteractionArtifacts;
   percentageTreshold: number;
   percentageFullPointsTreshold: number;
-  pointsThresholds?: { accuracy: number; pointsPercent: number }[];
+  pointsThresholds: PointsThreshold[];
 }
 
 export type generator = () => {

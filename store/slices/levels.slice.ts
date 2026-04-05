@@ -6,15 +6,22 @@ import { backendStorage } from "@/lib/utils/backendStorage";
 import { EventSequenceStep, Level, VerifiedInteraction, difficulty } from "@/types";
 import { gameMaxTime } from "@/constants";
 import { normalizeEventSequence, normalizeInteractionArtifacts, normalizeInteractionTriggers } from "@/lib/drawboard/interactionEvents";
+import {
+  DEFAULT_POINTS_THRESHOLDS,
+  applyPointsThresholdsInPlace,
+  ensurePointsThresholdsOnLevel,
+} from "@/lib/levels/pointsThresholds";
 // allLevels will be set by the App component when levels are loaded
 export let allLevels: Level[] = [];
 export const setAllLevels = (levels: Level[]) => {
-  allLevels = levels.map((level) => ({
-    ...level,
-    eventSequence: normalizeEventSequence(level.eventSequence) ?? { byScenarioId: {} },
-    events: normalizeInteractionTriggers(level.events as never),
-    interactionArtifacts: normalizeInteractionArtifacts(level.interactionArtifacts) ?? { byScenarioId: {} },
-  }));
+  allLevels = levels.map((level) =>
+    ensurePointsThresholdsOnLevel({
+      ...level,
+      eventSequence: normalizeEventSequence(level.eventSequence) ?? { byScenarioId: {} },
+      events: normalizeInteractionTriggers(level.events as never),
+      interactionArtifacts: normalizeInteractionArtifacts(level.interactionArtifacts) ?? { byScenarioId: {} },
+    }),
+  );
 };
 
 type scenarioSolutionUrls = {
@@ -47,13 +54,9 @@ const templateWithoutCode = {
   difficulty: "easy" as difficulty,
   points: 0,
   maxPoints: 100,
-  percentageTreshold: 90,
-  percentageFullPointsTreshold: 98,
-  pointsThresholds: [
-    { accuracy: 70, pointsPercent: 25 },
-    { accuracy: 85, pointsPercent: 60 },
-    { accuracy: 95, pointsPercent: 100 },
-  ],
+  percentageTreshold: 70,
+  percentageFullPointsTreshold: 95,
+  pointsThresholds: DEFAULT_POINTS_THRESHOLDS.map((t) => ({ ...t })),
   accuracy: 0,
   interactive: false,
   showModelPicture: false,
@@ -102,12 +105,14 @@ const levelsSlice = createSlice({
       activeGameId = gameId || null;
       activeMapName = mapName;
       activeMode = mode || "game";
-      const normalizedLevels = levels.map((level: Level) => ({
-        ...level,
-        eventSequence: normalizeEventSequence(level.eventSequence) ?? { byScenarioId: {} },
-        events: normalizeInteractionTriggers(level.events as never),
-        interactionArtifacts: normalizeInteractionArtifacts(level.interactionArtifacts) ?? { byScenarioId: {} },
-      }));
+      const normalizedLevels = levels.map((level: Level) =>
+        ensurePointsThresholdsOnLevel({
+          ...level,
+          eventSequence: normalizeEventSequence(level.eventSequence) ?? { byScenarioId: {} },
+          events: normalizeInteractionTriggers(level.events as never),
+          interactionArtifacts: normalizeInteractionArtifacts(level.interactionArtifacts) ?? { byScenarioId: {} },
+        }),
+      );
 
       if (activeMode === "game" && activeGameId) {
         // Gameplay code is owned by the websocket room state.
@@ -132,15 +137,17 @@ const levelsSlice = createSlice({
             // Sanitize: strip any identifier that isn't a valid UUID so old
             // short random strings (e.g. "w4zenm") don't block saving.
             const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-            const sanitized = cachedLevels.map((level: Level) => ({
-              ...level,
-              identifier: level.identifier && UUID_RE.test(level.identifier)
-                ? level.identifier
-                : undefined,
-              eventSequence: normalizeEventSequence(level.eventSequence) ?? { byScenarioId: {} },
-              events: normalizeInteractionTriggers(level.events as never),
-              interactionArtifacts: normalizeInteractionArtifacts(level.interactionArtifacts) ?? { byScenarioId: {} },
-            }));
+            const sanitized = cachedLevels.map((level: Level) =>
+              ensurePointsThresholdsOnLevel({
+                ...level,
+                identifier: level.identifier && UUID_RE.test(level.identifier)
+                  ? level.identifier
+                  : undefined,
+                eventSequence: normalizeEventSequence(level.eventSequence) ?? { byScenarioId: {} },
+                events: normalizeInteractionTriggers(level.events as never),
+                interactionArtifacts: normalizeInteractionArtifacts(level.interactionArtifacts) ?? { byScenarioId: {} },
+              }),
+            );
             return sanitized;
           }
         } catch (e) {
@@ -615,13 +622,15 @@ const levelsSlice = createSlice({
     addThisLevel(state, action) {
       const levelDetails = action.payload;
       const parsedLevelDetails = JSON.parse(levelDetails);
-      state.push({
-        ...parsedLevelDetails,
-        ...templateWithoutCode,
-        eventSequence: normalizeEventSequence(parsedLevelDetails.eventSequence) ?? { byScenarioId: {} },
-        events: normalizeInteractionTriggers(parsedLevelDetails.events),
-        interactionArtifacts: normalizeInteractionArtifacts(parsedLevelDetails.interactionArtifacts) ?? { byScenarioId: {} },
-      });
+      state.push(
+        ensurePointsThresholdsOnLevel({
+          ...parsedLevelDetails,
+          ...templateWithoutCode,
+          eventSequence: normalizeEventSequence(parsedLevelDetails.eventSequence) ?? { byScenarioId: {} },
+          events: normalizeInteractionTriggers(parsedLevelDetails.events),
+          interactionArtifacts: normalizeInteractionArtifacts(parsedLevelDetails.interactionArtifacts) ?? { byScenarioId: {} },
+        } as Level),
+      );
       storage?.setItem(storage.key, JSON.stringify(state));
     },
     addNewLevel(state) {
@@ -698,6 +707,7 @@ const levelsSlice = createSlice({
         }
         (level as Record<string, unknown>)[key] = value;
       }
+      applyPointsThresholdsInPlace(level);
     },
   },
 });
