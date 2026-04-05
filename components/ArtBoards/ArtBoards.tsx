@@ -18,7 +18,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, ImageIcon, MousePointer } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { AutoRunCircle } from "@/components/icons/AutoRunCircle";
+import { cn } from "@/lib/utils/cn";
+import { ChevronLeft, ChevronRight, ImageIcon, MousePointer, Play, Square } from "lucide-react";
 import { scenario } from "@/types";
 import {
   toggleImageInteractivity,
@@ -33,7 +36,9 @@ import {
   getEventSequenceRuntimeKey,
   getSequenceRuntimeState,
   isStepStale,
+  cancelAutoReplay,
   requestAutoReplay,
+  setAutoReplayOnMount,
   setCreatorPreviewInteractiveForScenario,
   setSelectedEventSequenceStepId,
   setSelectedScenarioIdForLevel,
@@ -157,7 +162,7 @@ export const ArtBoards = (): React.ReactNode => {
   const effectiveSelectedSequenceStepId = isCreatorContext && isSequencePanelOpen
     ? (selectedSequenceStepId ?? INITIAL_EVENT_SEQUENCE_STEP_ID)
     : selectedSequenceStepId;
-  /** In game mode, the active step drives the solution artboard image (no user step-click). */
+  /** Live gameplay step (game route): drives per-step solution capture keys, independent of timeline scrub. */
   const gameActiveStepId = !isCreatorContext && selectedScenarioSequence.length > 0
     ? selectedScenarioSequence[normalizedActiveStepIndex]?.id ?? null
     : null;
@@ -207,54 +212,152 @@ export const ArtBoards = (): React.ReactNode => {
     return set;
   }, [sequenceRuntime]);
 
+  const showEventRunControls =
+    Boolean(selectedScenario)
+    && selectedScenarioSequence.length > 0
+    && sequenceRuntime.recordingMode === "idle"
+    && Boolean(selectedRuntimeKey);
+
+  const handleRunEventsClick = useCallback(() => {
+    if (!selectedRuntimeKey) {
+      return;
+    }
+    const running = getSequenceRuntimeState(selectedRuntimeKey).autoReplay?.running;
+    if (running) {
+      cancelAutoReplay(selectedRuntimeKey);
+    } else {
+      requestAutoReplay(selectedRuntimeKey, selectedScenarioSequence.length + 1);
+    }
+  }, [selectedRuntimeKey, selectedScenarioSequence.length]);
+
+  const handleToggleAutoRunOnMount = useCallback(() => {
+    if (!selectedScenario) {
+      return;
+    }
+    setAutoReplayOnMount(currentLevel, selectedScenario.scenarioId, !autoReplayOnMount);
+  }, [autoReplayOnMount, currentLevel, selectedScenario]);
+
   // Early return if level doesn't exist - parent handles loading state
   if (!level) {
     return null;
   }
 
+  const eventRunButtons = showEventRunControls ? (
+    <>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className={cn(
+              "h-9 w-9 shrink-0 border-0 shadow-none",
+              sequenceRuntime.autoReplay?.running && "bg-muted hover:bg-muted/90",
+            )}
+            onClick={handleRunEventsClick}
+            aria-label={
+              sequenceRuntime.autoReplay?.running
+                ? "Stop scenario run"
+                : "Run Scenario events"
+            }
+          >
+            {sequenceRuntime.autoReplay?.running ? (
+              <Square className="h-4 w-4 shrink-0" />
+            ) : (
+              <Play className="h-4 w-4 shrink-0" />
+            )}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" className="max-w-[240px] text-xs leading-snug">
+          {sequenceRuntime.autoReplay?.running
+            ? "Stop scenario run"
+            : "Run Scenario events"}
+        </TooltipContent>
+      </Tooltip>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className={cn(
+              "h-9 w-9 shrink-0 border-0 shadow-none",
+              autoReplayOnMount && "bg-muted hover:bg-muted/90",
+            )}
+            onClick={handleToggleAutoRunOnMount}
+            aria-label="Auto Run scenario-events upon page refresh"
+          >
+            <AutoRunCircle className="h-4 w-4 shrink-0" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" className="max-w-[260px] text-xs leading-snug">
+          Auto Run scenario-events upon page refresh
+        </TooltipContent>
+      </Tooltip>
+    </>
+  ) : null;
+
   return (
     <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden">
-      {scenarios.length > 1 ? (
-        <div className="flex flex-wrap items-center justify-center gap-2 px-3 pb-3 pt-1">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-9 w-9 shrink-0"
-            disabled={selectedScenarioIndex <= 0}
-            onClick={() => goToScenario(selectedScenarioIndex - 1)}
-            aria-label="Show previous scenario"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
+      {scenarios.length > 1 || eventRunButtons ? (
+        <div
+          className="flex flex-wrap items-center justify-center gap-1.5 px-3 pb-3 pt-1"
+          data-tour-spot="gameboard.scenario_run_controls"
+        >
+          {scenarios.length > 1 ? (
+            <>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9 shrink-0"
+                disabled={selectedScenarioIndex <= 0}
+                onClick={() => goToScenario(selectedScenarioIndex - 1)}
+                aria-label="Show previous scenario"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
 
-          <Select
-            value={selectedScenario?.scenarioId ?? ""}
-            onValueChange={setSelectedScenarioId}
-          >
-            <SelectTrigger className="h-9 w-full max-w-[260px]">
-              <SelectValue placeholder="Select scenario" />
-            </SelectTrigger>
-            <SelectContent>
-              {scenarios.map((scenario, index) => (
-                <SelectItem key={scenario.scenarioId} value={scenario.scenarioId}>
-                  Scenario {index + 1}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+              <Select
+                value={selectedScenario?.scenarioId ?? ""}
+                onValueChange={setSelectedScenarioId}
+              >
+                <SelectTrigger
+                  className={cn(
+                    "h-9 w-auto min-w-0 max-w-[min(100%,12rem)] shrink gap-1 px-2",
+                    "border-0 bg-transparent shadow-none",
+                    "ring-0 ring-offset-0 focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0",
+                    "data-[state=open]:ring-0 [&>span]:flex-none [&>span]:truncate",
+                  )}
+                >
+                  <SelectValue placeholder="Select scenario" />
+                </SelectTrigger>
+                <SelectContent>
+                  {scenarios.map((scenario, index) => (
+                    <SelectItem key={scenario.scenarioId} value={scenario.scenarioId}>
+                      Scenario {index + 1}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
 
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-9 w-9 shrink-0"
-            disabled={selectedScenarioIndex < 0 || selectedScenarioIndex >= scenarios.length - 1}
-            onClick={() => goToScenario(selectedScenarioIndex + 1)}
-            aria-label="Show next scenario"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
+              {eventRunButtons}
+
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9 shrink-0"
+                disabled={selectedScenarioIndex < 0 || selectedScenarioIndex >= scenarios.length - 1}
+                onClick={() => goToScenario(selectedScenarioIndex + 1)}
+                aria-label="Show next scenario"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </>
+          ) : (
+            eventRunButtons
+          )}
         </div>
       ) : null}
 
@@ -300,6 +403,7 @@ export const ArtBoards = (): React.ReactNode => {
                   creatorMode={isCreatorContext}
                   creatorPreviewInteractive={creatorPreviewInteractive}
                   selectedEventSequenceStepId={effectiveSelectedSequenceStepId ?? gameActiveStepId}
+                  gameplaySolutionStepId={gameActiveStepId}
                   eventSequenceScopedTriggers={selectedScenarioSequence.length > 0}
                   registerForNavbarCapture
                 />,
@@ -309,6 +413,7 @@ export const ArtBoards = (): React.ReactNode => {
                   creatorMode={isCreatorContext}
                   creatorPreviewInteractive={creatorPreviewInteractive}
                   selectedEventSequenceStepId={effectiveSelectedSequenceStepId ?? gameActiveStepId}
+                  gameplaySolutionStepId={gameActiveStepId}
                   eventSequenceScopedTriggers={selectedScenarioSequence.length > 0}
                   registerForNavbarCapture
                 />,

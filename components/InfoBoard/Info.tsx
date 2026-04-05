@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { useAppDispatch } from "@/store/hooks/hooks";
 import { useAppSelector } from "@/store/hooks/hooks";
 import { InfoBoard } from "./InfoBoard";
@@ -24,6 +25,7 @@ import { useOptionalCollaboration } from "@/lib/collaboration/CollaborationProvi
 import Shaker from "@/components/General/Shaker/Shaker";
 import { CompactMenuButton, compactMenuLabelClass } from "@/components/General/CompactMenuButton";
 import { toast } from "sonner";
+import { stripBasePath } from "@/lib/apiUrl";
 
 function CompactMenuItem({
   label,
@@ -51,6 +53,9 @@ export function LevelFooterMenu() {
   const options = useAppSelector((state) => state.options);
   const points = useAppSelector((state) => state.points);
   const collaboration = useOptionalCollaboration();
+  const pathname = usePathname();
+  const normalizedPathname = stripBasePath(pathname);
+  const isCreatorRoute = normalizedPathname.startsWith("/creator/");
   const level = levels[currentLevel - 1];
 
   if (!level) return null;
@@ -117,17 +122,16 @@ export function LevelFooterMenu() {
                 </div>
               </CompactMenuItem>
             )}
-            {isCreator ? (
+            <CompactMenuItem label="Next Threshold">
+              <div className="text-sm font-semibold text-foreground">
+                {nextThresholdLabel}
+              </div>
+            </CompactMenuItem>
+            {isCreator && isCreatorRoute ? (
               <div className="rounded-md bg-background/80 px-3 py-2 text-center">
                 <ThresholdsEditor />
               </div>
-            ) : (
-              <CompactMenuItem label="Next Threshold">
-                <div className="text-sm font-semibold text-foreground">
-                  {nextThresholdLabel}
-                </div>
-              </CompactMenuItem>
-            )}
+            ) : null}
             {level.buildingBlocks?.colors?.length ? (
               <CompactMenuItem label="Colors">
                 <div className="flex max-w-full flex-row flex-wrap items-center justify-center gap-1.5">
@@ -231,6 +235,9 @@ export function CompactInfoMenus() {
 }
 
 const Info = () => {
+  const pathname = usePathname();
+  const normalizedPathname = stripBasePath(pathname);
+  const isCreatorRoute = normalizedPathname.startsWith("/creator/");
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const levels = useAppSelector((state) => state.levels);
   const options = useAppSelector((state) => state.options);
@@ -255,7 +262,8 @@ const Info = () => {
             </PoppingTitle>
           </InfoBox>
         )}
-        {isCreator ? <ThresholdsEditor /> : <NextThreshold />}
+        <NextThreshold />
+        {isCreator && isCreatorRoute && <ThresholdsEditor />}
         {isCreator && (
           <InfoBox>
             <Difficulty />

@@ -114,8 +114,9 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
     if (name === "solutionUrl") {
       const raw = state.solutionUrls as Record<string, string | undefined>;
       if (eventSequenceSolutionStepId) {
-        return raw[eventSequenceSolutionStorageKey(scenario.scenarioId, eventSequenceSolutionStepId)]
-          ?? raw[scenario.scenarioId];
+        // Per-step game capture: do not fall back to legacy scenarioId — that blocks capture and
+        // shows one stale image for every step when only the legacy key is populated.
+        return raw[eventSequenceSolutionStorageKey(scenario.scenarioId, eventSequenceSolutionStepId)];
       }
       return raw[scenario.scenarioId];
     }

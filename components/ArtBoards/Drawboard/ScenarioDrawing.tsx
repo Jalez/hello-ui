@@ -110,6 +110,10 @@ type ScenarioDrawingProps = {
   creatorMode?: boolean;
   selectedEventSequenceStepId?: string | null;
   /**
+   * Game + event sequence: live gameplay step for per-step solution URL / compare target only.
+   */
+  gameplaySolutionStepId?: string | null;
+  /**
    * When true (ArtBoards with an event sequence), interaction triggers match the replay depth only.
    * When false (e.g. DrawBoard), all sequence triggers stay registered.
    */
@@ -124,6 +128,7 @@ export const ScenarioDrawing = ({
   creatorPreviewInteractive,
   creatorMode,
   selectedEventSequenceStepId,
+  gameplaySolutionStepId = null,
   eventSequenceScopedTriggers = false,
 }: ScenarioDrawingProps): React.ReactNode => {
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
@@ -139,6 +144,9 @@ export const ScenarioDrawing = ({
   const [stepPreviews, setStepPreviews] = useState<Record<string, DrawboardRenderPreviewPayload>>({});
   const stepPreviewsRef = useRef<Record<string, DrawboardRenderPreviewPayload>>({});
   const drawingFrameRef = useRef<FrameHandle | null>(null);
+  /** Last timeline step id we showed a loading sentinel for; avoids -1 on every effect dep churn. */
+  const prevCompareStepSelectionRef = useRef<string | null>(null);
+  const prevCompareRuntimeKeyRef = useRef<string | null>(null);
   const captureNav = useOptionalDrawboardNavbarCapture();
   const { drawboardCaptureMode, manualDrawboardCapture } = useGameRuntimeConfig();
 
@@ -212,14 +220,28 @@ export const ScenarioDrawing = ({
     [css, html, js, resolvedSolutionCss, resolvedSolutionHtml, scenario.js, scenarioSequence],
   );
   const usePerStepSolutionKeys = !isCreator && scenarioSequence.length > 0;
-  const drawingTimelineStepId = defaultTimelineStepIdForSolutionCapture(selectedEventSequenceStepId);
+  const solutionStepIdForCapture = useMemo(() => {
+    // Timeline scrub / auto-replay step takes priority — each step needs its own solution capture.
+    // gameplaySolutionStepId is only the fallback when no step is explicitly selected.
+    if (!isCreator && scenarioSequence.length > 0) {
+      const scrubbed = selectedEventSequenceStepId?.trim();
+      if (scrubbed) {
+        return defaultTimelineStepIdForSolutionCapture(scrubbed);
+      }
+      if (gameplaySolutionStepId != null) {
+        return defaultTimelineStepIdForSolutionCapture(gameplaySolutionStepId);
+      }
+    }
+    return defaultTimelineStepIdForSolutionCapture(selectedEventSequenceStepId);
+  }, [gameplaySolutionStepId, isCreator, scenarioSequence.length, selectedEventSequenceStepId]);
   const solutionUrl = useMemo(
     () =>
       resolveEventSequenceSolutionUrl(solutionUrls, scenario.scenarioId, {
         usePerStepKeys: usePerStepSolutionKeys,
-        stepId: drawingTimelineStepId,
+        stepId: solutionStepIdForCapture,
+        allowLegacyFallback: !usePerStepSolutionKeys,
       }),
-    [drawingTimelineStepId, scenario.scenarioId, solutionUrls, usePerStepSolutionKeys],
+    [solutionStepIdForCapture, scenario.scenarioId, solutionUrls, usePerStepSolutionKeys],
   );
   /**
    * Solution preview fetch + step accuracy compare: skip probes and hidden carousel clones
@@ -360,11 +382,9 @@ export const ScenarioDrawing = ({
         setStepPreviews({});
         return;
       }
-      if (drawboardCaptureMode === "browser") {
-        setStepPreviews({});
-        lastRenderedSolutionSourceRef.current = "";
-        return;
-      }
+      // Browser capture: compare prefers iframe pixels when drawing+solution buffers exist, but the
+      // solution side is often missing briefly (or never posted in some layouts). Keep server-rendered
+      // step targets so compareOne can fall back — same path for creator and game.
 
       const renderSourceKey = `${resolvedSolutionCss}\0${resolvedSolutionHtml}`;
       const sourceChanged = lastRenderedSolutionSourceRef.current !== renderSourceKey;
@@ -480,6 +500,11 @@ export const ScenarioDrawing = ({
     }
     let cancelled = false;
 
+    if (prevCompareRuntimeKeyRef.current !== runtimeKey) {
+      prevCompareRuntimeKeyRef.current = runtimeKey;
+      prevCompareStepSelectionRef.current = null;
+    }
+
     const loadImageDataForSnapshot = async (url: string, width: number, height: number) => {
       const image = new window.Image();
       image.crossOrigin = "anonymous";
@@ -534,9 +559,15 @@ export const ScenarioDrawing = ({
      * In game mode, also compare the active gameplay step when it is pending verification
      * and the player is scrubbed to a different step, so advancement still sees a fresh score.
      */
-    const compareFocusedStepsToDrawing = async (): Promise<Record<string, number> | null> => {
+    type CompareFocusedOutcome = {
+      accuracies: Record<string, number> | null;
+      /** True only when drawing+solution buffers came from getDrawboardPixelsPair (serial guard applies). */
+      comparedViaIframePixelPair: boolean;
+    };
+
+    const compareFocusedStepsToDrawing = async (): Promise<CompareFocusedOutcome> => {
       if (!drawingUrl || !scenarioSequence.length) {
-        return null;
+        return { accuracies: null, comparedViaIframePixelPair: false };
       }
 
       const ids = new Set<string>();
@@ -556,7 +587,7 @@ export const ScenarioDrawing = ({
       }
 
       if (ids.size === 0) {
-        return null;
+        return { accuracies: null, comparedViaIframePixelPair: false };
       }
 
       if (drawboardCaptureMode === "browser") {
@@ -569,13 +600,13 @@ export const ScenarioDrawing = ({
         ) {
           const comparison = await runWorkerCompare(drawing, solution);
           if (cancelled) {
-            return null;
+            return { accuracies: null, comparedViaIframePixelPair: true };
           }
           const nextAccuracies: Record<string, number> = {};
           [...ids].forEach((id) => {
             nextAccuracies[id] = comparison;
           });
-          return nextAccuracies;
+          return { accuracies: nextAccuracies, comparedViaIframePixelPair: true };
         }
         const w = scenario.dimensions.width;
         const h = scenario.dimensions.height;
@@ -592,13 +623,13 @@ export const ScenarioDrawing = ({
             ) {
               const comparison = await runWorkerCompare(drawingData, targetData);
               if (cancelled) {
-                return null;
+                return { accuracies: null, comparedViaIframePixelPair: false };
               }
               const nextAccuracies: Record<string, number> = {};
               [...ids].forEach((id) => {
                 nextAccuracies[id] = comparison;
               });
-              return nextAccuracies;
+              return { accuracies: nextAccuracies, comparedViaIframePixelPair: false };
             }
           } catch {
             /* fall through to server-render path */
@@ -656,7 +687,7 @@ export const ScenarioDrawing = ({
 
       const results = await Promise.all([...ids].map((id) => compareOne(id)));
       if (cancelled) {
-        return null;
+        return { accuracies: null, comparedViaIframePixelPair: false };
       }
       const nextAccuracies: Record<string, number> = {};
       results.forEach(([id, value]) => {
@@ -664,7 +695,9 @@ export const ScenarioDrawing = ({
           nextAccuracies[id] = value;
         }
       });
-      return Object.keys(nextAccuracies).length > 0 ? nextAccuracies : null;
+      const mergedKeys = Object.keys(nextAccuracies);
+      const out = mergedKeys.length > 0 ? nextAccuracies : null;
+      return { accuracies: out, comparedViaIframePixelPair: false };
     };
 
     const pushFooterAccuracyForSequence = (mergedStepAccuracies: Record<string, number>) => {
@@ -679,7 +712,7 @@ export const ScenarioDrawing = ({
     };
 
     /** Write -2 for the focused step when comparison produces no result. */
-    const markFocusedStepComparisonFailed = () => {
+    const markFocusedStepComparisonFailed = (source: string) => {
       const focus = selectedEventSequenceStepId?.trim();
       if (!focus) return;
       updateSequenceRuntimeState(runtimeKey, (current) => {
@@ -691,16 +724,33 @@ export const ScenarioDrawing = ({
     const runCreatorComparisons = async () => {
       const pixelsSerialAtCompareStart =
         drawboardCaptureMode === "browser" ? getDrawboardPixelsSerial(scenario.scenarioId) : null;
-      const nextAccuracies = await compareFocusedStepsToDrawing();
+      const { accuracies: nextAccuracies, comparedViaIframePixelPair } =
+        await compareFocusedStepsToDrawing();
       if (cancelled) return;
       if (
-        pixelsSerialAtCompareStart !== null
+        comparedViaIframePixelPair
+        && pixelsSerialAtCompareStart !== null
         && getDrawboardPixelsSerial(scenario.scenarioId) !== pixelsSerialAtCompareStart
       ) {
         return;
       }
       if (!nextAccuracies) {
-        markFocusedStepComparisonFailed();
+        if (!drawingUrl?.trim()) {
+          return;
+        }
+        if (drawboardCaptureMode === "browser") {
+          const fid = selectedEventSequenceStepId?.trim();
+          if (fid) {
+            const previewReady =
+              fid === INITIAL_EVENT_SEQUENCE_STEP_ID
+                ? Boolean(stepPreviews[INITIAL_EVENT_SEQUENCE_STEP_ID])
+                : Boolean(stepPreviews[fid]);
+            if (!previewReady) {
+              return;
+            }
+          }
+        }
+        markFocusedStepComparisonFailed("creator_null_result");
         return;
       }
       let mergedSnapshot: Record<string, number> = {};
@@ -725,16 +775,33 @@ export const ScenarioDrawing = ({
       }
       const pixelsSerialAtCompareStart =
         drawboardCaptureMode === "browser" ? getDrawboardPixelsSerial(scenario.scenarioId) : null;
-      const nextAccuracies = await compareFocusedStepsToDrawing();
+      const { accuracies: nextAccuracies, comparedViaIframePixelPair } =
+        await compareFocusedStepsToDrawing();
       if (cancelled) return;
       if (
-        pixelsSerialAtCompareStart !== null
+        comparedViaIframePixelPair
+        && pixelsSerialAtCompareStart !== null
         && getDrawboardPixelsSerial(scenario.scenarioId) !== pixelsSerialAtCompareStart
       ) {
         return;
       }
       if (!nextAccuracies) {
-        markFocusedStepComparisonFailed();
+        if (!drawingUrl?.trim()) {
+          return;
+        }
+        if (drawboardCaptureMode === "browser") {
+          const fid = selectedEventSequenceStepId?.trim();
+          if (fid) {
+            const previewReady =
+              fid === INITIAL_EVENT_SEQUENCE_STEP_ID
+                ? Boolean(stepPreviews[INITIAL_EVENT_SEQUENCE_STEP_ID])
+                : Boolean(stepPreviews[fid]);
+            if (!previewReady) {
+              return;
+            }
+          }
+        }
+        markFocusedStepComparisonFailed("game_null_result");
         return;
       }
       let mergedSnapshot: Record<string, number> = {};
@@ -770,26 +837,28 @@ export const ScenarioDrawing = ({
       if (isCreator) {
         void runCreatorComparisons().catch((error) => {
           console.error("EventSequence: failed to compare events (creator)", error);
-          markFocusedStepComparisonFailed();
+          markFocusedStepComparisonFailed("creator_exception");
         });
       } else {
         void runGameComparisons().catch((error) => {
           console.error("EventSequence: failed to compare events (game)", error);
-          markFocusedStepComparisonFailed();
+          markFocusedStepComparisonFailed("game_exception");
         });
       }
     };
 
-    // Mark the focused step as "comparing" (-1 sentinel) so the circle shows a
-    // loading indicator instead of briefly flashing the previous step's percentage.
-    const focusedId = selectedEventSequenceStepId?.trim();
-    if (focusedId) {
-      updateSequenceRuntimeState(runtimeKey, (current) => {
-        if (current.stepAccuracies[focusedId] === undefined || current.stepAccuracies[focusedId] === -1) {
-          return current;
-        }
-        return { ...current, stepAccuracies: { ...current.stepAccuracies, [focusedId]: -1 } };
-      });
+    // Loading (-1) only when the user selects a different timeline step — not on every effect
+    // re-run (drawingUrl / solutionUrl churn caused constant flicker).
+    const focusedId = selectedEventSequenceStepId?.trim() ?? null;
+    const prevSel = prevCompareStepSelectionRef.current;
+    if (focusedId !== prevSel) {
+      prevCompareStepSelectionRef.current = focusedId;
+      if (focusedId) {
+        updateSequenceRuntimeState(runtimeKey, (current) => ({
+          ...current,
+          stepAccuracies: { ...current.stepAccuracies, [focusedId]: -1 },
+        }));
+      }
     }
 
     // Always run once when deps change. Stale async results are skipped when the drawboard

@@ -127,10 +127,15 @@ export function EventSequencePanel({
   }
 
   return (
-    <div className="mb-3 w-full max-w-[min(100%,720px)]">
-
+    <div
+      className="mb-3 w-full max-w-[min(100%,720px)]"
+      data-tour-spot="gameboard.events_strip"
+    >
       <TooltipProvider>
-        <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+        <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2">
+          <h3 className="shrink-0 text-sm font-semibold tracking-tight text-foreground">
+            Events
+          </h3>
           {displaySteps.map((step, index) => {
             const isInitialStep = step.id === INITIAL_EVENT_SEQUENCE_STEP_ID;
             const rawValue = stepAccuracies[step.id];

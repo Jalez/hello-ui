@@ -43,6 +43,11 @@ type ScenarioModelProps = {
   creatorPreviewInteractive?: boolean;
   creatorMode?: boolean;
   selectedEventSequenceStepId?: string | null;
+  /**
+   * Game + event sequence: live gameplay step for per-step solution capture / Redux keys only.
+   * `selectedEventSequenceStepId` still drives replay, scrub, and trigger prefix.
+   */
+  gameplaySolutionStepId?: string | null;
   /** Match ScenarioDrawing: scope interaction triggers to the replay prefix when scrubbing steps. */
   eventSequenceScopedTriggers?: boolean;
 };
@@ -57,6 +62,7 @@ export const ScenarioModel = ({
   creatorPreviewInteractive,
   creatorMode,
   selectedEventSequenceStepId,
+  gameplaySolutionStepId = null,
   eventSequenceScopedTriggers = false,
 }: ScenarioModelProps): React.ReactNode => {
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
@@ -68,12 +74,29 @@ export const ScenarioModel = ({
   const options = useAppSelector((state) => state.options);
   const isCreator = creatorMode ?? options.creator;
   const usePerStepSolutionKeys = !isCreator && scenarioSequence.length > 0;
-  const eventSequenceCaptureStepId = defaultTimelineStepIdForSolutionCapture(selectedEventSequenceStepId);
+  const solutionStepIdForCapture = useMemo(() => {
+    // Timeline scrub / auto-replay step takes priority — each step needs its own solution capture.
+    // gameplaySolutionStepId is only the fallback when no step is explicitly selected.
+    if (!isCreator && scenarioSequence.length > 0) {
+      const scrubbed = selectedEventSequenceStepId?.trim();
+      if (scrubbed) {
+        return defaultTimelineStepIdForSolutionCapture(scrubbed);
+      }
+      if (gameplaySolutionStepId != null) {
+        return defaultTimelineStepIdForSolutionCapture(gameplaySolutionStepId);
+      }
+    }
+    return defaultTimelineStepIdForSolutionCapture(selectedEventSequenceStepId);
+  }, [gameplaySolutionStepId, isCreator, scenarioSequence.length, selectedEventSequenceStepId]);
   const solutionUrl = useAppSelector((state) =>
     resolveEventSequenceSolutionUrl(
       state.solutionUrls as Record<string, string | undefined>,
       scenario.scenarioId,
-      { usePerStepKeys: usePerStepSolutionKeys, stepId: eventSequenceCaptureStepId },
+      {
+        usePerStepKeys: usePerStepSolutionKeys,
+        stepId: solutionStepIdForCapture,
+        allowLegacyFallback: !usePerStepSolutionKeys,
+      },
     ),
   );
   const [modelToolbarDragStarted, setModelToolbarDragStarted] = useState(false);
@@ -174,7 +197,7 @@ export const ScenarioModel = ({
             isCreator={isCreator}
             scenarioSequenceLength={scenarioSequence.length}
             solutionUrl={solutionUrl}
-            eventSequenceSolutionStepId={usePerStepSolutionKeys ? eventSequenceCaptureStepId : null}
+            eventSequenceSolutionStepId={usePerStepSolutionKeys ? solutionStepIdForCapture : null}
             allowTransientSolutionIframe={!suppressHeavyLayoutEffects}
             interactiveOverride={frameNeedsInteractive}
             recordingSequence={isSequenceRecording}
