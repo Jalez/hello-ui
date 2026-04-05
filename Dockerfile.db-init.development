@@ -1,0 +1,12 @@
+FROM node:20-alpine
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+# Keep the dev-only image minimal; this container only runs the bootstrap script.
+RUN npm install --no-save pg dotenv
+
+COPY scripts/sql/ ./scripts/sql/
+COPY docker/db-init-docker.mjs ./
+
+CMD ["node", "db-init-docker.mjs"]

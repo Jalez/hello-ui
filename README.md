@@ -108,7 +108,9 @@ docker compose up --build
 
 The app will be available at `http://localhost:3000`.
 
-The first run takes a few minutes as it installs dependencies and builds the Next.js app inside the container.
+The local compose setup uses `Dockerfile.development` variants for smaller development images. `production.docker-compose.yml` continues to use the legacy single-stage Dockerfiles for the current server.
+
+The first run takes a few minutes as it installs dependencies and builds the app images.
 
 ### Common commands
 

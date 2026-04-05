@@ -20,7 +20,7 @@ services:
   db-init:
     build:
       context: .
-      dockerfile: Dockerfile.db-init
+      dockerfile: Dockerfile.db-init.development
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/ui_designer
     depends_on:
@@ -33,7 +33,7 @@ services:
   drawboard:
     build:
       context: ./drawBoard
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.development
     ports:
       - "3500:3500"
     environment:
@@ -46,7 +46,7 @@ services:
   app:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.development
       args:
         NEXT_PUBLIC_DRAWBOARD_URL: ${NEXT_PUBLIC_DRAWBOARD_URL:-http://localhost:3500}
     ports:
@@ -78,7 +78,7 @@ services:
   ws-server:
     build:
       context: ./ws-server
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.development
     ports:
       - "3100:3100"
     env_file:

@@ -1,5 +1,6 @@
 .git
 .gitignore
+.cursor
 .env*
 !.env.example
 node_modules
