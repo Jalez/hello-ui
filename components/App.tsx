@@ -299,6 +299,11 @@ function App() {
             week: mapName,
             percentageTreshold: 70,
             percentageFullPointsTreshold: 95,
+            pointsThresholds: [
+              { accuracy: 70, pointsPercent: 25 },
+              { accuracy: 85, pointsPercent: 60 },
+              { accuracy: 95, pointsPercent: 100 },
+            ],
             difficulty: "easy",
             instructions: [],
             question_and_answer: { question: "", answer: "" },

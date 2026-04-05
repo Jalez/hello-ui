@@ -238,18 +238,18 @@ export const Footer = () => {
 
   const viewUserId = searchParams.get("userId");
   const isGroupGameplay = currentGame?.collaborationMode === "group" && Boolean(groupId);
-  const isCreatorRoute = normalizedPathname.startsWith("/creator/");
-  /** Active instance dashboards for editors: creator route only so /game matches player footer. */
   const showCreatorGroupInstances =
     currentGame?.collaborationMode === "group" &&
     Boolean(currentGame?.id) &&
     Boolean(currentGame?.canEdit ?? currentGame?.isOwner) &&
-    isCreatorRoute;
+    normalizedPathname.startsWith("/game/") &&
+    !options.creator;
   const showCreatorIndividualInstances =
     currentGame?.collaborationMode === "individual" &&
     Boolean(currentGame?.id) &&
     Boolean(currentGame?.canEdit ?? currentGame?.isOwner) &&
-    isCreatorRoute;
+    normalizedPathname.startsWith("/game/") &&
+    !options.creator;
 
   useEffect(() => {
     if (!isGroupGameplay || !groupId || !isCurrentGameResolved) {

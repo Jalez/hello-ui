@@ -2,7 +2,7 @@
 
 import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
 import { Button } from "@/components/ui/button";
-import { RotateCcw, PanelLeft, Map, Flag, Settings, Gamepad2, BarChart3, Users, MousePointer, Eye, Square, Wrench, ListMinus, ListX, ListPlus, ListOrdered } from "lucide-react";
+import { RotateCcw, PanelLeft, Map, Flag, Settings, Gamepad2, BarChart3, Users, MousePointer, Eye, Square, Wrench, ListMinus, ListX, ListPlus, ListOrdered, Code2 } from "lucide-react";
 import { LevelSelect } from "@/components/General/LevelControls/LevelControls";
 import { setCurrentLevel } from "@/store/slices/currentLevel.slice";
 import { clearEventSequenceForScenario, removeEventSequenceStep, resetLevel } from "@/store/slices/levels.slice";
@@ -93,8 +93,6 @@ const CREATOR_WORKBENCH_SUBNAV_TABS: Array<{
 ];
 
 /** Shown under the compact level picker on the game route (players). */
-const GAME_ROUTE_LEVEL_SELECT_DESCRIPTION =
-  "Switch levels anytime. The percentage is your best accuracy on that level.";
 
 export const Navbar = () => {
   const dispatch = useAppDispatch();
@@ -120,11 +118,9 @@ export const Navbar = () => {
   const canEditCurrentGame = Boolean(currentGame?.canEdit ?? currentGame?.isOwner);
   const isGameRoute = normalizedPathname.startsWith("/game/");
   const isGroupGame = currentGame?.collaborationMode === "group";
-  /** Game route: same sidebar visibility for every player, including owners. */
-  const shouldHideSidebarForPlayers = isGameRoute && Boolean(currentGame?.hideSidebar);
-  /** Reset/finish/game-tools menus live on creator route only; game route matches player chrome. */
+  const shouldHideSidebarForPlayers = isGameRoute && Boolean(currentGame?.hideSidebar) && !canEditCurrentGame;
   const showCreatorGameMenus =
-    isCreatorRoute &&
+    isGameRoute &&
     Boolean(currentGame?.id) &&
     canEditCurrentGame;
   const isCreatorWorkbenchContext = isCreatorRoute && canEditCurrentGame;
@@ -293,6 +289,16 @@ export const Navbar = () => {
     router.push(apiUrl(`/game/${currentGame.id}${query ? `?${query}` : ""}`));
   }, [currentGame?.id, isGroupGame, router, searchParams]);
 
+  const openCreatorPreview = useCallback(() => {
+    if (!currentGame?.id) {
+      return;
+    }
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("mode", "game");
+    params.delete("groupId");
+    router.push(apiUrl(`/game/${currentGame.id}?${params.toString()}`));
+  }, [currentGame?.id, router, searchParams]);
+
   const handleAnchorElReset = useCallback(() => {
     setIsResetDialogOpen(false);
   }, []);
@@ -383,6 +389,37 @@ export const Navbar = () => {
       <DropdownMenuContent align="start" className="w-72 border-0 shadow-lg">
         <DropdownMenuLabel>Game Tools</DropdownMenuLabel>
         <DropdownMenuSeparator />
+        {showCreatorGameMenus && currentGame?.id ? (
+          <>
+            <DropdownMenuItem asChild>
+              <Link href={apiUrl(`/creator/${currentGame.id}`)}>
+                <Code2 className="h-4 w-4 mr-2" />
+                Go to creator
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
+        ) : null}
+        {isGameRoute && currentGame?.id && isGroupGame && (
+          <>
+            <DropdownMenuItem onSelect={openGameLobby}>
+              <Users className="h-4 w-4 mr-2" />
+              Back to Game Lobby
+            </DropdownMenuItem>
+            {showCreatorGameMenus ? (
+              <DropdownMenuItem onSelect={openCreatorPreview}>
+                <Eye className="h-4 w-4 mr-2" />
+                <div className="flex flex-col">
+                  <span>Creator Preview</span>
+                  <span className="text-xs text-muted-foreground">
+                    Open the isolated preview without a group
+                  </span>
+                </div>
+              </DropdownMenuItem>
+            ) : null}
+            <DropdownMenuSeparator />
+          </>
+        )}
         {isCreatorRoute && currentGame?.id && canEditCurrentGame && (
           <>
             <DropdownMenuItem asChild>
@@ -421,7 +458,7 @@ export const Navbar = () => {
           <Map className="h-4 w-4 mr-2" />
           Game Levels
         </DropdownMenuItem>
-        {isCreatorRoute && currentGame?.id && canEditCurrentGame && (
+        {currentGame?.id && canEditCurrentGame && (
           <>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
@@ -541,7 +578,6 @@ export const Navbar = () => {
               levelHandler={levelChanger}
               compact
               compactLabel="Levels"
-              compactDescription={GAME_ROUTE_LEVEL_SELECT_DESCRIPTION}
             />
           </div>
         </div>
@@ -591,7 +627,6 @@ export const Navbar = () => {
               levelHandler={levelChanger}
               compact
               compactLabel="Levels"
-              compactDescription={GAME_ROUTE_LEVEL_SELECT_DESCRIPTION}
             />
           </div>
         </div>

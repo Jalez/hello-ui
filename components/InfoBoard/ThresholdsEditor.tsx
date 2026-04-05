@@ -11,14 +11,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Plus, Trash2 } from "lucide-react";
 import InfoBox from "./InfoBox";
-
-type PointsThreshold = { accuracy: number; pointsPercent: number };
-
-const DEFAULT_THRESHOLDS: PointsThreshold[] = [
-  { accuracy: 70, pointsPercent: 25 },
-  { accuracy: 85, pointsPercent: 60 },
-  { accuracy: 95, pointsPercent: 100 },
-];
+import type { PointsThreshold } from "@/types";
+import { DEFAULT_POINTS_THRESHOLDS } from "@/lib/levels/pointsThresholds";
 
 type EditorMode = "form" | "json";
 type ThresholdValidationResult =
@@ -76,10 +70,12 @@ export const ThresholdsEditor = () => {
   const level = useAppSelector((state) => state.levels[currentLevel - 1]);
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<EditorMode>("form");
-  const [draftThresholds, setDraftThresholds] = useState<PointsThreshold[]>(DEFAULT_THRESHOLDS);
-  const [jsonDraft, setJsonDraft] = useState(formatThresholdsJson(DEFAULT_THRESHOLDS));
+  const [draftThresholds, setDraftThresholds] = useState<PointsThreshold[]>(() =>
+    DEFAULT_POINTS_THRESHOLDS.map((t) => ({ ...t })),
+  );
+  const [jsonDraft, setJsonDraft] = useState(formatThresholdsJson(DEFAULT_POINTS_THRESHOLDS));
   const [jsonError, setJsonError] = useState<string | null>(null);
-  const thresholds = level?.pointsThresholds ?? DEFAULT_THRESHOLDS;
+  const thresholds = level?.pointsThresholds ?? DEFAULT_POINTS_THRESHOLDS;
   const sorted = useMemo(
     () => sortThresholds(thresholds),
     [thresholds],
@@ -157,6 +153,10 @@ export const ThresholdsEditor = () => {
 
   const handleRemove = (index: number) => {
     updateDraft(sortedDraft.filter((_, i) => i !== index));
+  };
+
+  const handleResetToDefaults = () => {
+    updateDraft(DEFAULT_POINTS_THRESHOLDS.map((t) => ({ ...t })));
   };
 
   const handleCancel = () => {
@@ -310,6 +310,15 @@ export const ThresholdsEditor = () => {
               </Button>
             </div>
           )}
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            className="w-full"
+            onClick={handleResetToDefaults}
+          >
+            Reset to defaults
+          </Button>
           <div className="flex items-center gap-2 pt-1">
             <Button
               size="sm"

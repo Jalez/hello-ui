@@ -9,6 +9,7 @@ import { useAppSelector } from "@/store/hooks/hooks";
 import { DrawboardSnapshotPayload, EventSequenceStep, InteractionTrigger, scenario } from "@/types";
 import { Spinner } from "@/components/General/Spinner/Spinner";
 import { announceLiveSolutionFrameRemoved } from "@/lib/drawboard/solutionFrameLifecycle";
+import { clearStoredSolutionSide } from "@/lib/drawboard/drawboardPixelsStore";
 
 const EMPTY_REPLAY_SEQUENCE: EventSequenceStep[] = [];
 
@@ -85,6 +86,17 @@ export const ModelArtContainer = ({
     prevMountedSolutionFrameRef.current = mountSolutionFrame;
   }, [isCreator, mountSolutionFrame, scenario.scenarioId]);
 
+  // When the per-step solution iframe remounts for a different step (key change),
+  // clear stale solution pixels so the comparison pipeline uses the solutionUrl
+  // instead of leftover pixels from the previous step's iframe.
+  const prevStepIdRef = useRef(eventSequenceSolutionStepId);
+  useEffect(() => {
+    if (usePerStepGameCapture && prevStepIdRef.current !== eventSequenceSolutionStepId) {
+      clearStoredSolutionSide(scenario.scenarioId);
+    }
+    prevStepIdRef.current = eventSequenceSolutionStepId;
+  }, [eventSequenceSolutionStepId, scenario.scenarioId, usePerStepGameCapture]);
+
   if (!level) return null;
 
   const defaultLevelSolutions = solutions[level.name]
@@ -109,6 +121,7 @@ export const ModelArtContainer = ({
     >
       {mountSolutionFrame && (
         <Frame
+          key={usePerStepGameCapture ? `solution-${eventSequenceSolutionStepId ?? "none"}` : undefined}
           ref={frameRef}
           id="DrawBoard"
           newCss={frameCss}

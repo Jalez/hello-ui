@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
 import { useAppDispatch } from "@/store/hooks/hooks";
 import { useAppSelector } from "@/store/hooks/hooks";
 import { InfoBoard } from "./InfoBoard";
@@ -25,7 +24,6 @@ import { useOptionalCollaboration } from "@/lib/collaboration/CollaborationProvi
 import Shaker from "@/components/General/Shaker/Shaker";
 import { CompactMenuButton, compactMenuLabelClass } from "@/components/General/CompactMenuButton";
 import { toast } from "sonner";
-import { stripBasePath } from "@/lib/apiUrl";
 
 function CompactMenuItem({
   label,
@@ -53,9 +51,6 @@ export function LevelFooterMenu() {
   const options = useAppSelector((state) => state.options);
   const points = useAppSelector((state) => state.points);
   const collaboration = useOptionalCollaboration();
-  const pathname = usePathname();
-  const normalizedPathname = stripBasePath(pathname);
-  const isCreatorRoute = normalizedPathname.startsWith("/creator/");
   const level = levels[currentLevel - 1];
 
   if (!level) return null;
@@ -65,7 +60,7 @@ export function LevelFooterMenu() {
   const levelPoints = points.levels[level.name]?.points ?? level.points;
   const levelMaxPoints = level.maxPoints;
   const levelAccuracy = points.levels[level.name]?.accuracy ?? 0;
-  const sortedThresholds = [...(level.pointsThresholds ?? [])].sort((a, b) => a.accuracy - b.accuracy);
+  const sortedThresholds = [...level.pointsThresholds].sort((a, b) => a.accuracy - b.accuracy);
   const reachedThresholdCount = sortedThresholds.filter((threshold) => levelAccuracy >= threshold.accuracy).length;
   const nextThreshold = sortedThresholds.find((threshold) => levelAccuracy < threshold.accuracy) ?? null;
   const nextThresholdLabel = nextThreshold
@@ -127,7 +122,7 @@ export function LevelFooterMenu() {
                 {nextThresholdLabel}
               </div>
             </CompactMenuItem>
-            {isCreator && isCreatorRoute ? (
+            {isCreator ? (
               <div className="rounded-md bg-background/80 px-3 py-2 text-center">
                 <ThresholdsEditor />
               </div>
@@ -235,9 +230,6 @@ export function CompactInfoMenus() {
 }
 
 const Info = () => {
-  const pathname = usePathname();
-  const normalizedPathname = stripBasePath(pathname);
-  const isCreatorRoute = normalizedPathname.startsWith("/creator/");
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const levels = useAppSelector((state) => state.levels);
   const options = useAppSelector((state) => state.options);
@@ -249,6 +241,7 @@ const Info = () => {
   const isCreator = options.creator;
   const hasAccuracy = Boolean(points.levels[level.name]);
 
+  console.log("CREATOR", isCreator);
   return (
     <InfoBoard>
       <div className="flex w-full flex-nowrap items-center justify-around">
@@ -263,7 +256,7 @@ const Info = () => {
           </InfoBox>
         )}
         <NextThreshold />
-        {isCreator && isCreatorRoute && <ThresholdsEditor />}
+        {isCreator && <ThresholdsEditor />}
         {isCreator && (
           <InfoBox>
             <Difficulty />
