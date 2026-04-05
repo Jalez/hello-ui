@@ -9,6 +9,7 @@ import { useAppSelector } from "@/store/hooks/hooks";
 import { useGameStore } from "@/components/default/games";
 import { Loader2, Send } from "lucide-react";
 import { useOptionalCollaboration } from "@/lib/collaboration/CollaborationProvider";
+import { finishGameCompletionHints } from "@/lib/finishGameCompletionHints";
 
 interface LtiSessionInfo {
   isLtiMode: boolean;
@@ -59,6 +60,7 @@ export function FinishGameView({ gameId, gameTitle }: FinishGameViewProps) {
   const addGameToStore = useGameStore((s) => s.addGameToStore);
   const collaboration = useOptionalCollaboration();
   const points = useAppSelector((state) => state.points);
+  const levels = useAppSelector((state) => state.levels);
 
   const [ltiInfo, setLtiInfo] = useState<LtiSessionInfo | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -81,6 +83,16 @@ export function FinishGameView({ gameId, gameTitle }: FinishGameViewProps) {
 
   const percentage =
     points.allMaxPoints > 0 ? Math.round((points.allPoints / points.allMaxPoints) * 100) : 0;
+
+  const completionHints = useMemo(
+    () =>
+      finishGameCompletionHints(levels, {
+        allPoints: points.allPoints,
+        allMaxPoints: points.allMaxPoints,
+        levels: points.levels,
+      }),
+    [levels, points.allMaxPoints, points.allPoints, points.levels],
+  );
 
   const backHref = useMemo(() => {
     const nextParams = new URLSearchParams(searchParams.toString());
@@ -261,6 +273,17 @@ export function FinishGameView({ gameId, gameTitle }: FinishGameViewProps) {
           </div>
           <div className="mt-2 text-xl text-muted-foreground">{percentage}%</div>
         </div>
+
+        {completionHints.length > 0 ? (
+          <div className="rounded-lg border border-amber-200/80 bg-amber-50/80 p-4 text-sm text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/25 dark:text-amber-100">
+            <p className="font-medium">You are missing a lot of points. Did you notice:</p>
+            <ul className="mt-2 list-disc space-y-1 pl-5">
+              {completionHints.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
 
         {ltiInfo?.courseName ? (
           <p className="text-sm text-muted-foreground">
