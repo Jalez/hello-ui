@@ -20,7 +20,7 @@ if (!DATABASE_URL) {
 }
 
 /** Must match the number of SQL files listed in lib/db/migrations/meta/_journal.json */
-const EXPECTED_MIGRATION_COUNT = 3;
+const EXPECTED_MIGRATION_COUNT = 4;
 
 async function main() {
   const pool = new Pool({ connectionString: DATABASE_URL });

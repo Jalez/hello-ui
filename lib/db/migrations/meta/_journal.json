@@ -22,6 +22,13 @@
       "when": 1775149968762,
       "tag": "0002_amusing_cassandra_nova",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1775150400000,
+      "tag": "0003_user_tour_spot_ack",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,5 @@
 export * from "./users";
+export * from "./tour";
 export * from "./lti";
 export * from "./credits";
 export * from "./game";
