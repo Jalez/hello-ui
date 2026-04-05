@@ -37,6 +37,8 @@ interface LevelSelectProps {
   levelHandler: (level: number) => void;
   compact?: boolean;
   compactLabel?: string;
+  /** Shown under the compact control (e.g. game route navbar). */
+  compactDescription?: string;
 }
 
 const EMPTY_ACTIVE_USERS: ActiveUser[] = [];
@@ -244,7 +246,12 @@ const LevelPresence = ({ users }: { users: ActiveUser[] }) => {
   );
 };
 
-export const LevelSelect = ({ levelHandler, compact = false, compactLabel }: LevelSelectProps) => {
+export const LevelSelect = ({
+  levelHandler,
+  compact = false,
+  compactLabel,
+  compactDescription,
+}: LevelSelectProps) => {
   const levels = useAppSelector((state) => state.levels);
   const points = useAppSelector((state) => state.points);
   const currentLevel = useAppSelector(
@@ -335,8 +342,79 @@ export const LevelSelect = ({ levelHandler, compact = false, compactLabel }: Lev
         </form>
       )}
       {!openEditor && (
-        <div className={`flex items-center gap-2 ${compact ? "w-full justify-center" : "flex-row"}`}>
-          <Select value={currentLevelData?.name || ""} onValueChange={levelSelectHandler}>
+        compact && compactDescription ? (
+          <div className="flex w-full flex-col gap-1">
+            <p className="w-full px-1 text-center text-[10px] leading-snug text-muted-foreground min-[520px]:text-left">
+              {compactDescription}
+            </p>
+            <div className="flex w-full items-center justify-center gap-2">
+              <Select value={currentLevelData?.name || ""} onValueChange={levelSelectHandler}>
+            <SelectTrigger
+              className={
+                compact
+                  ? "mx-auto flex h-auto w-[min(18rem,100%)] max-w-full items-center justify-between gap-2 rounded-md border-0 bg-transparent px-2 py-1.5 text-primary shadow-none hover:bg-muted/70 focus-visible:bg-muted/70 focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=open]:bg-muted/70 [&>svg]:shrink-0"
+                  : "text-primary border-b-2 border-secondary hover:border-secondary focus:border-primary focus:outline-none px-2 py-1 h-auto font-normal min-w-[200px]"
+              }
+            >
+              {compact ? (
+                <div className="flex min-w-0 flex-1 flex-col items-center text-center">
+                  {compactLabel && (
+                    <span className={`${compactMenuLabelClass} min-[520px]:hidden`}>
+                      {compactLabel}
+                    </span>
+                  )}
+                  <SelectValue placeholder="Select level" className="truncate text-xs font-medium leading-none">
+                    {currentLevelData
+                      ? `${currentLevelData.name}${isCreator ? "" : ` - ${getLevelAccuracy(currentLevelData.name)}`}`
+                      : "Select level"}
+                  </SelectValue>
+                </div>
+              ) : (
+                <SelectValue placeholder="Select level" className="truncate">
+                  {currentLevelData
+                    ? `The ${currentLevelData.name}${isCreator ? "" : ` - ${getLevelAccuracy(currentLevelData.name)}`}`
+                    : "Select level"}
+                </SelectValue>
+              )}
+            </SelectTrigger>
+            <SelectContent className={`bg-popover border border-border shadow-lg ${compact ? "min-w-[220px]" : "min-w-[300px]"}`}>
+              {levels.map((level, index) => (
+                <SelectItem
+                  key={index}
+                  value={level.name}
+                  textValue={`${compact ? "" : "The "}${level.name}${isCreator ? "" : ` - ${getLevelAccuracy(level.name)}`}`}
+                >
+                  <div className="flex w-full items-center justify-between gap-2">
+                    <div className="flex min-w-0 flex-1 items-center gap-2">
+                      <SelectItemText>
+                        {`${compact ? "" : "The "}${level.name}${isCreator ? "" : ` - ${getLevelAccuracy(level.name)}`}`}
+                      </SelectItemText>
+                      <LevelPresence users={usersByLevel.get(index) ?? []} />
+                    </div>
+                    <div className="flex shrink-0 gap-1">
+                      {getSyntaxIcons(level)}
+                    </div>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+              {isCreator && (
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={handleClickToEdit}
+                  className={showEdit ? "visible" : "invisible"}
+                >
+                  <Edit className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className={`flex items-center gap-2 ${compact ? "w-full justify-center" : "flex-row"}`}>
+            <Select value={currentLevelData?.name || ""} onValueChange={levelSelectHandler}>
             <SelectTrigger
               className={
                 compact
@@ -398,7 +476,8 @@ export const LevelSelect = ({ levelHandler, compact = false, compactLabel }: Lev
               <Edit className="h-4 w-4" />
             </Button>
           )}
-        </div>
+          </div>
+        )
       )}
     </div>
   );

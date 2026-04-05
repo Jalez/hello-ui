@@ -25,6 +25,7 @@ import { ProgressionSync } from "./General/ProgressionSync";
 import { ProgressPersistence } from "./General/ProgressPersistence";
 import { LevelMetaSync } from "./General/LevelMetaSync";
 import { GameplayTelemetryTracker } from "./General/GameplayTelemetryTracker";
+import { GameboardTourController } from "./General/GameboardTourController";
 import { useGameStore } from "./default/games";
 import { useSession } from "next-auth/react";
 import type { Mode } from "@/store/slices/options.slice";
@@ -81,10 +82,9 @@ function App() {
   const pathname = usePathname();
   const normalizedPathname = stripBasePath(pathname);
   const canEditCurrentGame = Boolean(currentGame?.canEdit ?? currentGame?.isOwner);
-  /** Sidebar host for creator route or game route when the user can edit (editor / preview). */
+  /** Sidebar host for creator workbench only; game route editors use navbar menus instead. */
   const showEditorWorkbenchSidebar =
-    canEditCurrentGame &&
-    (normalizedPathname.startsWith("/creator/") || normalizedPathname.startsWith("/game/"));
+    canEditCurrentGame && normalizedPathname.startsWith("/creator/");
   const params = useParams<{ gameId?: string }>();
   const mode = searchParams.get('mode');
   const routeGameIdParam = params?.gameId;
@@ -465,6 +465,7 @@ function App() {
               </div>
             ) : levels.length > 0 ? (
               <DrawboardNavbarCaptureProvider>
+                <GameboardTourController />
                 <Navbar />
                 <div
                   ref={contentRowRef}

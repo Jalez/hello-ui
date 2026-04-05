@@ -31,6 +31,7 @@ export function CreatorWorkbenchSubSidebar({ sections }: CreatorWorkbenchSubSide
     <TooltipProvider>
       <aside
         aria-label="Creator workbench tools"
+        data-tour-spot="creator.workbench_sidebar"
         className={cn(
           "flex min-h-0 flex-1 flex-col gap-0 overflow-x-hidden overflow-y-auto overscroll-y-contain border-border bg-background/70 py-1.5 [container-type:inline-size]",
           isMobile ? "min-w-[90px] max-w-[148px] border-r px-1" : "w-14 shrink-0 border-r px-1",

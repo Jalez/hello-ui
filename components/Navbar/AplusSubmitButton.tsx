@@ -48,7 +48,10 @@ export const AplusSubmitButton = ({
 
   const trigger = renderTrigger ? renderTrigger({ openDialog }) : (
     displayMode === "icon" ? (
-      <PoppingTitle topTitle="Finish game">
+      <PoppingTitle
+        topTitle="Finish game"
+        bottomTitle="Review your run, save your score, and submit if your course requires it."
+      >
         <Button
           size="icon"
           variant="ghost"
@@ -59,16 +62,21 @@ export const AplusSubmitButton = ({
         </Button>
       </PoppingTitle>
     ) : (
-      <Button
-        size="sm"
-        variant="ghost"
-        className="w-full justify-start gap-2"
-        onClick={openDialog}
-        title="Finish game and save result"
+      <PoppingTitle
+        topTitle="Finish game"
+        bottomTitle="Review your run, save your score, and submit if your course requires it."
       >
-        <Flag className="h-5 w-5" />
-        <span>Finish game</span>
-      </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="w-full justify-start gap-2"
+          onClick={openDialog}
+          title="Finish game and save result"
+        >
+          <Flag className="h-5 w-5" />
+          <span>Finish game</span>
+        </Button>
+      </PoppingTitle>
     )
   );
 

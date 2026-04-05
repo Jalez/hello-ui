@@ -16,7 +16,6 @@ import type { MapEditorRef } from "@/components/CreatorControls/MapEditor";
 import { apiUrl } from "@/lib/apiUrl";
 import { AplusSubmitButton } from "./AplusSubmitButton";
 import { WorkbenchSidebarToolRow } from "./WorkbenchSidebarToolRow";
-import type { SubNavbarItem } from "./SubNavbar";
 
 export type GameToolsSidebarProps = {
   mapEditorRef: RefObject<MapEditorRef | null>;
@@ -29,8 +28,6 @@ export type GameToolsSidebarProps = {
   openGameLobby: () => void;
   togglePopper: (scope: "level" | "game") => void;
   shouldEmphasizeFinishGame: boolean;
-  /** Run events / auto-run events (game route editor workbench). */
-  interactionRunItems?: SubNavbarItem[];
   /** Shown in game route editor sidebar; opens creator for this game. */
   onSwitchToCreator?: () => void;
 };
@@ -50,7 +47,6 @@ export function GameToolsSidebar({
   openGameLobby,
   togglePopper,
   shouldEmphasizeFinishGame,
-  interactionRunItems,
   onSwitchToCreator,
 }: GameToolsSidebarProps) {
   const router = useRouter();
@@ -131,32 +127,6 @@ export function GameToolsSidebar({
 
       {showCreatorGameMenus ? <SidebarDivider /> : null}
 
-      {interactionRunItems && interactionRunItems.length > 0 ? (
-        <>
-          {interactionRunItems.map((item) => {
-            if (!item.icon || !item.onClick) {
-              return null;
-            }
-            const Icon = item.icon;
-            return (
-              <WorkbenchSidebarToolRow
-                key={item.id}
-                id={`game-interaction-${item.id}`}
-                label={item.label}
-                tooltip={item.tooltip}
-                icon={Icon}
-                onClick={item.onClick}
-                disabled={item.disabled}
-                active={item.active}
-                variant={item.variant}
-                iconClassName={item.iconClassName}
-              />
-            );
-          })}
-          <SidebarDivider />
-        </>
-      ) : null}
-
       <WorkbenchSidebarToolRow
         id="game-levels-map"
         label="Levels"
@@ -175,13 +145,15 @@ export function GameToolsSidebar({
             icon={BarChart3}
             onClick={() => router.push(apiUrl(`/creator/${currentGameId}/statistics`))}
           />
-          <WorkbenchSidebarToolRow
-            id="game-settings"
-            label="Settings"
-            tooltip="Game Settings"
-            icon={Settings}
-            onClick={() => router.push(apiUrl(`/creator/${currentGameId}/settings`))}
-          />
+          {!isGameRoute ? (
+            <WorkbenchSidebarToolRow
+              id="game-settings"
+              label="Settings"
+              tooltip="Game Settings"
+              icon={Settings}
+              onClick={() => router.push(apiUrl(`/creator/${currentGameId}/settings`))}
+            />
+          ) : null}
         </>
       ) : null}
     </div>

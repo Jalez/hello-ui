@@ -2,8 +2,7 @@
 
 import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
 import { Button } from "@/components/ui/button";
-import { RotateCcw, PanelLeft, Map, Flag, Settings, Gamepad2, BarChart3, Users, MousePointer, Eye, Square, Play, Wrench, ListMinus, ListX, ListPlus, ListOrdered } from "lucide-react";
-import { AutoRunCircle } from "@/components/icons/AutoRunCircle";
+import { RotateCcw, PanelLeft, Map, Flag, Settings, Gamepad2, BarChart3, Users, MousePointer, Eye, Square, Wrench, ListMinus, ListX, ListPlus, ListOrdered } from "lucide-react";
 import { LevelSelect } from "@/components/General/LevelControls/LevelControls";
 import { setCurrentLevel } from "@/store/slices/currentLevel.slice";
 import { clearEventSequenceForScenario, removeEventSequenceStep, resetLevel } from "@/store/slices/levels.slice";
@@ -37,7 +36,6 @@ import { ModeToggleButton } from "./ModeToggleButton";
 import { AplusSubmitButton } from "./AplusSubmitButton";
 import Link from "next/link";
 import { useGameStore } from "@/components/default/games";
-import { CreatorMenu } from "./CreatorMenu";
 import { useOptionalCollaboration } from "@/lib/collaboration/CollaborationProvider";
 import { apiUrl, stripBasePath } from "@/lib/apiUrl";
 import { useGameplayTelemetry } from "@/components/General/useGameplayTelemetry";
@@ -64,9 +62,6 @@ import {
   subscribeSequenceRuntime,
   updateSequenceRuntimeState,
   useEventSequenceUiState,
-  requestAutoReplay,
-  cancelAutoReplay,
-  setAutoReplayOnMount,
 } from "@/lib/drawboard/eventSequenceState";
 
 type CreatorWorkbenchSubnavTabId = "creator" | "events" | "game";
@@ -97,6 +92,10 @@ const CREATOR_WORKBENCH_SUBNAV_TABS: Array<{
   },
 ];
 
+/** Shown under the compact level picker on the game route (players). */
+const GAME_ROUTE_LEVEL_SELECT_DESCRIPTION =
+  "Switch levels anytime. The percentage is your best accuracy on that level.";
+
 export const Navbar = () => {
   const dispatch = useAppDispatch();
   const router = useRouter();
@@ -121,14 +120,16 @@ export const Navbar = () => {
   const canEditCurrentGame = Boolean(currentGame?.canEdit ?? currentGame?.isOwner);
   const isGameRoute = normalizedPathname.startsWith("/game/");
   const isGroupGame = currentGame?.collaborationMode === "group";
-  const shouldHideSidebarForPlayers = isGameRoute && Boolean(currentGame?.hideSidebar) && !canEditCurrentGame;
+  /** Game route: same sidebar visibility for every player, including owners. */
+  const shouldHideSidebarForPlayers = isGameRoute && Boolean(currentGame?.hideSidebar);
+  /** Reset/finish/game-tools menus live on creator route only; game route matches player chrome. */
   const showCreatorGameMenus =
-    isGameRoute &&
+    isCreatorRoute &&
     Boolean(currentGame?.id) &&
     canEditCurrentGame;
   const isCreatorWorkbenchContext = isCreatorRoute && canEditCurrentGame;
-  /** Editor workbench sidebar (creator route full rail, or game route Game tools rail). */
-  const hostEditorWorkbench = isCreatorWorkbenchContext || showCreatorGameMenus;
+  /** Creator workbench sidebar rail only; game route uses navbar menus (no subsidebar). */
+  const hostEditorWorkbench = isCreatorWorkbenchContext;
   const shouldShowMobileSidebarToggle =
     isGameRoute &&
     isVisible &&
@@ -171,13 +172,14 @@ export const Navbar = () => {
       ] ?? false;
     }, [currentLevel, selectedSequenceScenarioId]),
   );
+  /** Must match `ArtBoards` `isCreatorContext` / `ScenarioDrawing` `creatorMode` so navbar and boards share one runtime store per route. */
   const selectedSequenceRuntimeKey = useMemo(
     () => (
       selectedSequenceScenarioId
-        ? getEventSequenceRuntimeKey(currentLevel, selectedSequenceScenarioId, true)
+        ? getEventSequenceRuntimeKey(currentLevel, selectedSequenceScenarioId, isCreatorRoute)
         : null
     ),
-    [currentLevel, selectedSequenceScenarioId],
+    [currentLevel, isCreatorRoute, selectedSequenceScenarioId],
   );
   const selectedSequenceRuntime = useSyncExternalStore(
     useCallback(
@@ -212,15 +214,6 @@ export const Navbar = () => {
     && selectedSequenceSteps.length > 0
     && selectedSequenceSteps[selectedSequenceSteps.length - 1]?.id === selectedSequenceStep.id,
   );
-  const autoReplayOnMount = useEventSequenceUiState(
-    useCallback((state) => {
-      if (!selectedSequenceScenarioId) {
-        return false;
-      }
-      return state.autoReplayOnMountByScenario[getEventSequenceScenarioUiKey(currentLevel, selectedSequenceScenarioId)] ?? false;
-    }, [currentLevel, selectedSequenceScenarioId]),
-  );
-
   useEffect(() => {
     if (!shouldEmphasizeFinishGame) {
       setHasDismissedCompactGameShake(false);
@@ -390,15 +383,6 @@ export const Navbar = () => {
       <DropdownMenuContent align="start" className="w-72 border-0 shadow-lg">
         <DropdownMenuLabel>Game Tools</DropdownMenuLabel>
         <DropdownMenuSeparator />
-        {isGameRoute && currentGame?.id && isGroupGame && (
-          <>
-            <DropdownMenuItem onSelect={openGameLobby}>
-              <Users className="h-4 w-4 mr-2" />
-              Back to Game Lobby
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-          </>
-        )}
         {isCreatorRoute && currentGame?.id && canEditCurrentGame && (
           <>
             <DropdownMenuItem asChild>
@@ -437,19 +421,13 @@ export const Navbar = () => {
           <Map className="h-4 w-4 mr-2" />
           Game Levels
         </DropdownMenuItem>
-        {currentGame?.id && canEditCurrentGame && (
+        {isCreatorRoute && currentGame?.id && canEditCurrentGame && (
           <>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
               <Link href={`/creator/${currentGame.id}/statistics`}>
                 <BarChart3 className="h-4 w-4 mr-2" />
                 Statistics
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link href={`/creator/${currentGame.id}/settings`}>
-                <Settings className="h-4 w-4 mr-2" />
-                Game Settings
               </Link>
             </DropdownMenuItem>
           </>
@@ -460,7 +438,10 @@ export const Navbar = () => {
 
   const renderCompactPlayerMenus = () => (
     <>
-      <div className="flex flex-none">
+      <div
+        className="flex flex-none"
+        {...(isMobile ? { "data-tour-spot": "navbar.game_route_mobile_game_menu" as const } : {})}
+      >
         <div className="rounded-md px-2 py-1.5">
             <Popover>
               <PopoverTrigger asChild>
@@ -487,6 +468,9 @@ export const Navbar = () => {
                   </Button>
               </PopoverTrigger>
               <PopoverContent side="bottom" align="start" className="w-72 space-y-3">
+                <p className="text-xs leading-snug text-muted-foreground">
+                  Score, group lobby, and finish — same as the wide layout, grouped for small screens.
+                </p>
                 <div className="rounded-md border bg-muted/40 p-3">
                   <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
                     <Gamepad2 className="h-3.5 w-3.5" />
@@ -496,12 +480,18 @@ export const Navbar = () => {
                     <div className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
                       Total Score
                     </div>
+                    <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
+                      Your cumulative points across all levels, out of the maximum you can earn.
+                    </p>
                     <div className="mt-1 text-sm font-semibold text-foreground">
                       {points.allPoints || 0}/{points.allMaxPoints || 0}
                     </div>
                   </div>
                   {isGroupGame && (
-                    <div className="mt-3 rounded-md bg-background/80 px-3 py-2">
+                    <div className="mt-3 space-y-1.5 rounded-md bg-background/80 px-3 py-2">
+                      <p className="text-[10px] leading-snug text-muted-foreground">
+                        Return to the lobby to join a different group or wait for your team.
+                      </p>
                       <Button
                         type="button"
                         variant="ghost"
@@ -514,7 +504,10 @@ export const Navbar = () => {
                       </Button>
                     </div>
                   )}
-                  <div className="mt-3 rounded-md bg-background/80 px-3 py-2">
+                  <div className="mt-3 space-y-1.5 rounded-md bg-background/80 px-3 py-2">
+                    <p className="text-[10px] leading-snug text-muted-foreground">
+                      Open the finish screen to review your run, save your score, and submit if your course requires it.
+                    </p>
                     <AplusSubmitButton
                       displayMode="icon-label"
                       shouldShake={shouldEmphasizeFinishGame}
@@ -538,10 +531,18 @@ export const Navbar = () => {
         </div>
       </div>
 
-      <div className="flex flex-1 min-w-0">
+      <div
+        className="flex flex-1 min-w-0"
+        {...(isMobile ? { "data-tour-spot": "navbar.game_route_levels" as const } : {})}
+      >
         <div className="w-full rounded-md px-2 py-1.5">
           <div className="flex-1 min-w-0">
-            <LevelSelect levelHandler={levelChanger} compact compactLabel="Levels" />
+            <LevelSelect
+              levelHandler={levelChanger}
+              compact
+              compactLabel="Levels"
+              compactDescription={GAME_ROUTE_LEVEL_SELECT_DESCRIPTION}
+            />
           </div>
         </div>
       </div>
@@ -550,38 +551,67 @@ export const Navbar = () => {
 
   const renderInlinePlayerMenus = () => (
     <>
-      <div className="flex flex-none">
+      <div
+        className="flex flex-none"
+        {...(!isMobile ? { "data-tour-spot": "navbar.game_route_score" as const } : {})}
+      >
         <InfoGamePoints />
       </div>
       {isGroupGame && (
-        <div className="flex flex-none">
+        <div
+          className="flex flex-none"
+          {...(!isMobile ? { "data-tour-spot": "navbar.game_route_lobby" as const } : {})}
+        >
           <Button
             type="button"
             variant="ghost"
             size="sm"
             className="justify-center gap-2"
             onClick={openGameLobby}
+            title="Return to the lobby to join a different group or wait for teammates."
           >
             <Users className="h-4 w-4" />
             <span>To lobby</span>
           </Button>
         </div>
       )}
-      <div className="flex flex-none">
+      <div
+        className="flex flex-none"
+        {...(!isMobile ? { "data-tour-spot": "navbar.game_route_finish" as const } : {})}
+      >
         <AplusSubmitButton displayMode="icon-label" shouldShake={shouldEmphasizeFinishGame} />
       </div>
-      <div className="flex flex-1 min-w-0">
+      <div
+        className="flex flex-1 min-w-0"
+        {...(!isMobile ? { "data-tour-spot": "navbar.game_route_levels" as const } : {})}
+      >
         <div className="w-full rounded-md px-2 py-1.5">
           <div className="flex-1 min-w-0">
-            <LevelSelect levelHandler={levelChanger} compact compactLabel="Levels" />
+            <LevelSelect
+              levelHandler={levelChanger}
+              compact
+              compactLabel="Levels"
+              compactDescription={GAME_ROUTE_LEVEL_SELECT_DESCRIPTION}
+            />
           </div>
         </div>
       </div>
     </>
   );
 
-  const renderCompactCreatorLevelMenu = () => (
-    <div className="flex flex-1 min-w-0">
+  /** Attach Joyride targets only on the visible responsive row (mobile vs desktop both mount). */
+  const tourSpotProps = (spot: string, slot: "mobile" | "desktop") => {
+    if (slot === "mobile" && isMobile) {
+      return { "data-tour-spot": spot };
+    }
+    if (slot === "desktop" && !isMobile) {
+      return { "data-tour-spot": spot };
+    }
+    return {};
+  };
+
+  const renderCompactCreatorLevelMenu = (slot: "mobile" | "desktop") => (
+    <div className="flex flex-1 min-w-0" {...tourSpotProps("navbar.creator_levels", slot)}>
       <div className="w-full rounded-md px-2 py-1.5">
         <div className="flex-1 min-w-0">
           <LevelSelect levelHandler={levelChanger} compact compactLabel="Levels" />
@@ -590,7 +620,7 @@ export const Navbar = () => {
     </div>
   );
 
-  const renderCompactCreatorMenus = () => (
+  const renderCompactCreatorMenus = (slot: "mobile" | "desktop") => (
     <>
       {shouldShowCreatorSidebarToggle ? (
         <div className="flex flex-none">
@@ -605,24 +635,16 @@ export const Navbar = () => {
           </div>
         </div>
       ) : null}
-      <div className="flex flex-none">
-        <div className="rounded-md px-2 py-1.5">
-          <CreatorMenu
-            gameId={currentGame!.id}
-            collaborationMode={currentGame!.collaborationMode}
-          />
-        </div>
-      </div>
-      <div className="flex flex-none">
+      <div className="flex flex-none" {...tourSpotProps("navbar.creator_game_menu", slot)}>
         <div className="rounded-md px-2 py-1.5">
           {renderGameMenu()}
         </div>
       </div>
-      {renderCompactCreatorLevelMenu()}
+      {renderCompactCreatorLevelMenu(slot)}
     </>
   );
 
-  const renderCompactCreatorWorkbenchMenus = () => (
+  const renderCompactCreatorWorkbenchMenus = (slot: "mobile" | "desktop") => (
     <>
       {shouldShowCreatorSidebarToggle ? (
         <div className="flex flex-none">
@@ -637,7 +659,7 @@ export const Navbar = () => {
           </div>
         </div>
       ) : null}
-      <div className="flex flex-none">
+      <div className="flex flex-none" {...tourSpotProps("navbar.creator_workbench_tools", slot)}>
         <div className="rounded-md px-2 py-1.5">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -678,7 +700,7 @@ export const Navbar = () => {
           </DropdownMenu>
         </div>
       </div>
-      <div className="flex flex-1 min-w-0">
+      <div className="flex flex-1 min-w-0" {...tourSpotProps("navbar.creator_levels", slot)}>
         <div className="w-full rounded-md px-2 py-1.5">
           <div className="flex-1 min-w-0">
             <LevelSelect levelHandler={levelChanger} compact compactLabel="Levels" />
@@ -747,35 +769,7 @@ export const Navbar = () => {
         : "Only the last recorded event can be removed.",
       variant: "ghost" as const,
     }] : []),
-    ...(selectedSequenceSteps.length > 0 && !isSequenceRecording ? [{
-      id: "auto-replay",
-      label: selectedSequenceRuntime.autoReplay?.running ? "Stop run" : "Run events",
-      icon: selectedSequenceRuntime.autoReplay?.running ? Square : Play,
-      onClick: () => {
-        if (!selectedSequenceRuntimeKey) return;
-        if (selectedSequenceRuntime.autoReplay?.running) {
-          cancelAutoReplay(selectedSequenceRuntimeKey);
-        } else {
-          requestAutoReplay(selectedSequenceRuntimeKey, selectedSequenceSteps.length + 1);
-        }
-      },
-      active: Boolean(selectedSequenceRuntime.autoReplay?.running),
-    }] : []),
-    ...(selectedSequenceSteps.length > 0 && !isSequenceRecording ? [{
-      id: "auto-replay-on-mount",
-      label: "Auto-run events",
-      icon: AutoRunCircle,
-      iconClassName: "!h-5 !w-5 !min-h-[1.25rem] !min-w-[1.25rem]",
-      onClick: () => {
-        if (!selectedSequenceScenarioId) return;
-        setAutoReplayOnMount(currentLevel, selectedSequenceScenarioId, !autoReplayOnMount);
-      },
-      active: autoReplayOnMount,
-      variant: "outline" as const,
-      tooltip: "Automatically run and compare all events when the page loads.",
-    }] : []),
   ], [
-    autoReplayOnMount,
     currentLevel,
     handleClearSelectedSequence,
     handleRemoveSelectedStep,
@@ -785,63 +779,11 @@ export const Navbar = () => {
     handleStopSequenceRecording,
     isSequenceRecording,
     selectedSequenceRuntime,
-    selectedSequenceRuntimeKey,
     selectedSequenceScenarioId,
     selectedSequenceScenarioInteractive,
     selectedSequenceStep,
     selectedSequenceStepIsLast,
     selectedSequenceSteps.length,
-  ]);
-
-  const handleSwitchToCreator = useCallback(() => {
-    if (!currentGame?.id) {
-      return;
-    }
-    router.push(apiUrl(`/creator/${currentGame.id}`));
-  }, [currentGame?.id, router]);
-
-  const gameRouteInteractionRunItems = useMemo(
-    () =>
-      interactionSubnavItems.filter(
-        (item) => item.id === "auto-replay" || item.id === "auto-replay-on-mount",
-      ),
-    [interactionSubnavItems],
-  );
-
-  const gameRouteWorkbenchSections = useMemo((): CreatorWorkbenchSection[] => [
-    {
-      id: "game",
-      visible: true,
-      title: "Game",
-      children: (
-        <GameToolsSidebar
-          mapEditorRef={mapEditorRef}
-          isGameRoute={isGameRoute}
-          isCreatorRoute={isCreatorRoute}
-          currentGameId={currentGame?.id}
-          canEditCurrentGame={canEditCurrentGame}
-          showCreatorGameMenus={showCreatorGameMenus}
-          isGroupGame={isGroupGame}
-          openGameLobby={openGameLobby}
-          togglePopper={togglePopper}
-          shouldEmphasizeFinishGame={shouldEmphasizeFinishGame}
-          interactionRunItems={gameRouteInteractionRunItems}
-          onSwitchToCreator={handleSwitchToCreator}
-        />
-      ),
-    },
-  ], [
-    canEditCurrentGame,
-    currentGame?.id,
-    gameRouteInteractionRunItems,
-    handleSwitchToCreator,
-    isGameRoute,
-    isCreatorRoute,
-    isGroupGame,
-    openGameLobby,
-    showCreatorGameMenus,
-    shouldEmphasizeFinishGame,
-    togglePopper,
   ]);
 
   const creatorWorkbenchSections = useMemo((): CreatorWorkbenchSection[] => [
@@ -923,9 +865,9 @@ export const Navbar = () => {
             )}
             <div className="flex min-w-0 flex-1 items-center gap-1">
               {showCreatorGameMenus
-                ? renderCompactCreatorMenus()
+                ? renderCompactCreatorMenus("mobile")
                 : isCreatorWorkbenchContext
-                  ? renderCompactCreatorWorkbenchMenus()
+                  ? renderCompactCreatorWorkbenchMenus("mobile")
                   : renderCompactPlayerMenus()}
             </div>
           </div>
@@ -934,9 +876,9 @@ export const Navbar = () => {
         {/* Compact nav: text-first menus (no icon-only mode). Hide Game and Level menus on game route. */}
         <div className={`${isMobile ? "hidden" : "flex"} flex-1 min-w-0 items-center gap-1`}>
           {showCreatorGameMenus && currentGame?.id ? (
-            renderCompactCreatorMenus()
+            renderCompactCreatorMenus("desktop")
           ) : isCreatorWorkbenchContext ? (
-            renderCompactCreatorWorkbenchMenus()
+            renderCompactCreatorWorkbenchMenus("desktop")
           ) : !isCreatorRoute && !isGameRoute ? (
             <ModeToggleButton displayMode="icon-label" />
           ) : null}
@@ -977,13 +919,9 @@ export const Navbar = () => {
       </div>
       {hostEditorWorkbench && creatorWorkbenchSidebarHost
         ? createPortal(
-            isCreatorWorkbenchContext ? (
-              <CreatorAutosaveProvider>
-                <CreatorWorkbenchSubSidebar sections={creatorWorkbenchSections} />
-              </CreatorAutosaveProvider>
-            ) : (
-              <CreatorWorkbenchSubSidebar sections={gameRouteWorkbenchSections} />
-            ),
+            <CreatorAutosaveProvider>
+              <CreatorWorkbenchSubSidebar sections={creatorWorkbenchSections} />
+            </CreatorAutosaveProvider>,
             creatorWorkbenchSidebarHost,
           )
         : null}

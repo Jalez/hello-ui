@@ -221,20 +221,35 @@ export const Footer = () => {
   const [activeIndividuals, setActiveIndividuals] = useState<ClientActiveIndividualInstance[]>([]);
   const [isLoadingActiveIndividuals, setIsLoadingActiveIndividuals] = useState(false);
 
+  /** Matches Tailwind `xl:` (1280px); footer layout switches between compact and wide rows. */
+  const [isXl, setIsXl] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return undefined;
+    }
+    const mq = window.matchMedia("(min-width: 1280px)");
+    const apply = () => setIsXl(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+
+  const footerTourSpot = (spot: string, when: boolean) => (when ? { "data-tour-spot": spot } : {});
+
   const viewUserId = searchParams.get("userId");
   const isGroupGameplay = currentGame?.collaborationMode === "group" && Boolean(groupId);
+  const isCreatorRoute = normalizedPathname.startsWith("/creator/");
+  /** Active instance dashboards for editors: creator route only so /game matches player footer. */
   const showCreatorGroupInstances =
     currentGame?.collaborationMode === "group" &&
     Boolean(currentGame?.id) &&
     Boolean(currentGame?.canEdit ?? currentGame?.isOwner) &&
-    normalizedPathname.startsWith("/game/") &&
-    !options.creator;
+    isCreatorRoute;
   const showCreatorIndividualInstances =
     currentGame?.collaborationMode === "individual" &&
     Boolean(currentGame?.id) &&
     Boolean(currentGame?.canEdit ?? currentGame?.isOwner) &&
-    normalizedPathname.startsWith("/game/") &&
-    !options.creator;
+    isCreatorRoute;
 
   useEffect(() => {
     if (!isGroupGameplay || !groupId || !isCurrentGameResolved) {
@@ -367,7 +382,7 @@ export const Footer = () => {
   return (
     <footer className="w-full h-fit shrink-0 border-t p-2 text-sm">
       <div className="flex items-center gap-2 xl:hidden">
-        <div className="flex flex-1 min-w-0">
+        <div className="flex flex-1 min-w-0" {...footerTourSpot("footer.help", !isXl)}>
           <HelpModal
             mode={options.creator ? "creator" : "game"}
             trigger={
@@ -375,86 +390,90 @@ export const Footer = () => {
             }
           />
         </div>
-        <div className="flex flex-1 min-w-0">
+        <div className="flex flex-1 min-w-0" {...footerTourSpot("footer.level_menu", !isXl)}>
           <LevelFooterMenu />
         </div>
-        <div className="flex flex-1 min-w-0">
+        <div
+          className="flex flex-1 min-w-0"
+          {...footerTourSpot("footer.time_menu", !isXl && !options.creator)}
+        >
           <TimeFooterMenu />
         </div>
-        {showCreatorGroupInstances ? (
-          <div className="flex flex-1 min-w-0">
-            <Popover>
-              <PopoverTrigger asChild>
-                <CompactMenuButton
-                  icon={isLoadingActiveGroups ? Loader2 : Users}
-                  label="Groups"
-                  text="Groups"
-                  className={isLoadingActiveGroups ? "[&_svg]:animate-spin" : undefined}
-                />
-              </PopoverTrigger>
-              <PopoverContent side="top" align="end" className="w-80 space-y-3">
-                <CreatorGroupsMenu
-                  groups={activeGroups}
-                  isLoading={isLoadingActiveGroups}
-                  currentGroupId={groupId}
-                  onOpenGroup={openGroupInstance}
-                  onOpenDetails={setDetailsGroup}
-                />
-              </PopoverContent>
-            </Popover>
-          </div>
-        ) : showCreatorIndividualInstances ? (
-          <div className="flex flex-1 min-w-0">
-            <Popover>
-              <PopoverTrigger asChild>
-                <CompactMenuButton
-                  icon={isLoadingActiveIndividuals ? Loader2 : User}
-                  label="Students"
-                  text="Students"
-                  className={isLoadingActiveIndividuals ? "[&_svg]:animate-spin" : undefined}
-                />
-              </PopoverTrigger>
-              <PopoverContent side="top" align="end" className="w-80 space-y-3">
-                <CreatorIndividualsMenu
-                  individuals={activeIndividuals}
-                  isLoading={isLoadingActiveIndividuals}
-                  currentUserId={viewUserId}
-                  onOpenInstance={openIndividualInstance}
-                />
-              </PopoverContent>
-            </Popover>
-          </div>
-        ) : isGroupGameplay && groupId ? (
-          <div className="flex flex-1 min-w-0">
-            <Popover>
-              <PopoverTrigger asChild>
-                <CompactMenuButton
-                  icon={isLoadingGroup ? Loader2 : Users}
-                  label="Group"
-                  text={groupName || "Group"}
-                  className={isLoadingGroup ? "[&_svg]:animate-spin" : undefined}
-                />
-              </PopoverTrigger>
-              <PopoverContent side="top" align="end" className="w-72 space-y-3">
-                <div className="rounded-md border bg-muted/40 p-3">
-                  <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                    <Users className="h-3.5 w-3.5" />
-                    <span>Group Game</span>
+        {showCreatorGroupInstances || showCreatorIndividualInstances || (isGroupGameplay && groupId) ? (
+          <div
+            className="flex flex-1 min-w-0"
+            {...footerTourSpot("footer.collaboration", !isXl)}
+          >
+            {showCreatorGroupInstances ? (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <CompactMenuButton
+                    icon={isLoadingActiveGroups ? Loader2 : Users}
+                    label="Groups"
+                    text="Groups"
+                    className={isLoadingActiveGroups ? "[&_svg]:animate-spin" : undefined}
+                  />
+                </PopoverTrigger>
+                <PopoverContent side="top" align="end" className="w-80 space-y-3">
+                  <CreatorGroupsMenu
+                    groups={activeGroups}
+                    isLoading={isLoadingActiveGroups}
+                    currentGroupId={groupId}
+                    onOpenGroup={openGroupInstance}
+                    onOpenDetails={setDetailsGroup}
+                  />
+                </PopoverContent>
+              </Popover>
+            ) : showCreatorIndividualInstances ? (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <CompactMenuButton
+                    icon={isLoadingActiveIndividuals ? Loader2 : User}
+                    label="Students"
+                    text="Students"
+                    className={isLoadingActiveIndividuals ? "[&_svg]:animate-spin" : undefined}
+                  />
+                </PopoverTrigger>
+                <PopoverContent side="top" align="end" className="w-80 space-y-3">
+                  <CreatorIndividualsMenu
+                    individuals={activeIndividuals}
+                    isLoading={isLoadingActiveIndividuals}
+                    currentUserId={viewUserId}
+                    onOpenInstance={openIndividualInstance}
+                  />
+                </PopoverContent>
+              </Popover>
+            ) : (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <CompactMenuButton
+                    icon={isLoadingGroup ? Loader2 : Users}
+                    label="Group"
+                    text={groupName || "Group"}
+                    className={isLoadingGroup ? "[&_svg]:animate-spin" : undefined}
+                  />
+                </PopoverTrigger>
+                <PopoverContent side="top" align="end" className="w-72 space-y-3">
+                  <div className="rounded-md border bg-muted/40 p-3">
+                    <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                      <Users className="h-3.5 w-3.5" />
+                      <span>Group Game</span>
+                    </div>
+                    <p className="mt-2 break-words text-sm font-semibold text-foreground">{groupName || "Unnamed group"}</p>
+                    <div className="mt-3 flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                      <KeyRound className="h-3.5 w-3.5" />
+                      <span>Join Key</span>
+                    </div>
+                    <p className="mt-2 rounded-sm bg-background/80 px-2 py-1 font-mono text-lg tracking-[0.2em]">
+                      {groupJoinKey || "Unavailable"}
+                    </p>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Share this key with teammates if they need to join the same group.
+                    </p>
                   </div>
-                  <p className="mt-2 break-words text-sm font-semibold text-foreground">{groupName || "Unnamed group"}</p>
-                  <div className="mt-3 flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                    <KeyRound className="h-3.5 w-3.5" />
-                    <span>Join Key</span>
-                  </div>
-                  <p className="mt-2 rounded-sm bg-background/80 px-2 py-1 font-mono text-lg tracking-[0.2em]">
-                    {groupJoinKey || "Unavailable"}
-                  </p>
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    Share this key with teammates if they need to join the same group.
-                  </p>
-                </div>
-              </PopoverContent>
-            </Popover>
+                </PopoverContent>
+              </Popover>
+            )}
           </div>
         ) : (
           <div className="flex-1" />
@@ -462,7 +481,10 @@ export const Footer = () => {
       </div>
 
       <div className="hidden xl:flex items-center gap-2">
-        <div className="flex flex-1 min-w-0 items-center pointer-events-auto">
+        <div
+          className="flex flex-1 min-w-0 items-center pointer-events-auto"
+          {...footerTourSpot("footer.help", isXl)}
+        >
           <HelpModal
             mode={options.creator ? "creator" : "game"}
             trigger={
@@ -470,82 +492,89 @@ export const Footer = () => {
             }
           />
         </div>
-        <div className="flex flex-[2] min-w-0 justify-center">
+        <div
+          className="flex flex-[2] min-w-0 justify-center"
+          {...footerTourSpot("footer.info", isXl)}
+        >
           <Info />
         </div>
         <div className="flex flex-1 min-w-0 items-center justify-end gap-0">
-          {showCreatorGroupInstances ? (
-            <Popover>
-              <PopoverTrigger asChild>
-                <CompactMenuButton
-                  icon={isLoadingActiveGroups ? Loader2 : Users}
-                  label="Groups"
-                  text="Groups"
-                  showText="always"
-                  className={isLoadingActiveGroups ? "[&_svg]:animate-spin" : undefined}
-                />
-              </PopoverTrigger>
-              <PopoverContent side="top" align="end" className="w-80 space-y-3">
-                <CreatorGroupsMenu
-                  groups={activeGroups}
-                  isLoading={isLoadingActiveGroups}
-                  currentGroupId={groupId}
-                  onOpenGroup={openGroupInstance}
-                  onOpenDetails={setDetailsGroup}
-                />
-              </PopoverContent>
-            </Popover>
-          ) : showCreatorIndividualInstances ? (
-            <Popover>
-              <PopoverTrigger asChild>
-                <CompactMenuButton
-                  icon={isLoadingActiveIndividuals ? Loader2 : User}
-                  label="Students"
-                  text="Students"
-                  showText="always"
-                  className={isLoadingActiveIndividuals ? "[&_svg]:animate-spin" : undefined}
-                />
-              </PopoverTrigger>
-              <PopoverContent side="top" align="end" className="w-80 space-y-3">
-                <CreatorIndividualsMenu
-                  individuals={activeIndividuals}
-                  isLoading={isLoadingActiveIndividuals}
-                  currentUserId={viewUserId}
-                  onOpenInstance={openIndividualInstance}
-                />
-              </PopoverContent>
-            </Popover>
-          ) : isGroupGameplay && groupId ? (
-            <Popover>
-              <PopoverTrigger asChild>
-                <CompactMenuButton
-                  icon={isLoadingGroup ? Loader2 : Users}
-                  label="Group"
-                  text={groupName || "Group"}
-                  showText="always"
-                  className={isLoadingGroup ? "[&_svg]:animate-spin" : undefined}
-                />
-              </PopoverTrigger>
-              <PopoverContent side="top" align="end" className="w-72 space-y-3">
-                <div className="rounded-md border bg-muted/40 p-3">
-                  <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                    <Users className="h-3.5 w-3.5" />
-                    <span>Group Game</span>
-                  </div>
-                  <p className="mt-2 break-words text-sm font-semibold text-foreground">{groupName || "Unnamed group"}</p>
-                  <div className="mt-3 flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                    <KeyRound className="h-3.5 w-3.5" />
-                    <span>Join Key</span>
-                  </div>
-                  <p className="mt-2 rounded-sm bg-background/80 px-2 py-1 font-mono text-lg tracking-[0.2em]">
-                    {groupJoinKey || "Unavailable"}
-                  </p>
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    Share this key with teammates if they need to join the same group.
-                  </p>
-                </div>
-              </PopoverContent>
-            </Popover>
+          {showCreatorGroupInstances || showCreatorIndividualInstances || (isGroupGameplay && groupId) ? (
+            <div className="flex items-center gap-2" {...footerTourSpot("footer.collaboration", isXl)}>
+              {showCreatorGroupInstances ? (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <CompactMenuButton
+                      icon={isLoadingActiveGroups ? Loader2 : Users}
+                      label="Groups"
+                      text="Groups"
+                      showText="always"
+                      className={isLoadingActiveGroups ? "[&_svg]:animate-spin" : undefined}
+                    />
+                  </PopoverTrigger>
+                  <PopoverContent side="top" align="end" className="w-80 space-y-3">
+                    <CreatorGroupsMenu
+                      groups={activeGroups}
+                      isLoading={isLoadingActiveGroups}
+                      currentGroupId={groupId}
+                      onOpenGroup={openGroupInstance}
+                      onOpenDetails={setDetailsGroup}
+                    />
+                  </PopoverContent>
+                </Popover>
+              ) : showCreatorIndividualInstances ? (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <CompactMenuButton
+                      icon={isLoadingActiveIndividuals ? Loader2 : User}
+                      label="Students"
+                      text="Students"
+                      showText="always"
+                      className={isLoadingActiveIndividuals ? "[&_svg]:animate-spin" : undefined}
+                    />
+                  </PopoverTrigger>
+                  <PopoverContent side="top" align="end" className="w-80 space-y-3">
+                    <CreatorIndividualsMenu
+                      individuals={activeIndividuals}
+                      isLoading={isLoadingActiveIndividuals}
+                      currentUserId={viewUserId}
+                      onOpenInstance={openIndividualInstance}
+                    />
+                  </PopoverContent>
+                </Popover>
+              ) : (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <CompactMenuButton
+                      icon={isLoadingGroup ? Loader2 : Users}
+                      label="Group"
+                      text={groupName || "Group"}
+                      showText="always"
+                      className={isLoadingGroup ? "[&_svg]:animate-spin" : undefined}
+                    />
+                  </PopoverTrigger>
+                  <PopoverContent side="top" align="end" className="w-72 space-y-3">
+                    <div className="rounded-md border bg-muted/40 p-3">
+                      <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                        <Users className="h-3.5 w-3.5" />
+                        <span>Group Game</span>
+                      </div>
+                      <p className="mt-2 break-words text-sm font-semibold text-foreground">{groupName || "Unnamed group"}</p>
+                      <div className="mt-3 flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                        <KeyRound className="h-3.5 w-3.5" />
+                        <span>Join Key</span>
+                      </div>
+                      <p className="mt-2 rounded-sm bg-background/80 px-2 py-1 font-mono text-lg tracking-[0.2em]">
+                        {groupJoinKey || "Unavailable"}
+                      </p>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Share this key with teammates if they need to join the same group.
+                      </p>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              )}
+            </div>
           ) : null}
           {options.creator && (
             <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
