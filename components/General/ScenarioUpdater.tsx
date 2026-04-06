@@ -7,20 +7,21 @@ import { addDifferenceUrl } from "@/store/slices/differenceUrls.slice";
 import { batch } from "react-redux";
 import { scenario } from "@/types";
 
-// drawingPixels, solutionPixels should be objects, where key is the scenarioId and value is the ImageData
-type scenarioData = {
-  [key: string]: ImageData;
-};
-
-export let scenarioDiffs = {};
+export const scenarioDiffs = {};
 
 type ScenarioUpdaterProps = {
   scenario: scenario;
   drawingPixels?: ImageData | undefined;
   solutionPixels?: ImageData | undefined;
+  differenceStepId?: string | null;
 };
 
-export const ScenarioUpdater = ({ scenario, drawingPixels, solutionPixels }: ScenarioUpdaterProps) => {
+export const ScenarioUpdater = ({
+  scenario,
+  drawingPixels,
+  solutionPixels,
+  differenceStepId,
+}: ScenarioUpdaterProps) => {
   const dispatch = useAppDispatch();
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const level = useAppSelector((state) => state.levels[currentLevel - 1]);
@@ -73,6 +74,7 @@ export const ScenarioUpdater = ({ scenario, drawingPixels, solutionPixels }: Sce
               addDifferenceUrl({
                 scenarioId: scenarioId,
                 differenceUrl: diff,
+                eventSequenceStepId: differenceStepId ?? undefined,
               }),
             );
           });
@@ -112,7 +114,7 @@ export const ScenarioUpdater = ({ scenario, drawingPixels, solutionPixels }: Sce
       clearTimeout(debounceTimer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [drawingPixels, solutionPixels, dispatch, scenarioId, hasEventSequence]);
+  }, [differenceStepId, drawingPixels, solutionPixels, dispatch, scenarioId, hasEventSequence]);
 
   return <></>;
 };

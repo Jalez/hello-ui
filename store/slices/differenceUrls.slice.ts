@@ -1,5 +1,6 @@
 import { createSlice } from "@reduxjs/toolkit";
 import { obfuscate } from "@/lib/utils/obfuscators/obfuscate";
+import { eventSequenceDiffStorageKey } from "@/lib/drawboard/eventSequenceDiffUrls";
 
 const name = "differenceUrls";
 
@@ -8,7 +9,7 @@ interface differenceUrlsState {
 }
 const storage = obfuscate(name);
 
-let initialState: differenceUrlsState = {};
+const initialState: differenceUrlsState = {};
 
 // const currentDifferenceUrls = storage.getItem(storage.key);
 
@@ -21,9 +22,13 @@ const differenceUrlsSlice = createSlice({
   initialState,
   reducers: {
     addDifferenceUrl(state, action) {
-      const { differenceUrl, scenarioId } = action.payload;
+      const { differenceUrl, scenarioId, eventSequenceStepId } = action.payload;
+      const key =
+        eventSequenceStepId && eventSequenceStepId.length > 0
+          ? eventSequenceDiffStorageKey(scenarioId, eventSequenceStepId)
+          : scenarioId;
       // if (state[scenarioId]) return;
-      state[scenarioId] = differenceUrl;
+      state[key] = differenceUrl;
       // storage.setItem(storage.key, JSON.stringify(state));
     },
   },
