@@ -32,13 +32,19 @@ CREATE INDEX IF NOT EXISTS idx_admin_roles_user_id ON admin_roles(user_id);
 CREATE INDEX IF NOT EXISTS idx_admin_roles_active ON admin_roles(is_active);
 CREATE INDEX IF NOT EXISTS idx_admin_roles_role ON admin_roles(role);
 
--- Add your admin email here (create user if they don't exist, then grant admin role)
+-- Add your admin email here (create user if they don't exist, then grant admin role).
+-- Use NOT EXISTS instead of ON CONFLICT so this works when users.email has no UNIQUE
+-- (e.g. legacy DB volume created before that constraint, while Drizzle/SQL diverged).
 INSERT INTO users (email, name)
-VALUES ('raitsu11@gmail.com', 'Admin User')
-ON CONFLICT (email) DO NOTHING;
+SELECT 'raitsu11@gmail.com', 'Admin User'
+WHERE NOT EXISTS (
+  SELECT 1 FROM users WHERE email = 'raitsu11@gmail.com'
+);
 
 INSERT INTO admin_roles (user_id, role)
 SELECT u.id, 'admin'
 FROM users u
 WHERE u.email = 'raitsu11@gmail.com'
-ON CONFLICT (user_id) DO NOTHING;
+  AND NOT EXISTS (
+    SELECT 1 FROM admin_roles ar WHERE ar.user_id = u.id
+  );
