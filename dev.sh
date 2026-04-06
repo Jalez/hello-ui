@@ -13,9 +13,12 @@ export WS_ARTIFICIAL_DELAY_MS="${WS_ARTIFICIAL_DELAY_MS:-80}"
 export WS_ARTIFICIAL_JITTER_MS="${WS_ARTIFICIAL_JITTER_MS:-120}"
 export DATABASE_URL="${DATABASE_URL:-postgresql://postgres:postgres@localhost:5433/ui_designer}"
 export DB_CLIENT="${DB_CLIENT:-postgres}"
+export REDIS_URL="${REDIS_URL:-redis://localhost:6379}"
 APP_PORT="${APP_PORT:-3000}"
 WS_PORT="${WS_PORT:-3100}"
 DRAWBOARD_PORT="${DRAWBOARD_PORT:-3500}"
+REDIS_PORT="${REDIS_PORT:-6379}"
+PID_FILE="${SCRIPT_DIR}/.dev-pids"
 
 # Kill any existing listeners on the ports this script needs.
 free_port() {
@@ -44,6 +47,18 @@ close_required_ports() {
   free_port "${DRAWBOARD_PORT}"
 }
 
+write_pid_file() {
+  cat > "${PID_FILE}" <<EOF
+WS_PID=${WS_PID:-}
+DRAWBOARD_PID=${DRAWBOARD_PID:-}
+APP_PID=${APP_PID:-}
+APP_PORT=${APP_PORT}
+WS_PORT=${WS_PORT}
+DRAWBOARD_PORT=${DRAWBOARD_PORT}
+REDIS_PORT=${REDIS_PORT}
+EOF
+}
+
 # Function to clean up background processes on exit
 cleanup() {
   echo ""
@@ -51,7 +66,8 @@ cleanup() {
   # Kill the background processes
   kill "${WS_PID:-}" "${DRAWBOARD_PID:-}" "${APP_PID:-}" 2>/dev/null || true
   # Stop the database container
-  docker compose stop db db-init
+  docker compose stop redis db db-init
+  rm -f "${PID_FILE}"
   exit
 }
 
@@ -61,9 +77,10 @@ trap cleanup SIGINT SIGTERM EXIT
 echo "Closing any existing dev processes on ports ${APP_PORT}, ${WS_PORT}, ${DRAWBOARD_PORT}..."
 close_required_ports
 
-echo "Starting database via docker-compose..."
-docker compose up -d db db-init
+echo "Starting Redis and database via docker-compose..."
+docker compose up -d redis db db-init
 echo "Using DATABASE_URL=${DATABASE_URL}"
+echo "Using REDIS_URL=${REDIS_URL}"
 
 echo "Starting ws-server in background..."
 cd "${SCRIPT_DIR}/ws-server"
@@ -96,12 +113,14 @@ if [ ! -d "${HOME}/.cache/ms-playwright" ]; then
 fi
 npm run dev &
 APP_PID=$!
+write_pid_file
 
 echo "==========================================================="
 echo "All local dev services started!"
 echo "Main App:   http://localhost:${APP_PORT}"
 echo "Drawboard:  http://localhost:${DRAWBOARD_PORT}"
 echo "WS Server:  http://localhost:${WS_PORT}"
+echo "Redis:      ${REDIS_URL}"
 echo "Press Ctrl+C to stop all services."
 echo "==========================================================="
 

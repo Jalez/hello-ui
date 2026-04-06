@@ -10,6 +10,7 @@ import { DrawboardSnapshotPayload, EventSequenceStep, InteractionTrigger, scenar
 import { Spinner } from "@/components/General/Spinner/Spinner";
 import { announceLiveSolutionFrameRemoved } from "@/lib/drawboard/solutionFrameLifecycle";
 import { clearStoredSolutionSide } from "@/lib/drawboard/drawboardPixelsStore";
+import type { DrawboardArtifactDescriptor } from "@/lib/drawboard/artifactCache";
 
 const EMPTY_REPLAY_SEQUENCE: EventSequenceStep[] = [];
 
@@ -45,6 +46,7 @@ type ModelArtContainerProps = {
   interactiveOverride?: boolean;
   snapshotOverride?: DrawboardSnapshotPayload | null;
   suppressHeavyLayoutEffects?: boolean;
+  artifactCache?: DrawboardArtifactDescriptor;
 };
 
 export const ModelArtContainer = ({
@@ -64,6 +66,7 @@ export const ModelArtContainer = ({
   interactiveOverride,
   snapshotOverride = null,
   suppressHeavyLayoutEffects = false,
+  artifactCache,
 }: ModelArtContainerProps): React.ReactNode => {
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const level = useAppSelector((state) => state.levels[currentLevel - 1]);
@@ -138,6 +141,7 @@ export const ModelArtContainer = ({
           replaySequence={replaySequence}
           suppressHeavyLayoutEffects={suppressHeavyLayoutEffects}
           eventSequenceSolutionStepId={usePerStepGameCapture ? eventSequenceSolutionStepId : null}
+          artifactCache={artifactCache}
         />
       )}
       {children}

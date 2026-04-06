@@ -13,6 +13,13 @@ import { dataUrlFromRawRgba } from "@/lib/utils/drawboardSnapshot";
 import { useGameRuntimeConfig } from "@/hooks/useGameRuntimeConfig";
 import { useLevelMetaSync } from "@/lib/collaboration/hooks/useLevelMetaSync";
 import { eventSequenceSolutionStorageKey } from "@/lib/drawboard/eventSequenceSolutionUrls";
+import {
+  buildArtifactKey,
+  persistLocalArtifact,
+  removeLocalArtifactsMatching,
+  type DrawboardArtifactDescriptor,
+  uploadRemoteArtifact,
+} from "@/lib/drawboard/artifactCache";
 
 /**
  * Module-level capture dedup. SidebySideArt renders each content element multiple times
@@ -74,6 +81,7 @@ interface FrameProps {
   dataTestId?: string;
   /** Game + event sequence: tag captures so Redux can store one image per timeline step. */
   eventSequenceSolutionStepId?: string | null;
+  artifactCache?: DrawboardArtifactDescriptor;
 }
 
 export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
@@ -96,6 +104,7 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
     suppressHeavyLayoutEffects = false,
     dataTestId,
     eventSequenceSolutionStepId = null,
+    artifactCache,
   },
   ref,
 ) {
@@ -104,6 +113,7 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
   const [iframeLoadGeneration, setIframeLoadGeneration] = useState(0);
   const renderReadyCaptureTimeoutRef = useRef<number | null>(null);
   const iframeReloadDebounceRef = useRef<number | null>(null);
+  const hasSkippedInitialReloadRef = useRef(false);
   const dispatch = useAppDispatch();
   const store = useAppStore();
   const { syncLevelFields } = useLevelMetaSync();
@@ -126,6 +136,53 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
     return undefined;
   });
   const interactive = interactiveOverride ?? level.interactive;
+
+  const persistArtifactRecord = useCallback((input: {
+    dataUrl: string;
+    pixelBufferBase64?: string;
+  }) => {
+    if (!artifactCache || !input.dataUrl) {
+      return;
+    }
+    const key = buildArtifactKey(artifactCache);
+    const record = {
+      ...artifactCache,
+      key,
+      dataUrl: input.dataUrl,
+      pixelBufferBase64: input.pixelBufferBase64,
+      createdAt: new Date().toISOString(),
+    };
+    if (artifactCache.artifactType === "solution" || artifactCache.artifactType === "solution-step") {
+      removeLocalArtifactsMatching((candidate) => {
+        if (candidate.key === key) {
+          return false;
+        }
+        if (candidate.captureMode !== artifactCache.captureMode) {
+          return false;
+        }
+        if (candidate.artifactType !== artifactCache.artifactType) {
+          return false;
+        }
+        if (candidate.gameId !== artifactCache.gameId) {
+          return false;
+        }
+        if (candidate.levelIdentifier !== artifactCache.levelIdentifier) {
+          return false;
+        }
+        if (candidate.scenarioId !== artifactCache.scenarioId) {
+          return false;
+        }
+        if ((candidate.stepId ?? null) !== (artifactCache.stepId ?? null)) {
+          return false;
+        }
+        return true;
+      });
+    }
+    persistLocalArtifact(record);
+    if (artifactCache.artifactType === "solution" || artifactCache.artifactType === "solution-step") {
+      void uploadRemoteArtifact(record).catch(() => {});
+    }
+  }, [artifactCache]);
 
   const notifyCaptureBusy = useCallback(
     (busy: boolean) => {
@@ -158,6 +215,7 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
             scenarioId: scenario.scenarioId,
             urlName: name,
             includeDataUrl,
+            artifactCache,
           }),
         });
 
@@ -214,6 +272,12 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
             }),
           );
         }
+        if (displayDataUrl) {
+          persistArtifactRecord({
+            dataUrl: displayDataUrl,
+            pixelBufferBase64: payload.pixelBufferBase64,
+          });
+        }
       } catch (error) {
         console.error(`[Frame:${name}] Failed to capture frame`, error);
       } finally {
@@ -228,6 +292,8 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
       scenario.dimensions.height,
       scenario.dimensions.width,
       scenario.scenarioId,
+      artifactCache,
+      persistArtifactRecord,
     ],
   );
 
@@ -504,6 +570,9 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
           }),
         );
       }
+      persistArtifactRecord({
+        dataUrl: event.data.dataURL,
+      });
       if (drawboardCaptureMode === "browser") {
         notifyCaptureBusy(false);
       }
@@ -513,7 +582,7 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
     return () => {
       window.removeEventListener("message", handleDisplayUrlFromIframe);
     };
-  }, [dispatch, drawboardCaptureMode, name, notifyCaptureBusy, scenario.scenarioId]);
+  }, [dispatch, drawboardCaptureMode, name, notifyCaptureBusy, persistArtifactRecord, scenario.scenarioId]);
 
   useEffect(() => {
     if (drawboardCaptureMode !== "browser") {
@@ -597,6 +666,10 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
         window.clearTimeout(iframeReloadDebounceRef.current);
         iframeReloadDebounceRef.current = null;
       }
+      return;
+    }
+    if (!hasSkippedInitialReloadRef.current) {
+      hasSkippedInitialReloadRef.current = true;
       return;
     }
     if (iframeReloadDebounceRef.current) {

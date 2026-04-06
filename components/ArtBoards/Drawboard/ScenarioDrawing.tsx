@@ -1,6 +1,7 @@
 'use client';
 
 import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
+import { useGameStore } from "@/components/default/games";
 import { Image } from "@/components/General/Image/Image";
 import { ArtContainer } from "../ArtContainer";
 import { Frame } from "../Frame";
@@ -13,7 +14,9 @@ import { scenario, VerifiedInteraction, type EventSequenceStep } from "@/types";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useOptionalDrawboardNavbarCapture } from "@/components/ArtBoards/DrawboardNavbarCaptureContext";
 import { updateLevelAccuracyByIndexThunk } from "@/store/actions/score.actions";
+import { addDrawingUrl } from "@/store/slices/drawingUrls.slice";
 import { toggleImageInteractivity } from "@/store/slices/levels.slice";
+import { addSolutionUrl } from "@/store/slices/solutionUrls.slice";
 import { Camera, Loader2 } from "lucide-react";
 import type { FrameHandle } from "@/components/ArtBoards/Frame";
 import PoppingTitle from "@/components/General/PoppingTitle";
@@ -42,6 +45,18 @@ import {
   resolveEventSequenceSolutionUrl,
 } from "@/lib/drawboard/eventSequenceSolutionUrls";
 import { useEventSequencePreview } from "@/lib/drawboard/useEventSequencePreview";
+import {
+  fetchRemoteArtifact,
+  hashArtifactFingerprint,
+  readLocalArtifact,
+  type DrawboardArtifactDescriptor,
+} from "@/lib/drawboard/artifactCache";
+import {
+  drawingArtifactFingerprint,
+  solutionArtifactFingerprint,
+  solutionStepArtifactFingerprint,
+} from "@/lib/drawboard/artifactFingerprint";
+import { getBrowserPlatformBucket } from "@/lib/drawboard/platformBucket";
 
 /** One bootstrap per level across all mounted clones (SidebySideArt mounts several instances). */
 let playwrightGameInteractiveBootstrappedLevel: number | null = null;
@@ -137,6 +152,7 @@ export const ScenarioDrawing = ({
   const drawingUrls = useAppSelector((state) => state.drawingUrls as Record<string, string>);
   const drawingUrl = drawingUrls[scenario.scenarioId];
   const dispatch = useAppDispatch();
+  const currentGameId = useGameStore((state) => state.currentGameId);
   const { syncLevelFields } = useLevelMetaSync();
   const options = useAppSelector((state) => state.options);
   const isCreator = creatorMode ?? options.creator;
@@ -149,6 +165,10 @@ export const ScenarioDrawing = ({
   const prevCompareRuntimeKeyRef = useRef<string | null>(null);
   const captureNav = useOptionalDrawboardNavbarCapture();
   const { drawboardCaptureMode, manualDrawboardCapture } = useGameRuntimeConfig();
+  const platformBucket = useMemo(
+    () => (drawboardCaptureMode === "browser" ? getBrowserPlatformBucket() : null),
+    [drawboardCaptureMode],
+  );
 
   const bindDrawingFrame = useCallback(
     (instance: FrameHandle | null) => {
@@ -199,6 +219,7 @@ export const ScenarioDrawing = ({
   }, [level, solutions]);
   const resolvedSolutionCss = resolvedSolution.css;
   const resolvedSolutionHtml = resolvedSolution.html;
+  const resolvedSolutionJs = level?.solution?.js || solutions[level?.name ?? ""]?.SJS || "";
   const interactive = level?.interactive ?? false;
   const runtimeKey = useMemo(
     () => getEventSequenceRuntimeKey(currentLevel, scenario.scenarioId, isCreator),
@@ -243,21 +264,176 @@ export const ScenarioDrawing = ({
       }),
     [solutionStepIdForCapture, scenario.scenarioId, solutionUrls, usePerStepSolutionKeys],
   );
+  const drawingFingerprint = useMemo(
+    () =>
+      drawingArtifactFingerprint({
+        html,
+        css,
+        js,
+        scenario,
+      }),
+    [css, html, js, scenario],
+  );
+  const solutionFingerprint = useMemo(
+    () =>
+      solutionArtifactFingerprint({
+        html: resolvedSolutionHtml,
+        css: resolvedSolutionCss,
+        js: resolvedSolutionJs,
+        scenario,
+      }),
+    [resolvedSolutionCss, resolvedSolutionHtml, resolvedSolutionJs, scenario],
+  );
+  const selectedSolutionStep = useMemo(
+    () => scenarioSequence.find((step) => step.id === solutionStepIdForCapture) ?? null,
+    [scenarioSequence, solutionStepIdForCapture],
+  );
+  const activeSolutionFingerprint = useMemo(
+    () =>
+      usePerStepSolutionKeys && selectedSolutionStep
+        ? solutionStepArtifactFingerprint({
+            solutionFingerprint,
+            step: selectedSolutionStep,
+          })
+        : solutionFingerprint,
+    [selectedSolutionStep, solutionFingerprint, usePerStepSolutionKeys],
+  );
+  const drawingArtifactDescriptor = useMemo<DrawboardArtifactDescriptor>(
+    () => ({
+      version: "v1",
+      captureMode: drawboardCaptureMode,
+      artifactType: "drawing",
+      fingerprint: drawingFingerprint,
+      gameId: currentGameId,
+      levelIdentifier: level?.identifier ?? null,
+      levelName: level?.name ?? null,
+      scenarioId: scenario.scenarioId,
+      stepId: null,
+      platformBucket,
+      width: scenario.dimensions.width,
+      height: scenario.dimensions.height,
+    }),
+    [
+      currentGameId,
+      drawboardCaptureMode,
+      drawingFingerprint,
+      level?.identifier,
+      level?.name,
+      platformBucket,
+      scenario.dimensions.height,
+      scenario.dimensions.width,
+      scenario.scenarioId,
+    ],
+  );
+  const solutionArtifactDescriptor = useMemo<DrawboardArtifactDescriptor>(
+    () => ({
+      version: "v1",
+      captureMode: drawboardCaptureMode,
+      artifactType: usePerStepSolutionKeys ? "solution-step" : "solution",
+      fingerprint: activeSolutionFingerprint,
+      gameId: currentGameId,
+      levelIdentifier: level?.identifier ?? null,
+      levelName: level?.name ?? null,
+      scenarioId: scenario.scenarioId,
+      stepId: usePerStepSolutionKeys ? solutionStepIdForCapture : null,
+      platformBucket,
+      width: scenario.dimensions.width,
+      height: scenario.dimensions.height,
+    }),
+    [
+      activeSolutionFingerprint,
+      currentGameId,
+      drawboardCaptureMode,
+      level?.identifier,
+      level?.name,
+      platformBucket,
+      scenario.dimensions.height,
+      scenario.dimensions.width,
+      scenario.scenarioId,
+      solutionStepIdForCapture,
+      usePerStepSolutionKeys,
+    ],
+  );
   /**
    * Solution preview fetch + step accuracy compare: skip probes and hidden carousel clones
-   * (suppressHeavyLayoutEffects). When an event sequence exists, only the primary board
-   * (registerForNavbarCapture) runs metrics so we do not duplicate work or race updates.
+   * (suppressHeavyLayoutEffects). Do not couple event-sequence progression to navbar
+   * capture ownership: in single-artboard layouts the drawing board can be mounted
+   * off-screen, and it still must keep replay/step advancement running normally.
    */
-  const allowSequenceMetrics =
-    scenarioSequence.length > 0
-      ? registerForNavbarCapture && !suppressHeavyLayoutEffects
-      : !suppressHeavyLayoutEffects;
+  const allowSequenceMetrics = !suppressHeavyLayoutEffects;
   const suppressSequenceMetrics = !allowSequenceMetrics;
+
+  useEffect(() => {
+    if (drawingUrl?.trim()) {
+      return;
+    }
+    let cancelled = false;
+    const hydrate = async () => {
+      const local = readLocalArtifact(drawingArtifactDescriptor);
+      if (local?.dataUrl) {
+        dispatch(addDrawingUrl({ drawingUrl: local.dataUrl, scenarioId: scenario.scenarioId }));
+        return;
+      }
+      try {
+        const remote = await fetchRemoteArtifact(drawingArtifactDescriptor);
+        if (!cancelled && remote?.dataUrl) {
+          dispatch(addDrawingUrl({ drawingUrl: remote.dataUrl, scenarioId: scenario.scenarioId }));
+        }
+      } catch {
+        // Ignore cache misses/network failures; live capture will populate.
+      }
+    };
+    void hydrate();
+    return () => {
+      cancelled = true;
+    };
+  }, [dispatch, drawingArtifactDescriptor, drawingUrl, scenario.scenarioId]);
+
+  useEffect(() => {
+    if (solutionUrl?.trim()) {
+      return;
+    }
+    let cancelled = false;
+    const hydrate = async () => {
+      const local = readLocalArtifact(solutionArtifactDescriptor);
+      if (local?.dataUrl) {
+        dispatch(addSolutionUrl({
+          solutionUrl: local.dataUrl,
+          scenarioId: scenario.scenarioId,
+          eventSequenceStepId: usePerStepSolutionKeys ? solutionStepIdForCapture ?? undefined : undefined,
+        }));
+        return;
+      }
+      try {
+        const remote = await fetchRemoteArtifact(solutionArtifactDescriptor);
+        if (!cancelled && remote?.dataUrl) {
+          dispatch(addSolutionUrl({
+            solutionUrl: remote.dataUrl,
+            scenarioId: scenario.scenarioId,
+            eventSequenceStepId: usePerStepSolutionKeys ? solutionStepIdForCapture ?? undefined : undefined,
+          }));
+        }
+      } catch {
+        // Ignore cache misses/network failures; live capture or Playwright mode can populate.
+      }
+    };
+    void hydrate();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    dispatch,
+    scenario.scenarioId,
+    solutionArtifactDescriptor,
+    solutionStepIdForCapture,
+    solutionUrl,
+    usePerStepSolutionKeys,
+  ]);
 
   const prevFingerprintRuntimeKeyRef = useRef<string | null>(null);
   const prevCompareSourcesFingerprintRef = useRef<string | undefined>(undefined);
   useEffect(() => {
-    if (scenarioSequence.length === 0 || !registerForNavbarCapture || suppressHeavyLayoutEffects) {
+    if (scenarioSequence.length === 0 || suppressHeavyLayoutEffects) {
       return;
     }
     if (prevFingerprintRuntimeKeyRef.current !== runtimeKey) {
@@ -275,7 +451,6 @@ export const ScenarioDrawing = ({
     prevCompareSourcesFingerprintRef.current = fp;
   }, [
     compareSourcesFingerprint,
-    registerForNavbarCapture,
     runtimeKey,
     scenarioSequence.length,
     suppressHeavyLayoutEffects,
@@ -378,6 +553,10 @@ export const ScenarioDrawing = ({
       if (suppressSequenceMetrics) {
         return;
       }
+      if (drawboardCaptureMode === "browser") {
+        setStepPreviews({});
+        return;
+      }
       if (!scenarioSequence.length) {
         setStepPreviews({});
         return;
@@ -412,7 +591,12 @@ export const ScenarioDrawing = ({
       lastRenderedSolutionSourceRef.current = renderSourceKey;
 
       const first = scenarioSequence[0];
-      const renderBody = (snapshotHtml: string, width: number, height: number) =>
+      const renderBody = (
+        snapshotHtml: string,
+        width: number,
+        height: number,
+        artifactCache: DrawboardArtifactDescriptor,
+      ) =>
         fetch(apiUrl("/api/drawboard/render"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -424,11 +608,24 @@ export const ScenarioDrawing = ({
             scenarioId: scenario.scenarioId,
             urlName: "solutionUrl",
             includeDataUrl: true,
+            artifactCache,
           }),
         });
 
       const requests: Promise<readonly [string, DrawboardRenderPreviewPayload | null]>[] = [];
 
+      const initialDescriptor: DrawboardArtifactDescriptor = {
+        ...solutionArtifactDescriptor,
+        artifactType: "solution-step",
+        stepId: INITIAL_EVENT_SEQUENCE_STEP_ID,
+        fingerprint: hashArtifactFingerprint([
+          "solution-step",
+          solutionFingerprint,
+          INITIAL_EVENT_SEQUENCE_STEP_ID,
+        ]),
+        width: first.snapshot.width,
+        height: first.snapshot.height,
+      };
       if (needInitialPreview) {
         requests.push(
           (async (): Promise<readonly [string, DrawboardRenderPreviewPayload | null]> => {
@@ -436,6 +633,7 @@ export const ScenarioDrawing = ({
               resolvedSolutionHtml,
               first.snapshot.width,
               first.snapshot.height,
+              initialDescriptor,
             );
             if (!response.ok) {
               return [INITIAL_EVENT_SEQUENCE_STEP_ID, null] as const;
@@ -447,12 +645,24 @@ export const ScenarioDrawing = ({
       }
 
       missingSteps.forEach((step) => {
+        const stepDescriptor: DrawboardArtifactDescriptor = {
+          ...solutionArtifactDescriptor,
+          artifactType: "solution-step",
+          stepId: step.id,
+          fingerprint: solutionStepArtifactFingerprint({
+            solutionFingerprint,
+            step,
+          }),
+          width: step.snapshot.width,
+          height: step.snapshot.height,
+        };
         requests.push(
           (async (): Promise<readonly [string, DrawboardRenderPreviewPayload | null]> => {
             const response = await renderBody(
               step.snapshot.snapshotHtml,
               step.snapshot.width,
               step.snapshot.height,
+              stepDescriptor,
             );
             if (!response.ok) {
               return [step.id, null] as const;
@@ -491,6 +701,8 @@ export const ScenarioDrawing = ({
     resolvedSolutionCss,
     resolvedSolutionHtml,
     scenario.scenarioId,
+    solutionArtifactDescriptor,
+    solutionFingerprint,
     suppressSequenceMetrics,
   ]);
 
@@ -995,6 +1207,7 @@ export const ScenarioDrawing = ({
                           suppressHeavyLayoutEffects={suppressHeavyLayoutEffects}
                           dataTestId={suppressHeavyLayoutEffects ? undefined : "creator-template-drawboard-frame"}
                           onVerifiedInteraction={handleVerifiedInteraction}
+                          artifactCache={drawingArtifactDescriptor}
                         />
                         {!shouldShowInteractivePreview && (
                           <div className="relative z-[1]">
@@ -1062,6 +1275,7 @@ export const ScenarioDrawing = ({
                           replaySequence={replaySequence}
                           suppressHeavyLayoutEffects={suppressHeavyLayoutEffects}
                           onVerifiedInteraction={handleVerifiedInteraction}
+                          artifactCache={drawingArtifactDescriptor}
                         />
                         {!interactive && !frameNeedsInteractive && (
                           <div className="relative z-[1]">

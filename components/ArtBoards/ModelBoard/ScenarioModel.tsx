@@ -6,6 +6,7 @@ import { BoardContainer } from "../BoardContainer";
 import { Board } from "../Board";
 import { ModelArtContainer } from "./ModelArtContainer";
 import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
+import { useGameStore } from "@/components/default/games";
 import { EventSequenceStep, scenario } from "@/types";
 import { Image } from "@/components/General/Image/Image";
 import {
@@ -32,6 +33,17 @@ import {
   resolveEventSequenceSolutionUrl,
 } from "@/lib/drawboard/eventSequenceSolutionUrls";
 import { useEventSequencePreview } from "@/lib/drawboard/useEventSequencePreview";
+import {
+  fetchRemoteArtifact,
+  readLocalArtifact,
+  type DrawboardArtifactDescriptor,
+} from "@/lib/drawboard/artifactCache";
+import {
+  solutionArtifactFingerprint,
+  solutionStepArtifactFingerprint,
+} from "@/lib/drawboard/artifactFingerprint";
+import { getBrowserPlatformBucket } from "@/lib/drawboard/platformBucket";
+import { addSolutionUrl } from "@/store/slices/solutionUrls.slice";
 
 type ScenarioModelProps = {
   scenario: scenario;
@@ -67,8 +79,11 @@ export const ScenarioModel = ({
 }: ScenarioModelProps): React.ReactNode => {
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const level = useAppSelector((state) => state.levels[currentLevel - 1]);
+  const levelIdentifier = level?.identifier ?? null;
+  const levelName = level?.name ?? null;
   const showModel = level.showModelPicture;
   const dispatch = useAppDispatch();
+  const currentGameId = useGameStore((state) => state.currentGameId);
   const { syncLevelFields } = useLevelMetaSync();
   const scenarioSequence = level?.eventSequence?.byScenarioId?.[scenario.scenarioId] ?? EMPTY_EVENT_SEQUENCE;
   const options = useAppSelector((state) => state.options);
@@ -103,7 +118,11 @@ export const ScenarioModel = ({
   const [solutionCaptureBusy, setSolutionCaptureBusy] = useState(false);
   const solutionFrameRef = useRef<FrameHandle | null>(null);
   const captureNav = useOptionalDrawboardNavbarCapture();
-  const { manualDrawboardCapture } = useGameRuntimeConfig();
+  const { drawboardCaptureMode, manualDrawboardCapture } = useGameRuntimeConfig();
+  const platformBucket = useMemo(
+    () => (drawboardCaptureMode === "browser" ? getBrowserPlatformBucket() : null),
+    [drawboardCaptureMode],
+  );
   const runtimeKey = useMemo(
     () => getEventSequenceRuntimeKey(currentLevel, scenario.scenarioId, isCreator),
     [currentLevel, isCreator, scenario.scenarioId],
@@ -133,6 +152,88 @@ export const ScenarioModel = ({
   });
   const effectiveShowInteractivePreview = shouldShowInteractivePreview;
   const selectedEventSequenceStep = selectedSequenceIndex >= 0 ? scenarioSequence[selectedSequenceIndex] : null;
+  const solutionFingerprint = useMemo(
+    () =>
+      solutionArtifactFingerprint({
+        html: level?.solution?.html || "",
+        css: level?.solution?.css || "",
+        js: level?.solution?.js || "",
+        scenario,
+      }),
+    [level?.solution?.css, level?.solution?.html, level?.solution?.js, scenario],
+  );
+  const activeSolutionFingerprint = useMemo(
+    () =>
+      usePerStepSolutionKeys && selectedEventSequenceStep
+        ? solutionStepArtifactFingerprint({
+            solutionFingerprint,
+            step: selectedEventSequenceStep,
+          })
+        : solutionFingerprint,
+    [selectedEventSequenceStep, solutionFingerprint, usePerStepSolutionKeys],
+  );
+  const solutionArtifactDescriptor = useMemo<DrawboardArtifactDescriptor>(
+    () => ({
+      version: "v1",
+      captureMode: drawboardCaptureMode,
+      artifactType: usePerStepSolutionKeys ? "solution-step" : "solution",
+      fingerprint: activeSolutionFingerprint,
+      gameId: currentGameId,
+      levelIdentifier,
+      levelName,
+      scenarioId: scenario.scenarioId,
+      stepId: usePerStepSolutionKeys ? solutionStepIdForCapture : null,
+      platformBucket,
+      width: scenario.dimensions.width,
+      height: scenario.dimensions.height,
+    }),
+    [
+      activeSolutionFingerprint,
+      currentGameId,
+      drawboardCaptureMode,
+      levelIdentifier,
+      levelName,
+      platformBucket,
+      scenario.dimensions.height,
+      scenario.dimensions.width,
+      scenario.scenarioId,
+      solutionStepIdForCapture,
+      usePerStepSolutionKeys,
+    ],
+  );
+  useEffect(() => {
+    if (solutionUrl?.trim()) {
+      return;
+    }
+    let cancelled = false;
+    const hydrate = async () => {
+      const local = readLocalArtifact(solutionArtifactDescriptor);
+      if (local?.dataUrl) {
+        dispatch(addSolutionUrl({
+          solutionUrl: local.dataUrl,
+          scenarioId: scenario.scenarioId,
+          eventSequenceStepId: usePerStepSolutionKeys ? solutionStepIdForCapture ?? undefined : undefined,
+        }));
+        return;
+      }
+      try {
+        const remote = await fetchRemoteArtifact(solutionArtifactDescriptor);
+        if (!cancelled && remote?.dataUrl) {
+          dispatch(addSolutionUrl({
+            solutionUrl: remote.dataUrl,
+            scenarioId: scenario.scenarioId,
+            eventSequenceStepId: usePerStepSolutionKeys ? solutionStepIdForCapture ?? undefined : undefined,
+          }));
+        }
+      } catch {
+        // Ignore cache misses/network failures.
+      }
+    };
+    void hydrate();
+    return () => {
+      cancelled = true;
+    };
+  }, [dispatch, scenario.scenarioId, solutionArtifactDescriptor, solutionStepIdForCapture, solutionUrl, usePerStepSolutionKeys]);
   const useLiveSolutionForStepScrub =
     isCreator && frameNeedsInteractive && scenarioSequence.length > 0;
   const interactiveSnapshotOverride = useMemo(() => {
@@ -205,6 +306,7 @@ export const ScenarioModel = ({
             interactionTriggers={interactionTriggers}
             snapshotOverride={interactiveSnapshotOverride}
             suppressHeavyLayoutEffects={suppressHeavyLayoutEffects}
+            artifactCache={solutionArtifactDescriptor}
           >
             <div
               className="relative"
