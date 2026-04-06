@@ -42,6 +42,7 @@ export const EMPTY_SEQUENCE_RUNTIME_STATE: SequenceRuntimeState = {
 
 const sequenceRuntimeStore = new Map<string, SequenceRuntimeState>();
 const sequenceRuntimeListeners = new Map<string, Set<() => void>>();
+const autoReplayMountRunKeys = new Set<string>();
 
 const AUTO_REPLAY_STORAGE_KEY = "eventSequence:autoReplayOnMount";
 
@@ -200,6 +201,17 @@ export function setAutoReplayOnMount(
     persistAutoReplayOnMount(next);
     return { ...current, autoReplayOnMountByScenario: next };
   });
+  if (!enabled) {
+    autoReplayMountRunKeys.delete(key);
+  }
+}
+
+export function hasAutoReplayMountedRun(levelId: number, scenarioId: string): boolean {
+  return autoReplayMountRunKeys.has(getEventSequenceScenarioUiKey(levelId, scenarioId));
+}
+
+export function markAutoReplayMountedRun(levelId: number, scenarioId: string): void {
+  autoReplayMountRunKeys.add(getEventSequenceScenarioUiKey(levelId, scenarioId));
 }
 
 export function useEventSequenceUiState<T>(

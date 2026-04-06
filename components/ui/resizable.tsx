@@ -37,7 +37,9 @@ const ResizableHandle = ({
 }) => (
   <Separator
     className={cn(
-      "relative flex shrink-0 items-center justify-center bg-border/70 transition-colors hover:bg-border/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+      "relative z-20 flex shrink-0 items-center justify-center bg-border/60 transition-colors",
+      "hover:bg-border/80 data-[separator=hover]:bg-border/80 data-[separator=active]:bg-border",
+      "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border/70 focus-visible:ring-offset-0",
       groupOrientation === "horizontal"
         ? "h-full w-px cursor-col-resize"
         : "h-px w-full cursor-row-resize",
@@ -48,7 +50,7 @@ const ResizableHandle = ({
     {withHandle ? (
       <div
         className={cn(
-          "pointer-events-none z-10 flex items-center justify-center rounded-full border border-border/70 bg-border/70 shadow-sm",
+          "pointer-events-none z-30 flex items-center justify-center rounded-full border border-border/60 bg-background/90 shadow-sm backdrop-blur-sm",
           groupOrientation === "horizontal" ? "h-10 w-5" : "h-5 w-10",
         )}
       >
@@ -64,7 +66,10 @@ const ResizableHandle = ({
             size="icon"
             variant="ghost"
             className={cn(
-              "pointer-events-auto absolute rounded-full border border-transparent bg-transparent text-muted-foreground shadow-none hover:border-border/60 hover:bg-muted/40 hover:text-foreground",
+              "pointer-events-auto absolute rounded-full border border-transparent bg-transparent text-muted-foreground shadow-none",
+              "z-40",
+              "hover:border-border/60 hover:bg-muted/40 hover:text-foreground",
+              "focus-visible:ring-1 focus-visible:ring-border/70 focus-visible:ring-offset-0",
               "h-6 w-6",
             )}
             onPointerDown={(event) => {

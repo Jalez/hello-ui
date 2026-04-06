@@ -8,7 +8,7 @@ import ScenarioRemover from "./ScenarioRemover";
 import SidebySideArt from "./SidebySideArt";
 import { ScenarioDrawing } from "./Drawboard/ScenarioDrawing";
 import { ScenarioModel } from "./ModelBoard/ScenarioModel";
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
 import {
   Select,
@@ -32,10 +32,12 @@ import PoppingTitle from "@/components/General/PoppingTitle";
 import {
   EMPTY_SEQUENCE_RUNTIME_STATE,
   INITIAL_EVENT_SEQUENCE_STEP_ID,
+  hasAutoReplayMountedRun,
   getEventSequenceScenarioUiKey,
   getEventSequenceRuntimeKey,
   getSequenceRuntimeState,
   isStepStale,
+  markAutoReplayMountedRun,
   cancelAutoReplay,
   requestAutoReplay,
   setAutoReplayOnMount,
@@ -178,21 +180,20 @@ export const ArtBoards = (): React.ReactNode => {
     setCreatorPreviewInteractiveForScenario(currentLevel, selectedScenario.scenarioId, creatorPreviewInteractive);
   }, [creatorPreviewInteractive, currentLevel, isCreatorContext, selectedScenario]);
 
-  // Trigger auto-replay on mount when the preference is enabled.
-  const autoReplayOnMountFiredRef = useRef(false);
   useEffect(() => {
     if (
-      autoReplayOnMount
+      selectedScenario
+      && autoReplayOnMount
       && selectedRuntimeKey
       && selectedScenarioSequence.length > 0
-      && !autoReplayOnMountFiredRef.current
+      && !hasAutoReplayMountedRun(currentLevel, selectedScenario.scenarioId)
       && !sequenceRuntime.autoReplay?.running
     ) {
-      autoReplayOnMountFiredRef.current = true;
+      markAutoReplayMountedRun(currentLevel, selectedScenario.scenarioId);
       requestAutoReplay(selectedRuntimeKey, selectedScenarioSequence.length + 1);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoReplayOnMount, selectedRuntimeKey, selectedScenarioSequence.length]);
+  }, [autoReplayOnMount, currentLevel, selectedRuntimeKey, selectedScenario, selectedScenarioSequence.length]);
 
   useAutoReplaySequence({
     runtimeKey: selectedRuntimeKey,

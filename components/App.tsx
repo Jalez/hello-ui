@@ -34,11 +34,15 @@ import { apiUrl, stripBasePath } from "@/lib/apiUrl";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { useDefaultLayout } from "react-resizable-panels";
 import type { PanelImperativeHandle } from "react-resizable-panels";
+import type { GroupImperativeHandle } from "react-resizable-panels";
 
 export const allLevels: Level[] = [];
 type SolutionsByLevelName = Record<string, { html: string; css: string; js: string }>;
 const MIN_EDITOR_PANE_WIDTH = 420;
 const ARTBOARD_PANE_CHROME_WIDTH = 56;
+const HORIZONTAL_LAYOUT_ID = "game-layout-horizontal";
+const VERTICAL_LAYOUT_ID = "game-layout-vertical";
+const STABLE_LAYOUT_GROUP_ID = "game-layout-stable";
 
 function normalizeRoomStateLevels(
   levels: Array<Record<string, unknown>>,
@@ -96,6 +100,7 @@ function App() {
   const lastRoomStateSignatureRef = useRef<string | null>(null);
   const contentRowRef = useRef<HTMLDivElement | null>(null);
   const editorPanelRef = useRef<PanelImperativeHandle | null>(null);
+  const panelGroupRef = useRef<GroupImperativeHandle | null>(null);
   const [contentRowWidth, setContentRowWidth] = useState(0);
   const [isEditorCollapsed, setIsEditorCollapsed] = useState(false);
   const setIsLoadingAsync = (value: boolean) => {
@@ -120,14 +125,36 @@ function App() {
       : false;
   const groupOrientation = shouldStackGameLayout ? "vertical" : "horizontal";
   const horizontalLayout = useDefaultLayout({
-    id: "game-layout-horizontal",
+    id: HORIZONTAL_LAYOUT_ID,
     panelIds: ["artboards", "editor"],
   });
   const verticalLayout = useDefaultLayout({
-    id: "game-layout-vertical",
+    id: VERTICAL_LAYOUT_ID,
     panelIds: ["artboards", "editor"],
   });
   const activeLayout = shouldStackGameLayout ? verticalLayout : horizontalLayout;
+  const activeLayoutId = shouldStackGameLayout ? VERTICAL_LAYOUT_ID : HORIZONTAL_LAYOUT_ID;
+
+  useEffect(() => {
+    const nextLayout = activeLayout.defaultLayout;
+    if (!panelGroupRef.current || !nextLayout) {
+      return;
+    }
+
+    const currentLayout = panelGroupRef.current.getLayout();
+    const currentArtboards = currentLayout.artboards;
+    const currentEditor = currentLayout.editor;
+    if (
+      typeof currentArtboards === "number"
+      && typeof currentEditor === "number"
+      && Math.abs(currentArtboards - nextLayout.artboards) < 0.001
+      && Math.abs(currentEditor - nextLayout.editor) < 0.001
+    ) {
+      return;
+    }
+
+    panelGroupRef.current.setLayout(nextLayout);
+  }, [activeLayout.defaultLayout, activeLayoutId]);
 
   useEffect(() => {
     const target = contentRowRef.current;
@@ -484,6 +511,8 @@ function App() {
                   ) : null}
                   <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                     <ResizablePanelGroup
+                      id={STABLE_LAYOUT_GROUP_ID}
+                      groupRef={panelGroupRef}
                       orientation={groupOrientation}
                       defaultLayout={activeLayout.defaultLayout}
                       onLayoutChanged={activeLayout.onLayoutChanged}
