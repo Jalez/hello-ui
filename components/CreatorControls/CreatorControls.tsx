@@ -147,6 +147,9 @@ const CreatorControls = ({ displayMode = "icon-label" }: CreatorControlsProps) =
         iconClassName={LEVELS_EMPHASIZED_ICON_CLASS}
       />
       <div className="my-1 h-px w-full shrink-0 bg-border" aria-hidden />
+      <div className="px-0.5 text-center text-[clamp(8px,20cqw,11px)] font-semibold uppercase leading-snug tracking-[0.08em] text-muted-foreground [overflow-wrap:anywhere]">
+        AI
+      </div>
       <WorkbenchSidebarToolRow
         id="level-generate"
         label="Generate"

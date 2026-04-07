@@ -61,6 +61,8 @@ function EditorTabs({
 
   const [activeLanguage, setActiveLanguage] = React.useState<'html' | 'css' | 'js'>('html');
   const [isTemplateMode, setIsTemplateMode] = React.useState<boolean>(true);
+  const [useCompactHeader, setUseCompactHeader] = React.useState(false);
+  const headerRef = React.useRef<HTMLDivElement | null>(null);
 
   const collaboration = useOptionalCollaboration();
   const isConnected = collaboration?.isConnected ?? false;
@@ -91,6 +93,27 @@ function EditorTabs({
     lastSentTabRef.current = nextPresenceKey;
     setActiveTab(activeLanguage, currentLevel - 1);
   }, [currentLevel, isConnected, setActiveTab, activeLanguage]);
+
+  React.useEffect(() => {
+    const header = headerRef.current;
+    if (!header) return;
+
+    const updateHeaderMode = (width: number) => {
+      const compactThreshold = isCreator ? 450 : 250;
+      setUseCompactHeader(width < compactThreshold);
+    };
+
+    updateHeaderMode(header.getBoundingClientRect().width);
+
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      updateHeaderMode(entry.contentRect.width);
+    });
+
+    observer.observe(header);
+    return () => observer.disconnect();
+  }, [isCreator]);
 
   const handleLanguageChange = (newLanguage: string) => {
     const editorType = newLanguage as EditorType;
@@ -187,7 +210,7 @@ function EditorTabs({
   const languageTabs = [
     { value: 'html', label: 'HTML' },
     { value: 'css', label: 'CSS' },
-    { value: 'js', label: 'JavaScript' },
+    { value: 'js', label: 'JS' },
   ];
 
   return (
@@ -196,8 +219,13 @@ function EditorTabs({
     >
       <div className="flex flex-col justify-start items-stretch m-0 p-0 flex-1 h-full w-full relative ">
         <Tabs value={activeLanguage} onValueChange={handleLanguageChange} className="w-full h-full flex flex-col">
-          <div className="relative min-h-10 bg-border/20 dark:bg-muted/60">
-            <div className="absolute inset-0 flex items-center gap-0 transition-opacity duration-150 md:pointer-events-none md:opacity-0">
+          <div ref={headerRef} className="relative min-h-10 bg-border/20 dark:bg-muted/60">
+            <div
+              className={cn(
+                "absolute inset-0 flex items-center gap-0 transition-opacity duration-150",
+                useCompactHeader ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
+              )}
+            >
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -277,7 +305,12 @@ function EditorTabs({
               </div>
             </div>
 
-            <div className="pointer-events-none absolute inset-0 flex items-center gap-0 opacity-0 transition-opacity duration-150 md:pointer-events-auto md:opacity-100">
+            <div
+              className={cn(
+                "absolute inset-0 flex items-center gap-0 transition-opacity duration-150",
+                useCompactHeader ? "pointer-events-none opacity-0" : "pointer-events-auto opacity-100"
+              )}
+            >
               <TabsList className="flex flex-1 gap-0 bg-transparent">
                 {languageTabs.map((tab) => {
                   const tabLanguage = tab.value as 'html' | 'css' | 'js';
