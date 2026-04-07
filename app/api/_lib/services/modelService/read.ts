@@ -23,6 +23,7 @@ export async function getAvailableModels() {
         completion_price,
         image_price,
         request_price,
+        supports_tool_use,
         api_provider,
         is_active,
         created_at as created
@@ -61,6 +62,7 @@ export async function getAvailableModels() {
       per_request_limits: null,
       supported_parameters: [],
       default_parameters: {},
+      supportsToolUse: Boolean(row.supports_tool_use),
     }));
   } catch (dbError) {
     console.error("Error fetching models from database:", dbError);

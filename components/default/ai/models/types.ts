@@ -33,6 +33,7 @@ export interface Model {
   per_request_limits: any | null;
   supported_parameters: string[];
   default_parameters: Record<string, any>;
+  supportsToolUse?: boolean;
   api_provider?: string; // Provider name (openai, anthropic, xai, etc.) for direct API, or "vercel-gateway" for Vercel AI Gateway
 }
 

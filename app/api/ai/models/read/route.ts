@@ -16,12 +16,16 @@ type OpenRouterModelEntry = {
     request?: string | number;
     image?: string | number;
   };
+  supported_parameters?: string[];
 };
 
 function mapOpenRouterModel(entry: OpenRouterModelEntry): Model {
   const id = String(entry?.id || "");
   const provider = String(entry?.provider || id.split("/")[0] || "unknown");
   const modalities = Array.isArray(entry?.modalities) ? entry.modalities.map(String) : ["text"];
+  const supportedParameters = Array.isArray(entry?.supported_parameters)
+    ? entry.supported_parameters.map(String)
+    : [];
 
   return {
     id,
@@ -49,8 +53,9 @@ function mapOpenRouterModel(entry: OpenRouterModelEntry): Model {
       is_moderated: false,
     },
     per_request_limits: null,
-    supported_parameters: [],
+    supported_parameters: supportedParameters,
     default_parameters: {},
+    supportsToolUse: supportedParameters.includes("tools"),
     api_provider: provider,
   };
 }

@@ -22,6 +22,7 @@ export interface OpenRouterModel {
   context_length?: number;
   provider?: string;
   modalities?: string[];
+  supported_parameters?: string[];
 }
 
 interface OpenRouterData {
