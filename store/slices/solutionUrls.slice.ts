@@ -27,17 +27,20 @@ const solutionUrlsSlice = createSlice({
       action: {
         payload: {
           solutionUrl: string;
+          storageKey?: string;
           scenarioId: string;
           /** Game + event sequence: store per timeline step so the iframe can unmount after each capture. */
           eventSequenceStepId?: string | null;
         };
       },
     ) {
-      const { solutionUrl, scenarioId, eventSequenceStepId } = action.payload;
-      const key =
-        eventSequenceStepId && eventSequenceStepId.length > 0
-          ? eventSequenceSolutionStorageKey(scenarioId, eventSequenceStepId)
-          : scenarioId;
+      const { solutionUrl, storageKey, scenarioId, eventSequenceStepId } = action.payload;
+      const key = storageKey?.trim()
+        || (
+          eventSequenceStepId && eventSequenceStepId.length > 0
+            ? eventSequenceSolutionStorageKey(scenarioId, eventSequenceStepId)
+            : scenarioId
+        );
       if (state[key] === solutionUrl) {
         return;
       }

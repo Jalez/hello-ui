@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
+import { useGameStore } from "@/components/default/games";
 import { sendScoreToParentFrame } from "@/store/actions/score.actions";
 import { ScenarioUpdater } from "./ScenarioUpdater";
 import { updateDrawnState } from "@/store/slices/solutions.slice";
@@ -22,8 +23,15 @@ import {
 } from "@/lib/drawboard/eventSequenceState";
 import {
   defaultTimelineStepIdForSolutionCapture,
-  resolveEventSequenceSolutionUrl,
 } from "@/lib/drawboard/eventSequenceSolutionUrls";
+import { useGameRuntimeConfig } from "@/hooks/useGameRuntimeConfig";
+import { buildArtifactKey, type DrawboardArtifactDescriptor } from "@/lib/drawboard/artifactCache";
+import {
+  drawingArtifactFingerprint,
+  solutionArtifactFingerprint,
+  solutionStepArtifactFingerprint,
+} from "@/lib/drawboard/artifactFingerprint";
+import { getBrowserPlatformBucket } from "@/lib/drawboard/platformBucket";
 
 // drawingPixels, solutionPixels should be objects, where key is the scenarioId and value is the ImageData
 type scenarioData = {
@@ -41,6 +49,9 @@ export const LevelUpdater = () => {
   const dispatch = useAppDispatch();
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const options = useAppSelector((state) => state.options);
+  const currentGameId = useGameStore((state) => state.currentGameId);
+  const { drawboardCaptureMode } = useGameRuntimeConfig();
+  const platformBucket = drawboardCaptureMode === "browser" ? getBrowserPlatformBucket() : null;
 
   // get the level from the levels array
   const level = useAppSelector((state) => state.levels[currentLevel - 1]);
@@ -82,7 +93,26 @@ export const LevelUpdater = () => {
       for (const scenario of level.scenarios) {
         const width = scenario.dimensions.width;
         const height = scenario.dimensions.height;
-        const drawingUrl = drawingUrls[scenario.scenarioId]?.trim();
+        const drawingDescriptor: DrawboardArtifactDescriptor = {
+          version: "v1",
+          captureMode: drawboardCaptureMode,
+          artifactType: "drawing",
+          fingerprint: drawingArtifactFingerprint({
+            html: level.code.html ?? "",
+            css: level.code.css ?? "",
+            js: level.code.js ?? "",
+            scenario,
+          }),
+          gameId: currentGameId,
+          levelIdentifier: level.identifier ?? null,
+          levelName: level.name ?? null,
+          scenarioId: scenario.scenarioId,
+          stepId: null,
+          platformBucket,
+          width,
+          height,
+        };
+        const drawingUrl = drawingUrls[buildArtifactKey(drawingDescriptor)]?.trim();
         const scenarioSequence = level.eventSequence?.byScenarioId?.[scenario.scenarioId] ?? [];
         const runtimeKey = getEventSequenceRuntimeKey(currentLevel, scenario.scenarioId, options.creator);
         const runtimeState = getSequenceRuntimeState(runtimeKey);
@@ -101,11 +131,36 @@ export const LevelUpdater = () => {
                 selectedStepId ?? activeStepId ?? INITIAL_EVENT_SEQUENCE_STEP_ID,
               )
             : defaultTimelineStepIdForSolutionCapture(selectedStepId);
-        const solutionUrl = resolveEventSequenceSolutionUrl(solutionUrls, scenario.scenarioId, {
-          usePerStepKeys: !options.creator && scenarioSequence.length > 0,
-          stepId: solutionStepId,
-          allowLegacyFallback: true,
-        })?.trim();
+        const solutionFingerprint = solutionArtifactFingerprint({
+          html: level.solution?.html ?? "",
+          css: level.solution?.css ?? "",
+          js: level.solution?.js ?? "",
+          scenario,
+        });
+        const selectedSolutionStep =
+          scenarioSequence.find((step) => step.id === solutionStepId) ?? null;
+        const activeSolutionFingerprint =
+          !options.creator && scenarioSequence.length > 0 && selectedSolutionStep
+            ? solutionStepArtifactFingerprint({
+                solutionFingerprint,
+                step: selectedSolutionStep,
+              })
+            : solutionFingerprint;
+        const solutionDescriptor: DrawboardArtifactDescriptor = {
+          version: "v1",
+          captureMode: drawboardCaptureMode,
+          artifactType: !options.creator && scenarioSequence.length > 0 ? "solution-step" : "solution",
+          fingerprint: activeSolutionFingerprint,
+          gameId: currentGameId,
+          levelIdentifier: level.identifier ?? null,
+          levelName: level.name ?? null,
+          scenarioId: scenario.scenarioId,
+          stepId: !options.creator && scenarioSequence.length > 0 ? solutionStepId : null,
+          platformBucket,
+          width,
+          height,
+        };
+        const solutionUrl = solutionUrls[buildArtifactKey(solutionDescriptor)]?.trim();
 
         const previousDrawingUrl = drawingPixelSourceUrlsRef.current[scenario.scenarioId];
         if (drawingUrl && previousDrawingUrl !== drawingUrl) {
@@ -147,10 +202,13 @@ export const LevelUpdater = () => {
     };
   }, [
     currentLevel,
+    currentGameId,
+    drawboardCaptureMode,
     drawingUrls,
     eventSequenceUiState,
     level,
     options.creator,
+    platformBucket,
     solutionUrls,
   ]);
 

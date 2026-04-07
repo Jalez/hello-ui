@@ -123,8 +123,12 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
   const isCreator = useAppSelector((state) => state.options.creator);
   const level = useAppSelector((state: { levels: Array<{ interactive: boolean }> }) => state.levels[currentLevel - 1]);
   const existingImageUrl = useAppSelector((state) => {
+    const artifactStorageKey = artifactCache ? buildArtifactKey(artifactCache) : null;
     if (name === "solutionUrl") {
       const raw = state.solutionUrls as Record<string, string | undefined>;
+      if (artifactStorageKey) {
+        return raw[artifactStorageKey];
+      }
       if (eventSequenceSolutionStepId) {
         // Per-step game capture: do not fall back to legacy scenarioId — that blocks capture and
         // shows one stale image for every step when only the legacy key is populated.
@@ -133,7 +137,11 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
       return raw[scenario.scenarioId];
     }
     if (name === "drawingUrl") {
-      return (state.drawingUrls as Record<string, string | undefined>)[scenario.scenarioId];
+      const raw = state.drawingUrls as Record<string, string | undefined>;
+      if (artifactStorageKey) {
+        return raw[artifactStorageKey];
+      }
+      return raw[scenario.scenarioId];
     }
     return undefined;
   });
@@ -266,20 +274,24 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
         );
 
         if (payload.urlName === "solutionUrl") {
+          const storageKey = artifactCache ? buildArtifactKey(artifactCache) : undefined;
           dispatch(
             addSolutionUrl({
               solutionUrl: displayDataUrl,
               scenarioId: payload.scenarioId,
+              storageKey,
               eventSequenceStepId: eventSequenceSolutionStepId ?? undefined,
             }),
           );
         }
 
         if (payload.urlName === "drawingUrl") {
+          const storageKey = artifactCache ? buildArtifactKey(artifactCache) : undefined;
           dispatch(
             addDrawingUrl({
               drawingUrl: displayDataUrl,
               scenarioId: payload.scenarioId,
+              storageKey,
             }),
           );
         }

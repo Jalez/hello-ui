@@ -30,7 +30,6 @@ import {
 } from "@/lib/drawboard/eventSequenceState";
 import {
   defaultTimelineStepIdForSolutionCapture,
-  resolveEventSequenceSolutionUrl,
 } from "@/lib/drawboard/eventSequenceSolutionUrls";
 import { useEventSequencePreview } from "@/lib/drawboard/useEventSequencePreview";
 import {
@@ -105,17 +104,6 @@ export const ScenarioModel = ({
     }
     return defaultTimelineStepIdForSolutionCapture(selectedEventSequenceStepId);
   }, [gameplaySolutionStepId, isCreator, scenarioSequence.length, selectedEventSequenceStepId]);
-  const solutionUrl = useAppSelector((state) =>
-    resolveEventSequenceSolutionUrl(
-      state.solutionUrls as Record<string, string | undefined>,
-      scenario.scenarioId,
-      {
-        usePerStepKeys: usePerStepSolutionKeys,
-        stepId: solutionStepIdForCapture,
-        allowLegacyFallback: !usePerStepSolutionKeys,
-      },
-    ),
-  );
   const [modelToolbarDragStarted, setModelToolbarDragStarted] = useState(false);
   const [solutionCaptureBusy, setSolutionCaptureBusy] = useState(false);
   const solutionFrameRef = useRef<FrameHandle | null>(null);
@@ -134,26 +122,6 @@ export const ScenarioModel = ({
     useCallback(() => getSequenceRuntimeState(runtimeKey), [runtimeKey]),
     useCallback(() => getSequenceRuntimeState(runtimeKey), [runtimeKey]),
   );
-  const fallbackEvents = useMemo(() => level?.events ?? [], [level]);
-  const {
-    selectedSequenceIndex,
-    replaySequence,
-    interactionTriggers,
-    shouldShowInteractivePreview,
-    frameNeedsInteractive,
-    isSequenceRecording,
-  } = useEventSequencePreview({
-    isCreator,
-    scenarioSequence,
-    selectedEventSequenceStepId,
-    eventSequenceScopedTriggers,
-    recordingMode: sequenceRuntime.recordingMode,
-    creatorPreviewInteractive,
-    hasCapture: Boolean(solutionUrl),
-    fallbackEvents,
-  });
-  const effectiveShowInteractivePreview = shouldShowInteractivePreview;
-  const selectedEventSequenceStep = selectedSequenceIndex >= 0 ? scenarioSequence[selectedSequenceIndex] : null;
   const solutionFingerprint = useMemo(
     () =>
       solutionArtifactFingerprint({
@@ -164,15 +132,19 @@ export const ScenarioModel = ({
       }),
     [level?.solution?.css, level?.solution?.html, level?.solution?.js, scenario],
   );
+  const selectedSolutionStep = useMemo(
+    () => scenarioSequence.find((step) => step.id === solutionStepIdForCapture) ?? null,
+    [scenarioSequence, solutionStepIdForCapture],
+  );
   const activeSolutionFingerprint = useMemo(
     () =>
-      usePerStepSolutionKeys && selectedEventSequenceStep
+      usePerStepSolutionKeys && selectedSolutionStep
         ? solutionStepArtifactFingerprint({
             solutionFingerprint,
-            step: selectedEventSequenceStep,
+            step: selectedSolutionStep,
           })
         : solutionFingerprint,
-    [selectedEventSequenceStep, solutionFingerprint, usePerStepSolutionKeys],
+    [selectedSolutionStep, solutionFingerprint, usePerStepSolutionKeys],
   );
   const solutionArtifactDescriptor = useMemo<DrawboardArtifactDescriptor>(
     () => ({
@@ -207,6 +179,29 @@ export const ScenarioModel = ({
     () => buildArtifactKey(solutionArtifactDescriptor),
     [solutionArtifactDescriptor],
   );
+  const solutionUrl = useAppSelector(
+    (state) => (state.solutionUrls as Record<string, string | undefined>)[solutionArtifactKey] ?? "",
+  );
+  const fallbackEvents = useMemo(() => level?.events ?? [], [level]);
+  const {
+    selectedSequenceIndex,
+    replaySequence,
+    interactionTriggers,
+    shouldShowInteractivePreview,
+    frameNeedsInteractive,
+    isSequenceRecording,
+  } = useEventSequencePreview({
+    isCreator,
+    scenarioSequence,
+    selectedEventSequenceStepId,
+    eventSequenceScopedTriggers,
+    recordingMode: sequenceRuntime.recordingMode,
+    creatorPreviewInteractive,
+    hasCapture: Boolean(solutionUrl),
+    fallbackEvents,
+  });
+  const effectiveShowInteractivePreview = shouldShowInteractivePreview;
+  const selectedEventSequenceStep = selectedSequenceIndex >= 0 ? scenarioSequence[selectedSequenceIndex] : null;
   const [solutionArtifactLookup, setSolutionArtifactLookup] = useState<{
     key: string;
     status: SolutionArtifactLookupStatus;
@@ -231,6 +226,7 @@ export const ScenarioModel = ({
         dispatch(addSolutionUrl({
           solutionUrl: local.dataUrl,
           scenarioId: scenario.scenarioId,
+          storageKey: solutionArtifactKey,
           eventSequenceStepId: usePerStepSolutionKeys ? solutionStepIdForCapture ?? undefined : undefined,
         }));
         if (!cancelled) {
@@ -244,6 +240,7 @@ export const ScenarioModel = ({
           dispatch(addSolutionUrl({
             solutionUrl: remote.dataUrl,
             scenarioId: scenario.scenarioId,
+            storageKey: solutionArtifactKey,
             eventSequenceStepId: usePerStepSolutionKeys ? solutionStepIdForCapture ?? undefined : undefined,
           }));
           setSolutionArtifactLookup({ key: solutionArtifactKey, status: "ready" });

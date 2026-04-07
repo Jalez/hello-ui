@@ -2,6 +2,7 @@
 'use client';
 
 import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
+import { useGameStore } from "@/components/default/games";
 import { KeyBindings } from "@/components/Editors/KeyBindings";
 import ScenarioAdder from "./ScenarioAdder";
 import ScenarioRemover from "./ScenarioRemover";
@@ -55,6 +56,9 @@ import { useGameRuntimeConfig } from "@/hooks/useGameRuntimeConfig";
 import { EventSequencePanel } from "./Drawboard/EventSequencePanel";
 import { useAutoReplaySequence } from "@/lib/drawboard/useAutoReplaySequence";
 import { apiUrl, stripBasePath } from "@/lib/apiUrl";
+import { buildArtifactKey, type DrawboardArtifactDescriptor } from "@/lib/drawboard/artifactCache";
+import { drawingArtifactFingerprint } from "@/lib/drawboard/artifactFingerprint";
+import { getBrowserPlatformBucket } from "@/lib/drawboard/platformBucket";
 
 const EMPTY_SCENARIOS: scenario[] = [];
 
@@ -68,6 +72,7 @@ export const ArtBoards = (): React.ReactNode => {
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const level = useAppSelector((state) => state.levels[currentLevel - 1]);
   const drawingUrls = useAppSelector((state) => state.drawingUrls as Record<string, string | undefined>);
+  const currentGameId = useGameStore((state) => state.currentGameId);
   const isCreatorRoute = pathname?.startsWith("/creator/") ?? false;
   const isCreatorContext = isCreatorRoute;
   const routeGameIdParam = params?.gameId;
@@ -93,7 +98,40 @@ export const ArtBoards = (): React.ReactNode => {
     ? scenarios.findIndex((scenario) => scenario.scenarioId === selectedScenario.scenarioId)
     : -1;
 
-  const selectedScenarioDrawingUrl = selectedScenario ? drawingUrls[selectedScenario.scenarioId] : undefined;
+  const platformBucket = useMemo(
+    () => (drawboardCaptureMode === "browser" ? getBrowserPlatformBucket() : null),
+    [drawboardCaptureMode],
+  );
+  const selectedScenarioDrawingArtifactDescriptor = useMemo<DrawboardArtifactDescriptor | null>(() => {
+    if (!level || !selectedScenario) {
+      return null;
+    }
+    return {
+      version: "v1",
+      captureMode: drawboardCaptureMode,
+      artifactType: "drawing",
+      fingerprint: drawingArtifactFingerprint({
+        html: level.code.html ?? "",
+        css: level.code.css ?? "",
+        js: level.code.js ?? "",
+        scenario: selectedScenario,
+      }),
+      gameId: currentGameId,
+      levelIdentifier: level.identifier ?? null,
+      levelName: level.name ?? null,
+      scenarioId: selectedScenario.scenarioId,
+      stepId: null,
+      platformBucket,
+      width: selectedScenario.dimensions.width,
+      height: selectedScenario.dimensions.height,
+    };
+  }, [currentGameId, drawboardCaptureMode, level, platformBucket, selectedScenario]);
+  const selectedScenarioDrawingUrl = useMemo(() => {
+    if (!selectedScenarioDrawingArtifactDescriptor) {
+      return undefined;
+    }
+    return drawingUrls[buildArtifactKey(selectedScenarioDrawingArtifactDescriptor)];
+  }, [drawingUrls, selectedScenarioDrawingArtifactDescriptor]);
   const scenarioRestoreKey = routeGameId ? `${routeGameId}:${currentLevel}` : null;
   const selectedScenarioPreviewChoice = useEventSequenceUiState(
     useCallback((state) => {
