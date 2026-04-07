@@ -5,10 +5,13 @@ import { Spinner } from "../Spinner/Spinner";
 
 // interface
 interface ModelProps {
-  imageUrl: string;
+  imageUrl?: string;
   height: number;
   width: number;
   name?: string;
+  alt?: string;
+  /** Shown while `imageUrl` is empty (e.g. capture not ready yet). */
+  loadingMessage?: string;
 }
 
 export const Image = ({
@@ -16,6 +19,8 @@ export const Image = ({
   height,
   width,
   name,
+  alt,
+  loadingMessage,
 }: ModelProps): React.ReactNode => {
   return (
     <div
@@ -26,13 +31,13 @@ export const Image = ({
         {imageUrl ? (
           <img
             src={imageUrl}
-            alt="The image that the user will draw a copy of"
+            alt={alt || "The image that the user will draw a copy of"}
             width={width}
             height={height}
             style={{ width: `${width}px`, height: `${height}px`, display: "block" }}
           />
         ) : (
-          <Spinner height={height} width={width} />
+          <Spinner height={height} width={width} message={loadingMessage} />
         )}
       </div>
       {imageUrl && (

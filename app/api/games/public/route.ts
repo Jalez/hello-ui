@@ -75,6 +75,7 @@ export async function GET() {
         accessEndsAt: game.access_ends_at,
         accessKeyRequired: game.access_key_required,
         collaborationMode: game.collaboration_mode,
+        groupId: game.group_id,
         languages,
         levelsCount,
         difficulties,

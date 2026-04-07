@@ -15,7 +15,13 @@ export interface Game {
   access_key_required: boolean;
   access_key: string | null;
   collaboration_mode: "individual" | "group";
+  /** Set when the game is bound to a collaboration group (see `projects.group_id`). */
+  group_id: string | null;
   allow_duplicate_users: boolean;
+  drawboard_capture_mode: "browser" | "playwright";
+  manual_drawboard_capture: boolean;
+  remote_sync_debounce_ms: number;
+  drawboard_reload_debounce_ms: number;
   is_owner?: boolean;
   is_collaborator?: boolean;
   can_edit?: boolean;
@@ -47,6 +53,10 @@ export interface UpdateGameOptions {
   accessKey?: string | null;
   collaborationMode?: "individual" | "group";
   allowDuplicateUsers?: boolean;
+  drawboardCaptureMode?: "browser" | "playwright";
+  manualDrawboardCapture?: boolean;
+  remoteSyncDebounceMs?: number;
+  drawboardReloadDebounceMs?: number;
 }
 
 export interface GameCollaborator {

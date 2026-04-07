@@ -10,6 +10,7 @@ import { updateLevelIdentifier } from "@/store/slices/levels.slice";
 import { setLastSaved } from "@/store/slices/options.slice";
 import { addLevelsToMap } from "@/lib/utils/network/maps";
 import { useGameStore } from "@/components/default/games";
+import { serializeLevelForPersistence } from "@/lib/levels/variants";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const isValidUUID = (str: string): boolean => UUID_REGEX.test(str);
@@ -31,7 +32,8 @@ const LevelSaver = () => {
     const url = isUpdate ? `${levelUrl}/${levelToSave.identifier}` : levelUrl;
     const method = isUpdate ? "PUT" : "POST";
 
-    const { identifier, name, ...json } = levelToSave;
+    const serializedLevel = serializeLevelForPersistence(levelToSave);
+    const { identifier, name, ...json } = serializedLevel;
     const body = { name, ...json };
 
     const response = await fetch(url, {

@@ -13,26 +13,22 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTheme } from "next-themes";
 import { PencilOff } from "lucide-react";
 
-import EditorMagicButton from "@/components/CreatorControls/EditorMagicButton";
 import { Button } from "@/components/ui/button";
 import { logCollaborationStep } from "@/lib/collaboration/logCollaborationStep";
 import { useAppSelector } from "@/store/hooks/hooks";
 import { useGameplayTelemetry } from "@/components/General/useGameplayTelemetry";
 import { useOptionalCollaboration } from "@/lib/collaboration/CollaborationProvider";
 
-import { AiReviewPanel } from "./AiReviewPanel";
 import {
   commentKeymapCompartment,
   reviewDecorationsCompartment,
-  LOCAL_REDUX_UPDATE_DEBOUNCE_MS,
 } from "./constants";
+import { useGameRuntimeConfig } from "@/hooks/useGameRuntimeConfig";
 import { getCommentKeymap } from "./getCommentKeyMap";
-import { HtmlFrameLine } from "./HtmlFrameLine";
 import { RemoteCaretsOverlay } from "./RemoteCaretsOverlay";
 import { createConsistentLineTheme } from "./theme";
 import type { CodeEditorProps } from "./types";
 import { useCodeEditorCollaboration } from "./useCodeEditorCollaboration";
-import { buildReviewDecorations, useCodeEditorReview } from "./useCodeEditorReview";
 import { titleToEditorType } from "./utils";
 
 const lineNumberCompartment = new Compartment();
@@ -104,18 +100,7 @@ export default function CodeEditor({
   const consistentLineTheme = createConsistentLineTheme(isDark);
   const lastActivityTsRef = useRef<number | null>(null);
   const collaboration = useOptionalCollaboration();
-
-  const {
-    review,
-    reviewError,
-    clearReview,
-    handleAiSuggestion,
-    updateHunkStatus,
-    applyAcceptedChanges,
-  } = useCodeEditorReview({
-    code,
-    setCode,
-  });
+  const { remoteSyncDebounceMs } = useGameRuntimeConfig();
 
   const {
     isConnected,
@@ -140,7 +125,6 @@ export default function CodeEditor({
     locked,
     levelIdentifier,
     currentLevel,
-    onLocalChange: review ? clearReview : undefined,
     onLocalUserInput: options.mode === "game"
       ? () => {
           const now = Date.now();
@@ -165,21 +149,6 @@ export default function CodeEditor({
     const timer = window.setTimeout(() => setShowCollaborationRecoveryOverlay(true), 600);
     return () => window.clearTimeout(timer);
   }, [collaborationRecoveryNeeded]);
-
-  useEffect(() => {
-    const view = editorViewRef.current;
-    if (!view) {
-      return;
-    }
-
-    const extension = review
-      ? buildReviewDecorations(view.state.doc, review.hunks)
-      : [];
-
-    view.dispatch({
-      effects: reviewDecorationsCompartment.reconfigure(extension),
-    });
-  }, [editorViewRef, review]);
 
   const isSolution = type === "Solution" || type === "solution";
   const flushPendingLocalCodeUpdate = useCallback((pendingCode) => {
@@ -210,17 +179,12 @@ export default function CodeEditor({
     }
     const timeout = setTimeout(() => {
       flushPendingLocalCodeUpdate(code);
-    }, LOCAL_REDUX_UPDATE_DEBOUNCE_MS);
+    }, remoteSyncDebounceMs);
 
     return () => {
       clearTimeout(timeout);
     }
-  }, [applyingExternalUpdateRef, code, flushPendingLocalCodeUpdate, isYjsManaged, template]);
-
-
-  useEffect(() => {
-    clearReview();
-  }, [clearReview, levelIdentifier, template]);
+  }, [applyingExternalUpdateRef, code, flushPendingLocalCodeUpdate, isYjsManaged, remoteSyncDebounceMs, template]);
 
   useEffect(() => {
     if (!collaboration?.reportEditorWatchState) {
@@ -298,7 +262,7 @@ export default function CodeEditor({
               lastActivityTsRef.current = now;
               recordEditorActivity(currentLevel - 1, delta);
             }
-            handleCodeUpdate(value);
+            handleCodeUpdate();
           },
         }),
     onCreateEditor: handleEditorCreate,
@@ -319,20 +283,9 @@ export default function CodeEditor({
     placeholder: `Write your ${title} here...`,
   };
 
-  const htmlFrameLineProps: ReactCodeMirrorProps = {
-    extensions: [
-      EditorState.readOnly.of(true),
-      EditorView.editable.of(false),
-      EditorView.lineWrapping,
-      consistentLineTheme,
-      lineNumberCompartment.of([]),
-    ],
-    theme,
-    placeholder: `Write your ${title} here...`,
-  };
-
   const editorStyle: React.CSSProperties = {
-    overflow: "auto",
+    // Let the parent container own scrolling so HTML frame lines stay in flow.
+    overflow: "visible",
     boxSizing: "border-box",
     margin: "0",
     padding: "0",
@@ -340,38 +293,13 @@ export default function CodeEditor({
 
   return (
     <div className="codeEditorContainer relative flex h-full min-h-0 w-full flex-1 flex-col">
-      {options.creator && review && (
-        <AiReviewPanel
-          review={review}
-          onClose={clearReview}
-          onApplyAccepted={applyAcceptedChanges}
-          onUpdateHunkStatus={updateHunkStatus}
-        />
-      )}
-
-      {options.creator && reviewError && (
-        <div className="absolute top-1 left-1 z-[120] rounded border border-destructive bg-card px-2 py-1 text-xs text-destructive">
-          {reviewError}
-        </div>
-      )}
-
       <div
         className="codeEditor relative flex min-h-0 flex-[1_1_20px] flex-col overflow-hidden"
         title={locked ? "You can't edit this code" : " Click on the code to edit it"}
       >
-        {(options.creator || readOnlySession) && (
+        {readOnlySession && (
           <div className="pointer-events-none absolute bottom-1 right-1 z-[100] flex items-center gap-1">
             <div className="pointer-events-auto flex items-center gap-1">
-              {options.creator && (
-                <EditorMagicButton
-                  buttonColor="primary"
-                  EditorCode={code}
-                  editorType={title}
-                  onSuggestion={handleAiSuggestion}
-                  disabled={locked || readOnlySession}
-                />
-              )}
-
               {readOnlySession && (
                 <Button
                   type="button"
@@ -398,14 +326,7 @@ export default function CodeEditor({
         )}
 
         <div className="flex min-h-0 flex-1 flex-col overflow-auto">
-          {title === "HTML" && (
-            <HtmlFrameLine
-              value={"<div id='root'><kbd>"}
-              props={htmlFrameLineProps}
-            />
-          )}
-
-          <div ref={editorViewportRef} className="relative min-h-0 flex-1">
+          <div ref={editorViewportRef} className="relative min-h-0">
             {isYjsManaged ? (
               canMountYjsSurface ? (
                 <YjsEditorSurface
@@ -444,13 +365,6 @@ export default function CodeEditor({
               </div>
             )}
           </div>
-
-          {title === "HTML" && (
-            <HtmlFrameLine
-              value={"</kbd></div>"}
-              props={htmlFrameLineProps}
-            />
-          )}
         </div>
       </div>
     </div>

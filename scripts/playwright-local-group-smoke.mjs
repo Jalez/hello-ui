@@ -1,6 +1,8 @@
 import { chromium, expect, firefox, webkit } from "@playwright/test";
 import { Client } from "pg";
 import { readFileSync } from "fs";
+import dotenv from "dotenv";
+import path from "node:path";
 import net from "net";
 import tls from "tls";
 import { randomBytes } from "crypto";
@@ -9,7 +11,9 @@ import { promisify } from "util";
 
 const execFileAsync = promisify(execFile);
 
-const baseUrl = process.env.PLAYWRIGHT_BASE_URL || "http://127.0.0.1:3000";
+dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
+
+const baseUrl = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3000";
 const scenario = process.env.PLAYWRIGHT_SCENARIO || "baseline";
 const browserName = process.env.PLAYWRIGHT_BROWSER || "chromium";
 const routeKind = process.env.PLAYWRIGHT_ROUTE_KIND || (scenario === "prototype_yjs" ? "prototype-yjs" : "game");
@@ -21,7 +25,7 @@ const concurrentEditors = Math.max(2, Number.parseInt(process.env.PLAYWRIGHT_CON
 const timeoutMultiplier = Math.max(1, Number.parseFloat(process.env.PLAYWRIGHT_TIMEOUT_MULTIPLIER || "1"));
 const verboseYjsLogs = process.env.PLAYWRIGHT_VERBOSE_YJS === "true";
 const verboseBrowserLogs = process.env.PLAYWRIGHT_VERBOSE_BROWSER === "true";
-const dbUrl = process.env.PLAYWRIGHT_DATABASE_URL || process.env.DATABASE_URL || "postgresql://postgres:password@localhost:5432/ui_designer_dev";
+const dbUrl = process.env.PLAYWRIGHT_DATABASE_URL || process.env.DATABASE_URL || "postgresql://postgres:postgres@localhost:5433/ui_designer";
 let activeGameId = requestedGameId;
 const smokeViewport = {
   width: Number.parseInt(process.env.PLAYWRIGHT_VIEWPORT_WIDTH || "430", 10),
@@ -994,7 +998,7 @@ async function runWsRecoveryScenario(browser) {
       try {
         const stabilityResult = await tryEditStability(pages[0], pages, "ws-recovery-post");
         console.log(
-          `ws-recovery stability stable=${stabilityResult.stable} appearedAt=${stabilityResult.appearedAt} disappearedAt=${stabilityResult.disappearedAt}`
+          `ws-recovery stability stable=${stabilityResult.stable} convergedToPeers=${stabilityResult.convergedToPeers} appearedAt=${stabilityResult.appearedAt} disappearedAt=${stabilityResult.disappearedAt}`
         );
         expect(stabilityResult.stable).toBe(true);
       } finally {
@@ -1222,6 +1226,11 @@ function createStarterLevel() {
     week: "playwright-local",
     percentageTreshold: 70,
     percentageFullPointsTreshold: 95,
+    pointsThresholds: [
+      { accuracy: 70, pointsPercent: 25 },
+      { accuracy: 85, pointsPercent: 60 },
+      { accuracy: 95, pointsPercent: 100 },
+    ],
     difficulty: "easy",
     instructions: [],
     question_and_answer: { question: "", answer: "" },
@@ -1282,9 +1291,69 @@ function summarizeSet(values) {
 
 async function signInDevUser(page, username) {
   await page.goto(new URL("/auth/signin", baseUrl).toString(), { waitUntil: "networkidle" });
-  await page.getByPlaceholder("alice").fill(username);
-  await page.getByRole("button", { name: "Use Local User" }).click();
-  await page.waitForURL((url) => !url.pathname.endsWith("/auth/signin"), { timeout: scaledTimeout(15000) });
+
+  const signInResult = await page.evaluate(async (nextUsername) => {
+    const csrfResponse = await fetch("/api/auth/csrf", { credentials: "include" });
+    const csrfPayload = await csrfResponse.json();
+    const params = new URLSearchParams({
+      csrfToken: csrfPayload.csrfToken,
+      username: nextUsername,
+      callbackUrl: "/",
+      json: "true",
+    });
+    const response = await fetch("/api/auth/callback/dev-user", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: params.toString(),
+      credentials: "include",
+    });
+
+    return {
+      ok: response.ok,
+      status: response.status,
+      text: await response.text(),
+    };
+  }, normalizeName(username));
+
+  if (!signInResult.ok) {
+    throw new Error(
+      `Local dev sign-in failed for ${username}: ${signInResult.status} ${signInResult.text}`,
+    );
+  }
+
+  await expect
+    .poll(async () => {
+      return page.evaluate(async () => {
+        const response = await fetch("/api/auth/session", { credentials: "include" });
+        const session = await response.json();
+        return Boolean(session?.user?.email);
+      });
+    }, {
+      timeout: scaledTimeout(15000),
+      message: `Expected authenticated session for ${username}`,
+    })
+    .toBe(true);
+
+  // Pre-acknowledge all tour spots so the Joyride overlay never blocks interactions.
+  await page.evaluate(async () => {
+    const acks = {
+      "navbar.game_route_score": 1, "navbar.game_route_mobile_game_menu": 1,
+      "navbar.game_route_levels": 1, "navbar.game_route_lobby": 1,
+      "navbar.game_route_finish": 1, "navbar.creator_game_menu": 1,
+      "navbar.creator_workbench_tools": 1, "navbar.creator_levels": 1,
+      "creator.workbench_sidebar": 1, "footer.help": 1,
+      "footer.level_menu": 1, "footer.time_menu": 1,
+      "footer.info": 1, "footer.collaboration": 1,
+      "gameboard.events_strip": 2, "gameboard.scenario_run_controls": 2,
+    };
+    await fetch("/api/user/tour-spots", {
+      method: "PATCH", credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ acks }),
+    }).catch(() => {});
+  });
 }
 
 async function enableHttpLatency(context) {
@@ -1752,7 +1821,54 @@ async function getEditableContent(page) {
 }
 
 async function setEditorSelection(page, placement = "end", offset = 0) {
-  const positioned = await page.evaluate(({ nextPlacement, nextOffset }) => {
+  const maxAttempts = 8;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const positioned = await page.evaluate(({ nextPlacement, nextOffset }) => {
+      const editableContent = document.querySelector(".cm-content[contenteditable='true']");
+      if (!editableContent) {
+        return false;
+      }
+      const cmEl = editableContent.closest(".cm-editor");
+      let view = null;
+      try { view = cmEl?.cmView?.view; } catch {}
+      if (!view) {
+        try { view = editableContent.parentNode?.cmView?.view; } catch {}
+        if (!view) try { view = editableContent.cmView?.view; } catch {}
+      }
+      if (!view?.state?.doc) {
+        return false;
+      }
+      const docLength = view.state.doc.length;
+      const basePosition = nextPlacement === "start" ? 0 : docLength;
+      const anchor = Math.max(0, Math.min(docLength, basePosition + nextOffset));
+      view.dispatch({
+        selection: { anchor, head: anchor },
+        scrollIntoView: true,
+      });
+      view.focus();
+      return true;
+    }, { nextPlacement: placement, nextOffset: offset });
+
+    if (positioned) {
+      return;
+    }
+
+    await page.waitForTimeout(150);
+  }
+
+  const navigationModifier = process.platform === "darwin" ? "Meta" : "Control";
+  await page.locator(".cm-content[contenteditable='true']").first().click();
+  await page.keyboard.press(
+    placement === "start" ? `${navigationModifier}+ArrowUp` : `${navigationModifier}+ArrowDown`,
+  );
+  if (offset !== 0) {
+    const key = offset < 0 ? "ArrowLeft" : "ArrowRight";
+    for (let step = 0; step < Math.abs(offset); step += 1) {
+      await page.keyboard.press(key);
+    }
+  }
+
+  const confirmed = await page.evaluate(({ nextPlacement, nextOffset }) => {
     const editableContent = document.querySelector(".cm-content[contenteditable='true']");
     if (!editableContent) {
       return false;
@@ -1764,22 +1880,49 @@ async function setEditorSelection(page, placement = "end", offset = 0) {
       try { view = editableContent.parentNode?.cmView?.view; } catch {}
       if (!view) try { view = editableContent.cmView?.view; } catch {}
     }
-    if (!view?.state?.doc) {
-      return false;
+    if (!view?.state?.selection?.main) {
+      return true;
     }
     const docLength = view.state.doc.length;
-    const basePosition = nextPlacement === "start" ? 0 : docLength;
-    const anchor = Math.max(0, Math.min(docLength, basePosition + nextOffset));
+    const expectedBase = nextPlacement === "start" ? 0 : docLength;
+    const expectedAnchor = Math.max(0, Math.min(docLength, expectedBase + nextOffset));
+    return view.state.selection.main.anchor === expectedAnchor;
+  }, { nextPlacement: placement, nextOffset: offset });
+
+  if (!confirmed) {
+    throw new Error(`Failed to position CodeMirror selection at ${placement}:${offset}`);
+  }
+}
+
+async function insertEditorText(page, text) {
+  const inserted = await page.evaluate((nextText) => {
+    const editableContent = document.querySelector(".cm-content[contenteditable='true']");
+    if (!editableContent) {
+      return false;
+    }
+    const cmEl = editableContent.closest(".cm-editor");
+    let view = null;
+    try { view = cmEl?.cmView?.view; } catch {}
+    if (!view) {
+      try { view = editableContent.parentNode?.cmView?.view; } catch {}
+      if (!view) try { view = editableContent.cmView?.view; } catch {}
+    }
+    if (!view?.state) {
+      return false;
+    }
+    const range = view.state.selection.main;
+    const insertAt = range.from + nextText.length;
     view.dispatch({
-      selection: { anchor, head: anchor },
+      changes: { from: range.from, to: range.to, insert: nextText },
+      selection: { anchor: insertAt, head: insertAt },
       scrollIntoView: true,
     });
     view.focus();
     return true;
-  }, { nextPlacement: placement, nextOffset: offset });
+  }, text);
 
-  if (!positioned) {
-    throw new Error(`Failed to position CodeMirror selection at ${placement}:${offset}`);
+  if (!inserted) {
+    throw new Error("Failed to insert text into CodeMirror.");
   }
 }
 
@@ -1922,6 +2065,7 @@ async function waitForMarkerOnPage(page, marker, label, timeoutMs = scaledTimeou
 async function waitForPagesConverged(pages, requiredMarkers, label, timeoutMs = scaledTimeout(15000)) {
   const startedAt = Date.now();
   let lastContents = [];
+  let stablePasses = 0;
   while (Date.now() - startedAt < timeoutMs) {
     lastContents = await Promise.all(pages.map((page) => getEditableContent(page)));
     const converged = lastContents.length > 0 && lastContents.every((content) => content === lastContents[0]);
@@ -1930,10 +2074,15 @@ async function waitForPagesConverged(pages, requiredMarkers, label, timeoutMs = 
         ? true
         : lastContents.every((content) => requiredMarkers.every((marker) => content.includes(marker)));
     if (converged && containsMarkers) {
-      return {
-        ok: true,
-        contents: lastContents,
-      };
+      stablePasses += 1;
+      if (stablePasses >= 2) {
+        return {
+          ok: true,
+          contents: lastContents,
+        };
+      }
+    } else {
+      stablePasses = 0;
     }
     await pages[0].waitForTimeout(750);
   }
@@ -1959,7 +2108,7 @@ async function waitForEditorsSettled(pages, label, timeoutMs = scaledTimeout(100
     const converged = states.length > 0 && states.every((state) => state.content === states[0].content);
     if (allEditable && converged) {
       stablePasses += 1;
-      if (stablePasses >= 2) {
+      if (stablePasses >= 3) {
         return true;
       }
     } else {
@@ -2120,7 +2269,7 @@ async function trySamePositionConcurrentEdit(pages, groupName) {
  * @param {object} [opts]
  * @param {number} [opts.stabilityWindowMs]  How long the marker must persist (default 10s)
  * @param {number} [opts.pollIntervalMs]     Check interval (default 400ms)
- * @returns {Promise<{stable: boolean, appearedAt: number|null, disappearedAt: number|null}>}
+ * @returns {Promise<{stable: boolean, appearedAt: number|null, disappearedAt: number|null, convergedToPeers: boolean}>}
  */
 async function tryEditStability(targetPage, allPages, groupName, opts = {}) {
   const stabilityWindowMs = opts.stabilityWindowMs ?? 10000;
@@ -2133,7 +2282,7 @@ async function tryEditStability(targetPage, allPages, groupName, opts = {}) {
   const editor = targetPage.locator(".cm-content[contenteditable='true']").first();
   await editor.click();
   await setEditorSelection(targetPage, "end");
-  await targetPage.keyboard.type(`\n<!-- ${marker} -->`, { delay: 30 });
+  await insertEditorText(targetPage, `\n<!-- ${marker} -->`);
 
   // Wait for the marker to first appear on the target page
   let appearedAt = null;
@@ -2148,7 +2297,7 @@ async function tryEditStability(targetPage, allPages, groupName, opts = {}) {
 
   if (!appearedAt) {
     console.warn(`[stability:never-appeared] ${groupName} marker=${marker}`);
-    return { stable: false, appearedAt: null, disappearedAt: null };
+    return { stable: false, appearedAt: null, disappearedAt: null, convergedToPeers: false };
   }
 
   // Have ONE other page type a few edits to create divergence conditions.
@@ -2190,23 +2339,32 @@ async function tryEditStability(targetPage, allPages, groupName, opts = {}) {
   // Wait for background typing to finish
   await bgTypingPromise;
 
-  const stable = disappearedAt === null;
-  if (stable) {
-    // Verify the marker eventually reaches other pages (convergence still works)
+  let convergedToPeers = true;
+  if (disappearedAt === null) {
+    // End the synthetic partition before checking convergence. The usability goal
+    // is "recover once the bad network condition clears", not "magically converge
+    // while inbound collaboration traffic is still being dropped on this page".
+    stopDroppingYjsUpdates(targetPage);
+    await targetPage.waitForTimeout(600);
+
+    // Verify the marker eventually reaches other pages once traffic resumes.
     for (const page of otherPages) {
       try {
         const hasMarker = await waitForMarkerOnPage(page, marker, `${groupName}:stability-converge`, scaledTimeout(10000));
         if (!hasMarker) {
           console.warn(`[stability:no-converge] ${groupName} marker=${marker} did not reach all pages`);
+          convergedToPeers = false;
         }
       } catch (err) {
         console.warn(`[stability:converge-error] ${groupName} marker=${marker} ${err.message?.slice(0, 100)}`);
+        convergedToPeers = false;
       }
     }
   }
 
+  const stable = disappearedAt === null && convergedToPeers;
   console.log(`stability:check ${groupName} stable=${stable} checks=${checks} marker=${marker}`);
-  return { stable, appearedAt, disappearedAt };
+  return { stable, appearedAt, disappearedAt, convergedToPeers };
 }
 
 async function switchToEditorTab(page, label) {
@@ -3854,6 +4012,8 @@ async function main() {
       }
 
       console.log(`\nFragments: ${totalSurvived}/${totalFragments} survived on all pages (${totalTyped}/${totalFragments} typed successfully)`);
+      const allGroupsConverged = summary.every((row) => row.textProduction?.converged);
+      console.log(`Groups converged: ${summary.filter((row) => row.textProduction?.converged).length}/${summary.length}`);
       console.log("\nChaos event breakdown:");
       console.log("event | attempts | failures | failure_rate");
       for (const event of CHAOS_EVENTS) {
@@ -3865,10 +4025,14 @@ async function main() {
         }
       }
 
-      const allOk = totalSurvived === totalFragments;
+      const allOk =
+        totalSurvived === totalFragments &&
+        totalTyped === totalFragments &&
+        allGroupsConverged;
       printRunSummary(scenario, allOk, {
         "fragments-survived": totalSurvived === totalFragments,
         "fragments-typed": totalTyped === totalFragments,
+        "groups-converged": allGroupsConverged,
       });
     }
 

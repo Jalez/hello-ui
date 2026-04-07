@@ -4,7 +4,8 @@ import { FolderKanban, Loader2, Plus, Search } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import type React from "react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { SidebarButton } from "../sidebar/SidebarButton";
 import { SidebarLink } from "../sidebar/SidebarLink";
 import { useSidebarCollapse } from "../sidebar/context/SidebarCollapseContext";
@@ -17,21 +18,28 @@ import { GamesSearchModal } from "./GamesSearchModal";
 
 interface SidebarGameListProps {
   onGameClick?: () => void;
-  isUserAdmin: boolean;
 }
 
-export const GameSidebar: React.FC<SidebarGameListProps> = ({ onGameClick, isUserAdmin }) => {
+const MAX_AUTO_LOAD_RETRIES = 2;
+const AUTO_LOAD_RETRY_DELAY_MS = 1500;
+
+export const GameSidebar: React.FC<SidebarGameListProps> = ({ onGameClick }) => {
   const { isCollapsed: contextCollapsed } = useSidebarCollapse();
   const isMobileSidebar = useMobileSidebar();
   const isCollapsed = isMobileSidebar ? false : contextCollapsed;
   const pathname = usePathname();
   const { data: session } = useSession();
-  const { games, loadGames } = useGameStore();
-  const [isLoading, setIsLoading] = useState(false);
-  const [hasLoadedGames, setHasLoadedGames] = useState(false);
+  const games = useGameStore((state) => state.games);
+  const loadGames = useGameStore((state) => state.loadGames);
+  const isStoreLoading = useGameStore((state) => state.isLoading);
+  const hasInitializedGames = useGameStore((state) => state.isInitialized);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
+  const autoLoadRetriesRef = useRef(0);
+  const autoLoadPausedRef = useRef(false);
+  const autoLoadInFlightRef = useRef(false);
+  const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isAuthenticated = !!session?.user;
 
@@ -40,23 +48,73 @@ export const GameSidebar: React.FC<SidebarGameListProps> = ({ onGameClick, isUse
     onGameClick,
   });
 
-  useEffect(() => {
-    const loadGms = async () => {
-      if (isAuthenticated && !hasLoadedGames && session?.user?.email && (!isCollapsed || isSearchModalOpen)) {
-        setIsLoading(true);
-        try {
-          await loadGames();
-          setHasLoadedGames(true);
-        } catch (error) {
-          console.error("Error loading games:", error);
-        } finally {
-          setIsLoading(false);
-        }
-      }
-    };
+  const clearRetryTimeout = useCallback(() => {
+    if (retryTimeoutRef.current !== null) {
+      clearTimeout(retryTimeoutRef.current);
+      retryTimeoutRef.current = null;
+    }
+  }, []);
 
-    loadGms();
-  }, [isAuthenticated, hasLoadedGames, session?.user?.email, loadGames, isCollapsed, isSearchModalOpen]);
+  const shouldAutoLoad =
+    isAuthenticated &&
+    !hasInitializedGames &&
+    !isStoreLoading &&
+    Boolean(session?.user?.email) &&
+    (!isCollapsed || isSearchModalOpen);
+
+  const attemptLoadGames = useCallback(async () => {
+    if (!shouldAutoLoad || autoLoadPausedRef.current || autoLoadInFlightRef.current) {
+      return;
+    }
+
+    autoLoadInFlightRef.current = true;
+
+    try {
+      await loadGames();
+      autoLoadRetriesRef.current = 0;
+      autoLoadPausedRef.current = false;
+      clearRetryTimeout();
+    } catch (error) {
+      console.error("Error loading games:", error);
+
+      if (autoLoadRetriesRef.current < MAX_AUTO_LOAD_RETRIES) {
+        autoLoadRetriesRef.current += 1;
+        const delay = AUTO_LOAD_RETRY_DELAY_MS * autoLoadRetriesRef.current;
+        clearRetryTimeout();
+        retryTimeoutRef.current = setTimeout(() => {
+          retryTimeoutRef.current = null;
+          autoLoadInFlightRef.current = false;
+          void attemptLoadGames();
+        }, delay);
+        return;
+      }
+
+      autoLoadPausedRef.current = true;
+      toast.error("Could not load games after multiple attempts. Auto-retries are paused.");
+    } finally {
+      if (retryTimeoutRef.current === null) {
+        autoLoadInFlightRef.current = false;
+      }
+    }
+  }, [clearRetryTimeout, loadGames, shouldAutoLoad]);
+
+  useEffect(() => {
+    void attemptLoadGames();
+  }, [attemptLoadGames]);
+
+  useEffect(() => {
+    if (hasInitializedGames) {
+      autoLoadPausedRef.current = false;
+      autoLoadRetriesRef.current = 0;
+      clearRetryTimeout();
+    }
+  }, [clearRetryTimeout, hasInitializedGames]);
+
+  useEffect(() => {
+    return () => {
+      clearRetryTimeout();
+    };
+  }, [clearRetryTimeout]);
 
   const isActive = (gameId: string) => {
     return pathname === `/game/${gameId}` || pathname === `/creator/${gameId}`;
@@ -149,7 +207,7 @@ export const GameSidebar: React.FC<SidebarGameListProps> = ({ onGameClick, isUse
         )}
         <GamesList
           games={creatorGames}
-          isLoading={isLoading}
+          isLoading={isStoreLoading && !hasInitializedGames}
           creatingGameId={creatingGameId}
           isCollapsed={isCollapsed}
           editingId={editingId}
@@ -173,7 +231,7 @@ export const GameSidebar: React.FC<SidebarGameListProps> = ({ onGameClick, isUse
         )}
         <GamesList
           games={playedGames}
-          isLoading={isLoading}
+          isLoading={isStoreLoading && !hasInitializedGames}
           creatingGameId={creatingGameId}
           isCollapsed={isCollapsed}
           editingId={editingId}

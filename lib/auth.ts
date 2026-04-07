@@ -268,7 +268,8 @@ export const authOptions = {
   basePath: BASE_PATH
     ? `${BASE_PATH}/api/auth`
     : undefined,
-  debug: process.env.NODE_ENV === "development",
+  // Keep NextAuth internal debug logging opt-in to avoid warning noise during normal local dev.
+  debug: process.env.NEXTAUTH_DEBUG === "true",
 };
 
 const handler = NextAuth(authOptions);

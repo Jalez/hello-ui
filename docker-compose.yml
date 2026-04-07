@@ -1,4 +1,16 @@
 services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - ui-designer-net
+
   db:
     image: postgres:16-alpine
     environment:
@@ -20,7 +32,7 @@ services:
   db-init:
     build:
       context: .
-      dockerfile: Dockerfile.db-init
+      dockerfile: Dockerfile.db-init.development
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/ui_designer
     depends_on:
@@ -33,7 +45,7 @@ services:
   drawboard:
     build:
       context: ./drawBoard
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.development
     ports:
       - "3500:3500"
     environment:
@@ -46,7 +58,7 @@ services:
   app:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.development
       args:
         NEXT_PUBLIC_DRAWBOARD_URL: ${NEXT_PUBLIC_DRAWBOARD_URL:-http://localhost:3500}
     ports:
@@ -72,13 +84,15 @@ services:
         condition: service_completed_successfully
       drawboard:
         condition: service_started
+      redis:
+        condition: service_healthy
     networks:
       - ui-designer-net
 
   ws-server:
     build:
       context: ./ws-server
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.development
     ports:
       - "3100:3100"
     env_file:

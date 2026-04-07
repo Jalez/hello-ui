@@ -1,29 +1,55 @@
 'use client';
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Buffer } from "buffer";
 import { useAppSelector } from "@/store/hooks/hooks";
+import type { RootState } from "@/store/store";
 import { scenario } from "@/types";
 import { mainColor } from "@/constants";
+import {
+  getEventSequenceScenarioUiKey,
+  getEventSequenceUiState,
+  subscribeEventSequenceUiState,
+  INITIAL_EVENT_SEQUENCE_STEP_ID,
+} from "@/lib/drawboard/eventSequenceState";
+import { resolveEventSequenceDiffUrl } from "@/lib/drawboard/eventSequenceDiffUrls";
 
 type DiffProps = {
   scenario: scenario;
 };
 
 export const Diff = ({ scenario }: DiffProps): React.ReactNode => {
-  const { currentLevel } = useAppSelector((state: any) => state.currentLevel);
-  const differenceUrls = useAppSelector((state: any) => state.differenceUrls);
-  const scenarioDiffUrl = differenceUrls[scenario.scenarioId];
-  const level = useAppSelector((state: any) => state.levels[currentLevel - 1]);
+  const { currentLevel } = useAppSelector((state: RootState) => state.currentLevel);
+  const differenceUrls = useAppSelector((state: RootState) => state.differenceUrls);
+  const level = useAppSelector((state: RootState) => state.levels[currentLevel - 1]);
+  const eventSequenceUiState = useSyncExternalStore(
+    subscribeEventSequenceUiState,
+    getEventSequenceUiState,
+    getEventSequenceUiState,
+  );
   const [imgUrl, setImgUrl] = useState<string | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
 
   const prevImgUrlRef = useRef<string | null>(null);
 
+  const scenarioSequence = level?.eventSequence?.byScenarioId?.[scenario.scenarioId] ?? [];
+  const uiScenarioKey = getEventSequenceScenarioUiKey(currentLevel, scenario.scenarioId);
+  const selectedStepId =
+    eventSequenceUiState.selectedStepIdByScenario[uiScenarioKey]?.trim()
+    || (scenarioSequence.length > 0 ? INITIAL_EVENT_SEQUENCE_STEP_ID : null);
+  const scenarioDiffUrl = resolveEventSequenceDiffUrl(differenceUrls, scenario.scenarioId, {
+    usePerStepKeys: scenarioSequence.length > 0,
+    stepId: selectedStepId,
+  });
+
   useEffect(() => {
-    setLoading(true);
     if (!scenarioDiffUrl || scenarioDiffUrl.length === 0) {
-      setLoading(false);
+      setImgUrl((current) => {
+        if (current) {
+          URL.revokeObjectURL(current);
+          prevImgUrlRef.current = null;
+        }
+        return null;
+      });
       return;
     }
 
@@ -64,7 +90,6 @@ export const Diff = ({ scenario }: DiffProps): React.ReactNode => {
         setImgUrl(newUrl);
       }
     });
-    setLoading(false);
   }, [scenario, scenarioDiffUrl]);
 
   // Revoke on unmount
@@ -86,15 +111,14 @@ export const Diff = ({ scenario }: DiffProps): React.ReactNode => {
         backgroundColor: mainColor,
       }}
     >
-      {
-        // @ts-ignore
-        (imgUrl && <img src={imgUrl} alt="Difference" />) || (
-          <p className="text-center">
-            No diff image created for this level yet. Save your solution to
-            generate.
-          </p>
-        )
-      }
+      {imgUrl ? (
+        <img src={imgUrl} alt="Difference" />
+      ) : (
+        <p className="text-center">
+          No diff image created for this level yet. Save your solution to
+          generate.
+        </p>
+      )}
     </div>
   );
 };

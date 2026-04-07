@@ -29,6 +29,68 @@ export type scenario = {
 
 export type difficulty = "easy" | "medium" | "hard";
 
+export type InteractionEventType =
+  | "click"
+  | "change"
+  | "input"
+  | "submit"
+  | "keydown";
+
+export interface InteractionTrigger {
+  id: string;
+  eventType: InteractionEventType;
+  selector?: string;
+  keyFilter?: string;
+  label?: string;
+}
+
+export interface VerifiedInteraction {
+  id: string;
+  triggerId: string;
+  eventType: InteractionEventType;
+  label?: string;
+  selector?: string;
+  targetSummary?: string;
+  keyFilter?: string;
+  keyPressed?: string;
+  sequence: number;
+  createdAt: string;
+  preHash: string;
+  postHash: string;
+  verificationSource: "dom" | "pixel";
+}
+
+export interface InteractionArtifacts {
+  byScenarioId: Record<string, VerifiedInteraction[]>;
+}
+
+export interface DrawboardSnapshotPayload {
+  css: string;
+  snapshotHtml: string;
+  width: number;
+  height: number;
+}
+
+export interface EventSequenceStep {
+  id: string;
+  scenarioId: string;
+  order: number;
+  eventType: InteractionEventType;
+  selector?: string;
+  keyFilter?: string;
+  label: string;
+  instruction: string;
+  targetSummary?: string;
+  verificationSource: "dom" | "pixel";
+  preHash: string;
+  postHash: string;
+  snapshot: DrawboardSnapshotPayload;
+}
+
+export interface EventSequence {
+  byScenarioId: Record<string, EventSequenceStep[]>;
+}
+
 type instructionSection = {
   title: string;
   content: string[];
@@ -40,6 +102,58 @@ export type scenarioAccuracy = {
 };
 
 type instructions = instructionSection[];
+
+export type PointsThreshold = {
+  accuracy: number;
+  pointsPercent: number;
+};
+
+export type LevelVariantContent = {
+  buildingBlocks?: {
+    pictures?: Array<string>;
+    colors?: Array<string>;
+  };
+  code: {
+    html: string;
+    css: string;
+    js: string;
+  };
+  solution: {
+    html: string;
+    css: string;
+    js: string;
+  };
+  scenarios: scenario[];
+  maxPoints: number;
+  help: {
+    description: string;
+    images: string[];
+    usefullCSSProperties: string[];
+  };
+  instructions: instructions;
+  question_and_answer: question_and_answer;
+  showModelPicture: boolean;
+  lockCSS: boolean;
+  lockHTML: boolean;
+  lockJS: boolean;
+  interactive: boolean;
+  showScenarioModel: boolean;
+  showHotkeys: boolean;
+  eventSequence?: EventSequence;
+  events: InteractionTrigger[];
+  interactionArtifacts?: InteractionArtifacts;
+  percentageTreshold: number;
+  percentageFullPointsTreshold: number;
+  pointsThresholds: PointsThreshold[];
+  difficulty: difficulty;
+};
+
+export type LevelVariant = {
+  id: string;
+  name: string;
+  content: LevelVariantContent;
+};
+
 export interface Level {
   identifier?: levelIdentifier;
   week: string;
@@ -85,10 +199,15 @@ export interface Level {
   interactive: boolean;
   showScenarioModel: boolean;
   showHotkeys: boolean;
-  events: string[];
+  eventSequence?: EventSequence;
+  events: InteractionTrigger[];
+  interactionArtifacts?: InteractionArtifacts;
   percentageTreshold: number;
   percentageFullPointsTreshold: number;
-  pointsThresholds?: { accuracy: number; pointsPercent: number }[];
+  pointsThresholds: PointsThreshold[];
+  variants?: LevelVariant[];
+  activeVariantId?: string;
+  variantBase?: LevelVariantContent;
 }
 
 export type generator = () => {
@@ -98,7 +217,7 @@ export type generator = () => {
   SCSS: string;
   TJS?: string;
   SJS?: string;
-  events?: string[];
+  events?: Array<string | InteractionTrigger>;
   instructions: instructions;
   question_and_answer: question_and_answer;
   difficulty: difficulty;

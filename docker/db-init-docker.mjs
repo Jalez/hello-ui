@@ -73,12 +73,12 @@ async function main() {
     "webhook-schema.sql",
   ];
 
+  // Drizzle migrations under lib/db/migrations/ own: game runtime columns (0000), projects.group_id + lti_credentials (0001).
+  // After SQL bootstrap, run `pnpm db:migrate` (production does this from the app image).
   const optional = [
     "groups-schema.sql",
     "game-statistics-schema.sql",
     "games-migration.sql",
-    "lti-credentials-schema.sql",
-    "group-game-migration.sql",
     "game-collaboration-migration.sql",
     "game-instances-migration.sql",
     "ai-schema.sql",

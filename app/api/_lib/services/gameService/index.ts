@@ -51,7 +51,12 @@ function mapGame(row: typeof projects.$inferSelect): Game {
     access_key_required: row.accessKeyRequired ?? false,
     access_key: row.accessKey ?? null,
     collaboration_mode: row.collaborationMode === "group" ? "group" : "individual",
+    group_id: row.groupId ?? null,
     allow_duplicate_users: row.allowDuplicateUsers ?? true,
+    drawboard_capture_mode: row.drawboardCaptureMode === "playwright" ? "playwright" : "browser",
+    manual_drawboard_capture: row.manualDrawboardCapture ?? false,
+    remote_sync_debounce_ms: row.remoteSyncDebounceMs ?? 500,
+    drawboard_reload_debounce_ms: row.drawboardReloadDebounceMs ?? 48,
     created_at: row.createdAt,
     updated_at: row.updatedAt,
   };
@@ -116,6 +121,15 @@ function evaluateShareAccess(game: Game, accessKey?: string | null): ShareAccess
 }
 
 export function evaluateGameRouteAccess(game: Game, accessKey?: string | null): ShareAccessError | undefined {
+  const windowError = evaluateWindowAccess(game);
+  if (windowError) {
+    return windowError;
+  }
+
+  if (game.can_edit) {
+    return undefined;
+  }
+
   return evaluateShareAccess(game, accessKey);
 }
 
@@ -376,6 +390,36 @@ export async function updateGame(id: string, options: UpdateGameOptions): Promis
 
   if (options.allowDuplicateUsers !== undefined) {
     updateData.allowDuplicateUsers = options.allowDuplicateUsers;
+  }
+
+  if (options.drawboardCaptureMode !== undefined) {
+    if (options.drawboardCaptureMode !== "browser" && options.drawboardCaptureMode !== "playwright") {
+      throw new Error("Invalid drawboardCaptureMode");
+    }
+    updateData.drawboardCaptureMode = options.drawboardCaptureMode;
+  }
+
+  if (options.manualDrawboardCapture !== undefined) {
+    if (typeof options.manualDrawboardCapture !== "boolean") {
+      throw new Error("Invalid manualDrawboardCapture: must be a boolean");
+    }
+    updateData.manualDrawboardCapture = options.manualDrawboardCapture;
+  }
+
+  if (options.remoteSyncDebounceMs !== undefined) {
+    const n = Math.round(Number(options.remoteSyncDebounceMs));
+    if (!Number.isFinite(n)) {
+      throw new Error("Invalid remoteSyncDebounceMs: must be a number");
+    }
+    updateData.remoteSyncDebounceMs = Math.min(10_000, Math.max(0, n));
+  }
+
+  if (options.drawboardReloadDebounceMs !== undefined) {
+    const n = Math.round(Number(options.drawboardReloadDebounceMs));
+    if (!Number.isFinite(n)) {
+      throw new Error("Invalid drawboardReloadDebounceMs: must be a number");
+    }
+    updateData.drawboardReloadDebounceMs = Math.min(10_000, Math.max(0, n));
   }
 
   if (Object.keys(updateData).length === 0) {

@@ -45,24 +45,53 @@ async function checkDatabase() {
       console.log("   Run: pnpm db:init");
     } else {
       const expectedTables = [
-        'users', 'admin_roles', 'user_credits', 'credit_transactions',
-        'maps', 'levels', 'map_levels', 'projects', 'user_sessions',
-        'webhook_idempotency', 'ai_providers', 'ai_models'
+        "users",
+        "admin_roles",
+        "user_credits",
+        "credit_transactions",
+        "maps",
+        "levels",
+        "map_levels",
+        "projects",
+        "project_collaborators",
+        "user_sessions",
+        "webhook_idempotency",
+        "groups",
+        "group_members",
+        "game_instances",
+        "game_attempts",
+        "game_attempt_levels",
+        "game_attempt_participants",
+        "game_attempt_events",
+        "lti_credentials",
+        "__drizzle_migrations",
       ];
+
+      const optionalFeatureTables = ["ai_providers", "ai_models", "documents", "source_files"];
       
-      const existingTables = tables.rows.map(r => r.table_name);
-      
+      const existingTables = tables.rows.map((r) => r.table_name);
+
+      const iconFor = (name: string) => {
+        if (expectedTables.includes(name)) return "✅";
+        if (optionalFeatureTables.includes(name)) return "◆";
+        return "📋";
+      };
+
       console.log(`Found ${existingTables.length} tables:`);
       tables.rows.forEach((row) => {
-        const icon = expectedTables.includes(row.table_name) ? '✅' : '📋';
-        console.log(`  ${icon} ${row.table_name}`);
+        console.log(`  ${iconFor(row.table_name)} ${row.table_name}`);
       });
-      
-      // Check for missing expected tables
-      const missingTables = expectedTables.filter(t => !existingTables.includes(t));
+
+      const missingTables = expectedTables.filter((t) => !existingTables.includes(t));
       if (missingTables.length > 0) {
-        console.log("\n⚠️  Missing expected tables:");
-        missingTables.forEach(t => console.log(`     - ${t}`));
+        console.log("\n⚠️  Missing expected tables (core + Drizzle migrate path):");
+        missingTables.forEach((t) => console.log(`     - ${t}`));
+      }
+
+      const missingOptional = optionalFeatureTables.filter((t) => !existingTables.includes(t));
+      if (missingOptional.length > 0) {
+        console.log("\nℹ️  Optional / feature tables not present (OK if you skipped AI or documents SQL):");
+        missingOptional.forEach((t) => console.log(`     - ${t}`));
       }
     }
     console.log("");

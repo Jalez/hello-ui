@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, Layout } from "lucide-react";
+import { ChevronLeft, Layout, PanelLeft } from "lucide-react";
 import Link from "next/link";
 import type React from "react";
 import { useEffect, useState } from "react";
@@ -36,10 +36,10 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({ showCloseButton = 
         sidebarElement.addEventListener("transitionend", handleTransitionEnd);
 
         // Also set a fallback timer in case transitionend doesn't fire
-        // This handles the case where sidebar is already open on page load
+        // Must be >= the 300ms CSS transition duration to avoid showing text mid-animation
         const fallbackTimer = setTimeout(() => {
           setShouldShowText(true);
-        }, 100); // Small delay to ensure DOM is ready
+        }, 350);
 
         return () => {
           sidebarElement.removeEventListener("transitionend", handleTransitionEnd);
@@ -51,9 +51,34 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({ showCloseButton = 
         return () => clearTimeout(timer);
       }
     } else {
-      setShouldShowText(false);
+      const timer = setTimeout(() => setShouldShowText(false), 0);
+      return () => clearTimeout(timer);
     }
   }, [isCollapsed]);
+
+  if (isCollapsed) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={toggleCollapsed}
+            className="flex h-12 w-full items-center rounded-none p-4 text-left text-gray-700 transition-colors hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-muted"
+            aria-label="Expand sidebar"
+            title="Expand sidebar"
+          >
+            <div className="flex w-8 shrink-0 items-center justify-center">
+              <PanelLeft className="h-5 w-5 text-gray-900 dark:text-white" />
+            </div>
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="right" className="ml-2 z-[10000]">
+          <p>Expand sidebar</p>
+        </TooltipContent>
+      </Tooltip>
+    );
+  }
 
   return (
     <div className="flex items-center h-12 relative w-full">
@@ -104,5 +129,3 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({ showCloseButton = 
     </div>
   );
 };
-
-

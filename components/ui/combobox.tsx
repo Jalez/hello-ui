@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import Select, { type GroupBase, type InputActionMeta, type SingleValue } from "react-select";
+import Select, { type GroupBase, type InputActionMeta, type MenuPlacement, type SingleValue } from "react-select";
 import { cn } from "@/lib/utils";
 
 export interface ComboboxOption {
@@ -23,6 +23,7 @@ interface ComboboxProps {
   loadingText?: string;
   disabled?: boolean;
   isLoading?: boolean;
+  menuPlacement?: MenuPlacement;
   className?: string;
   triggerClassName?: string;
   contentClassName?: string;
@@ -42,6 +43,7 @@ export function Combobox({
   loadingText = "Loading...",
   disabled = false,
   isLoading = false,
+  menuPlacement = "auto",
   className,
   triggerClassName,
   contentClassName,
@@ -58,7 +60,8 @@ export function Combobox({
     meta: { context: "menu" | "value"; selectValue: readonly ComboboxOption[] }
   ) => {
     if (meta.context === "value") {
-      return renderValue ? renderValue(selected) : option.label;
+      // Use `option` here — it is the value row react-select is rendering; `selected` from useMemo can lag.
+      return renderValue ? renderValue(option) : option.label;
     }
 
     const isSelected = meta.selectValue.some((item) => item.value === option.value);
@@ -80,8 +83,10 @@ export function Combobox({
       inputValue={inputValue}
       isLoading={isLoading}
       isDisabled={disabled}
+      menuPlacement={menuPlacement}
       isSearchable
       isClearable={false}
+      blurInputOnSelect
       placeholder={placeholder}
       noOptionsMessage={() => emptyText}
       loadingMessage={() => loadingText}

@@ -7,6 +7,7 @@
 
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { spawn } from "node:child_process";
 import * as dotenv from "dotenv";
 import { Pool } from "pg";
 
@@ -31,8 +32,39 @@ const pool = new Pool({
   connectionString: DATABASE_URL,
 });
 
+async function runDrizzleMigrate() {
+  console.log("");
+  console.log("🧭 Applying Drizzle migrations...");
+
+  await new Promise<void>((resolvePromise, rejectPromise) => {
+    const child = spawn(
+      "npx",
+      ["tsx", "scripts/run-drizzle-kit.ts", "migrate"],
+      {
+        cwd: resolve(__dirname, ".."),
+        stdio: "inherit",
+        env: process.env,
+        shell: process.platform === "win32",
+      },
+    );
+
+    child.on("exit", (code) => {
+      if (code === 0) {
+        resolvePromise();
+        return;
+      }
+      rejectPromise(new Error(`Drizzle migrate failed with exit code ${code ?? "unknown"}`));
+    });
+
+    child.on("error", rejectPromise);
+  });
+
+  console.log("✅ Drizzle migrations applied");
+}
+
 async function initializeProductionDatabase() {
   const client = await pool.connect();
+  let released = false;
 
   try {
     console.log("🚀 INITIALIZING PRODUCTION DATABASE...");
@@ -159,17 +191,26 @@ async function initializeProductionDatabase() {
     }
 
     console.log("");
+    await client.release();
+    released = true;
+    await pool.end();
+    await runDrizzleMigrate();
+
+    console.log("");
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     console.log("✅ Production database initialized successfully!");
     console.log("");
-    console.log("💡 Run 'pnpm tsx scripts/db-check.ts' to verify the production setup");
+    console.log("💡 Next: `pnpm db:verify-migrations` and `pnpm db:check` to verify.");
     console.log("");
   } catch (error) {
     console.error("❌ Error initializing production database:", error);
     throw error;
   } finally {
-    client.release();
-    await pool.end();
+    if (!released) {
+      client.release();
+      released = true;
+    }
+    await pool.end().catch(() => {});
   }
 }
 

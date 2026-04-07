@@ -14,7 +14,7 @@ const DrawBoard = () => {
     return <div>Scenarios not found</div>;
   }
   return (
-    <div>
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <BoardsContainer>
         {scenarios.length === 0 ? (
           <div className="flex flex-col items-center justify-center text-center">

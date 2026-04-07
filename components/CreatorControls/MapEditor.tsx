@@ -22,6 +22,7 @@ import { setCurrentLevel } from "@/store/slices/currentLevel.slice";
 import { updateWeek, setAllLevels } from "@/store/slices/levels.slice";
 import { setSolutions } from "@/store/slices/solutions.slice";
 import { resetSolutionUrls } from "@/store/slices/solutionUrls.slice";
+import { resetDrawingUrls } from "@/store/slices/drawingUrls.slice";
 import { initializePointsFromLevelsStateThunk } from "@/store/actions/score.actions";
 import { Level } from "@/types";
 import { toast } from "sonner";
@@ -96,6 +97,7 @@ const MapEditor = forwardRef<MapEditorRef, MapEditorProps>(({ renderButton = tru
     );
     dispatch(setSolutions(solutions));
     dispatch(resetSolutionUrls());
+    dispatch(resetDrawingUrls());
     setAllLevels(freshLevels);
     dispatch(initializePointsFromLevelsStateThunk());
 

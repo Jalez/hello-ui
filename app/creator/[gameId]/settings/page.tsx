@@ -27,11 +27,24 @@ import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useGameStore } from "@/components/default/games";
 import { useAppSelector } from "@/store/hooks/hooks";
 import { apiUrl } from "@/lib/apiUrl";
+import {
+  DEFAULT_DRAWBOARD_CAPTURE_MODE,
+  DEFAULT_MANUAL_DRAWBOARD_CAPTURE,
+  DEFAULT_REMOTE_SYNC_DEBOUNCE_MS,
+  DEFAULT_DRAWBOARD_RELOAD_DEBOUNCE_MS,
+} from "@/lib/gameRuntimeConfig";
 
 type Collaborator = {
   user_id: string;
@@ -57,6 +70,10 @@ type SettingsDraft = {
   accessEndsAtInput: string;
   accessKeyRequired: boolean;
   accessKey: string;
+  drawboardCaptureMode: "browser" | "playwright";
+  manualDrawboardCapture: boolean;
+  remoteSyncDebounceMs: number;
+  drawboardReloadDebounceMs: number;
 };
 
 function createAccessKey(): string {
@@ -95,7 +112,24 @@ function createDraft(game: {
   accessEndsAt: string | null;
   accessKeyRequired: boolean;
   accessKey?: string | null;
+  drawboardCaptureMode?: "browser" | "playwright";
+  manualDrawboardCapture?: boolean;
+  remoteSyncDebounceMs?: number;
+  drawboardReloadDebounceMs?: number;
 }): SettingsDraft {
+  const captureMode =
+    game.drawboardCaptureMode === "playwright" || game.drawboardCaptureMode === "browser"
+      ? game.drawboardCaptureMode
+      : DEFAULT_DRAWBOARD_CAPTURE_MODE;
+  const debounce =
+    typeof game.remoteSyncDebounceMs === "number" && Number.isFinite(game.remoteSyncDebounceMs)
+      ? Math.min(10_000, Math.max(0, Math.round(game.remoteSyncDebounceMs)))
+      : DEFAULT_REMOTE_SYNC_DEBOUNCE_MS;
+  const reloadDebounce =
+    typeof game.drawboardReloadDebounceMs === "number" && Number.isFinite(game.drawboardReloadDebounceMs)
+      ? Math.min(10_000, Math.max(0, Math.round(game.drawboardReloadDebounceMs)))
+      : DEFAULT_DRAWBOARD_RELOAD_DEBOUNCE_MS;
+
   return {
     description: game.description ?? "",
     isPublic: game.isPublic,
@@ -108,6 +142,13 @@ function createDraft(game: {
     accessEndsAtInput: toDateTimeInputValue(game.accessEndsAt),
     accessKeyRequired: game.accessKeyRequired,
     accessKey: game.accessKey ?? "",
+    drawboardCaptureMode: captureMode,
+    manualDrawboardCapture:
+      typeof game.manualDrawboardCapture === "boolean"
+        ? game.manualDrawboardCapture
+        : DEFAULT_MANUAL_DRAWBOARD_CAPTURE,
+    remoteSyncDebounceMs: debounce,
+    drawboardReloadDebounceMs: reloadDebounce,
   };
 }
 
@@ -133,6 +174,8 @@ export default function CreatorSettingsPage({ params }: CreatorSettingsPageProps
   const [copiedAccessKey, setCopiedAccessKey] = useState(false);
 
   const [collaboratorEmail, setCollaboratorEmail] = useState("");
+  /** Search text in the combobox; kept separate from `collaboratorEmail` so the chosen label shows immediately after pick. */
+  const [collaboratorSearch, setCollaboratorSearch] = useState("");
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
   const [collaboratorError, setCollaboratorError] = useState<string | null>(null);
   const [collaboratorSuggestions, setCollaboratorSuggestions] = useState<{ email: string; name: string | null }[]>([]);
@@ -218,19 +261,19 @@ export default function CreatorSettingsPage({ params }: CreatorSettingsPageProps
     [levels, solutionUrls],
   );
 
-  const collaboratorOptions: ComboboxOption[] = useMemo(
-    () =>
-      collaboratorSuggestions.map((suggestion) => ({
-        value: suggestion.email,
-        label: suggestion.name ? `${suggestion.name} (${suggestion.email})` : suggestion.email,
-        keywords: [suggestion.email, suggestion.name || ""],
-      })),
-    [collaboratorSuggestions],
-  );
-
-  const selectedCollaboratorOption = collaboratorOptions.find(
-    (option) => option.value === collaboratorEmail,
-  );
+  const collaboratorOptions: ComboboxOption[] = useMemo(() => {
+    const fromSuggestions = collaboratorSuggestions.map((suggestion) => ({
+      value: suggestion.email,
+      label: suggestion.name ? `${suggestion.name} (${suggestion.email})` : suggestion.email,
+      keywords: [suggestion.email, suggestion.name || ""],
+    }));
+    const typed = collaboratorEmail.trim();
+    // Keep a stable option after pick or when suggestions clear (options were only search hits).
+    if (typed && !fromSuggestions.some((o) => o.value === typed)) {
+      return [{ value: typed, label: typed }, ...fromSuggestions];
+    }
+    return fromSuggestions;
+  }, [collaboratorSuggestions, collaboratorEmail]);
 
   const scenarioLabel = (scenarioId: string) => {
     for (const level of levels) {
@@ -265,6 +308,10 @@ export default function CreatorSettingsPage({ params }: CreatorSettingsPageProps
         accessEndsAt: toIsoOrNull(draft.accessEndsAtInput),
         accessKeyRequired: draft.accessKeyRequired,
         accessKey: draft.accessKeyRequired ? draft.accessKey.trim() : null,
+        drawboardCaptureMode: draft.drawboardCaptureMode,
+        manualDrawboardCapture: draft.manualDrawboardCapture,
+        remoteSyncDebounceMs: draft.remoteSyncDebounceMs,
+        drawboardReloadDebounceMs: draft.drawboardReloadDebounceMs,
       });
 
       setInitialDraft(draft);
@@ -323,6 +370,7 @@ export default function CreatorSettingsPage({ params }: CreatorSettingsPageProps
 
       setCollaborators(Array.isArray(data.collaborators) ? data.collaborators : collaborators);
       setCollaboratorEmail("");
+      setCollaboratorSearch("");
     } catch (err) {
       setCollaboratorError(err instanceof Error ? err.message : "Failed to add collaborator");
     }
@@ -355,7 +403,7 @@ export default function CreatorSettingsPage({ params }: CreatorSettingsPageProps
       return;
     }
 
-    const query = collaboratorEmail.trim();
+    const query = collaboratorSearch.trim();
     if (query.length < 2) {
       setCollaboratorSuggestions([]);
       setLoadingSuggestions(false);
@@ -381,7 +429,7 @@ export default function CreatorSettingsPage({ params }: CreatorSettingsPageProps
     }, 180);
 
     return () => clearTimeout(timerId);
-  }, [collaboratorEmail, canManageCollaborators, game?.id]);
+  }, [collaboratorSearch, canManageCollaborators, game?.id]);
 
   if (isLoading) {
     return (
@@ -525,6 +573,103 @@ export default function CreatorSettingsPage({ params }: CreatorSettingsPageProps
                     {draft.collaborationMode === "group" && " In group mode, this also blocks the same account from joining multiple group rooms."}
                   </p>
                 )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Drawboard and editor sync</CardTitle>
+              <CardDescription>
+                How artboard screenshots are captured and how quickly editor changes sync to previews. Applies after you save; no server restart.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="space-y-2">
+                <Label htmlFor="drawboard-capture-mode">Capture mode</Label>
+                <Select
+                  value={draft.drawboardCaptureMode}
+                  onValueChange={(value: "browser" | "playwright") => {
+                    setDraft((current) =>
+                      current ? { ...current, drawboardCaptureMode: value } : current,
+                    );
+                    setSaveSuccess(null);
+                  }}
+                >
+                  <SelectTrigger id="drawboard-capture-mode" className="max-w-md">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="browser">Browser (default)</SelectItem>
+                    <SelectItem value="playwright">Playwright (server render)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Browser uses canvas export in the iframe; Playwright renders on the server.
+                </p>
+              </div>
+              <div className="flex items-center justify-between rounded-md border p-3 gap-3">
+                <div>
+                  <p className="text-sm font-medium">Manual drawboard capture</p>
+                  <p className="text-xs text-muted-foreground">
+                    When on, snapshots run only when you use Capture on each artboard (default off: capture on edit).
+                  </p>
+                </div>
+                <Switch
+                  checked={draft.manualDrawboardCapture}
+                  onCheckedChange={(checked) => {
+                    setDraft((current) =>
+                      current ? { ...current, manualDrawboardCapture: checked } : current,
+                    );
+                    setSaveSuccess(null);
+                  }}
+                />
+              </div>
+              <div className="space-y-2 max-w-md">
+                <Label htmlFor="remote-sync-debounce">Remote sync debounce (ms)</Label>
+                <Input
+                  id="remote-sync-debounce"
+                  type="number"
+                  min={0}
+                  max={10_000}
+                  value={draft.remoteSyncDebounceMs}
+                  onChange={(event) => {
+                    const parsed = Number.parseInt(event.target.value, 10);
+                    const next = Number.isFinite(parsed)
+                      ? Math.min(10_000, Math.max(0, parsed))
+                      : DEFAULT_REMOTE_SYNC_DEBOUNCE_MS;
+                    setDraft((current) =>
+                      current ? { ...current, remoteSyncDebounceMs: next } : current,
+                    );
+                    setSaveSuccess(null);
+                  }}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Delay before Yjs and drawboard capture mirror into Redux (0–10000 ms). Default 500.
+                </p>
+              </div>
+              <div className="space-y-2 max-w-md">
+                <Label htmlFor="drawboard-reload-debounce">Drawboard reload debounce (ms)</Label>
+                <Input
+                  id="drawboard-reload-debounce"
+                  type="number"
+                  min={0}
+                  max={10_000}
+                  value={draft.drawboardReloadDebounceMs}
+                  onChange={(event) => {
+                    const parsed = Number.parseInt(event.target.value, 10);
+                    const next = Number.isFinite(parsed)
+                      ? Math.min(10_000, Math.max(0, parsed))
+                      : DEFAULT_DRAWBOARD_RELOAD_DEBOUNCE_MS;
+                    setDraft((current) =>
+                      current ? { ...current, drawboardReloadDebounceMs: next } : current,
+                    );
+                    setSaveSuccess(null);
+                  }}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Delay before the drawboard iframe reloads after editor changes (0–10000 ms). Default 48.
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -691,10 +836,18 @@ export default function CreatorSettingsPage({ params }: CreatorSettingsPageProps
                 <div className="flex gap-2">
                   <div className="flex-1">
                     <Combobox
-                      value={selectedCollaboratorOption?.value}
-                      inputValue={collaboratorEmail}
-                      onInputChange={setCollaboratorEmail}
-                      onValueChange={setCollaboratorEmail}
+                      value={collaboratorEmail.trim() || undefined}
+                      inputValue={collaboratorSearch}
+                      onInputChange={(v) => {
+                        setCollaboratorSearch(v);
+                        if (collaboratorEmail && v.length > 0) {
+                          setCollaboratorEmail("");
+                        }
+                      }}
+                      onValueChange={(email) => {
+                        setCollaboratorEmail(email);
+                        setCollaboratorSearch("");
+                      }}
                       options={collaboratorOptions}
                       isLoading={loadingSuggestions}
                       loadingText="Loading collaborators..."
@@ -712,7 +865,7 @@ export default function CreatorSettingsPage({ params }: CreatorSettingsPageProps
                 <p className="text-xs text-muted-foreground">You can edit this game but cannot manage collaborators.</p>
               )}
 
-              {canManageCollaborators && collaboratorEmail.trim().length >= 2 && (
+              {canManageCollaborators && collaboratorSearch.trim().length >= 2 && (
                 <p className="text-xs text-muted-foreground">
                   {loadingSuggestions
                     ? "Searching users..."

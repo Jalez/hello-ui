@@ -3,13 +3,38 @@
 import { createSlice } from "@reduxjs/toolkit";
 import confetti from "canvas-confetti";
 import { backendStorage } from "@/lib/utils/backendStorage";
-import { Level, difficulty } from "@/types";
+import { EventSequenceStep, Level, VerifiedInteraction, difficulty } from "@/types";
 import { gameMaxTime } from "@/constants";
+import { normalizeEventSequence, normalizeInteractionArtifacts, normalizeInteractionTriggers } from "@/lib/drawboard/interactionEvents";
+import {
+  DEFAULT_POINTS_THRESHOLDS,
+  applyPointsThresholdsInPlace,
+  ensurePointsThresholdsOnLevel,
+} from "@/lib/levels/pointsThresholds";
+import {
+  BASE_LEVEL_VARIANT_ID,
+  addLevelVariantFromCurrentView,
+  normalizeLevelVariants,
+  removeLevelVariant,
+  serializeLevelForPersistence,
+  setLevelVariantView,
+} from "@/lib/levels/variants";
 // allLevels will be set by the App component when levels are loaded
 export let allLevels: Level[] = [];
 export const setAllLevels = (levels: Level[]) => {
-  allLevels = levels;
+  allLevels = levels.map((level) =>
+    normalizeLevelVariants(ensurePointsThresholdsOnLevel({
+      ...level,
+      eventSequence: normalizeEventSequence(level.eventSequence) ?? { byScenarioId: {} },
+      events: normalizeInteractionTriggers(level.events as never),
+      interactionArtifacts: normalizeInteractionArtifacts(level.interactionArtifacts) ?? { byScenarioId: {} },
+    }), "game"),
+  );
 };
+
+function persistLevelsState(state: Level[]) {
+  storage?.setItem(storage.key, JSON.stringify(state.map((level) => serializeLevelForPersistence(level))));
+}
 
 type scenarioSolutionUrls = {
   [key: string]: string;
@@ -30,7 +55,9 @@ const templateWithoutCode = {
   },
   week: "all",
   instructions: [],
+  eventSequence: { byScenarioId: {} },
   events: [],
+  interactionArtifacts: { byScenarioId: {} },
   help: {
     description: "",
     images: [],
@@ -39,13 +66,9 @@ const templateWithoutCode = {
   difficulty: "easy" as difficulty,
   points: 0,
   maxPoints: 100,
-  percentageTreshold: 90,
-  percentageFullPointsTreshold: 98,
-  pointsThresholds: [
-    { accuracy: 70, pointsPercent: 25 },
-    { accuracy: 85, pointsPercent: 60 },
-    { accuracy: 95, pointsPercent: 100 },
-  ],
+  percentageTreshold: 70,
+  percentageFullPointsTreshold: 95,
+  pointsThresholds: DEFAULT_POINTS_THRESHOLDS.map((t) => ({ ...t })),
   accuracy: 0,
   interactive: false,
   showModelPicture: false,
@@ -94,20 +117,28 @@ const levelsSlice = createSlice({
       activeGameId = gameId || null;
       activeMapName = mapName;
       activeMode = mode || "game";
+      const normalizedLevels = levels.map((level: Level) =>
+        normalizeLevelVariants(ensurePointsThresholdsOnLevel({
+          ...level,
+          eventSequence: normalizeEventSequence(level.eventSequence) ?? { byScenarioId: {} },
+          events: normalizeInteractionTriggers(level.events as never),
+          interactionArtifacts: normalizeInteractionArtifacts(level.interactionArtifacts) ?? { byScenarioId: {} },
+        }), activeMode === "creator" ? "creator" : "game"),
+      );
 
       if (activeMode === "game" && activeGameId) {
         // Gameplay code is owned by the websocket room state.
         // Clearing storage here prevents any creator-mode cache from leaking into gameplay.
         storage = null;
-        return levels;
+        return normalizedLevels;
       }
 
       // Scope cache by game ID so different games don't share stale level state
       const cacheKey = gameId ? `ui-designer-${mapName}-${gameId}` : `ui-designer-${mapName}`;
       storage = backendStorage(cacheKey);
       if (forceFresh) {
-        storage.setItem(storage.key, JSON.stringify(levels));
-        return levels;
+        storage.setItem(storage.key, JSON.stringify(normalizedLevels.map((level) => serializeLevelForPersistence(level))));
+        return normalizedLevels;
       }
       // Try to get from sessionStorage cache first
       const cached = storage.getItem(storage.key);
@@ -118,12 +149,17 @@ const levelsSlice = createSlice({
             // Sanitize: strip any identifier that isn't a valid UUID so old
             // short random strings (e.g. "w4zenm") don't block saving.
             const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-            const sanitized = cachedLevels.map((level: Level) => ({
-              ...level,
-              identifier: level.identifier && UUID_RE.test(level.identifier)
-                ? level.identifier
-                : undefined,
-            }));
+            const sanitized = cachedLevels.map((level: Level) =>
+              normalizeLevelVariants(ensurePointsThresholdsOnLevel({
+                ...level,
+                identifier: level.identifier && UUID_RE.test(level.identifier)
+                  ? level.identifier
+                  : undefined,
+                eventSequence: normalizeEventSequence(level.eventSequence) ?? { byScenarioId: {} },
+                events: normalizeInteractionTriggers(level.events as never),
+                interactionArtifacts: normalizeInteractionArtifacts(level.interactionArtifacts) ?? { byScenarioId: {} },
+              }), activeMode === "creator" ? "creator" : "game"),
+            );
             return sanitized;
           }
         } catch (e) {
@@ -131,8 +167,8 @@ const levelsSlice = createSlice({
         }
       }
       // No cached data — use fresh levels from backend
-      storage.setItem(storage.key, JSON.stringify(levels));
-      return levels;
+      storage.setItem(storage.key, JSON.stringify(normalizedLevels.map((level) => serializeLevelForPersistence(level))));
+      return normalizedLevels;
     },
 
     snapshotCreatorCodes(state) {
@@ -155,7 +191,7 @@ const levelsSlice = createSlice({
           level.code = { ...original.code };
         }
       });
-      storage?.setItem(storage.key, JSON.stringify(state));
+      persistLevelsState(state);
     },
     resetLevel(state, action) {
       const level = state[action.payload - 1];
@@ -174,7 +210,7 @@ const levelsSlice = createSlice({
 
       // level.timeData.startTime = new Date().getTime();
 
-      storage?.setItem(storage.key, JSON.stringify(state));
+      persistLevelsState(state);
     },
     updateAccuracy(state, action) {
       const { currentLevel, scenarioId, accuracy } = action.payload;
@@ -185,7 +221,7 @@ const levelsSlice = createSlice({
       );
       if (!scenario) return;
       scenario.accuracy = accuracy;
-      storage?.setItem(storage.key, JSON.stringify(state));
+      persistLevelsState(state);
     },
     sprinkleConfetti(state, action) {
       const level = state[action.payload - 1];
@@ -193,20 +229,20 @@ const levelsSlice = createSlice({
       if (level.confettiSprinkled) return;
       confetti({ particleCount: 100 });
       level.confettiSprinkled = true;
-      storage?.setItem(storage.key, JSON.stringify(state));
+      persistLevelsState(state);
     },
     completeLevel(state, action) {
       const level = state[action.payload - 1];
       if (!level) return;
       level.completed = "yes";
-      storage?.setItem(storage.key, JSON.stringify(state));
+      persistLevelsState(state);
     },
     updateLevelPoints(state, action) {
       const { levelId, points } = action.payload;
       const level = state[levelId - 1];
       if (!level) return;
       level.points = points;
-      storage?.setItem(storage.key, JSON.stringify(state));
+      persistLevelsState(state);
     },
     updatePoints(state, action) {
       console.log("STILL CALLING UPDATE-POINTS: DEPRECATED");
@@ -215,20 +251,20 @@ const levelsSlice = createSlice({
       const level = state[action.payload - 1];
       if (!level) return;
       level.showModelPicture = !level.showModelPicture;
-      storage?.setItem(storage.key, JSON.stringify(state));
+      persistLevelsState(state);
     },
     startLevelTimer(state, action) {
       const level = state[action.payload - 1];
       if (!level) return;
       level.timeData.startTime = new Date().getTime();
-      storage?.setItem(storage.key, JSON.stringify(state));
+      persistLevelsState(state);
     },
     startLevelTimerAt(state, action) {
       const { levelId, startTime } = action.payload as { levelId: number; startTime: number };
       const level = state[levelId - 1];
       if (!level) return;
       level.timeData.startTime = startTime;
-      storage?.setItem(storage.key, JSON.stringify(state));
+      persistLevelsState(state);
     },
     updateSolutionCode(state, action) {
       const { id, code } = action.payload;
@@ -242,7 +278,7 @@ const levelsSlice = createSlice({
         return;
       }
       level.solution = code;
-      storage?.setItem(storage.key, JSON.stringify(state));
+      persistLevelsState(state);
     },
 
     updateCode(state, action) {
@@ -290,41 +326,41 @@ const levelsSlice = createSlice({
       // //console.log("updateCode", code.html, code.css, code.js);
       // //console.log("level.code", code);
       level.code = code;
-      storage?.setItem(storage.key, JSON.stringify(state));
+      persistLevelsState(state);
     },
 
     toggleImageInteractivity(state, action) {
       const level = state[action.payload - 1];
       if (!level) return;
       level.interactive = !level.interactive;
-      storage?.setItem(storage.key, JSON.stringify(state));
+      persistLevelsState(state);
     },
     toggleShowScenarioModel(state, action) {
       const { levelId, scenarioId } = action.payload;
       const level = state[levelId - 1];
       if (!level) return;
       level.showScenarioModel = !level.showScenarioModel;
-      storage?.setItem(storage.key, JSON.stringify(state));
+      persistLevelsState(state);
     },
     toggleShowHotkeys(state, action) {
       const level = state[action.payload - 1];
       if (!level) return;
       level.showHotkeys = !level.showHotkeys;
-      storage?.setItem(storage.key, JSON.stringify(state));
+      persistLevelsState(state);
     },
     changeLevelDifficulty(state, action) {
       const { levelId, difficulty } = action.payload;
       const level = state[levelId - 1];
       if (!level) return;
       level.difficulty = difficulty;
-      storage?.setItem(storage.key, JSON.stringify(state));
+      persistLevelsState(state);
     },
     changeAccuracyTreshold(state, action) {
       const { levelId, text } = action.payload;
       const level = state[levelId - 1];
       if (!level) return;
       level.percentageTreshold = Number(text);
-      storage?.setItem(storage.key, JSON.stringify(state));
+      persistLevelsState(state);
     },
     updatePointsThresholds(state, action) {
       const { levelId, thresholds } = action.payload;
@@ -336,14 +372,14 @@ const levelsSlice = createSlice({
         level.percentageTreshold = sortedThresholds[0].accuracy;
         level.percentageFullPointsTreshold = sortedThresholds[sortedThresholds.length - 1].accuracy;
       }
-      storage?.setItem(storage.key, JSON.stringify(state));
+      persistLevelsState(state);
     },
     changeMaxPoints(state, action) {
       const { levelId, text } = action.payload;
       const level = state[levelId - 1];
       if (!level) return;
       level.maxPoints = Number(text);
-      storage?.setItem(storage.key, JSON.stringify(state));
+      persistLevelsState(state);
     },
     changeScenarioDimensions(state, action) {
       const { levelId, scenarioId, dimensionType, value, unit, width, height } = action.payload;
@@ -367,7 +403,7 @@ const levelsSlice = createSlice({
       if (unit !== undefined) {
         scenario.dimensions.unit = unit;
       }
-      storage?.setItem(storage.key, JSON.stringify(state));
+      persistLevelsState(state);
     },
 
     addNewScenario(state, action: { payload: number }) {
@@ -386,7 +422,7 @@ const levelsSlice = createSlice({
         level.scenarios = [];
       }
       level.scenarios.push(newScenario);
-      storage?.setItem(storage.key, JSON.stringify(state));
+      persistLevelsState(state);
     },
     removeScenario(
       state,
@@ -398,14 +434,14 @@ const levelsSlice = createSlice({
       level.scenarios = level.scenarios?.filter(
         (scenario) => scenario.scenarioId !== scenarioId
       );
-      storage?.setItem(storage.key, JSON.stringify(state));
+      persistLevelsState(state);
     },
     setGuideSections(state, action) {
       const { levelId, sections } = action.payload;
       const level = state[levelId - 1];
       if (!level) return;
       level.instructions = sections;
-      storage?.setItem(storage.key, JSON.stringify(state));
+      persistLevelsState(state);
     },
 
     updateGuideSectionItem(state, action) {
@@ -413,7 +449,7 @@ const levelsSlice = createSlice({
       const level = state[levelId - 1];
       if (!level) return;
       level.instructions[sectionIndex].content[itemIndex] = text;
-      storage?.setItem(storage.key, JSON.stringify(state));
+      persistLevelsState(state);
     },
 
     updateGuideSectionTitle(state, action) {
@@ -421,35 +457,35 @@ const levelsSlice = createSlice({
       const level = state[levelId - 1];
       if (!level) return;
       level.instructions[sectionIndex].title = text;
-      storage?.setItem(storage.key, JSON.stringify(state));
+      persistLevelsState(state);
     },
     removeGuideSection(state, action) {
       const { levelId, sectionIndex } = action.payload;
       const level = state[levelId - 1];
       if (!level) return;
       level.instructions.splice(sectionIndex, 1);
-      storage?.setItem(storage.key, JSON.stringify(state));
+      persistLevelsState(state);
     },
     removeGuideSectionItem(state, action) {
       const { levelId, sectionIndex, itemIndex } = action.payload;
       const level = state[levelId - 1];
       if (!level) return;
       level.instructions[sectionIndex].content.splice(itemIndex, 1);
-      storage?.setItem(storage.key, JSON.stringify(state));
+      persistLevelsState(state);
     },
     addGuideSection(state, action) {
       const { levelId, title, content } = action.payload;
       const level = state[levelId - 1];
       if (!level) return;
       level.instructions.push({ title, content });
-      storage?.setItem(storage.key, JSON.stringify(state));
+      persistLevelsState(state);
     },
     addGuideSectionItem(state, action) {
       const { levelId, sectionIndex, text } = action.payload;
       const level = state[levelId - 1];
       if (!level) return;
       level.instructions[sectionIndex].content.push(text);
-      storage?.setItem(storage.key, JSON.stringify(state));
+      persistLevelsState(state);
     },
     handleLocking(state, action) {
       //get HTML, CSS or JS from the action, also levelId
@@ -470,20 +506,144 @@ const levelsSlice = createSlice({
         level.lockJS = !level.lockJS;
       }
       //Save the state
-      storage?.setItem(storage.key, JSON.stringify(state));
+      persistLevelsState(state);
     },
     updateLevelName(state, action) {
       const { levelId, text } = action.payload;
       const level = state[levelId - 1];
       if (!level) return;
       level.name = text;
-      storage?.setItem(storage.key, JSON.stringify(state));
+      persistLevelsState(state);
+    },
+    updateLevelEvents(state, action) {
+      const { levelId, events } = action.payload as { levelId: number; events: Level["events"] };
+      const level = state[levelId - 1];
+      if (!level) return;
+      level.events = normalizeInteractionTriggers(events as never);
+      persistLevelsState(state);
+    },
+    clearEventSequenceForScenario(state, action) {
+      const { levelId, scenarioId } = action.payload as { levelId: number; scenarioId: string };
+      const level = state[levelId - 1];
+      if (!level || !scenarioId) return;
+      if (!level.eventSequence) {
+        level.eventSequence = { byScenarioId: {} };
+      }
+      level.eventSequence.byScenarioId[scenarioId] = [];
+      persistLevelsState(state);
+    },
+    appendEventSequenceStep(state, action) {
+      const {
+        levelId,
+        scenarioId,
+        step,
+      } = action.payload as { levelId: number; scenarioId: string; step: EventSequenceStep };
+      const level = state[levelId - 1];
+      if (!level || !scenarioId || !step?.id) return;
+      if (!level.eventSequence) {
+        level.eventSequence = { byScenarioId: {} };
+      }
+      const existing = level.eventSequence.byScenarioId[scenarioId] ?? [];
+      if (
+        existing.some((entry) =>
+          entry.id === step.id
+          || (
+            entry.eventType === step.eventType
+            && entry.selector === step.selector
+            && entry.postHash === step.postHash
+            && entry.keyFilter === step.keyFilter
+          )
+          || (
+            entry.postHash === step.postHash
+            && entry.label === step.label
+            && entry.instruction === step.instruction
+          ),
+        )
+      ) {
+        return;
+      }
+      const nextStep = {
+        ...step,
+        scenarioId,
+        order: existing.length,
+      };
+      level.eventSequence.byScenarioId[scenarioId] = [...existing, nextStep];
+      persistLevelsState(state);
+    },
+    updateEventSequenceStep(state, action) {
+      const {
+        levelId,
+        scenarioId,
+        stepId,
+        changes,
+      } = action.payload as {
+        levelId: number;
+        scenarioId: string;
+        stepId: string;
+        changes: Partial<Pick<EventSequenceStep, "label" | "instruction">>;
+      };
+      const level = state[levelId - 1];
+      const existing = level?.eventSequence?.byScenarioId?.[scenarioId];
+      if (!level || !existing?.length) return;
+      level.eventSequence!.byScenarioId[scenarioId] = existing.map((entry) => (
+        entry.id === stepId
+          ? {
+              ...entry,
+              label: typeof changes.label === "string" ? changes.label : entry.label,
+              instruction: typeof changes.instruction === "string" ? changes.instruction : entry.instruction,
+            }
+          : entry
+      ));
+      persistLevelsState(state);
+    },
+    removeEventSequenceStep(state, action) {
+      const { levelId, scenarioId, stepId } = action.payload as { levelId: number; scenarioId: string; stepId: string };
+      const level = state[levelId - 1];
+      const existing = level?.eventSequence?.byScenarioId?.[scenarioId];
+      if (!level || !existing) return;
+      level.eventSequence!.byScenarioId[scenarioId] = existing
+        .filter((entry) => entry.id !== stepId)
+        .map((entry, index) => ({ ...entry, order: index }));
+      persistLevelsState(state);
+    },
+    clearInteractionArtifacts(state, action) {
+      const { levelId } = action.payload as { levelId: number };
+      const level = state[levelId - 1];
+      if (!level) return;
+      level.interactionArtifacts = { byScenarioId: {} };
+      persistLevelsState(state);
+    },
+    recordVerifiedInteraction(state, action) {
+      const {
+        levelId,
+        scenarioId,
+        interaction,
+      } = action.payload as { levelId: number; scenarioId: string; interaction: VerifiedInteraction };
+      const level = state[levelId - 1];
+      if (!level || !scenarioId) return;
+      if (!level.interactionArtifacts) {
+        level.interactionArtifacts = { byScenarioId: {} };
+      }
+      const existing = level.interactionArtifacts.byScenarioId[scenarioId] ?? [];
+      if (existing.some((entry) => entry.id === interaction.id)) {
+        return;
+      }
+      level.interactionArtifacts.byScenarioId[scenarioId] = [...existing, interaction];
+      persistLevelsState(state);
     },
     addThisLevel(state, action) {
       const levelDetails = action.payload;
       const parsedLevelDetails = JSON.parse(levelDetails);
-      state.push({ ...parsedLevelDetails, ...templateWithoutCode });
-      storage?.setItem(storage.key, JSON.stringify(state));
+      state.push(
+        normalizeLevelVariants(ensurePointsThresholdsOnLevel({
+          ...parsedLevelDetails,
+          ...templateWithoutCode,
+          eventSequence: normalizeEventSequence(parsedLevelDetails.eventSequence) ?? { byScenarioId: {} },
+          events: normalizeInteractionTriggers(parsedLevelDetails.events),
+          interactionArtifacts: normalizeInteractionArtifacts(parsedLevelDetails.interactionArtifacts) ?? { byScenarioId: {} },
+        } as Level), activeMode === "creator" ? "creator" : "game"),
+      );
+      persistLevelsState(state);
     },
     addNewLevel(state) {
       const newLevel: Level = {
@@ -500,8 +660,8 @@ const levelsSlice = createSlice({
         },
         ...templateWithoutCode,
       };
-      state.push(newLevel);
-      storage?.setItem(storage.key, JSON.stringify(state));
+      state.push(normalizeLevelVariants(newLevel, activeMode === "creator" ? "creator" : "game"));
+      persistLevelsState(state);
     },
     removeLevel(state, action) {
       const levelId = action.payload;
@@ -509,7 +669,7 @@ const levelsSlice = createSlice({
       if (!level) return;
       state.splice(levelId - 1, 1);
 
-      storage?.setItem(storage.key, JSON.stringify(state));
+      persistLevelsState(state);
     },
     updateLevelColors(state, action) {
       //receives an array of colors
@@ -528,13 +688,38 @@ const levelsSlice = createSlice({
       } else {
         level.buildingBlocks = { colors };
       }
+      persistLevelsState(state);
     },
     updateLevelIdentifier(state, action) {
       const { levelId, identifier } = action.payload;
       const level = state[levelId - 1];
       if (!level) return;
       level.identifier = identifier;
-      storage?.setItem(storage.key, JSON.stringify(state));
+      persistLevelsState(state);
+    },
+    addLevelVariant(state, action) {
+      const { levelId } = action.payload as { levelId: number };
+      const level = state[levelId - 1];
+      if (!level) return;
+      normalizeLevelVariants(level, "creator");
+      addLevelVariantFromCurrentView(level);
+      persistLevelsState(state);
+    },
+    removeLevelVariantById(state, action) {
+      const { levelId, variantId } = action.payload as { levelId: number; variantId: string };
+      const level = state[levelId - 1];
+      if (!level) return;
+      normalizeLevelVariants(level, "creator");
+      removeLevelVariant(level, variantId);
+      persistLevelsState(state);
+    },
+    setActiveLevelVariant(state, action) {
+      const { levelId, variantId } = action.payload as { levelId: number; variantId: string };
+      const level = state[levelId - 1];
+      if (!level) return;
+      normalizeLevelVariants(level, "creator");
+      setLevelVariantView(level, variantId || BASE_LEVEL_VARIANT_ID);
+      persistLevelsState(state);
     },
     mergeRemoteLevelMeta(
       state,
@@ -545,8 +730,28 @@ const levelsSlice = createSlice({
       if (!level || !fields) return;
       for (const [key, value] of Object.entries(fields)) {
         if (key === "code" || key === "versions") continue;
+        if (key === "events") {
+          (level as Record<string, unknown>)[key] = normalizeInteractionTriggers(value as never);
+          continue;
+        }
+        if (key === "eventSequence") {
+          (level as Record<string, unknown>)[key] = normalizeEventSequence(value as never) ?? { byScenarioId: {} };
+          continue;
+        }
+        if (key === "interactionArtifacts") {
+          (level as Record<string, unknown>)[key] = normalizeInteractionArtifacts(value as never) ?? { byScenarioId: {} };
+          continue;
+        }
+        if (key === "variants") {
+          (level as Record<string, unknown>)[key] = normalizeLevelVariants({
+            ...level,
+            variants: value as Level["variants"],
+          } as Level, "creator").variants;
+          continue;
+        }
         (level as Record<string, unknown>)[key] = value;
       }
+      applyPointsThresholdsInPlace(level);
     },
   },
 });
@@ -583,11 +788,21 @@ export const {
   addGuideSectionItem,
   handleLocking,
   updateLevelName,
+  updateLevelEvents,
+  clearEventSequenceForScenario,
+  appendEventSequenceStep,
+  updateEventSequenceStep,
+  removeEventSequenceStep,
+  clearInteractionArtifacts,
+  recordVerifiedInteraction,
   addThisLevel,
   addNewLevel,
   removeLevel,
   updateLevelColors,
   updateLevelIdentifier,
+  addLevelVariant,
+  removeLevelVariantById,
+  setActiveLevelVariant,
   setGuideSections,
   mergeRemoteLevelMeta,
 } = levelsSlice.actions;

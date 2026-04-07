@@ -100,7 +100,7 @@ export const sendScoreToParentFrame = (): AppThunk => (dispatch, getState) => {
     "*"
   );
 
-  const levelsAndCode = {} as Record<string, {}>;
+  const levelsAndCode = {} as Record<string, Record<string, unknown>>;
   // go through all levels and get the code, also tell the parent frame if the code is locked
   for (const level of levels) {
     const title = level.name;
@@ -126,6 +126,14 @@ export const sendScoreToParentFrame = (): AppThunk => (dispatch, getState) => {
     return;
   }
 
+  const shouldUseCompactGameMenu =
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(max-width: 639px)").matches;
+  const finishInstruction = shouldUseCompactGameMenu
+    ? "Open the Game menu and click Finish game to submit your work!"
+    : "Click Finish game to submit your work!";
+
   if (levelsWithPoints === 0) {
     toast.error(
       "Score " +
@@ -142,7 +150,8 @@ export const sendScoreToParentFrame = (): AppThunk => (dispatch, getState) => {
         allPoints +
         " / " +
         maxPoints +
-        " saved. You have completed all levels. Remember to submit your work!",
+        " saved. You have completed all levels. " +
+        finishInstruction,
     );
     return;
   }

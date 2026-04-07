@@ -2,10 +2,11 @@
 
 import Editors from "./Editors/Editors";
 import { ArtBoards } from "./ArtBoards/ArtBoards";
+import { DrawboardNavbarCaptureProvider } from "./ArtBoards/DrawboardNavbarCaptureContext";
 import { LevelUpdater } from "./General/LevelUpdater";
 import { GameContainer } from "./General/GameContainer";
 import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { updateWeek, setAllLevels } from "@/store/slices/levels.slice";
 import { Footer } from "./Footer/Footer";
@@ -15,6 +16,7 @@ import { setCurrentLevel } from "@/store/slices/currentLevel.slice";
 import { Level } from "@/types";
 import { setSolutions } from "@/store/slices/solutions.slice";
 import { resetSolutionUrls } from "@/store/slices/solutionUrls.slice";
+import { resetDrawingUrls } from "@/store/slices/drawingUrls.slice";
 import { getAllLevels } from "@/lib/utils/network/levels";
 import { getMapLevels } from "@/lib/utils/network/maps";
 import { initializePointsFromLevelsStateThunk } from "@/store/actions/score.actions";
@@ -23,14 +25,27 @@ import { ProgressionSync } from "./General/ProgressionSync";
 import { ProgressPersistence } from "./General/ProgressPersistence";
 import { LevelMetaSync } from "./General/LevelMetaSync";
 import { GameplayTelemetryTracker } from "./General/GameplayTelemetryTracker";
+import { GameboardTourController } from "./General/GameboardTourController";
 import { useGameStore } from "./default/games";
 import { useSession } from "next-auth/react";
 import type { Mode } from "@/store/slices/options.slice";
 import { useOptionalCollaboration } from "@/lib/collaboration/CollaborationProvider";
 import { apiUrl, stripBasePath } from "@/lib/apiUrl";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
+import { useDefaultLayout } from "react-resizable-panels";
+import type { PanelImperativeHandle } from "react-resizable-panels";
+import type { GroupImperativeHandle } from "react-resizable-panels";
+import { CreatorAiChatDrawer } from "@/components/creator-ai/CreatorAiChatDrawer";
+
+import { applyAssignedVariantToLevel, getLevelVariantAssignmentKey, normalizeLevelVariants } from "@/lib/levels/variants";
 
 export const allLevels: Level[] = [];
 type SolutionsByLevelName = Record<string, { html: string; css: string; js: string }>;
+const MIN_EDITOR_PANE_WIDTH = 420;
+const ARTBOARD_PANE_CHROME_WIDTH = 56;
+const HORIZONTAL_LAYOUT_ID = "game-layout-horizontal";
+const VERTICAL_LAYOUT_ID = "game-layout-vertical";
+const STABLE_LAYOUT_GROUP_ID = "game-layout-stable";
 
 function normalizeRoomStateLevels(
   levels: Array<Record<string, unknown>>,
@@ -56,18 +71,42 @@ function normalizeRoomStateLevels(
   });
 }
 
+function applyGameplayVariantAssignments(
+  sourceLevels: Level[],
+  progressData: Record<string, unknown> | null | undefined,
+): Level[] {
+  const assignments =
+    progressData?.variantAssignments && typeof progressData.variantAssignments === "object" && !Array.isArray(progressData.variantAssignments)
+      ? progressData.variantAssignments as Record<string, string>
+      : {};
+
+  return sourceLevels.map((level, index) => {
+    const assignmentKey = getLevelVariantAssignmentKey(level, index);
+    return applyAssignedVariantToLevel(level, assignments[assignmentKey]);
+  });
+}
+
 function App() {
   const levels = useAppSelector((state) => state.levels);
+  const currentLevel = useAppSelector((state) => state.currentLevel.currentLevel);
   const dispatch = useAppDispatch();
   const options = useAppSelector((state) => state.options);
   const [isLoading, setIsLoading] = useState(true);
-  const currentGame = useGameStore((state) => state.getCurrentGame());
+  const currentGame = useGameStore((state) => {
+    const { currentGameId, games } = state;
+    if (!currentGameId) return null;
+    return games.find((g) => g.id === currentGameId) ?? null;
+  });
   const { data: session } = useSession();
   const collaboration = useOptionalCollaboration();
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const normalizedPathname = stripBasePath(pathname);
+  const canEditCurrentGame = Boolean(currentGame?.canEdit ?? currentGame?.isOwner);
+  /** Sidebar host for creator workbench only; game route editors use navbar menus instead. */
+  const showEditorWorkbenchSidebar =
+    canEditCurrentGame && normalizedPathname.startsWith("/creator/");
   const params = useParams<{ gameId?: string }>();
   const mode = searchParams.get('mode');
   const routeGameIdParam = params?.gameId;
@@ -77,9 +116,141 @@ function App() {
   const lastModeRef = useRef<string | null>(null);
   const lastRoomIdRef = useRef<string | null>(null);
   const lastRoomStateSignatureRef = useRef<string | null>(null);
+  const restoredRouteProgressScopeRef = useRef<string | null>(null);
+  const contentRowRef = useRef<HTMLDivElement | null>(null);
+  const editorPanelRef = useRef<PanelImperativeHandle | null>(null);
+  const panelGroupRef = useRef<GroupImperativeHandle | null>(null);
+  const [contentRowWidth, setContentRowWidth] = useState(0);
+  const [isEditorCollapsed, setIsEditorCollapsed] = useState(false);
   const setIsLoadingAsync = (value: boolean) => {
     queueMicrotask(() => setIsLoading(value));
   };
+  const isRouteWithProgress = normalizedPathname.startsWith("/creator/") || normalizedPathname.startsWith("/game/");
+  const maxScenarioWidth = useMemo(() => {
+    const activeLevel = levels[currentLevel - 1];
+    const scenarios = activeLevel?.scenarios ?? [];
+
+    if (scenarios.length === 0) {
+      return 0;
+    }
+
+    return scenarios.reduce(
+      (maxWidth, scenario) => Math.max(maxWidth, scenario.dimensions.width),
+      0
+    );
+  }, [currentLevel, levels]);
+  const shouldStackGameLayout =
+    contentRowWidth > 0
+      ? contentRowWidth < maxScenarioWidth + ARTBOARD_PANE_CHROME_WIDTH + MIN_EDITOR_PANE_WIDTH
+      : false;
+  const groupOrientation = shouldStackGameLayout ? "vertical" : "horizontal";
+  const horizontalLayout = useDefaultLayout({
+    id: HORIZONTAL_LAYOUT_ID,
+    panelIds: ["artboards", "editor"],
+  });
+  const verticalLayout = useDefaultLayout({
+    id: VERTICAL_LAYOUT_ID,
+    panelIds: ["artboards", "editor"],
+  });
+  const activeLayout = shouldStackGameLayout ? verticalLayout : horizontalLayout;
+  const activeLayoutId = shouldStackGameLayout ? VERTICAL_LAYOUT_ID : HORIZONTAL_LAYOUT_ID;
+
+  useEffect(() => {
+    restoredRouteProgressScopeRef.current = null;
+  }, [routeGameId]);
+
+  useEffect(() => {
+    if (!isRouteWithProgress || !routeGameId || levels.length === 0) {
+      return;
+    }
+
+    if (restoredRouteProgressScopeRef.current === routeGameId) {
+      return;
+    }
+
+    const savedLevel = Number(searchParams.get('level'));
+
+    restoredRouteProgressScopeRef.current = routeGameId;
+
+    if (!Number.isFinite(savedLevel) || savedLevel < 1) {
+      return;
+    }
+
+    const normalizedLevel = Math.min(Math.max(1, savedLevel), levels.length);
+    if (normalizedLevel !== currentLevel) {
+      dispatch(setCurrentLevel(normalizedLevel));
+    }
+  }, [currentLevel, dispatch, isRouteWithProgress, levels.length, routeGameId, searchParams]);
+
+  useEffect(() => {
+    if (!isRouteWithProgress || !routeGameId || levels.length === 0) {
+      return;
+    }
+
+    if (restoredRouteProgressScopeRef.current !== routeGameId) {
+      return;
+    }
+
+    const clampedLevel = Math.min(Math.max(1, currentLevel), levels.length);
+    if (searchParams.get('level') === String(clampedLevel)) {
+      return;
+    }
+
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('level', String(clampedLevel));
+    router.replace(apiUrl(`${normalizedPathname}?${params.toString()}`));
+  }, [currentLevel, isRouteWithProgress, levels.length, normalizedPathname, routeGameId, router, searchParams]);
+
+  useEffect(() => {
+    const nextLayout = activeLayout.defaultLayout;
+    if (!panelGroupRef.current || !nextLayout) {
+      return;
+    }
+
+    const currentLayout = panelGroupRef.current.getLayout();
+    const currentArtboards = currentLayout.artboards;
+    const currentEditor = currentLayout.editor;
+    if (
+      typeof currentArtboards === "number"
+      && typeof currentEditor === "number"
+      && Math.abs(currentArtboards - nextLayout.artboards) < 0.001
+      && Math.abs(currentEditor - nextLayout.editor) < 0.001
+    ) {
+      return;
+    }
+
+    panelGroupRef.current.setLayout(nextLayout);
+  }, [activeLayout.defaultLayout, activeLayoutId]);
+
+  useEffect(() => {
+    const target = contentRowRef.current;
+    if (!target || typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    const updateWidth = () => {
+      setContentRowWidth(target.clientWidth);
+    };
+
+    updateWidth();
+
+    const observer = new ResizeObserver(() => {
+      updateWidth();
+    });
+
+    observer.observe(target);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [
+    isLoading,
+    levels.length,
+    collaboration?.roomId,
+    collaboration?.codeSyncReady,
+    collaboration?.initialRoomState,
+    collaboration?.getYCodeSnapshot,
+  ]);
 
   useEffect(() => {
     hasFetchedRef.current = false;
@@ -186,7 +357,19 @@ function App() {
       let solutions: SolutionsByLevelName = {};
       try {
         let fetchedLevels: Level[] = levelsSnapshot;
-        let nextLevels: Level[] = levelsSnapshot;
+        let nextLevels: Level[] = fetchedLevels;
+
+        if (!isCreator) {
+          const gameProgressData =
+            currentGame?.progressData && typeof currentGame.progressData === "object"
+              ? currentGame.progressData
+              : null;
+          fetchedLevels = applyGameplayVariantAssignments(fetchedLevels, gameProgressData);
+          nextLevels = fetchedLevels;
+        } else {
+          fetchedLevels = fetchedLevels.map((level) => normalizeLevelVariants(level, "creator"));
+          nextLevels = fetchedLevels;
+        }
 
         solutions = nextLevels.reduce((acc, level) => {
           acc[level.name] = {
@@ -221,12 +404,19 @@ function App() {
             week: mapName,
             percentageTreshold: 70,
             percentageFullPointsTreshold: 95,
+            pointsThresholds: [
+              { accuracy: 70, pointsPercent: 25 },
+              { accuracy: 85, pointsPercent: 60 },
+              { accuracy: 95, pointsPercent: 100 },
+            ],
             difficulty: "easy",
             instructions: [],
             question_and_answer: { question: "", answer: "" },
             help: { description: "Start coding!", images: [], usefullCSSProperties: [] },
             timeData: { startTime: 0, pointAndTime: { 0: "0:0", 1: "0:0", 2: "0:0", 3: "0:0", 4: "0:0", 5: "0:0" } },
+            eventSequence: { byScenarioId: {} },
             events: [],
+            interactionArtifacts: { byScenarioId: {} },
             interactive: false,
             showScenarioModel: true,
             showHotkeys: false,
@@ -240,7 +430,8 @@ function App() {
             confettiSprinkled: false,
           };
           fetchedLevels = [emptyLevel];
-          nextLevels = [emptyLevel];
+          nextLevels = [normalizeLevelVariants(emptyLevel, isCreator ? "creator" : "game")];
+          fetchedLevels = nextLevels;
           solutions[emptyLevel.name] = { html: "", css: "", js: "" };
           console.log("Empty level created:", emptyLevel);
         }
@@ -250,7 +441,30 @@ function App() {
         dispatch(updateWeek({ levels: nextLevels, mapName, gameId: currentGame?.id, mode: currentMode, forceFresh: modeChanged }));
         dispatch(setSolutions(solutions));
         dispatch(resetSolutionUrls());
+        dispatch(resetDrawingUrls());
         setAllLevels(fetchedLevels);
+        if (!isCreator && collaboration?.getYText) {
+          nextLevels.forEach((level, levelIndex) => {
+            (["html", "css", "js"] as const).forEach((editorType) => {
+              const yText = collaboration.getYText?.(editorType, levelIndex);
+              const nextContent = level.code[editorType] ?? "";
+              if (!yText || yText.toString() === nextContent) {
+                return;
+              }
+              const applyChange = () => {
+                yText.delete(0, yText.length);
+                if (nextContent.length > 0) {
+                  yText.insert(0, nextContent);
+                }
+              };
+              if (yText.doc) {
+                yText.doc.transact(applyChange, "variant-assignment");
+              } else {
+                applyChange();
+              }
+            });
+          });
+        }
         await dispatch(initializePointsFromLevelsStateThunk());
 
         // Restore saved best points per level from game instance (after points slice is initialized)
@@ -262,8 +476,12 @@ function App() {
           dispatch(mergeSavedPoints(pointsByLevel));
         }
 
-        // Reset to level 1 when loading new levels
-        dispatch(setCurrentLevel(1));
+        const savedLevel = Number(new URLSearchParams(window.location.search).get('level'));
+        const nextCurrentLevel = Number.isFinite(savedLevel) && savedLevel >= 1
+          ? Math.min(Math.max(1, savedLevel), Math.max(1, nextLevels.length))
+          : 1;
+
+        dispatch(setCurrentLevel(nextCurrentLevel));
 
         console.log("All dispatches complete, setting isLoading to false");
         // Set loading false immediately after dispatches (they're synchronous)
@@ -321,6 +539,7 @@ function App() {
     collaboration?.roomId,
     collaboration?.codeSyncReady,
     collaboration?.initialRoomState,
+    collaboration?.getYCodeSnapshot,
   ]);
 
   const isWaitingForSharedCode =
@@ -331,6 +550,22 @@ function App() {
       !collaboration.codeSyncReady ||
       !collaboration.initialRoomState
     );
+
+  const expandEditorPanel = () => {
+    editorPanelRef.current?.expand();
+  };
+
+  const collapseEditorPanel = () => {
+    editorPanelRef.current?.collapse();
+  };
+
+  const toggleEditorPanel = () => {
+    if (isEditorCollapsed) {
+      expandEditorPanel();
+    } else {
+      collapseEditorPanel();
+    }
+  };
 
   // Request enough height from parent LTI iframe to prevent scrollbars
   useEffect(() => {
@@ -352,9 +587,9 @@ function App() {
       <ProgressPersistence />
       <LevelMetaSync />
       <GameplayTelemetryTracker />
-      <article id="App" className="h-full flex flex-col justify-between">
+      <article id="App" className="flex h-full min-h-0 flex-col justify-start">
         <LevelUpdater />
-        <div className="flex-1">
+        <div className="flex-1 min-h-0">
           <GameContainer>
             {isLoading || isWaitingForSharedCode ? (
               <div className="flex items-center justify-center h-full">
@@ -366,18 +601,64 @@ function App() {
                 </div>
               </div>
             ) : levels.length > 0 ? (
-              <>
+              <DrawboardNavbarCaptureProvider>
+                <GameboardTourController />
                 <Navbar />
                 <div
-                  className="flex flex-row flex-wrap justify-center items-stretch w-full flex-1 overflow-hidden"
+                  ref={contentRowRef}
+                  className="relative flex w-full flex-1 items-stretch overflow-hidden"
                 >
-                  <div className="flex-1 flex items-center justify-center">
-                    <ArtBoards />
+                  {showEditorWorkbenchSidebar ? (
+                    <div
+                      id="creator-workbench-sidebar-root"
+                      className="flex h-full max-h-full min-h-0 flex-none shrink-0 flex-col overflow-hidden"
+                    />
+                  ) : null}
+                  <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+                    <ResizablePanelGroup
+                      id={STABLE_LAYOUT_GROUP_ID}
+                      groupRef={panelGroupRef}
+                      orientation={groupOrientation}
+                      defaultLayout={activeLayout.defaultLayout}
+                      onLayoutChanged={activeLayout.onLayoutChanged}
+                      className="h-full w-full"
+                    >
+                    <ResizablePanel
+                      id="artboards"
+                      defaultSize={shouldStackGameLayout ? 56 : 60}
+                      minSize={shouldStackGameLayout ? 28 : 38}
+                      className="min-h-0 min-w-0"
+                    >
+                      <div className="flex h-full w-full min-h-0 min-w-0 items-center justify-center overflow-hidden">
+                        <ArtBoards />
+                      </div>
+                    </ResizablePanel>
+                    <ResizableHandle
+                      withHandle
+                      groupOrientation={groupOrientation}
+                      isPanelCollapsed={isEditorCollapsed}
+                      onTogglePanel={toggleEditorPanel}
+                    />
+                    <ResizablePanel
+                      id="editor"
+                      panelRef={editorPanelRef}
+                      collapsible
+                      collapsedSize={0}
+                      minSize={shouldStackGameLayout ? 20 : 24}
+                      defaultSize={shouldStackGameLayout ? 44 : 40}
+                      onResize={(panelSize) => setIsEditorCollapsed(panelSize.asPercentage === 0)}
+                      className="min-h-0 min-w-0"
+                    >
+                      <div className="flex h-full w-full min-h-0 min-w-0 overflow-hidden">
+                        <Editors />
+                      </div>
+                    </ResizablePanel>
+                  </ResizablePanelGroup>
                   </div>
-                  <Editors />
                 </div>
                 <Footer />
-              </>
+                <CreatorAiChatDrawer />
+              </DrawboardNavbarCaptureProvider>
             ) : null}
           </GameContainer>
         </div>

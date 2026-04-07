@@ -7,9 +7,11 @@ import "./Spinner.css";
 type SpinnerProps = {
   height: number;
   width: number;
+  /** Shown under the spinner; defaults to a generic message. */
+  message?: string;
 };
 
-export const Spinner = ({ height, width }: SpinnerProps): React.ReactNode => {
+export const Spinner = ({ height, width, message = "Loading…" }: SpinnerProps): React.ReactNode => {
   return (
     <div
       className="flex flex-col justify-center items-center"
@@ -30,7 +32,7 @@ export const Spinner = ({ height, width }: SpinnerProps): React.ReactNode => {
         <circle className="path" fill="none" cx="33" cy="33" r="30" />
       </svg>
       <h6 className="text-lg font-semibold" style={{ color: mainColor }}>
-        Loading solution image...
+        {message}
       </h6>
       <p className="text-base text-center" style={{ color: mainColor }}>
         (If this takes too long, please refresh the page. This is a known issue

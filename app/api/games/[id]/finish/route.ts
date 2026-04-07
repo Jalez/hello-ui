@@ -124,9 +124,25 @@ export async function POST(
           },
         }
       : {}),
-    finishedAt: finishedAt.toISOString(),
-    finalScore: { points, maxPoints },
   };
+  if (mode === "group") {
+    const existingUserFinishStates =
+      existing.userFinishStates && typeof existing.userFinishStates === "object" && !Array.isArray(existing.userFinishStates)
+        ? existing.userFinishStates as Record<string, unknown>
+        : {};
+    progressData.userFinishStates = {
+      ...existingUserFinishStates,
+      [actorUserId]: {
+        finishedAt: finishedAt.toISOString(),
+        finalScore: { points, maxPoints },
+      },
+    };
+    delete progressData.finishedAt;
+    delete progressData.finalScore;
+  } else {
+    progressData.finishedAt = finishedAt.toISOString();
+    progressData.finalScore = { points, maxPoints };
+  }
   if (body.pointsByLevel && typeof body.pointsByLevel === "object" && !Array.isArray(body.pointsByLevel)) {
     progressData.pointsByLevel = body.pointsByLevel;
   }

@@ -1,7 +1,7 @@
 FROM node:20-bullseye
 WORKDIR /app
 
-# Install only pg for the init script
+# SQL bootstrap only. Versioned schema changes are applied by `pnpm db:migrate` from the app image (see docker-up.sh).
 RUN npm install --no-save pg dotenv
 
 COPY scripts/sql/ ./scripts/sql/

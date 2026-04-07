@@ -60,7 +60,7 @@ export function LevelFooterMenu() {
   const levelPoints = points.levels[level.name]?.points ?? level.points;
   const levelMaxPoints = level.maxPoints;
   const levelAccuracy = points.levels[level.name]?.accuracy ?? 0;
-  const sortedThresholds = [...(level.pointsThresholds ?? [])].sort((a, b) => a.accuracy - b.accuracy);
+  const sortedThresholds = [...level.pointsThresholds].sort((a, b) => a.accuracy - b.accuracy);
   const reachedThresholdCount = sortedThresholds.filter((threshold) => levelAccuracy >= threshold.accuracy).length;
   const nextThreshold = sortedThresholds.find((threshold) => levelAccuracy < threshold.accuracy) ?? null;
   const nextThresholdLabel = nextThreshold
@@ -111,23 +111,22 @@ export function LevelFooterMenu() {
               <LevelDifficultySkulls iconClassName="h-4 w-4" />
             </CompactMenuItem>
             {hasAccuracy && (
-              <CompactMenuItem label="Accuracy">
+              <CompactMenuItem label="Mean accuracy">
                 <div className="text-sm font-semibold text-foreground">
                   {levelAccuracy}%
                 </div>
               </CompactMenuItem>
             )}
+            <CompactMenuItem label="Next Threshold">
+              <div className="text-sm font-semibold text-foreground">
+                {nextThresholdLabel}
+              </div>
+            </CompactMenuItem>
             {isCreator ? (
               <div className="rounded-md bg-background/80 px-3 py-2 text-center">
                 <ThresholdsEditor />
               </div>
-            ) : (
-              <CompactMenuItem label="Next Threshold">
-                <div className="text-sm font-semibold text-foreground">
-                  {nextThresholdLabel}
-                </div>
-              </CompactMenuItem>
-            )}
+            ) : null}
             {level.buildingBlocks?.colors?.length ? (
               <CompactMenuItem label="Colors">
                 <div className="flex max-w-full flex-row flex-wrap items-center justify-center gap-1.5">
@@ -242,6 +241,7 @@ const Info = () => {
   const isCreator = options.creator;
   const hasAccuracy = Boolean(points.levels[level.name]);
 
+  console.log("CREATOR", isCreator);
   return (
     <InfoBoard>
       <div className="flex w-full flex-nowrap items-center justify-around">
@@ -250,12 +250,13 @@ const Info = () => {
         {!isCreator && <InfoTime />}
         {hasAccuracy && (
           <InfoBox>
-            <PoppingTitle topTitle="Accuracy">
+            <PoppingTitle topTitle="Mean accuracy">
               <InfoText>{points.levels[level.name].accuracy}%</InfoText>
             </PoppingTitle>
           </InfoBox>
         )}
-        {isCreator ? <ThresholdsEditor /> : <NextThreshold />}
+        <NextThreshold />
+        {isCreator && <ThresholdsEditor />}
         {isCreator && (
           <InfoBox>
             <Difficulty />

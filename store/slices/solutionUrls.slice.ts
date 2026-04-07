@@ -1,4 +1,5 @@
 import { createSlice } from "@reduxjs/toolkit";
+import { eventSequenceSolutionStorageKey } from "@/lib/drawboard/eventSequenceSolutionUrls";
 import { obfuscate } from "@/lib/utils/obfuscators/obfuscate";
 const name = "solutionUrls";
 
@@ -7,7 +8,7 @@ interface solutionUrlsState {
 }
 const storage = obfuscate(name);
 
-let noState = {};
+const noState = {};
 
 let initialState: solutionUrlsState = {};
 
@@ -21,16 +22,33 @@ const solutionUrlsSlice = createSlice({
   name,
   initialState,
   reducers: {
-    addSolutionUrl(state, action) {
-      const { solutionUrl, scenarioId } = action.payload;
-      // Skip if URL hasn't changed — prevents unnecessary re-renders
-      if (state[scenarioId] === solutionUrl) return;
-      state[scenarioId] = solutionUrl;
+    addSolutionUrl(
+      state,
+      action: {
+        payload: {
+          solutionUrl: string;
+          scenarioId: string;
+          /** Game + event sequence: store per timeline step so the iframe can unmount after each capture. */
+          eventSequenceStepId?: string | null;
+        };
+      },
+    ) {
+      const { solutionUrl, scenarioId, eventSequenceStepId } = action.payload;
+      const key =
+        eventSequenceStepId && eventSequenceStepId.length > 0
+          ? eventSequenceSolutionStorageKey(scenarioId, eventSequenceStepId)
+          : scenarioId;
+      if (state[key] === solutionUrl) {
+        return;
+      }
+      state[key] = solutionUrl;
       storage.setItem(storage.key, JSON.stringify(state));
     },
     resetSolutionUrls(state) {
+      Object.keys(state).forEach((k) => {
+        delete state[k];
+      });
       storage.setItem(storage.key, JSON.stringify(noState));
-      return noState;
     },
   },
 });

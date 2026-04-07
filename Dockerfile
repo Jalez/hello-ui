@@ -6,6 +6,7 @@ WORKDIR /app
 
 # Force ASCII output — old docker-compose chokes on Unicode progress bars
 ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 # Install pnpm
 RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
@@ -13,6 +14,7 @@ RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
 # Install dependencies
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile --reporter=append-only
+RUN npx playwright install --with-deps chromium
 
 # Copy source and build
 COPY . .
@@ -22,11 +24,18 @@ ARG NEXT_PUBLIC_APP_URL=http://localhost:3000
 ARG NEXT_PUBLIC_WEBSOCKET_URL=ws://localhost:3100
 ARG NEXT_PUBLIC_ASSET_PREFIX=
 ARG NEXT_PUBLIC_BASE_PATH=
+# Client bundle: must be set at build time (runtime .env alone does not change NEXT_PUBLIC_* in the browser).
+ARG NEXT_PUBLIC_DRAWBOARD_CAPTURE_MODE=browser
+ARG NEXT_PUBLIC_REMOTE_SYNC_DEBOUNCE_MS=500
+ARG NEXT_PUBLIC_MANUAL_DRAWBOARD_CAPTURE=
 ENV NEXT_PUBLIC_DRAWBOARD_URL=$NEXT_PUBLIC_DRAWBOARD_URL
 ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
 ENV NEXT_PUBLIC_WEBSOCKET_URL=$NEXT_PUBLIC_WEBSOCKET_URL
 ENV NEXT_PUBLIC_ASSET_PREFIX=$NEXT_PUBLIC_ASSET_PREFIX
 ENV NEXT_PUBLIC_BASE_PATH=$NEXT_PUBLIC_BASE_PATH
+ENV NEXT_PUBLIC_DRAWBOARD_CAPTURE_MODE=$NEXT_PUBLIC_DRAWBOARD_CAPTURE_MODE
+ENV NEXT_PUBLIC_REMOTE_SYNC_DEBOUNCE_MS=$NEXT_PUBLIC_REMOTE_SYNC_DEBOUNCE_MS
+ENV NEXT_PUBLIC_MANUAL_DRAWBOARD_CAPTURE=$NEXT_PUBLIC_MANUAL_DRAWBOARD_CAPTURE
 RUN pnpm build
 
 # Next.js standalone needs static files and public dir alongside server.js

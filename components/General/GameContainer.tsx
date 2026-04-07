@@ -7,7 +7,7 @@ interface GameContainerProps {
 export const GameContainer = ({ children }: GameContainerProps) => {
   return (
     <div
-      className="w-full relative flex-1 box-border border-none flex flex-col h-full"
+      className="relative flex h-full min-h-0 w-full flex-1 flex-col border-none box-border"
     >
       {children}
     </div>

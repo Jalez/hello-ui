@@ -48,7 +48,7 @@ const PoppingTitle = ({
         {displayTitle && (
           <TooltipContent
             side={displaySide}
-            className="bg-secondary text-secondary-foreground"
+            className="max-w-[240px] whitespace-pre-line bg-secondary text-secondary-foreground text-xs leading-snug"
             style={{
               backgroundColor: 'hsl(var(--secondary))',
               color: 'hsl(var(--secondary-foreground))',

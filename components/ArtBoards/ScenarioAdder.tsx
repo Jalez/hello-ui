@@ -7,7 +7,11 @@ import { addNewScenario } from "@/store/slices/levels.slice";
 import PoppingTitle from "@/components/General/PoppingTitle";
 import { useLevelMetaSync } from "@/lib/collaboration/hooks/useLevelMetaSync";
 
-const ScenarioAdder = () => {
+type ScenarioAdderProps = {
+  className?: string;
+};
+
+const ScenarioAdder = ({ className }: ScenarioAdderProps) => {
   const dispatch = useAppDispatch();
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const options = useAppSelector((state) => state.options);
@@ -27,6 +31,7 @@ const ScenarioAdder = () => {
         onClick={handleAddNewScenario}
         variant="ghost"
         size="icon"
+        className={className}
       >
         <ImagePlus className="h-5 w-5" />
       </Button>

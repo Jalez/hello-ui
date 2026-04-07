@@ -7,6 +7,7 @@ import scoreReducer from "./slices/score.slice";
 import roomReducer from "./slices/room.slice";
 import optionsReducer from "./slices/options.slice";
 import differenceUrlsReducer from "./slices/differenceUrls.slice";
+import drawingUrlsReducer from "./slices/drawingUrls.slice";
 import solutionUrlsReducer from "./slices/solutionUrls.slice";
 import solutionsReducer from "./slices/solutions.slice";
 import pointsReducer from "./slices/points.slice";
@@ -34,6 +35,7 @@ export const store = configureStore({
     room: roomReducer,
     options: optionsReducer,
     differenceUrls: differenceUrlsReducer,
+    drawingUrls: drawingUrlsReducer,
     solutionUrls: solutionUrlsReducer,
     solutions: solutionsReducer,
     points: pointsReducer,

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { apiUrl, stripBasePath } from "@/lib/apiUrl";
 import { LeaderboardDialog } from "@/components/GameStatistics/LeaderboardDialog";
 import { useGameStore } from "@/components/default/games";
+import { clearCurrentUserFinishState } from "@/lib/gameFinishState";
 
 export interface GameSummaryData {
   finishedAt?: string;
@@ -18,6 +19,8 @@ interface GameSummaryViewProps {
   gameId: string;
   gameTitle?: string;
   progressData: GameSummaryData;
+  currentUserId?: string | null;
+  isGroupGameplay?: boolean;
   className?: string;
 }
 
@@ -27,7 +30,14 @@ function stripCodeLevelsFromProgressData(progressData: Record<string, unknown>) 
   );
 }
 
-export function GameSummaryView({ gameId, gameTitle, progressData, className = "" }: GameSummaryViewProps) {
+export function GameSummaryView({
+  gameId,
+  gameTitle,
+  progressData,
+  currentUserId,
+  isGroupGameplay = false,
+  className = "",
+}: GameSummaryViewProps) {
   const pathname = usePathname();
   const router = useRouter();
   const normalizedPathname = stripBasePath(pathname);
@@ -51,9 +61,11 @@ export function GameSummaryView({ gameId, gameTitle, progressData, className = "
       currentGame.progressData && typeof currentGame.progressData === "object" && !Array.isArray(currentGame.progressData)
         ? currentGame.progressData
         : {};
-    const nextProgressData = stripCodeLevelsFromProgressData({ ...currentProgressData });
-    delete nextProgressData.finishedAt;
-    delete nextProgressData.finalScore;
+    const nextProgressData = clearCurrentUserFinishState(
+      stripCodeLevelsFromProgressData({ ...currentProgressData }),
+      currentUserId,
+      isGroupGameplay,
+    );
 
     addGameToStore({
       ...currentGame,

@@ -5,6 +5,14 @@ import { useCollaboration } from "@/lib/collaboration";
 import { Users } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { buildAvatarFallbacks } from "./PresenceStack";
 import { GroupTab } from "./GroupTab";
 import { LobbyChatSection } from "./LobbyChatSection";
@@ -20,6 +28,18 @@ interface PublicGroupLobbyProps {
   onGroupSelect: (groupId: string | null) => void | Promise<void>;
   onSkipWaiting?: () => void;
   canSkipWaiting?: boolean;
+  lmsGroupPicker?: {
+    open: boolean;
+    loading: boolean;
+    groups: Array<{
+      id: string;
+      memberNames: string[];
+      timestamp: string | null;
+    }>;
+    error: string | null;
+    onOpenChange: (open: boolean) => void;
+    onSelect: (groupId: string) => void | Promise<void>;
+  };
 }
 
 export function PublicGroupLobby({
@@ -31,13 +51,26 @@ export function PublicGroupLobby({
   onGroupSelect,
   onSkipWaiting,
   canSkipWaiting = false,
+  lmsGroupPicker,
 }: PublicGroupLobbyProps) {
   const lobbyCollaboration = useCollaboration();
   const [chatMode, setChatMode] = useState<"lobby" | "group">("lobby");
   const effectiveCurrentUser = lobbyCollaboration.effectiveIdentity ?? currentUser;
 
   const connectedUsersLobby = useMemo(() => {
-    const presenceByKey = new Map<string, any>();
+    const presenceByKey = new Map<
+      string,
+      {
+        userId?: string;
+        accountUserId?: string;
+        userEmail?: string;
+        accountUserEmail?: string;
+        userName?: string;
+        userImage?: string;
+        color?: string;
+        clientId?: string;
+      }
+    >();
     const avatarFallbacks = buildAvatarFallbacks([
       {
         userId: effectiveCurrentUser.id,
@@ -83,6 +116,47 @@ export function PublicGroupLobby({
 
   return (
     <div className="flex h-full items-center justify-center px-4 py-8 overflow-y-auto">
+      <Dialog open={Boolean(lmsGroupPicker?.open)} onOpenChange={(open) => lmsGroupPicker?.onOpenChange(open)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Select LMS Group</DialogTitle>
+            <DialogDescription>
+              Choose the course group you want to open in this game lobby.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            {lmsGroupPicker?.groups.length ? (
+              lmsGroupPicker.groups.map((group) => (
+                <button
+                  key={group.id}
+                  type="button"
+                  className="w-full rounded-lg border p-3 text-left transition-colors hover:bg-muted/50"
+                  onClick={() => lmsGroupPicker.onSelect(group.id)}
+                >
+                  <p className="font-medium">A+ Group {group.id}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {group.memberNames.length
+                      ? group.memberNames.join(", ")
+                      : "No member names available"}
+                  </p>
+                </button>
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                No LMS groups were available for this user.
+              </p>
+            )}
+            {lmsGroupPicker?.error ? (
+              <p className="text-sm text-destructive">{lmsGroupPicker.error}</p>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => lmsGroupPicker?.onOpenChange(false)}>
+              Continue Manually
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <div className="w-full max-w-5xl rounded-xl border bg-card p-5 shadow-sm">
         <div className="space-y-2">
           <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">Public Group Lobby</p>
@@ -123,7 +197,7 @@ export function PublicGroupLobby({
             </TabsTrigger>
           </TabsList>
 
-          <CollaborationProvider roomId={groupRoomId} user={currentUser}>
+          <CollaborationProvider roomId={groupRoomId} groupId={groupId || null} user={currentUser}>
             <TabsContent value="group" className="mt-4 min-h-[400px]">
               <GroupTab
                 gameId={gameId}

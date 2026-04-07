@@ -1,12 +1,6 @@
 import { PayloadAction, createSlice } from "@reduxjs/toolkit";
 import { Level, levelNames, scenarioAccuracy } from "@/types";
 import { numberTimeToMinutesAndSeconds } from "@/lib/utils/numberTimeToMinutesAndSeconds";
-import { backendStorage } from "@/lib/utils/backendStorage";
-
-type BasePoints = {
-  allPoints: number;
-  allMaxPoints: number;
-};
 
 type LevelPoints = {
   [K in levelNames]: {
@@ -39,31 +33,14 @@ function getAverageScenarioAccuracy(level: Level, existingScenarios?: scenarioAc
 }
 
 function calculatePointsFromThresholds(level: Level, accuracy: number): number {
-  const pointsThresholds = level.pointsThresholds;
-
-  if (pointsThresholds && pointsThresholds.length > 0) {
-    const sorted = [...pointsThresholds].sort((a, b) => a.accuracy - b.accuracy);
-    let earnedPercent = 0;
-    for (const threshold of sorted) {
-      if (accuracy >= threshold.accuracy) {
-        earnedPercent = threshold.pointsPercent;
-      }
+  const sorted = [...level.pointsThresholds].sort((a, b) => a.accuracy - b.accuracy);
+  let earnedPercent = 0;
+  for (const threshold of sorted) {
+    if (accuracy >= threshold.accuracy) {
+      earnedPercent = threshold.pointsPercent;
     }
-    return Math.ceil((earnedPercent / 100) * level.maxPoints);
   }
-
-  const percentageTreshold = level.percentageTreshold || 90;
-  const percentageFullPointsTreshold = level.percentageFullPointsTreshold || 100;
-  if (accuracy < percentageTreshold) {
-    return 0;
-  }
-  if (accuracy >= percentageFullPointsTreshold) {
-    return level.maxPoints;
-  }
-
-  const coveredRange = Math.max(percentageFullPointsTreshold - percentageTreshold, 1);
-  const progress = (accuracy - percentageTreshold) / coveredRange;
-  return Math.ceil(progress * level.maxPoints);
+  return Math.ceil((earnedPercent / 100) * level.maxPoints);
 }
 
 function buildLevelPoints(level: Level) {
@@ -107,16 +84,6 @@ export const pointsSlice = createSlice({
       levels.forEach((level) => {
         state.levels[level.name] = buildLevelPoints(level);
       });
-
-      // Save to backend as backup
-      if (typeof window !== 'undefined') {
-        const pointsStorage = backendStorage('points');
-        pointsStorage.setItem(pointsStorage.key, JSON.stringify(state));
-      }
-    },
-    restorePoints: (state, action: PayloadAction<Points>) => {
-      // Restore points from saved data (used in ProgressionSync)
-      return action.payload;
     },
     refreshPoints: (state) => {
       //go through the levels and their points, add them together and update allPoints
@@ -124,12 +91,6 @@ export const pointsSlice = createSlice({
         (acc, level) => acc + level.points,
         0
       );
-
-      // Save to backend as backup
-      if (typeof window !== 'undefined') {
-        const pointsStorage = backendStorage('points');
-        pointsStorage.setItem(pointsStorage.key, JSON.stringify(state));
-      }
     },
     updateMaxPoints: (state, action: PayloadAction<Level[]>) => {
       state.allMaxPoints = action.payload.reduce(
@@ -215,11 +176,6 @@ export const pointsSlice = createSlice({
       };
       state.allPoints = Object.values(state.levels).reduce((acc, item) => acc + item.points, 0);
       state.allMaxPoints = Object.values(state.levels).reduce((acc, item) => acc + item.maxPoints, 0);
-
-      if (typeof window !== "undefined") {
-        const pointsStorage = backendStorage("points");
-        pointsStorage.setItem(pointsStorage.key, JSON.stringify(state));
-      }
     },
     renameLevelKey: (state, action: PayloadAction<{ oldName: string; newName: string }>) => {
       const { oldName, newName } = action.payload;
@@ -258,17 +214,12 @@ export const pointsSlice = createSlice({
           level.scenarios = data.scenarios.map((s) => ({ scenarioId: s.scenarioId, accuracy: s.accuracy }));
       }
       state.allPoints = Object.values(state.levels).reduce((acc, l) => acc + l.points, 0);
-      if (typeof window !== "undefined") {
-        const pointsStorage = backendStorage("points");
-        pointsStorage.setItem(pointsStorage.key, JSON.stringify(state));
-      }
     },
   },
 });
 
 export const {
   initializePoints,
-  restorePoints,
   refreshPoints,
   updateMaxPoints,
   updateLevelPoints,

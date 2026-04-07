@@ -65,11 +65,14 @@ An interactive, gamified platform for learning and mastering CSS, HTML, and mode
    yarn install
    ```
 
-3. **Set up the database**
+3. **Set up the database** (PostgreSQL)
    ```bash
-   # The SQLite database is included in the repo
-   # Migrations will run automatically on first startup
+   # Ensure DATABASE_URL in .env.local points at your Postgres database, then:
+   pnpm db:create-database   # optional: creates the DB if missing
+   pnpm db:init -- -y        # SQL bootstrap + Drizzle migrations
+   pnpm db:verify-migrations # optional: sanity-check migration chain + key columns
    ```
+   See `docs/database-schema-inventory.md` for how SQL bootstrap and Drizzle migrations fit together.
 
 4. **Start the development server**
    ```bash
@@ -105,7 +108,9 @@ docker compose up --build
 
 The app will be available at `http://localhost:3000`.
 
-The first run takes a few minutes as it installs dependencies and builds the Next.js app inside the container.
+The local compose setup uses `Dockerfile.development` variants for smaller development images. `production.docker-compose.yml` continues to use the legacy single-stage Dockerfiles for the current server.
+
+The first run takes a few minutes as it installs dependencies and builds the app images.
 
 ### Common commands
 
@@ -152,7 +157,7 @@ ui-designer/
 │   └── models/           # Database models
 ├── store/                # Redux store configuration
 ├── types.ts              # TypeScript definitions
-└── db/                   # SQLite database
+└── lib/db/               # Drizzle schema + migrations (PostgreSQL)
 ```
 
 ## 🎯 How It Works
@@ -190,9 +195,13 @@ pnpm build        # Build for production
 pnpm start        # Start production server
 pnpm lint         # Run ESLint
 
-# Database
-pnpm db:migrate   # Run database migrations
-pnpm db:seed      # Seed database with sample data
+# Database (PostgreSQL)
+pnpm db:create-database   # Create DB named in DATABASE_URL if missing
+pnpm db:init -- -y        # SQL bootstrap + Drizzle migrations
+pnpm db:migrate          # Apply new Drizzle migrations incrementally after init
+pnpm db:verify-migrations # Verify migrations + critical columns/tables
+pnpm db:check            # Inspect DB state
+pnpm db:seed-admin       # Grant admin (see script)
 ```
 
 ## 🎨 Challenge Types

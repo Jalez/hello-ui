@@ -2,12 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { apiUrl, stripBasePath } from "@/lib/apiUrl";
 import { useAppSelector } from "@/store/hooks/hooks";
 import { useGameStore } from "@/components/default/games";
 import { Loader2, Send } from "lucide-react";
 import { useOptionalCollaboration } from "@/lib/collaboration/CollaborationProvider";
+import { finishGameCompletionHints } from "@/lib/finishGameCompletionHints";
 
 interface LtiSessionInfo {
   isLtiMode: boolean;
@@ -49,6 +51,7 @@ interface FinishGameViewProps {
 }
 
 export function FinishGameView({ gameId, gameTitle }: FinishGameViewProps) {
+  const { data: session } = useSession();
   const pathname = usePathname();
   const normalizedPathname = stripBasePath(pathname);
   const router = useRouter();
@@ -57,12 +60,14 @@ export function FinishGameView({ gameId, gameTitle }: FinishGameViewProps) {
   const addGameToStore = useGameStore((s) => s.addGameToStore);
   const collaboration = useOptionalCollaboration();
   const points = useAppSelector((state) => state.points);
+  const levels = useAppSelector((state) => state.levels);
 
   const [ltiInfo, setLtiInfo] = useState<LtiSessionInfo | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [result, setResult] = useState<{ success: boolean; message?: string; error?: string } | null>(null);
 
   const isGroupGameplay = Boolean(searchParams.get("groupId"));
+  const currentUserId = session?.userId || session?.user?.email || null;
 
   useEffect(() => {
     let cancelled = false;
@@ -78,6 +83,16 @@ export function FinishGameView({ gameId, gameTitle }: FinishGameViewProps) {
 
   const percentage =
     points.allMaxPoints > 0 ? Math.round((points.allPoints / points.allMaxPoints) * 100) : 0;
+
+  const completionHints = useMemo(
+    () =>
+      finishGameCompletionHints(levels, {
+        allPoints: points.allPoints,
+        allMaxPoints: points.allMaxPoints,
+        levels: points.levels,
+      }),
+    [levels, points.allMaxPoints, points.allPoints, points.levels],
+  );
 
   const backHref = useMemo(() => {
     const nextParams = new URLSearchParams(searchParams.toString());
@@ -123,7 +138,7 @@ export function FinishGameView({ gameId, gameTitle }: FinishGameViewProps) {
     }
 
     setTimeout(() => {
-      window.parent.postMessage({ type: "a-plus-refresh-stats" }, "*");
+      window.parent.postMessage({ type: "edu-game-refresh-grade" }, "*");
       if (window.top) {
         window.top.location.reload();
       }
@@ -183,11 +198,22 @@ export function FinishGameView({ gameId, gameTitle }: FinishGameViewProps) {
       if (ltiInfo?.hasOutcomeService) {
         const fallbackGradeData = await submitGradeDirectly();
         if (fallbackGradeData.success) {
-          collaboration?.syncProgressData({
-            finishedAt: finishData.instance?.progressData?.finishedAt ?? new Date().toISOString(),
-            finalScore: { points: points.allPoints, maxPoints: points.allMaxPoints },
+          const syncProgressData: Record<string, unknown> = {
             ltiGradeRefreshAt: new Date().toISOString(),
-          });
+          };
+          if (isGroupGameplay && currentUserId) {
+            syncProgressData.userFinishStates = {
+              [currentUserId]: {
+                finishedAt: new Date().toISOString(),
+                finalScore: { points: points.allPoints, maxPoints: points.allMaxPoints },
+              },
+            };
+          } else {
+            syncProgressData.finishedAt =
+              finishData.instance?.progressData?.finishedAt ?? new Date().toISOString();
+            syncProgressData.finalScore = { points: points.allPoints, maxPoints: points.allMaxPoints };
+          }
+          collaboration?.syncProgressData(syncProgressData);
           if (fallbackGradeData.isInIframe) {
             triggerAplusRefresh();
           }
@@ -221,6 +247,8 @@ export function FinishGameView({ gameId, gameTitle }: FinishGameViewProps) {
     router,
     submitGradeDirectly,
     triggerAplusRefresh,
+    currentUserId,
+    isGroupGameplay,
   ]);
 
   return (
@@ -245,6 +273,17 @@ export function FinishGameView({ gameId, gameTitle }: FinishGameViewProps) {
           </div>
           <div className="mt-2 text-xl text-muted-foreground">{percentage}%</div>
         </div>
+
+        {completionHints.length > 0 ? (
+          <div className="rounded-lg border border-amber-200/80 bg-amber-50/80 p-4 text-sm text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/25 dark:text-amber-100">
+            <p className="font-medium">You are missing a lot of points. Did you notice:</p>
+            <ul className="mt-2 list-disc space-y-1 pl-5">
+              {completionHints.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
 
         {ltiInfo?.courseName ? (
           <p className="text-sm text-muted-foreground">

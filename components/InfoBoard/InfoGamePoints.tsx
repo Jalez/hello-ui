@@ -19,7 +19,12 @@ const InfoGamePoints = () => {
 
   return (
     <PoppingTitle
-      topTitle={isCreator ? "Set Max Points" : "Total Points/Total Max Points"}
+      topTitle={isCreator ? "Set Max Points" : "Total score"}
+      bottomTitle={
+        isCreator
+          ? undefined
+          : "Points you’ve earned across all levels in this game, out of the maximum available."
+      }
     >
       <Shaker value={points.allPoints}>
         <InfoBox>

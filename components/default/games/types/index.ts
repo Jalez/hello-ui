@@ -15,6 +15,10 @@ export interface Game {
   accessKeyRequired: boolean;
   collaborationMode: "individual" | "group";
   allowDuplicateUsers: boolean;
+  drawboardCaptureMode?: "browser" | "playwright";
+  manualDrawboardCapture?: boolean;
+  remoteSyncDebounceMs?: number;
+  drawboardReloadDebounceMs?: number;
   accessKey?: string | null;
   regenerateAccessKey?: boolean;
   regenerateShareToken?: boolean;

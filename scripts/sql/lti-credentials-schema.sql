@@ -1,3 +1,7 @@
+-- DEPRECATED for new installs: lib/db/migrations/0001_projects_group_id_lti_credentials.sql (and lib/db/schema/lti.ts).
+-- Kept for reference / manual runs; Docker init no longer applies this file (use `pnpm db:migrate`).
+-- Local `pnpm db:init` may still apply this file for backwards compatibility until init is fully aligned.
+--
 -- ============================================================================
 -- LTI CREDENTIALS SCHEMA
 -- ============================================================================

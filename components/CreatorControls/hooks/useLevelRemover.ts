@@ -8,6 +8,7 @@ import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
 import { setCurrentLevel } from "@/store/slices/currentLevel.slice";
 import { removeLevel, updateWeek, setAllLevels } from "@/store/slices/levels.slice";
 import { resetSolutionUrls } from "@/store/slices/solutionUrls.slice";
+import { resetDrawingUrls } from "@/store/slices/drawingUrls.slice";
 import { setSolutions } from "@/store/slices/solutions.slice";
 import { Level } from "@/types";
 import { toast } from "sonner";
@@ -52,6 +53,7 @@ export const useLevelRemover = () => {
     );
     dispatch(setSolutions(solutions));
     dispatch(resetSolutionUrls());
+    dispatch(resetDrawingUrls());
     setAllLevels(freshLevels);
     dispatch(initializePointsFromLevelsStateThunk());
 

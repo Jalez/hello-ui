@@ -1,8 +1,11 @@
 import { Compartment } from "@codemirror/state";
+import { DEFAULT_REMOTE_SYNC_DEBOUNCE_MS } from "@/lib/gameRuntimeConfig";
 
-export const REMOTE_SYNC_DEBOUNCE_MS = 500;
-export const TYPING_IDLE_MS = 800;
+/** Build-time fallback only; prefer useGameRuntimeConfig().remoteSyncDebounceMs in components. */
+export const REMOTE_SYNC_DEBOUNCE_MS = DEFAULT_REMOTE_SYNC_DEBOUNCE_MS;
 export const LOCAL_REDUX_UPDATE_DEBOUNCE_MS = REMOTE_SYNC_DEBOUNCE_MS;
+
+export const TYPING_IDLE_MS = 800;
 
 export const commentKeymapCompartment = new Compartment();
 export const reviewDecorationsCompartment = new Compartment();
