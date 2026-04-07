@@ -9,8 +9,15 @@ type PixelPair = {
   solution: ImageData | null;
 };
 
+type ReplaySignatures = {
+  drawing: string | null;
+  solution: string | null;
+};
+
 const pairsByScenario = new Map<string, PixelPair>();
 const serialByScenario = new Map<string, number>();
+const sideSerialsByScenario = new Map<string, { drawing: number; solution: number }>();
+const replaySignaturesByScenario = new Map<string, ReplaySignatures>();
 const listenersByScenario = new Map<string, Set<() => void>>();
 
 export function subscribeDrawboardPixelsForScenario(
@@ -35,6 +42,7 @@ export function notifyDrawboardPixels(
   scenarioId: string,
   side: "drawing" | "solution",
   data: ImageData,
+  replaySignature?: string | null,
 ): void {
   let pair = pairsByScenario.get(scenarioId);
   if (!pair) {
@@ -47,6 +55,16 @@ export function notifyDrawboardPixels(
   }
   pairsByScenario.set(scenarioId, pair);
   serialByScenario.set(scenarioId, (serialByScenario.get(scenarioId) ?? 0) + 1);
+  const sideSerials = sideSerialsByScenario.get(scenarioId) ?? { drawing: 0, solution: 0 };
+  sideSerialsByScenario.set(scenarioId, {
+    ...sideSerials,
+    [side]: sideSerials[side] + 1,
+  });
+  const signatures = replaySignaturesByScenario.get(scenarioId) ?? { drawing: null, solution: null };
+  replaySignaturesByScenario.set(scenarioId, {
+    ...signatures,
+    [side]: replaySignature ?? null,
+  });
   listenersByScenario.get(scenarioId)?.forEach((l) => l());
 }
 
@@ -58,6 +76,14 @@ export function getDrawboardPixelsSerial(scenarioId: string): number {
   return serialByScenario.get(scenarioId) ?? 0;
 }
 
+export function getDrawboardPixelsSideSerials(scenarioId: string): { drawing: number; solution: number } {
+  return sideSerialsByScenario.get(scenarioId) ?? { drawing: 0, solution: 0 };
+}
+
+export function getDrawboardReplaySignatures(scenarioId: string): ReplaySignatures {
+  return replaySignaturesByScenario.get(scenarioId) ?? { drawing: null, solution: null };
+}
+
 /** Drop solution-side buffers after the live solution iframe is unmounted (e.g. game mode). */
 export function clearStoredSolutionSide(scenarioId: string): void {
   const pair = pairsByScenario.get(scenarioId);
@@ -67,11 +93,23 @@ export function clearStoredSolutionSide(scenarioId: string): void {
   pair.solution = null;
   pairsByScenario.set(scenarioId, pair);
   serialByScenario.set(scenarioId, (serialByScenario.get(scenarioId) ?? 0) + 1);
+  const sideSerials = sideSerialsByScenario.get(scenarioId) ?? { drawing: 0, solution: 0 };
+  sideSerialsByScenario.set(scenarioId, {
+    ...sideSerials,
+    solution: sideSerials.solution + 1,
+  });
+  const signatures = replaySignaturesByScenario.get(scenarioId) ?? { drawing: null, solution: null };
+  replaySignaturesByScenario.set(scenarioId, {
+    ...signatures,
+    solution: null,
+  });
   listenersByScenario.get(scenarioId)?.forEach((l) => l());
 }
 
 export function clearDrawboardPixelsStore(): void {
   pairsByScenario.clear();
   serialByScenario.clear();
+  sideSerialsByScenario.clear();
+  replaySignaturesByScenario.clear();
   listenersByScenario.clear();
 }

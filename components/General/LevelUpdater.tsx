@@ -178,7 +178,12 @@ export const LevelUpdater = () => {
           ...prev,
           [event.data.scenarioId]: imageData,
         }));
-        notifyDrawboardPixels(event.data.scenarioId, "solution", imageData);
+        notifyDrawboardPixels(
+          event.data.scenarioId,
+          "solution",
+          imageData,
+          typeof event.data.replaySignature === "string" ? event.data.replaySignature : null,
+        );
         return;
       } else if (event.data.urlName === "drawingUrl") {
         drawingPixelSourceUrlsRef.current[event.data.scenarioId] = "__live_iframe__";
@@ -186,7 +191,12 @@ export const LevelUpdater = () => {
           ...prev,
           [event.data.scenarioId]: imageData,
         }));
-        notifyDrawboardPixels(event.data.scenarioId, "drawing", imageData);
+        notifyDrawboardPixels(
+          event.data.scenarioId,
+          "drawing",
+          imageData,
+          typeof event.data.replaySignature === "string" ? event.data.replaySignature : null,
+        );
       }
     };
 

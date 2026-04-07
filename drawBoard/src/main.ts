@@ -97,6 +97,7 @@ let resizeObserver: ResizeObserver | null = null;
 let replaySequence: EventSequenceStep[] = [];
 let replayInFlight = false;
 let replayAppliedSignature = "";
+let replayPromise: Promise<void> | null = null;
 /** Baseline from the last full parent message; options-patch does not resend HTML/CSS/JS. */
 let lastAppliedHtml = "";
 let lastAppliedCss = "";
@@ -159,6 +160,10 @@ function normalizeReplaySequence(raw: unknown): EventSequenceStep[] {
     && typeof (entry as EventSequenceStep).id === "string"
     && typeof (entry as EventSequenceStep).eventType === "string"
   ));
+}
+
+function getReplaySequenceSignature() {
+  return replaySequence.map((step) => step.id).join("|");
 }
 
 function clearUserScript() {
@@ -333,37 +338,85 @@ async function replaySequenceStep(step: EventSequenceStep) {
 }
 
 async function replaySequenceIfNeeded() {
-  const signature = replaySequence.map((step) => step.id).join("|");
-  if (!interactive || recordingSequence || replayInFlight || !signature || replayAppliedSignature === signature) {
-    if (signature) {
-      console.log("[drawboard:replay] skipped:", { interactive, recordingSequence, replayInFlight, signature, appliedSig: replayAppliedSignature });
+  const requestedSignature = getReplaySequenceSignature();
+  if (!interactive || recordingSequence || !requestedSignature || replayAppliedSignature === requestedSignature) {
+    if (requestedSignature) {
+      console.log("[drawboard:replay] skipped:", {
+        interactive,
+        recordingSequence,
+        replayInFlight,
+        signature: requestedSignature,
+        appliedSig: replayAppliedSignature,
+      });
     }
     return;
   }
-  console.log("[drawboard:replay] starting replay, steps:", replaySequence.length, "signature:", signature);
 
-  replayInFlight = true;
+  if (replayPromise) {
+    console.log("[drawboard:replay] waiting for in-flight replay:", {
+      requestedSignature,
+      appliedSig: replayAppliedSignature,
+      replayInFlight,
+    });
+    await replayPromise;
+    const latestSignature = getReplaySequenceSignature();
+    if (interactive && !recordingSequence && latestSignature && replayAppliedSignature !== latestSignature) {
+      await replaySequenceIfNeeded();
+    }
+    return;
+  }
+
+  const runPromise = (async () => {
+    while (true) {
+      const signature = getReplaySequenceSignature();
+      if (!interactive || recordingSequence || !signature || replayAppliedSignature === signature) {
+        return;
+      }
+
+      console.log("[drawboard:replay] starting replay, steps:", replaySequence.length, "signature:", signature);
+      replayInFlight = true;
+      try {
+        for (const step of replaySequence) {
+          await replaySequenceStep(step);
+        }
+        acceptedVisualState = await buildVisualState();
+        replayAppliedSignature = signature;
+      } catch (error) {
+        console.error("Drawboard: replay sequence failed", error);
+        // Reset DOM to a clean state so subsequent replays start fresh
+        // instead of operating on a half-applied / corrupted DOM.
+        try {
+          applyHtml(lastAppliedHtml);
+          syncEventListeners();
+          installObservers();
+          applyCss(lastAppliedCss);
+          applyJs(lastAppliedJs);
+        } catch (resetError) {
+          console.error("Drawboard: baseline reset after failed replay also failed", resetError);
+        }
+        replayAppliedSignature = "";
+        return;
+      } finally {
+        replayInFlight = false;
+      }
+
+      const nextSignature = getReplaySequenceSignature();
+      if (nextSignature && nextSignature !== replayAppliedSignature) {
+        console.log("[drawboard:replay] replay signature advanced during run:", {
+          appliedSig: replayAppliedSignature,
+          nextSignature,
+        });
+      }
+    }
+  })();
+
+  replayPromise = runPromise;
   try {
-    for (const step of replaySequence) {
-      await replaySequenceStep(step);
-    }
-    acceptedVisualState = await buildVisualState();
-    replayAppliedSignature = signature;
-  } catch (error) {
-    console.error("Drawboard: replay sequence failed", error);
-    // Reset DOM to a clean state so subsequent replays start fresh
-    // instead of operating on a half-applied / corrupted DOM.
-    try {
-      applyHtml(lastAppliedHtml);
-      syncEventListeners();
-      installObservers();
-      applyCss(lastAppliedCss);
-      applyJs(lastAppliedJs);
-    } catch (resetError) {
-      console.error("Drawboard: baseline reset after failed replay also failed", resetError);
-    }
+    await runPromise;
   } finally {
-    replayInFlight = false;
+    if (replayPromise === runPromise) {
+      replayPromise = null;
+    }
   }
 }
 
@@ -421,6 +474,7 @@ async function captureBrowser() {
         scenarioId,
         width: w,
         height: h,
+        replaySignature: replayAppliedSignature,
       },
       "*",
       [bytes.buffer],
@@ -891,7 +945,7 @@ window.addEventListener("message", (event: MessageEvent<DrawboardPayload>) => {
     }
     const incomingReplay = normalizeReplaySequence(event.data?.replaySequence);
     console.log("[drawboard:options-patch]", urlName, { interactive: event.data.interactive, recording: event.data.recordingSequence, replaySteps: incomingReplay.length, dataReceived });
-    const prevReplaySignature = replaySequence.map((step) => step.id).join("|");
+    const prevReplaySignature = getReplaySequenceSignature();
     const nextReplaySignature = incomingReplay.map((step) => step.id).join("|");
     const replaySignatureChanged = prevReplaySignature !== nextReplaySignature;
     const prevInteractive = interactive;
