@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import Select, { type GroupBase, type InputActionMeta, type SingleValue } from "react-select";
+import Select, { type GroupBase, type InputActionMeta, type MenuPlacement, type SingleValue } from "react-select";
 import { cn } from "@/lib/utils";
 
 export interface ComboboxOption {
@@ -23,6 +23,7 @@ interface ComboboxProps {
   loadingText?: string;
   disabled?: boolean;
   isLoading?: boolean;
+  menuPlacement?: MenuPlacement;
   className?: string;
   triggerClassName?: string;
   contentClassName?: string;
@@ -42,6 +43,7 @@ export function Combobox({
   loadingText = "Loading...",
   disabled = false,
   isLoading = false,
+  menuPlacement = "auto",
   className,
   triggerClassName,
   contentClassName,
@@ -81,6 +83,7 @@ export function Combobox({
       inputValue={inputValue}
       isLoading={isLoading}
       isDisabled={disabled}
+      menuPlacement={menuPlacement}
       isSearchable
       isClearable={false}
       blurInputOnSelect

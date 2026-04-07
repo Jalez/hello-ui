@@ -35,6 +35,7 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/componen
 import { useDefaultLayout } from "react-resizable-panels";
 import type { PanelImperativeHandle } from "react-resizable-panels";
 import type { GroupImperativeHandle } from "react-resizable-panels";
+import { CreatorAiChatDrawer } from "@/components/creator-ai/CreatorAiChatDrawer";
 
 export const allLevels: Level[] = [];
 type SolutionsByLevelName = Record<string, { html: string; css: string; js: string }>;
@@ -552,6 +553,7 @@ function App() {
                   </div>
                 </div>
                 <Footer />
+                <CreatorAiChatDrawer />
               </DrawboardNavbarCaptureProvider>
             ) : null}
           </GameContainer>

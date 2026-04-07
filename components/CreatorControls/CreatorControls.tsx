@@ -2,17 +2,16 @@
 
 import { useAppSelector } from "@/store/hooks/hooks";
 import { Button } from "@/components/ui/button";
-import { Trash2, Save, Plus, Sparkles, SlidersHorizontal, Loader2 } from "lucide-react";
-import { useRef } from "react";
+import { Trash2, Save, Plus, SlidersHorizontal, Loader2, MessageSquare } from "lucide-react";
 import PoppingTitle from "@/components/General/PoppingTitle";
 import { WorkbenchSidebarToolRow } from "@/components/Navbar/WorkbenchSidebarToolRow";
 import { useCreatorAutosaveControls } from "./CreatorAutosaveContext";
 import { useLevelRemover } from "./hooks/useLevelRemover";
 import { useNewLevel } from "./hooks/useNewLevel";
-import MagicButton, { MagicButtonRef } from "./UniversalMagicButton";
 import { useRouter } from "next/navigation";
 import { apiUrl } from "@/lib/apiUrl";
 import { SaveCircle } from "@/components/icons/SaveCircle";
+import { useCreatorAiChatStore } from "@/components/creator-ai/store";
 
 /** Slightly larger than default sidebar icons so circle affordances read clearly. */
 const LEVELS_EMPHASIZED_ICON_CLASS =
@@ -30,8 +29,8 @@ const CreatorControls = ({ displayMode = "icon-label" }: CreatorControlsProps) =
   const { handleRemove } = useLevelRemover();
   const { handleSave, autoSaveEnabled, toggleAutoSave } = useCreatorAutosaveControls();
   const { handleNewLevelCreation, isCreating } = useNewLevel();
-  const magicButtonRef = useRef<MagicButtonRef>(null);
   const router = useRouter();
+  const setAiChatOpen = useCreatorAiChatStore((state) => state.setOpen);
 
   if (!isCreator) return null;
 
@@ -41,19 +40,13 @@ const CreatorControls = ({ displayMode = "icon-label" }: CreatorControlsProps) =
         {isCreating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
         {isCreating ? "Creating..." : "Create"}
       </Button>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="gap-2"
-        onClick={() => magicButtonRef.current?.triggerGenerate()}
-        data-testid="creator-generate-level"
-      >
-        <Sparkles className="h-4 w-4" />
-        Generate
-      </Button>
       <Button variant="ghost" size="sm" className="gap-2" onClick={() => router.push(apiUrl("/account/generation"))}>
         <SlidersHorizontal className="h-4 w-4" />
         Generation Settings
+      </Button>
+      <Button variant="ghost" size="sm" className="gap-2" onClick={() => setAiChatOpen(true)}>
+        <MessageSquare className="h-4 w-4" />
+        AI Chat
       </Button>
       <Button variant="ghost" size="sm" className="gap-2 text-destructive hover:text-destructive" onClick={handleRemove}>
         <Trash2 className="h-4 w-4" />
@@ -77,19 +70,14 @@ const CreatorControls = ({ displayMode = "icon-label" }: CreatorControlsProps) =
           {isCreating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
         </Button>
       </PoppingTitle>
-      <PoppingTitle topTitle="Generate Level">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => magicButtonRef.current?.triggerGenerate()}
-          data-testid="creator-generate-level"
-        >
-          <Sparkles className="h-4 w-4" />
-        </Button>
-      </PoppingTitle>
       <PoppingTitle topTitle="Generation Settings">
         <Button variant="ghost" size="icon" onClick={() => router.push(apiUrl("/account/generation"))}>
           <SlidersHorizontal className="h-4 w-4" />
+        </Button>
+      </PoppingTitle>
+      <PoppingTitle topTitle="AI Chat">
+        <Button variant="ghost" size="icon" onClick={() => setAiChatOpen(true)}>
+          <MessageSquare className="h-4 w-4" />
         </Button>
       </PoppingTitle>
       <PoppingTitle topTitle="Remove Level">
@@ -151,19 +139,18 @@ const CreatorControls = ({ displayMode = "icon-label" }: CreatorControlsProps) =
         AI
       </div>
       <WorkbenchSidebarToolRow
-        id="level-generate"
-        label="Generate"
-        tooltip="Generate Level"
-        icon={Sparkles}
-        onClick={() => magicButtonRef.current?.triggerGenerate()}
-        data-testid="creator-generate-level"
-      />
-      <WorkbenchSidebarToolRow
         id="level-gen-settings"
         label="Settings"
         tooltip="Generation Settings"
         icon={SlidersHorizontal}
         onClick={() => router.push(apiUrl("/account/generation"))}
+      />
+      <WorkbenchSidebarToolRow
+        id="level-ai-chat"
+        label="Chat"
+        tooltip="Open AI Chat"
+        icon={MessageSquare}
+        onClick={() => setAiChatOpen(true)}
       />
     </div>
   );
@@ -173,8 +160,6 @@ const CreatorControls = ({ displayMode = "icon-label" }: CreatorControlsProps) =
       {displayMode === "icon-label" && inlineIconLabel}
       {displayMode === "icon" && inlineIcons}
       {displayMode === "sidebar" && sidebar}
-      {/* Render dialog components without buttons */}
-      <MagicButton ref={magicButtonRef} renderButton={false} />
     </>
   );
 };

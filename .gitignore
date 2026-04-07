@@ -28,6 +28,7 @@ drawBoard/dist
 .DS_Store
 .cursor/
 .dev-pids
+.creator-ai-chats/
 *.pem
 exported-logs/
 css-artist-prod-logs.tar.gz

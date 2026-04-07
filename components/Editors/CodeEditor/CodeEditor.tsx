@@ -13,14 +13,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTheme } from "next-themes";
 import { PencilOff } from "lucide-react";
 
-import EditorMagicButton from "@/components/CreatorControls/EditorMagicButton";
 import { Button } from "@/components/ui/button";
 import { logCollaborationStep } from "@/lib/collaboration/logCollaborationStep";
 import { useAppSelector } from "@/store/hooks/hooks";
 import { useGameplayTelemetry } from "@/components/General/useGameplayTelemetry";
 import { useOptionalCollaboration } from "@/lib/collaboration/CollaborationProvider";
 
-import { AiReviewPanel } from "./AiReviewPanel";
 import {
   commentKeymapCompartment,
   reviewDecorationsCompartment,
@@ -31,7 +29,6 @@ import { RemoteCaretsOverlay } from "./RemoteCaretsOverlay";
 import { createConsistentLineTheme } from "./theme";
 import type { CodeEditorProps } from "./types";
 import { useCodeEditorCollaboration } from "./useCodeEditorCollaboration";
-import { buildReviewDecorations, useCodeEditorReview } from "./useCodeEditorReview";
 import { titleToEditorType } from "./utils";
 
 const lineNumberCompartment = new Compartment();
@@ -106,18 +103,6 @@ export default function CodeEditor({
   const { remoteSyncDebounceMs } = useGameRuntimeConfig();
 
   const {
-    review,
-    reviewError,
-    clearReview,
-    handleAiSuggestion,
-    updateHunkStatus,
-    applyAcceptedChanges,
-  } = useCodeEditorReview({
-    code,
-    setCode,
-  });
-
-  const {
     isConnected,
     remoteCarets,
     editorViewportRef,
@@ -140,7 +125,6 @@ export default function CodeEditor({
     locked,
     levelIdentifier,
     currentLevel,
-    onLocalChange: review ? clearReview : undefined,
     onLocalUserInput: options.mode === "game"
       ? () => {
           const now = Date.now();
@@ -165,21 +149,6 @@ export default function CodeEditor({
     const timer = window.setTimeout(() => setShowCollaborationRecoveryOverlay(true), 600);
     return () => window.clearTimeout(timer);
   }, [collaborationRecoveryNeeded]);
-
-  useEffect(() => {
-    const view = editorViewRef.current;
-    if (!view) {
-      return;
-    }
-
-    const extension = review
-      ? buildReviewDecorations(view.state.doc, review.hunks)
-      : [];
-
-    view.dispatch({
-      effects: reviewDecorationsCompartment.reconfigure(extension),
-    });
-  }, [editorViewRef, review]);
 
   const isSolution = type === "Solution" || type === "solution";
   const flushPendingLocalCodeUpdate = useCallback((pendingCode) => {
@@ -216,11 +185,6 @@ export default function CodeEditor({
       clearTimeout(timeout);
     }
   }, [applyingExternalUpdateRef, code, flushPendingLocalCodeUpdate, isYjsManaged, remoteSyncDebounceMs, template]);
-
-
-  useEffect(() => {
-    clearReview();
-  }, [clearReview, levelIdentifier, template]);
 
   useEffect(() => {
     if (!collaboration?.reportEditorWatchState) {
@@ -329,38 +293,13 @@ export default function CodeEditor({
 
   return (
     <div className="codeEditorContainer relative flex h-full min-h-0 w-full flex-1 flex-col">
-      {options.creator && review && (
-        <AiReviewPanel
-          review={review}
-          onClose={clearReview}
-          onApplyAccepted={applyAcceptedChanges}
-          onUpdateHunkStatus={updateHunkStatus}
-        />
-      )}
-
-      {options.creator && reviewError && (
-        <div className="absolute top-1 left-1 z-[120] rounded border border-destructive bg-card px-2 py-1 text-xs text-destructive">
-          {reviewError}
-        </div>
-      )}
-
       <div
         className="codeEditor relative flex min-h-0 flex-[1_1_20px] flex-col overflow-hidden"
         title={locked ? "You can't edit this code" : " Click on the code to edit it"}
       >
-        {(options.creator || readOnlySession) && (
+        {readOnlySession && (
           <div className="pointer-events-none absolute bottom-1 right-1 z-[100] flex items-center gap-1">
             <div className="pointer-events-auto flex items-center gap-1">
-              {options.creator && (
-                <EditorMagicButton
-                  buttonColor="primary"
-                  EditorCode={code}
-                  editorType={title}
-                  onSuggestion={handleAiSuggestion}
-                  disabled={locked || readOnlySession}
-                />
-              )}
-
               {readOnlySession && (
                 <Button
                   type="button"

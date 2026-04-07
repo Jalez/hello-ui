@@ -26,6 +26,7 @@ import { useOptionalCollaboration } from "@/lib/collaboration/CollaborationProvi
 import { TabPresence } from "@/components/collaboration/TabPresence";
 import { ActiveUser, EditorType } from "@/lib/collaboration/types";
 import { logDebugClient } from "@/lib/debug-logger";
+import { useCreatorAiChatStore } from "@/components/creator-ai/store";
 
 interface LanguageData {
   code: string;
@@ -63,6 +64,7 @@ function EditorTabs({
   const [isTemplateMode, setIsTemplateMode] = React.useState<boolean>(true);
   const [useCompactHeader, setUseCompactHeader] = React.useState(false);
   const headerRef = React.useRef<HTMLDivElement | null>(null);
+  const setActiveEditorContext = useCreatorAiChatStore((state) => state.setActiveEditorContext);
 
   const collaboration = useOptionalCollaboration();
   const isConnected = collaboration?.isConnected ?? false;
@@ -93,6 +95,13 @@ function EditorTabs({
     lastSentTabRef.current = nextPresenceKey;
     setActiveTab(activeLanguage, currentLevel - 1);
   }, [currentLevel, isConnected, setActiveTab, activeLanguage]);
+
+  React.useEffect(() => {
+    if (!isCreator) {
+      return;
+    }
+    setActiveEditorContext(activeLanguage, isTemplateMode ? "template" : "solution");
+  }, [activeLanguage, isCreator, isTemplateMode, setActiveEditorContext]);
 
   React.useEffect(() => {
     const header = headerRef.current;
