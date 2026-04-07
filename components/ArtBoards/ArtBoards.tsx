@@ -5,7 +5,7 @@ import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
 import { KeyBindings } from "@/components/Editors/KeyBindings";
 import ScenarioAdder from "./ScenarioAdder";
 import ScenarioRemover from "./ScenarioRemover";
-import SidebySideArt from "./SidebySideArt";
+import SidebySideArt, { type SingleLayoutControl } from "./SidebySideArt";
 import { ScenarioDrawing } from "./Drawboard/ScenarioDrawing";
 import { ScenarioModel } from "./ModelBoard/ScenarioModel";
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
@@ -21,7 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { AutoRunCircle } from "@/components/icons/AutoRunCircle";
 import { cn } from "@/lib/utils/cn";
-import { ChevronLeft, ChevronRight, ImageIcon, MousePointer, Play, Square } from "lucide-react";
+import { ChevronLeft, ChevronRight, ImageIcon, MousePointer, PanelsLeftRight, Play, Square } from "lucide-react";
 import { scenario } from "@/types";
 import {
   toggleImageInteractivity,
@@ -70,6 +70,7 @@ export const ArtBoards = (): React.ReactNode => {
   const [selectedScenarioId, setSelectedScenarioId] = useState<string | null>(null);
   const showHotkeys = level?.showHotkeys ?? false;
   const scenarios = level?.scenarios ?? EMPTY_SCENARIOS;
+  const [singleLayoutControl, setSingleLayoutControl] = useState<SingleLayoutControl | null>(null);
 
   const selectedScenario = useMemo(() => {
     if (scenarios.length === 0) {
@@ -434,6 +435,7 @@ export const ArtBoards = (): React.ReactNode => {
             ) : null}
             <SidebySideArt
               key={selectedScenario.scenarioId}
+              onSingleLayoutControlChange={setSingleLayoutControl}
               contents={[
                 <ScenarioModel
                   key={`${selectedScenario.scenarioId}-model`}
@@ -471,14 +473,31 @@ export const ArtBoards = (): React.ReactNode => {
         ) : null}
       </div>
 
-      <div className="absolute bottom-0 right-0 z-[100] flex flex-row items-center gap-1 p-2">
+      <div
+        className="absolute bottom-0 right-0 z-[100] flex flex-row items-center gap-1 p-2"
+        data-tour-spot="gameboard.artboard_actions"
+      >
+        {singleLayoutControl ? (
+          <PoppingTitle topTitle={`Show ${singleLayoutControl.label}`}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9 rounded-full bg-muted text-foreground shadow-sm hover:bg-muted/85"
+              onClick={singleLayoutControl.onClick}
+              aria-label={`Show ${singleLayoutControl.label}`}
+            >
+              <PanelsLeftRight className="h-5 w-5" />
+            </Button>
+          </PoppingTitle>
+        ) : null}
         {showSwitch ? (
           <PoppingTitle topTitle={switchIsInteractive ? "Switch to Static" : "Switch to Live"}>
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              className="h-9 w-9"
+              className="h-9 w-9 rounded-full bg-muted text-foreground shadow-sm hover:bg-muted/85"
               onClick={handleSwitchInteractiveStatic}
               aria-label={switchIsInteractive ? "Switch to static" : "Switch to live"}
             >
@@ -489,8 +508,9 @@ export const ArtBoards = (): React.ReactNode => {
         <ScenarioRemover
           scenarioId={selectedScenario?.scenarioId ?? null}
           canRemove={scenarios.length > 1}
+          className="h-9 w-9 rounded-full bg-muted text-foreground shadow-sm hover:bg-muted/85"
         />
-        <ScenarioAdder />
+        <ScenarioAdder className="h-9 w-9 rounded-full bg-muted text-foreground shadow-sm hover:bg-muted/85" />
       </div>
     </div>
   );

@@ -1,11 +1,15 @@
 'use client';
 
-import { cloneElement, isValidElement, ReactNode, useEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { cloneElement, isValidElement, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+export type SingleLayoutControl = {
+  label: "Solution" | "Drawboard";
+  onClick: () => void;
+};
 
 type SidebySideArtProps = {
   contents: ReactNode[];
+  onSingleLayoutControlChange?: (control: SingleLayoutControl | null) => void;
 };
 
 type LayoutMode = "row" | "column" | "single";
@@ -59,7 +63,7 @@ const withScalingPreference = (
   });
 };
 
-const SidebySideArt = ({ contents }: SidebySideArtProps): ReactNode => {
+const SidebySideArt = ({ contents, onSingleLayoutControlChange }: SidebySideArtProps): ReactNode => {
   const [activeIndex, setActiveIndex] = useState(0);
   const [layoutMode, setLayoutMode] = useState<LayoutMode>("row");
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -126,13 +130,40 @@ const SidebySideArt = ({ contents }: SidebySideArtProps): ReactNode => {
     };
   }, [contents]);
 
-  const goPrevious = () => {
+  const goPrevious = useCallback(() => {
     setActiveIndex((current) => Math.max(current - 1, 0));
-  };
+  }, []);
 
-  const goNext = () => {
+  const goNext = useCallback(() => {
     setActiveIndex((current) => Math.min(current + 1, contents.length - 1));
-  };
+  }, [contents.length]);
+
+  const singleLayoutTarget = useMemo(
+    () => (
+      visibleIndex === 0
+        ? { label: "Drawboard" as const, onClick: goNext, disabled: visibleIndex >= maxIndex }
+        : { label: "Solution" as const, onClick: goPrevious, disabled: visibleIndex <= 0 }
+    ),
+    [goNext, goPrevious, maxIndex, visibleIndex],
+  );
+
+  useEffect(() => {
+    if (!onSingleLayoutControlChange) {
+      return;
+    }
+
+    if (layoutMode !== "single" || contents.length <= 1 || singleLayoutTarget.disabled) {
+      onSingleLayoutControlChange(null);
+      return;
+    }
+
+    onSingleLayoutControlChange({
+      label: singleLayoutTarget.label,
+      onClick: singleLayoutTarget.onClick,
+    });
+
+    return () => onSingleLayoutControlChange(null);
+  }, [contents.length, layoutMode, onSingleLayoutControlChange, singleLayoutTarget.disabled, singleLayoutTarget.label, singleLayoutTarget.onClick]);
 
   const renderRowOrColumn = (direction: "row" | "column") => (
     <div
@@ -161,38 +192,6 @@ const SidebySideArt = ({ contents }: SidebySideArtProps): ReactNode => {
 
   const renderSingle = () => (
     <div className="flex h-full min-h-0 w-full flex-col items-center justify-start gap-3">
-      {contents.length > 1 ? (
-        <div className="flex w-full max-w-sm flex-none items-center justify-between gap-2 px-3">
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={goPrevious}
-            disabled={visibleIndex === 0}
-            className="h-auto min-w-[88px] flex-1 rounded-md px-3 py-2 text-foreground hover:bg-muted/70 disabled:opacity-35"
-            aria-label="Show previous board"
-          >
-            <ChevronLeft className="mr-2 h-4 w-4" />
-            <span className="text-sm font-medium">Prev</span>
-          </Button>
-
-          <div className="shrink-0 rounded-md px-3 py-2 text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-            {visibleIndex + 1} / {contents.length}
-          </div>
-
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={goNext}
-            disabled={visibleIndex === maxIndex}
-            className="h-auto min-w-[88px] flex-1 rounded-md px-3 py-2 text-foreground hover:bg-muted/70 disabled:opacity-35"
-            aria-label="Show next board"
-          >
-            <span className="text-sm font-medium">Next</span>
-            <ChevronRight className="ml-2 h-4 w-4" />
-          </Button>
-        </div>
-      ) : null}
-
       <div className="relative flex min-h-0 flex-1 w-full items-center justify-center overflow-hidden">
         <div
           className="flex h-full min-h-0 w-full transition-transform duration-300 ease-out"

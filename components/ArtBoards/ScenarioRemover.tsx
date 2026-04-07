@@ -6,14 +6,16 @@ import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
 import { removeScenario } from "@/store/slices/levels.slice";
 import PoppingTitle from "@/components/General/PoppingTitle";
 import { useLevelMetaSync } from "@/lib/collaboration/hooks/useLevelMetaSync";
+import { cn } from "@/lib/utils/cn";
 
 type ScenarioRemoverProps = {
   scenarioId: string | null;
   /** When false, at least one scenario must remain. */
   canRemove: boolean;
+  className?: string;
 };
 
-const ScenarioRemover = ({ scenarioId, canRemove }: ScenarioRemoverProps) => {
+const ScenarioRemover = ({ scenarioId, canRemove, className }: ScenarioRemoverProps) => {
   const dispatch = useAppDispatch();
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const options = useAppSelector((state) => state.options);
@@ -35,7 +37,7 @@ const ScenarioRemover = ({ scenarioId, canRemove }: ScenarioRemoverProps) => {
         variant="ghost"
         size="icon"
         disabled={!scenarioId || !canRemove}
-        className="text-destructive hover:text-destructive disabled:opacity-40"
+        className={cn("text-destructive hover:text-destructive disabled:opacity-40", className)}
       >
         <Trash2 className="h-5 w-5" />
       </Button>
