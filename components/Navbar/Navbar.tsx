@@ -2,7 +2,7 @@
 
 import { useAppDispatch, useAppSelector } from "@/store/hooks/hooks";
 import { Button } from "@/components/ui/button";
-import { RotateCcw, PanelLeft, Map, Flag, Settings, Gamepad2, BarChart3, Users, MousePointer, Eye, Square, Wrench, ListMinus, ListX, ListPlus, ListOrdered, Code2 } from "lucide-react";
+import { RotateCcw, PanelLeft, Map, Flag, Settings, Gamepad2, BarChart3, Users, MousePointer, Eye, Square, Wrench, ListMinus, ListX, ListPlus, ListOrdered, Code2, Layers3 } from "lucide-react";
 import { LevelSelect } from "@/components/General/LevelControls/LevelControls";
 import { setCurrentLevel } from "@/store/slices/currentLevel.slice";
 import { clearEventSequenceForScenario, removeEventSequenceStep, resetLevel } from "@/store/slices/levels.slice";
@@ -48,6 +48,7 @@ import { useLevelMetaSync } from "@/lib/collaboration/hooks/useLevelMetaSync";
 import { CreatorWorkbenchSubSidebar, type CreatorWorkbenchSection } from "./CreatorWorkbenchSubSidebar";
 import { GameToolsSidebar } from "./GameToolsSidebar";
 import type { SubNavbarItem } from "./SubNavbar";
+import { LevelVariantsPanel } from "@/components/CreatorControls/LevelVariantsPanel";
 import {
   EMPTY_SEQUENCE_RUNTIME_STATE,
   INITIAL_EVENT_SEQUENCE_STEP_ID,
@@ -64,7 +65,50 @@ import {
   useEventSequenceUiState,
 } from "@/lib/drawboard/eventSequenceState";
 
-type CreatorWorkbenchSubnavTabId = "creator" | "events" | "game";
+type CreatorWorkbenchSubnavTabId = "creator" | "variants" | "events" | "game";
+
+const CREATOR_WORKBENCH_PANELS_STORAGE_KEY = "creator-workbench-panels";
+const DEFAULT_CREATOR_WORKBENCH_PANELS: Record<CreatorWorkbenchSubnavTabId, boolean> = {
+  creator: true,
+  variants: false,
+  events: true,
+  game: true,
+};
+
+function loadStoredCreatorWorkbenchPanels(): Record<CreatorWorkbenchSubnavTabId, boolean> {
+  if (typeof window === "undefined") {
+    return DEFAULT_CREATOR_WORKBENCH_PANELS;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(CREATOR_WORKBENCH_PANELS_STORAGE_KEY);
+    if (!raw) {
+      return DEFAULT_CREATOR_WORKBENCH_PANELS;
+    }
+
+    const parsed = JSON.parse(raw) as Partial<Record<CreatorWorkbenchSubnavTabId, unknown>>;
+    return {
+      creator:
+        typeof parsed.creator === "boolean"
+          ? parsed.creator
+          : DEFAULT_CREATOR_WORKBENCH_PANELS.creator,
+      variants:
+        typeof parsed.variants === "boolean"
+          ? parsed.variants
+          : DEFAULT_CREATOR_WORKBENCH_PANELS.variants,
+      events:
+        typeof parsed.events === "boolean"
+          ? parsed.events
+          : DEFAULT_CREATOR_WORKBENCH_PANELS.events,
+      game:
+        typeof parsed.game === "boolean"
+          ? parsed.game
+          : DEFAULT_CREATOR_WORKBENCH_PANELS.game,
+    };
+  } catch {
+    return DEFAULT_CREATOR_WORKBENCH_PANELS;
+  }
+}
 
 const CREATOR_WORKBENCH_SUBNAV_TABS: Array<{
   id: CreatorWorkbenchSubnavTabId;
@@ -83,6 +127,12 @@ const CREATOR_WORKBENCH_SUBNAV_TABS: Array<{
     label: "Events",
     tooltip: "Record an event sequence for the selected scenario.",
     icon: MousePointer,
+  },
+  {
+    id: "variants",
+    label: "Variants",
+    tooltip: "View and manage level variants.",
+    icon: Layers3,
   },
   {
     id: "game",
@@ -149,11 +199,7 @@ export const Navbar = () => {
   const [hasDismissedCompactGameShake, setHasDismissedCompactGameShake] = useState(false);
   const [creatorWorkbenchPanels, setCreatorWorkbenchPanels] = useState<
     Record<CreatorWorkbenchSubnavTabId, boolean>
-  >({
-    creator: true,
-    events: true,
-    game: true,
-  });
+  >(() => loadStoredCreatorWorkbenchPanels());
   const storedSelectedSequenceScenarioId = useEventSequenceUiState(
     useCallback((state) => state.selectedScenarioIdsByLevel[currentLevel] ?? null, [currentLevel]),
   );
@@ -215,6 +261,17 @@ export const Navbar = () => {
       setHasDismissedCompactGameShake(false);
     }
   }, [shouldEmphasizeFinishGame]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(
+      CREATOR_WORKBENCH_PANELS_STORAGE_KEY,
+      JSON.stringify(creatorWorkbenchPanels),
+    );
+  }, [creatorWorkbenchPanels]);
 
   const levelChanger = useCallback((pickedLevel: number) => {
     dispatch(setCurrentLevel(pickedLevel));
@@ -835,6 +892,12 @@ export const Navbar = () => {
       children: <CreatorControls displayMode="sidebar" />,
     },
     {
+      id: "variants",
+      visible: creatorWorkbenchPanels.variants,
+      title: "Variants",
+      children: <LevelVariantsPanel />,
+    },
+    {
       id: "game",
       visible: creatorWorkbenchPanels.game,
       title: "Game",
@@ -856,6 +919,7 @@ export const Navbar = () => {
   ], [
     canEditCurrentGame,
     creatorWorkbenchPanels.creator,
+    creatorWorkbenchPanels.variants,
     creatorWorkbenchPanels.game,
     creatorWorkbenchPanels.events,
     currentGame?.id,

@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils/cn";
 import type { SubNavbarItem } from "./SubNavbar";
 import { WorkbenchSidebarToolRow } from "./WorkbenchSidebarToolRow";
 
-export type CreatorWorkbenchPanelId = "events" | "creator" | "game";
+export type CreatorWorkbenchPanelId = "events" | "creator" | "variants" | "game";
 
 export type CreatorWorkbenchSection = {
   id: CreatorWorkbenchPanelId;
@@ -22,6 +22,15 @@ type CreatorWorkbenchSubSidebarProps = {
   sections: CreatorWorkbenchSection[];
 };
 
+const SECTION_TOUR_SPOTS: Partial<Record<CreatorWorkbenchPanelId, string>> = {
+  creator: "creator.level_tools",
+  events: "creator.events",
+  variants: "creator.variants",
+  game: "creator.game_tools",
+};
+
+const TOUR_SCROLL_MARGIN_CLASS = "scroll-mt-28";
+
 export function CreatorWorkbenchSubSidebar({ sections }: CreatorWorkbenchSubSidebarProps) {
   const { isMobile } = useSidebarCollapse();
   const visibleSections = sections.filter((s) => s.visible);
@@ -33,15 +42,17 @@ export function CreatorWorkbenchSubSidebar({ sections }: CreatorWorkbenchSubSide
         aria-label="Creator workbench tools"
         data-tour-spot="creator.workbench_sidebar"
         className={cn(
-          "flex min-h-0 flex-1 flex-col gap-0 overflow-x-hidden overflow-y-auto overscroll-y-contain border-border bg-background/70 py-1.5 [container-type:inline-size]",
-          isMobile ? "min-w-[90px] max-w-[148px] border-r px-1" : "w-14 shrink-0 border-r px-1",
+          "flex min-h-0 flex-1 flex-col gap-0 overflow-x-hidden overflow-y-auto overscroll-y-contain border-border bg-background/70 py-1.5 [container-type:inline-size] scroll-pt-28",
+          isMobile ? "min-w-[90px] max-w-[148px] border-r px-1" : "w-20 shrink-0 border-r px-1",
         )}
       >
         {visibleSections.map((section, index) => (
           <div
             key={section.id}
+            data-tour-spot={SECTION_TOUR_SPOTS[section.id]}
             className={cn(
               "flex flex-col gap-0.5",
+              SECTION_TOUR_SPOTS[section.id] && TOUR_SCROLL_MARGIN_CLASS,
               index > 0 && "mt-1.5 border-t border-border pt-1.5",
             )}
           >
