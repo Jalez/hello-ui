@@ -13,12 +13,19 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 
+export type EditorMagicSuggestionTarget = "template" | "solution";
+export type EditorMagicSuggestion = {
+  code: string;
+  target: EditorMagicSuggestionTarget;
+};
+
 type EditorMagicButtonProps = {
   answerKey?: string;
   EditorCode: string;
-  onSuggestion?: (newCode: string) => void;
+  onSuggestion?: (suggestion: EditorMagicSuggestion) => void;
   editorCodeChanger?: (newCode: string) => void;
   editorType: string;
+  defaultTarget?: EditorMagicSuggestionTarget;
   disabled?: boolean;
   newPrompt?: string;
   newSystemPrompt?: string;
@@ -36,6 +43,57 @@ type EditorMagicButtonProps = {
 //   return formattedHtml;
 // }
 
+function inferSuggestionTarget(requestPrompt: string, currentTarget: EditorMagicSuggestionTarget): EditorMagicSuggestionTarget {
+  const prompt = requestPrompt.toLowerCase();
+  const mentionsTemplate = /\btemplate\b/.test(prompt);
+  const mentionsSolution = /\bsolution\b/.test(prompt);
+
+  if (mentionsTemplate && !mentionsSolution) {
+    return "template";
+  }
+  if (mentionsSolution && !mentionsTemplate) {
+    return "solution";
+  }
+
+  return currentTarget;
+}
+
+function parseAiJsonResponse(raw: unknown): Record<string, unknown> | null {
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    return raw as Record<string, unknown>;
+  }
+
+  if (typeof raw !== "string") {
+    return null;
+  }
+
+  const trimmed = raw.trim();
+  const candidates = [trimmed];
+
+  const fencedMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fencedMatch?.[1]) {
+    candidates.unshift(fencedMatch[1].trim());
+  }
+
+  const objectMatch = trimmed.match(/\{[\s\S]*\}/);
+  if (objectMatch?.[0]) {
+    candidates.push(objectMatch[0].trim());
+  }
+
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+    } catch {
+      // Ignore parse failures and try the next candidate.
+    }
+  }
+
+  return null;
+}
+
 const EditorMagicButton = ({
   answerKey = "code",
   buttonColor = "secondary",
@@ -43,10 +101,11 @@ const EditorMagicButton = ({
   onSuggestion,
   editorCodeChanger,
   editorType,
+  defaultTarget: defaultTargetProp,
   disabled = false,
   newPrompt,
   newSystemPrompt,
-  exampleResponse = "{" + '"code": "/**New and improved code here*/"' + "}",
+  exampleResponse = "/* New and improved code here */",
 }: EditorMagicButtonProps) => {
   const currentlevel = useAppSelector(
     (state) => state.currentLevel.currentLevel
@@ -58,7 +117,9 @@ const EditorMagicButton = ({
   const [requestPrompt, setRequestPrompt] = useState("");
   const { config } = useAIProviderConfig();
   const { config: promptConfig } = useAIPromptConfig();
-  const defaultSystemPromptAddOn = `Return a json with "${answerKey}"-key that contains the new and improved code for the component.`;
+  const defaultTarget: EditorMagicSuggestionTarget =
+    defaultTargetProp || (/\bsolution\b/i.test(editorType) ? "solution" : "template");
+  const defaultSystemPromptAddOn = `Return a JSON object with keys "${answerKey}" and "target". "${answerKey}" must contain only the updated code as a string. "target" must be either "template" or "solution". If the user explicitly mentions template or solution, follow that. Otherwise use "${defaultTarget}".`;
   const prompt = useMemo(
     () =>
       newPrompt ||
@@ -79,8 +140,9 @@ const EditorMagicButton = ({
   );
 
   const handleSuggestion = (nextCode: string) => {
+    const target = inferSuggestionTarget(requestPrompt, defaultTarget);
     if (onSuggestion) {
-      onSuggestion(nextCode);
+      onSuggestion({ code: nextCode, target });
       return;
     }
     if (editorCodeChanger) {
@@ -90,6 +152,7 @@ const EditorMagicButton = ({
 
   const fetchResponse = async () => {
     const trimmedRequestPrompt = requestPrompt.trim();
+    const requestedTarget = inferSuggestionTarget(trimmedRequestPrompt, defaultTarget);
     try {
       setLoading(true);
       const response = await fetch(chatGPTURl, {
@@ -103,18 +166,17 @@ const EditorMagicButton = ({
           apiKey: config.apiKey || undefined,
           systemPrompt:
             systemPrompt +
+            "\n" +
             defaultSystemPromptAddOn +
-            "example response:" +
-            "'''" +
-            `{
-              "${answerKey}": "${exampleResponse}"
-            }` +
-            "'''",
+            "\nExample response:\n```json\n" +
+            `{"${answerKey}":"${exampleResponse.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}","target":"${requestedTarget}"}` +
+            "\n```",
           prompt:
             prompt +
             (trimmedRequestPrompt
               ? `\nRequested changes from user:\n'''${trimmedRequestPrompt}'''\n`
               : "") +
+            `\nCurrent target context: ${defaultTarget}\n` +
             "code to improve:" +
             "'''" +
             EditorCode +
@@ -122,16 +184,33 @@ const EditorMagicButton = ({
         }),
       });
       const data = await response.json();
+      const parsed = parseAiJsonResponse(data);
+      if (!parsed) {
+        throw new Error("AI response was not valid JSON.");
+      }
 
-      if (typeof data === "string") {
-        const dP = JSON.parse(data);
-        if (typeof dP[answerKey] === "string") {
-          handleSuggestion(dP[answerKey] || "");
+      const nextCodeValue = parsed[answerKey];
+      const nextTargetValue = parsed.target;
+      const resolvedTarget =
+        nextTargetValue === "template" || nextTargetValue === "solution"
+          ? nextTargetValue
+          : requestedTarget;
+
+      if (typeof nextCodeValue === "string") {
+        if (onSuggestion) {
+          onSuggestion({ code: nextCodeValue, target: resolvedTarget });
         } else {
-          handleSuggestion(JSON.stringify(dP[answerKey] || ""));
+          handleSuggestion(nextCodeValue);
         }
-      } else if (typeof data === "object" && typeof data?.[answerKey] === "string") {
-        handleSuggestion(data[answerKey]);
+      } else if (nextCodeValue !== undefined) {
+        const stringifiedCode = JSON.stringify(nextCodeValue);
+        if (onSuggestion) {
+          onSuggestion({ code: stringifiedCode, target: resolvedTarget });
+        } else {
+          handleSuggestion(stringifiedCode);
+        }
+      } else {
+        throw new Error(`AI response did not include "${answerKey}".`);
       }
 
       setOpen(false);
