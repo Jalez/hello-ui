@@ -1,9 +1,11 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { usePathname } from "next/navigation";
 import { Joyride, EVENTS, STATUS, type Step } from "react-joyride";
+import { ImageIcon, ImagePlus, MousePointer, PanelsLeftRight, Trash2 } from "lucide-react";
 import { GameboardTourTooltip } from "@/components/General/GameboardTourTooltip";
 import { useAppSelector } from "@/store/hooks/hooks";
 import { apiUrl, stripBasePath } from "@/lib/apiUrl";
@@ -29,6 +31,7 @@ const SPOT_ORDER: TourSpotKey[] = [
   "creator.workbench_sidebar",
   "gameboard.events_strip",
   "gameboard.scenario_run_controls",
+  "gameboard.artboard_actions",
   "footer.help",
   "footer.level_menu",
   "footer.time_menu",
@@ -38,7 +41,7 @@ const SPOT_ORDER: TourSpotKey[] = [
 
 const STEP_CONTENT: Record<
   TourSpotKey,
-  { title: string; description: string; content: string }
+  { title: string; description: string; content: ReactNode }
 > = {
   "navbar.game_route_score": {
     title: "Total score",
@@ -105,6 +108,32 @@ const STEP_CONTENT: Record<
     description: "Play back or automate the scenario’s event timeline.",
     content:
       "Replay the full sequence from the start, or turn on auto-run so events advance when you open the page.",
+  },
+  "gameboard.artboard_actions": {
+    title: "Artboard actions",
+    description: "Quick controls for the visible artboards.",
+    content: (
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <PanelsLeftRight className="h-4 w-4 shrink-0" />
+          <span>Switch between Solution and Drawboard when only one artboard fits on screen.</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 shrink-0">
+            <ImageIcon className="h-4 w-4" />
+            <MousePointer className="h-4 w-4" />
+          </div>
+          <span>Toggle static versus live preview.</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 shrink-0">
+            <Trash2 className="h-4 w-4" />
+            <ImagePlus className="h-4 w-4" />
+          </div>
+          <span>Creators can remove or add scenarios here.</span>
+        </div>
+      </div>
+    ),
   },
   "footer.help": {
     title: "Help",
@@ -175,8 +204,8 @@ export function GameboardTourController() {
 
   useEffect(() => {
     if (status !== "authenticated") {
-      setAcks(null);
-      return;
+      const timer = setTimeout(() => setAcks(null), 0);
+      return () => clearTimeout(timer);
     }
     let cancelled = false;
     (async () => {
@@ -216,7 +245,7 @@ export function GameboardTourController() {
     tourSpotsRef.current = present;
     setSteps(buildStepsForSpots(present));
     setRun(true);
-  }, [acks, status, isGameOrCreator, levels.length]);
+  }, [acks, isGameOrCreator, levels.length, setRun, setSteps, status]);
 
   useEffect(() => {
     if (!acks || !isGameOrCreator || levels.length === 0 || status !== "authenticated") {
@@ -258,7 +287,7 @@ export function GameboardTourController() {
     };
   }, [acks, isGameOrCreator, levels.length, status, tryStartTour]);
 
-  const handleEvent = useCallback((data: { type: string; status: string }) => {
+  const handleEvent = (data: { type: string; status: string }) => {
     if (data.type !== EVENTS.TOUR_END) {
       return;
     }
@@ -284,7 +313,7 @@ export function GameboardTourController() {
     }).then(() => {
       setAcks((prev) => ({ ...prev, ...payload }));
     });
-  }, []);
+  };
 
   if (status !== "authenticated" || !isGameOrCreator || levels.length === 0 || steps.length === 0) {
     return null;

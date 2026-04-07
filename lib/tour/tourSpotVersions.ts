@@ -19,6 +19,7 @@ export const TOUR_SPOT_VERSIONS = {
   "footer.collaboration": 1,
   "gameboard.events_strip": 2,
   "gameboard.scenario_run_controls": 2,
+  "gameboard.artboard_actions": 2,
 } as const;
 
 export type TourSpotKey = keyof typeof TOUR_SPOT_VERSIONS;
