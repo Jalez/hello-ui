@@ -2,6 +2,7 @@ import dotenv from "dotenv";
 import path from "node:path";
 import process from "node:process";
 import { chromium, expect } from "@playwright/test";
+import { TOUR_SPOT_ACKS } from "./playwright-tour-acks.mjs";
 
 dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
 
@@ -465,25 +466,7 @@ async function deleteGame(request, gameId) {
 
 /** Pre-acknowledge every tour spot so the Joyride overlay never appears. */
 async function acknowledgeTourSpots(request) {
-  const acks = {
-    "navbar.game_route_score": 1,
-    "navbar.game_route_mobile_game_menu": 1,
-    "navbar.game_route_levels": 1,
-    "navbar.game_route_lobby": 1,
-    "navbar.game_route_finish": 1,
-    "navbar.creator_game_menu": 1,
-    "navbar.creator_workbench_tools": 1,
-    "navbar.creator_levels": 1,
-    "creator.workbench_sidebar": 1,
-    "footer.help": 1,
-    "footer.level_menu": 1,
-    "footer.time_menu": 1,
-    "footer.info": 1,
-    "footer.collaboration": 1,
-    "gameboard.events_strip": 2,
-    "gameboard.scenario_run_controls": 2,
-  };
-  const res = await request.patch(`${BASE_URL}/api/user/tour-spots`, { data: { acks } });
+  const res = await request.patch(`${BASE_URL}/api/user/tour-spots`, { data: { acks: TOUR_SPOT_ACKS } });
   if (!res.ok()) {
     console.warn("Failed to pre-ack tour spots:", res.status(), await res.text());
   }

@@ -1,4 +1,5 @@
 import { chromium, expect, firefox, webkit } from "@playwright/test";
+import { TOUR_SPOT_ACKS } from "./playwright-tour-acks.mjs";
 import { Client } from "pg";
 import { readFileSync } from "fs";
 import dotenv from "dotenv";
@@ -1337,23 +1338,13 @@ async function signInDevUser(page, username) {
     .toBe(true);
 
   // Pre-acknowledge all tour spots so the Joyride overlay never blocks interactions.
-  await page.evaluate(async () => {
-    const acks = {
-      "navbar.game_route_score": 1, "navbar.game_route_mobile_game_menu": 1,
-      "navbar.game_route_levels": 1, "navbar.game_route_lobby": 1,
-      "navbar.game_route_finish": 1, "navbar.creator_game_menu": 1,
-      "navbar.creator_workbench_tools": 1, "navbar.creator_levels": 1,
-      "creator.workbench_sidebar": 1, "footer.help": 1,
-      "footer.level_menu": 1, "footer.time_menu": 1,
-      "footer.info": 1, "footer.collaboration": 1,
-      "gameboard.events_strip": 2, "gameboard.scenario_run_controls": 2,
-    };
+  await page.evaluate(async (acks) => {
     await fetch("/api/user/tour-spots", {
       method: "PATCH", credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ acks }),
     }).catch(() => {});
-  });
+  }, TOUR_SPOT_ACKS);
 }
 
 async function enableHttpLatency(context) {
