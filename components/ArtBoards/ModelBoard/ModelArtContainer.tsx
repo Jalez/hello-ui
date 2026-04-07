@@ -47,6 +47,7 @@ type ModelArtContainerProps = {
   snapshotOverride?: DrawboardSnapshotPayload | null;
   suppressHeavyLayoutEffects?: boolean;
   artifactCache?: DrawboardArtifactDescriptor;
+  solutionArtifactLookupStatus?: "ready" | "loading" | "missing";
 };
 
 export const ModelArtContainer = ({
@@ -67,6 +68,7 @@ export const ModelArtContainer = ({
   snapshotOverride = null,
   suppressHeavyLayoutEffects = false,
   artifactCache,
+  solutionArtifactLookupStatus = "missing",
 }: ModelArtContainerProps): React.ReactNode => {
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const level = useAppSelector((state) => state.levels[currentLevel - 1]);
@@ -78,7 +80,12 @@ export const ModelArtContainer = ({
   const mountSolutionFrame =
     isCreator
     || (!usePerStepGameCapture && !hasSolutionCapture)
-    || (usePerStepGameCapture && allowTransientSolutionIframe && !hasSolutionCapture);
+    || (
+      usePerStepGameCapture
+      && allowTransientSolutionIframe
+      && !hasSolutionCapture
+      && solutionArtifactLookupStatus === "missing"
+    );
 
   const prevMountedSolutionFrameRef = useRef(mountSolutionFrame);
   useEffect(() => {
@@ -154,7 +161,7 @@ export const ModelArtContainer = ({
           <Spinner
             height={scenario.dimensions.height}
             width={scenario.dimensions.width}
-            message="Preparing reference…"
+            message={solutionArtifactLookupStatus === "loading" ? "Checking reference cache…" : "Preparing reference…"}
           />
         </div>
       )}

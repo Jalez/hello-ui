@@ -30,6 +30,7 @@ import {
  */
 const _lastCapture = new Map<string, { time: number; contentKey: string }>();
 const _lastVerifiedInteraction = new Map<string, number>();
+const _uploadedArtifactFingerprints = new Map<string, string>();
 const CAPTURE_DEDUP_MS = 100;
 /** Below Playwright layout follow-up interval so a second identical snapshot can refresh captures after fonts settle. */
 const CAPTURE_SAME_CONTENT_WINDOW_MS = 320;
@@ -180,7 +181,16 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
     }
     persistLocalArtifact(record);
     if (artifactCache.artifactType === "solution" || artifactCache.artifactType === "solution-step") {
-      void uploadRemoteArtifact(record).catch(() => {});
+      const uploadedFingerprint = _uploadedArtifactFingerprints.get(key);
+      if (uploadedFingerprint === artifactCache.fingerprint) {
+        return;
+      }
+      _uploadedArtifactFingerprints.set(key, artifactCache.fingerprint);
+      void uploadRemoteArtifact(record).catch(() => {
+        if (_uploadedArtifactFingerprints.get(key) === artifactCache.fingerprint) {
+          _uploadedArtifactFingerprints.delete(key);
+        }
+      });
     }
   }, [artifactCache]);
 

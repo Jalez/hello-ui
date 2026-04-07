@@ -34,6 +34,7 @@ import {
 } from "@/lib/drawboard/eventSequenceSolutionUrls";
 import { useEventSequencePreview } from "@/lib/drawboard/useEventSequencePreview";
 import {
+  buildArtifactKey,
   fetchRemoteArtifact,
   readLocalArtifact,
   type DrawboardArtifactDescriptor,
@@ -65,6 +66,7 @@ type ScenarioModelProps = {
 };
 
 const EMPTY_EVENT_SEQUENCE: EventSequenceStep[] = [];
+type SolutionArtifactLookupStatus = "ready" | "loading" | "missing";
 
 export const ScenarioModel = ({
   scenario,
@@ -201,6 +203,23 @@ export const ScenarioModel = ({
       usePerStepSolutionKeys,
     ],
   );
+  const solutionArtifactKey = useMemo(
+    () => buildArtifactKey(solutionArtifactDescriptor),
+    [solutionArtifactDescriptor],
+  );
+  const [solutionArtifactLookup, setSolutionArtifactLookup] = useState<{
+    key: string;
+    status: SolutionArtifactLookupStatus;
+  }>({
+    key: solutionArtifactKey,
+    status: solutionUrl?.trim() ? "ready" : "loading",
+  });
+  const solutionArtifactLookupStatus: SolutionArtifactLookupStatus = solutionUrl?.trim()
+    ? "ready"
+    : solutionArtifactLookup.key === solutionArtifactKey
+      ? solutionArtifactLookup.status
+      : "loading";
+
   useEffect(() => {
     if (solutionUrl?.trim()) {
       return;
@@ -214,6 +233,9 @@ export const ScenarioModel = ({
           scenarioId: scenario.scenarioId,
           eventSequenceStepId: usePerStepSolutionKeys ? solutionStepIdForCapture ?? undefined : undefined,
         }));
+        if (!cancelled) {
+          setSolutionArtifactLookup({ key: solutionArtifactKey, status: "ready" });
+        }
         return;
       }
       try {
@@ -224,16 +246,29 @@ export const ScenarioModel = ({
             scenarioId: scenario.scenarioId,
             eventSequenceStepId: usePerStepSolutionKeys ? solutionStepIdForCapture ?? undefined : undefined,
           }));
+          setSolutionArtifactLookup({ key: solutionArtifactKey, status: "ready" });
+          return;
         }
       } catch {
         // Ignore cache misses/network failures.
+      }
+      if (!cancelled) {
+        setSolutionArtifactLookup({ key: solutionArtifactKey, status: "missing" });
       }
     };
     void hydrate();
     return () => {
       cancelled = true;
     };
-  }, [dispatch, scenario.scenarioId, solutionArtifactDescriptor, solutionStepIdForCapture, solutionUrl, usePerStepSolutionKeys]);
+  }, [
+    dispatch,
+    scenario.scenarioId,
+    solutionArtifactDescriptor,
+    solutionArtifactKey,
+    solutionStepIdForCapture,
+    solutionUrl,
+    usePerStepSolutionKeys,
+  ]);
   const useLiveSolutionForStepScrub =
     isCreator && frameNeedsInteractive && scenarioSequence.length > 0;
   const interactiveSnapshotOverride = useMemo(() => {
@@ -307,6 +342,7 @@ export const ScenarioModel = ({
             snapshotOverride={interactiveSnapshotOverride}
             suppressHeavyLayoutEffects={suppressHeavyLayoutEffects}
             artifactCache={solutionArtifactDescriptor}
+            solutionArtifactLookupStatus={solutionArtifactLookupStatus}
           >
             <div
               className="relative"
