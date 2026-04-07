@@ -13,6 +13,7 @@ import { useOptionalCollaboration, useYjsLevelCodeSnapshot } from "@/lib/collabo
 import { store } from "@/store/store";
 import { useGameRuntimeConfig } from "@/hooks/useGameRuntimeConfig";
 import { apiUrl } from "@/lib/apiUrl";
+import { serializeLevelForPersistence } from "@/lib/levels/variants";
 
 const Editors = (): React.ReactNode => {
   const dispatch = useAppDispatch();
@@ -212,10 +213,19 @@ const Editors = (): React.ReactNode => {
         if (!payload) {
           return;
         }
+        const latestLevel = store.getState().levels[levelIndex] as Level | undefined;
+        if (!latestLevel) {
+          return;
+        }
+        const serializedLevel = serializeLevelForPersistence({
+          ...latestLevel,
+          solution: payload,
+        });
+        const { name, ...json } = serializedLevel;
         fetch(apiUrl(`/api/levels/${targetLevel.identifier}`), {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ solution: payload }),
+          body: JSON.stringify({ name, ...json }),
         }).catch(() => {});
       }, 600);
       solutionPersistTimeoutsRef.current.set(persistKey, timeout);
@@ -307,15 +317,19 @@ const Editors = (): React.ReactNode => {
         if (!payload) {
           return;
         }
-        const latestLevel = store.getState().levels[levelIndex];
-        const eventSequence = latestLevel?.eventSequence;
+        const latestLevel = store.getState().levels[levelIndex] as Level | undefined;
+        if (!latestLevel) {
+          return;
+        }
+        const serializedLevel = serializeLevelForPersistence({
+          ...latestLevel,
+          code: payload,
+        });
+        const { name, ...json } = serializedLevel;
         fetch(apiUrl(`/api/levels/${targetLevel.identifier}`), {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            code: payload,
-            ...(eventSequence && Object.keys(eventSequence.byScenarioId ?? {}).length > 0 ? { eventSequence } : {}),
-          }),
+          body: JSON.stringify({ name, ...json }),
         }).catch(() => {});
       }, 600);
       templatePersistTimeoutsRef.current.set(persistKey, timeout);

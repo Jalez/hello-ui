@@ -7,6 +7,7 @@ import { updateLevelIdentifier } from "@/store/slices/levels.slice";
 import { setAutoSaveLevels, setIsSavingLevel, setLastSaved } from "@/store/slices/options.slice";
 import { addLevelsToMap } from "@/lib/utils/network/maps";
 import { useGameStore } from "@/components/default/games";
+import { serializeLevelForPersistence } from "@/lib/levels/variants";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const AUTO_SAVE_DELAY_MS = 1500;
@@ -43,7 +44,7 @@ export const useLevelSaver = () => {
   };
 
   const serializeLevel = (levelToSerialize: typeof level): string =>
-    JSON.stringify(levelToSerialize ?? null);
+    JSON.stringify(levelToSerialize ? serializeLevelForPersistence(levelToSerialize) : null);
 
   const saveLevel = async (levelToSave: typeof level): Promise<void> => {
     if (!levelToSave) {
@@ -74,7 +75,8 @@ export const useLevelSaver = () => {
     const url = isUpdate ? `${levelUrl}/${levelToSave.identifier}` : levelUrl;
     const method = isUpdate ? "PUT" : "POST";
 
-    const { name, ...json } = levelToSave;
+    const serializedLevel = serializeLevelForPersistence(levelToSave);
+    const { name, ...json } = serializedLevel;
     const body = { name, ...json };
 
     pendingSaveCountRef.current += 1;

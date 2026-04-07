@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { getSql } from "@/app/api/_lib/db";
 import { evaluateGameRouteAccess, getGameById, getGameByIdForGameplay } from "@/app/api/_lib/services/gameService";
 import { getOrCreateUserByEmail } from "@/app/api/_lib/services/userService";
+import { getLevelsForMap } from "@/app/api/_lib/services/mapService/read";
 import {
   attachGameAccessCookie,
   clearGameAccessCookie,
@@ -11,6 +12,7 @@ import {
   resolveAccessKeyForGame,
 } from "@/app/api/_lib/services/gameService/accessCookie";
 import { getLtiSession, hasOutcomeService } from "@/lib/lti";
+import { BASE_LEVEL_VARIANT_ID, getLevelVariantAssignmentKey } from "@/lib/levels/variants";
 
 export function getRows(result: { rows?: unknown[] } | unknown[] | null | undefined): Record<string, unknown>[] {
   if (!result) {
@@ -177,6 +179,85 @@ function mergeProgressData(
     ...(groupStartGate ? { groupStartGate } : {}),
     ...(existing.levels === undefined ? {} : { levels: existing.levels }),
   };
+}
+
+function normalizeVariantAssignments(value: unknown): Record<string, string> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === "string" && entry[1].length > 0),
+  );
+}
+
+async function ensureVariantAssignmentsForInstance(
+  instanceId: string,
+  mapName: string,
+  existingProgressData: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const existingAssignments = normalizeVariantAssignments(existingProgressData.variantAssignments);
+  const levels = await getLevelsForMap(mapName);
+  if (!levels.length) {
+    return existingProgressData;
+  }
+
+  const nextAssignments: Record<string, string> = {};
+  let changed = false;
+
+  levels.forEach((level, index) => {
+    const key = getLevelVariantAssignmentKey({ identifier: level.identifier }, index);
+    const variants = Array.isArray(level.json?.variants)
+      ? level.json.variants.filter((variant): variant is { id: string } => (
+          !!variant
+          && typeof variant === "object"
+          && typeof (variant as { id?: unknown }).id === "string"
+          && ((variant as { id: string }).id.length > 0)
+        ))
+      : [];
+    const previous = existingAssignments[key];
+
+    if (variants.length === 0) {
+      nextAssignments[key] = BASE_LEVEL_VARIANT_ID;
+      if (previous !== BASE_LEVEL_VARIANT_ID) {
+        changed = true;
+      }
+      return;
+    }
+
+    const hasPreviousVariant = typeof previous === "string" && variants.some((variant) => variant.id === previous);
+    if (hasPreviousVariant) {
+      nextAssignments[key] = previous;
+      return;
+    }
+
+    nextAssignments[key] = variants[Math.floor(Math.random() * variants.length)]!.id;
+    changed = true;
+  });
+
+  if (!changed) {
+    const previousKeys = Object.keys(existingAssignments);
+    const nextKeys = Object.keys(nextAssignments);
+    if (
+      previousKeys.length === nextKeys.length &&
+      nextKeys.every((key) => existingAssignments[key] === nextAssignments[key])
+    ) {
+      return existingProgressData;
+    }
+  }
+
+  const nextProgressData = {
+    ...existingProgressData,
+    variantAssignments: nextAssignments,
+  };
+
+  const { persistedProgressData } = await updateInstanceProgressData(
+    instanceId,
+    existingProgressData,
+    nextProgressData,
+  );
+
+  return normalizeProgressData(persistedProgressData);
 }
 
 async function attachCurrentLtiOutcomeTarget(
@@ -432,24 +513,40 @@ async function resolveServiceTokenAuth(request: NextRequest, gameId: string) {
 
   const mode = gameRows[0].collaboration_mode === "group" ? "group" : "individual";
 
-  if (mode === "group") {
-    if (!groupId) {
-      if (userId) {
-        const individualInstance = await resolveIndividualInstance(sql, gameId, userId);
-        return {
-          ...individualInstance,
-          collaborationMode: mode,
-          mapName: (gameRows[0].map_name as string) || "",
-        } as const;
+    if (mode === "group") {
+      if (!groupId) {
+        if (userId) {
+          const individualInstance = await resolveIndividualInstance(sql, gameId, userId);
+          const progressData = await ensureVariantAssignmentsForInstance(
+            String(individualInstance.instance.id),
+            (gameRows[0].map_name as string) || "",
+            normalizeProgressData(individualInstance.instance.progressData),
+          );
+          return {
+            instance: {
+              ...individualInstance.instance,
+              progressData,
+            },
+            collaborationMode: mode,
+            mapName: (gameRows[0].map_name as string) || "",
+          } as const;
+        }
+        return { error: "groupId is required for group mode", status: 400 } as const;
       }
-      return { error: "groupId is required for group mode", status: 400 } as const;
-    }
-    const groupInstance = await resolveGroupInstance(sql, gameId, groupId);
-    return {
-      instance: groupInstance.instance,
-      collaborationMode: mode,
-      mapName: (gameRows[0].map_name as string) || "",
-    } as const;
+      const groupInstance = await resolveGroupInstance(sql, gameId, groupId);
+      const progressData = await ensureVariantAssignmentsForInstance(
+        String(groupInstance.instance.id),
+        (gameRows[0].map_name as string) || "",
+        normalizeProgressData(groupInstance.instance.progressData),
+      );
+      return {
+        instance: {
+          ...groupInstance.instance,
+          progressData,
+        },
+        collaborationMode: mode,
+        mapName: (gameRows[0].map_name as string) || "",
+      } as const;
   }
 
   // Individual mode
@@ -457,8 +554,16 @@ async function resolveServiceTokenAuth(request: NextRequest, gameId: string) {
     return { error: "userId is required for individual mode", status: 400 } as const;
   }
   const individualInstance = await resolveIndividualInstance(sql, gameId, userId);
+  const progressData = await ensureVariantAssignmentsForInstance(
+    String(individualInstance.instance.id),
+    (gameRows[0].map_name as string) || "",
+    normalizeProgressData(individualInstance.instance.progressData),
+  );
   return {
-    instance: individualInstance.instance,
+    instance: {
+      ...individualInstance.instance,
+      progressData,
+    },
     collaborationMode: mode,
     mapName: (gameRows[0].map_name as string) || "",
   } as const;
@@ -542,12 +647,21 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             ),
           }
         : resolved.instance;
+    const progressData = await ensureVariantAssignmentsForInstance(
+      String(instance.id),
+      game.map_name,
+      normalizeProgressData(instance.progressData),
+    );
+    const normalizedInstance = {
+      ...instance,
+      progressData,
+    };
 
     const response = NextResponse.json({
       gameId: id,
       collaborationMode: mode,
       mapName: game.map_name,
-      instance,
+      instance: normalizedInstance,
     });
     attachGameAccessCookie(request, response, game, rawAccessKey);
     return response;
@@ -584,12 +698,20 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           ),
         }
       : resolved.instance;
+  const progressData = await ensureVariantAssignmentsForInstance(
+    String(instance.id),
+    game.map_name,
+    normalizeProgressData(instance.progressData),
+  );
 
   return NextResponse.json({
     gameId: id,
     collaborationMode: mode,
     mapName: game.map_name,
-    instance,
+    instance: {
+      ...instance,
+      progressData,
+    },
   });
 }
 

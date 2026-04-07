@@ -9,7 +9,7 @@ import SidebySideArt, { type SingleLayoutControl } from "./SidebySideArt";
 import { ScenarioDrawing } from "./Drawboard/ScenarioDrawing";
 import { ScenarioModel } from "./ModelBoard/ScenarioModel";
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { usePathname } from "next/navigation";
+import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   Select,
   SelectContent,
@@ -54,20 +54,28 @@ import {
 import { useGameRuntimeConfig } from "@/hooks/useGameRuntimeConfig";
 import { EventSequencePanel } from "./Drawboard/EventSequencePanel";
 import { useAutoReplaySequence } from "@/lib/drawboard/useAutoReplaySequence";
+import { apiUrl, stripBasePath } from "@/lib/apiUrl";
 
 const EMPTY_SCENARIOS: scenario[] = [];
 
 export const ArtBoards = (): React.ReactNode => {
   const dispatch = useAppDispatch();
   const pathname = usePathname();
+  const normalizedPathname = stripBasePath(pathname ?? "");
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const params = useParams<{ gameId?: string }>();
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const level = useAppSelector((state) => state.levels[currentLevel - 1]);
   const drawingUrls = useAppSelector((state) => state.drawingUrls as Record<string, string | undefined>);
   const isCreatorRoute = pathname?.startsWith("/creator/") ?? false;
   const isCreatorContext = isCreatorRoute;
+  const routeGameIdParam = params?.gameId;
+  const routeGameId = Array.isArray(routeGameIdParam) ? routeGameIdParam[0] : routeGameIdParam;
   const { syncLevelFields } = useLevelMetaSync();
   const { drawboardCaptureMode } = useGameRuntimeConfig();
   const [selectedScenarioId, setSelectedScenarioId] = useState<string | null>(null);
+  const [restoredScenarioKey, setRestoredScenarioKey] = useState<string | null>(null);
   const showHotkeys = level?.showHotkeys ?? false;
   const scenarios = level?.scenarios ?? EMPTY_SCENARIOS;
   const [singleLayoutControl, setSingleLayoutControl] = useState<SingleLayoutControl | null>(null);
@@ -86,6 +94,7 @@ export const ArtBoards = (): React.ReactNode => {
     : -1;
 
   const selectedScenarioDrawingUrl = selectedScenario ? drawingUrls[selectedScenario.scenarioId] : undefined;
+  const scenarioRestoreKey = routeGameId ? `${routeGameId}:${currentLevel}` : null;
   const selectedScenarioPreviewChoice = useEventSequenceUiState(
     useCallback((state) => {
       if (!selectedScenario) {
@@ -202,6 +211,37 @@ export const ArtBoards = (): React.ReactNode => {
   useEffect(() => {
     setSelectedScenarioIdForLevel(currentLevel, selectedScenario?.scenarioId ?? null);
   }, [currentLevel, selectedScenario?.scenarioId]);
+
+  useEffect(() => {
+    if (!scenarioRestoreKey || scenarios.length === 0) {
+      return;
+    }
+
+    const urlLevel = Number(searchParams.get('level'));
+    const urlScenarioId = searchParams.get('scenario');
+    const savedScenarioId = urlLevel === currentLevel && urlScenarioId ? urlScenarioId : null;
+    const nextScenarioId = savedScenarioId && scenarios.some((scenario) => scenario.scenarioId === savedScenarioId)
+      ? savedScenarioId
+      : scenarios[0]?.scenarioId ?? null;
+
+    setSelectedScenarioId(nextScenarioId);
+    setRestoredScenarioKey(scenarioRestoreKey);
+  }, [currentLevel, scenarioRestoreKey, scenarios, searchParams]);
+
+  useEffect(() => {
+    if (!scenarioRestoreKey || restoredScenarioKey !== scenarioRestoreKey || !selectedScenario) {
+      return;
+    }
+
+    const currentScenario = searchParams.get('scenario');
+    if (currentScenario === selectedScenario.scenarioId) {
+      return;
+    }
+
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('scenario', selectedScenario.scenarioId);
+    router.replace(apiUrl(`${normalizedPathname}?${params.toString()}`));
+  }, [currentLevel, normalizedPathname, restoredScenarioKey, router, scenarioRestoreKey, searchParams, selectedScenario]);
 
   useEffect(() => {
     if (!selectedScenario || !isCreatorContext) {

@@ -37,6 +37,8 @@ import type { PanelImperativeHandle } from "react-resizable-panels";
 import type { GroupImperativeHandle } from "react-resizable-panels";
 import { CreatorAiChatDrawer } from "@/components/creator-ai/CreatorAiChatDrawer";
 
+import { applyAssignedVariantToLevel, getLevelVariantAssignmentKey, normalizeLevelVariants } from "@/lib/levels/variants";
+
 export const allLevels: Level[] = [];
 type SolutionsByLevelName = Record<string, { html: string; css: string; js: string }>;
 const MIN_EDITOR_PANE_WIDTH = 420;
@@ -66,6 +68,21 @@ function normalizeRoomStateLevels(
         js: getYCodeSnapshot?.("js", levelIndex) ?? "",
       },
     };
+  });
+}
+
+function applyGameplayVariantAssignments(
+  sourceLevels: Level[],
+  progressData: Record<string, unknown> | null | undefined,
+): Level[] {
+  const assignments =
+    progressData?.variantAssignments && typeof progressData.variantAssignments === "object" && !Array.isArray(progressData.variantAssignments)
+      ? progressData.variantAssignments as Record<string, string>
+      : {};
+
+  return sourceLevels.map((level, index) => {
+    const assignmentKey = getLevelVariantAssignmentKey(level, index);
+    return applyAssignedVariantToLevel(level, assignments[assignmentKey]);
   });
 }
 
@@ -99,6 +116,7 @@ function App() {
   const lastModeRef = useRef<string | null>(null);
   const lastRoomIdRef = useRef<string | null>(null);
   const lastRoomStateSignatureRef = useRef<string | null>(null);
+  const restoredRouteProgressScopeRef = useRef<string | null>(null);
   const contentRowRef = useRef<HTMLDivElement | null>(null);
   const editorPanelRef = useRef<PanelImperativeHandle | null>(null);
   const panelGroupRef = useRef<GroupImperativeHandle | null>(null);
@@ -107,6 +125,7 @@ function App() {
   const setIsLoadingAsync = (value: boolean) => {
     queueMicrotask(() => setIsLoading(value));
   };
+  const isRouteWithProgress = normalizedPathname.startsWith("/creator/") || normalizedPathname.startsWith("/game/");
   const maxScenarioWidth = useMemo(() => {
     const activeLevel = levels[currentLevel - 1];
     const scenarios = activeLevel?.scenarios ?? [];
@@ -135,6 +154,52 @@ function App() {
   });
   const activeLayout = shouldStackGameLayout ? verticalLayout : horizontalLayout;
   const activeLayoutId = shouldStackGameLayout ? VERTICAL_LAYOUT_ID : HORIZONTAL_LAYOUT_ID;
+
+  useEffect(() => {
+    restoredRouteProgressScopeRef.current = null;
+  }, [routeGameId]);
+
+  useEffect(() => {
+    if (!isRouteWithProgress || !routeGameId || levels.length === 0) {
+      return;
+    }
+
+    if (restoredRouteProgressScopeRef.current === routeGameId) {
+      return;
+    }
+
+    const savedLevel = Number(searchParams.get('level'));
+
+    restoredRouteProgressScopeRef.current = routeGameId;
+
+    if (!Number.isFinite(savedLevel) || savedLevel < 1) {
+      return;
+    }
+
+    const normalizedLevel = Math.min(Math.max(1, savedLevel), levels.length);
+    if (normalizedLevel !== currentLevel) {
+      dispatch(setCurrentLevel(normalizedLevel));
+    }
+  }, [currentLevel, dispatch, isRouteWithProgress, levels.length, routeGameId, searchParams]);
+
+  useEffect(() => {
+    if (!isRouteWithProgress || !routeGameId || levels.length === 0) {
+      return;
+    }
+
+    if (restoredRouteProgressScopeRef.current !== routeGameId) {
+      return;
+    }
+
+    const clampedLevel = Math.min(Math.max(1, currentLevel), levels.length);
+    if (searchParams.get('level') === String(clampedLevel)) {
+      return;
+    }
+
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('level', String(clampedLevel));
+    router.replace(apiUrl(`${normalizedPathname}?${params.toString()}`));
+  }, [currentLevel, isRouteWithProgress, levels.length, normalizedPathname, routeGameId, router, searchParams]);
 
   useEffect(() => {
     const nextLayout = activeLayout.defaultLayout;
@@ -294,6 +359,18 @@ function App() {
         let fetchedLevels: Level[] = levelsSnapshot;
         let nextLevels: Level[] = fetchedLevels;
 
+        if (!isCreator) {
+          const gameProgressData =
+            currentGame?.progressData && typeof currentGame.progressData === "object"
+              ? currentGame.progressData
+              : null;
+          fetchedLevels = applyGameplayVariantAssignments(fetchedLevels, gameProgressData);
+          nextLevels = fetchedLevels;
+        } else {
+          fetchedLevels = fetchedLevels.map((level) => normalizeLevelVariants(level, "creator"));
+          nextLevels = fetchedLevels;
+        }
+
         solutions = nextLevels.reduce((acc, level) => {
           acc[level.name] = {
             html: level.solution.html,
@@ -353,7 +430,8 @@ function App() {
             confettiSprinkled: false,
           };
           fetchedLevels = [emptyLevel];
-          nextLevels = [emptyLevel];
+          nextLevels = [normalizeLevelVariants(emptyLevel, isCreator ? "creator" : "game")];
+          fetchedLevels = nextLevels;
           solutions[emptyLevel.name] = { html: "", css: "", js: "" };
           console.log("Empty level created:", emptyLevel);
         }
@@ -365,6 +443,28 @@ function App() {
         dispatch(resetSolutionUrls());
         dispatch(resetDrawingUrls());
         setAllLevels(fetchedLevels);
+        if (!isCreator && collaboration?.getYText) {
+          nextLevels.forEach((level, levelIndex) => {
+            (["html", "css", "js"] as const).forEach((editorType) => {
+              const yText = collaboration.getYText?.(editorType, levelIndex);
+              const nextContent = level.code[editorType] ?? "";
+              if (!yText || yText.toString() === nextContent) {
+                return;
+              }
+              const applyChange = () => {
+                yText.delete(0, yText.length);
+                if (nextContent.length > 0) {
+                  yText.insert(0, nextContent);
+                }
+              };
+              if (yText.doc) {
+                yText.doc.transact(applyChange, "variant-assignment");
+              } else {
+                applyChange();
+              }
+            });
+          });
+        }
         await dispatch(initializePointsFromLevelsStateThunk());
 
         // Restore saved best points per level from game instance (after points slice is initialized)
@@ -376,8 +476,12 @@ function App() {
           dispatch(mergeSavedPoints(pointsByLevel));
         }
 
-        // Reset to level 1 when loading new levels
-        dispatch(setCurrentLevel(1));
+        const savedLevel = Number(new URLSearchParams(window.location.search).get('level'));
+        const nextCurrentLevel = Number.isFinite(savedLevel) && savedLevel >= 1
+          ? Math.min(Math.max(1, savedLevel), Math.max(1, nextLevels.length))
+          : 1;
+
+        dispatch(setCurrentLevel(nextCurrentLevel));
 
         console.log("All dispatches complete, setting isLoading to false");
         // Set loading false immediately after dispatches (they're synchronous)

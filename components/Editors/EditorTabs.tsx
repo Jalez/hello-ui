@@ -27,6 +27,7 @@ import { TabPresence } from "@/components/collaboration/TabPresence";
 import { ActiveUser, EditorType } from "@/lib/collaboration/types";
 import { logDebugClient } from "@/lib/debug-logger";
 import { useCreatorAiChatStore } from "@/components/creator-ai/store";
+import { serializeLevelForPersistence } from "@/lib/levels/variants";
 
 interface LanguageData {
   code: string;
@@ -166,10 +167,15 @@ function EditorTabs({
     });
 
     try {
+      const serializedLevel = serializeLevelForPersistence({
+        ...level,
+        ...nextLocks,
+      });
+      const { name, ...json } = serializedLevel;
       const response = await fetch(apiUrl(`/api/levels/${identifier}`), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(nextLocks),
+        body: JSON.stringify({ name, ...json }),
       });
       if (!response.ok) {
         const errorText = await response.text();

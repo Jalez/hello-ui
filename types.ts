@@ -108,6 +108,52 @@ export type PointsThreshold = {
   pointsPercent: number;
 };
 
+export type LevelVariantContent = {
+  buildingBlocks?: {
+    pictures?: Array<string>;
+    colors?: Array<string>;
+  };
+  code: {
+    html: string;
+    css: string;
+    js: string;
+  };
+  solution: {
+    html: string;
+    css: string;
+    js: string;
+  };
+  scenarios: scenario[];
+  maxPoints: number;
+  help: {
+    description: string;
+    images: string[];
+    usefullCSSProperties: string[];
+  };
+  instructions: instructions;
+  question_and_answer: question_and_answer;
+  showModelPicture: boolean;
+  lockCSS: boolean;
+  lockHTML: boolean;
+  lockJS: boolean;
+  interactive: boolean;
+  showScenarioModel: boolean;
+  showHotkeys: boolean;
+  eventSequence?: EventSequence;
+  events: InteractionTrigger[];
+  interactionArtifacts?: InteractionArtifacts;
+  percentageTreshold: number;
+  percentageFullPointsTreshold: number;
+  pointsThresholds: PointsThreshold[];
+  difficulty: difficulty;
+};
+
+export type LevelVariant = {
+  id: string;
+  name: string;
+  content: LevelVariantContent;
+};
+
 export interface Level {
   identifier?: levelIdentifier;
   week: string;
@@ -159,6 +205,9 @@ export interface Level {
   percentageTreshold: number;
   percentageFullPointsTreshold: number;
   pointsThresholds: PointsThreshold[];
+  variants?: LevelVariant[];
+  activeVariantId?: string;
+  variantBase?: LevelVariantContent;
 }
 
 export type generator = () => {

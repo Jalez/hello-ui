@@ -9,6 +9,7 @@ import { addDrawingUrl } from "@/store/slices/drawingUrls.slice";
 import { appendEventSequenceStep, recordVerifiedInteraction } from "@/store/slices/levels.slice";
 import { cn } from "@/lib/utils/cn";
 import { apiUrl } from "@/lib/apiUrl";
+import { serializeLevelForPersistence } from "@/lib/levels/variants";
 import { dataUrlFromRawRgba } from "@/lib/utils/drawboardSnapshot";
 import { useGameRuntimeConfig } from "@/hooks/useGameRuntimeConfig";
 import { useLevelMetaSync } from "@/lib/collaboration/hooks/useLevelMetaSync";
@@ -533,10 +534,15 @@ export const Frame = forwardRef<FrameHandle, FrameProps>(function Frame(
         if (!by || Object.keys(by).length === 0) {
           return;
         }
+        const serializedLevel = serializeLevelForPersistence({
+          ...fresh,
+          eventSequence: fresh.eventSequence,
+        });
+        const { name, ...json } = serializedLevel;
         fetch(apiUrl(`/api/levels/${fresh.identifier}`), {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ eventSequence: fresh.eventSequence }),
+          body: JSON.stringify({ name, ...json }),
         }).catch(() => {});
       }, 500);
       _eventSequencePersistTimeouts.set(persistKey, timeout);
