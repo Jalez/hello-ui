@@ -47,6 +47,11 @@ import {
   subscribeSequenceRuntime,
   useEventSequenceUiState,
 } from "@/lib/drawboard/eventSequenceState";
+import {
+  getDrawboardPixelsSideSerials,
+  subscribeDrawboardPixelsForScenario,
+} from "@/lib/drawboard/drawboardPixelsStore";
+import { useGameRuntimeConfig } from "@/hooks/useGameRuntimeConfig";
 import { EventSequencePanel } from "./Drawboard/EventSequencePanel";
 import { useAutoReplaySequence } from "@/lib/drawboard/useAutoReplaySequence";
 
@@ -61,6 +66,7 @@ export const ArtBoards = (): React.ReactNode => {
   const isCreatorRoute = pathname?.startsWith("/creator/") ?? false;
   const isCreatorContext = isCreatorRoute;
   const { syncLevelFields } = useLevelMetaSync();
+  const { drawboardCaptureMode } = useGameRuntimeConfig();
   const [selectedScenarioId, setSelectedScenarioId] = useState<string | null>(null);
   const showHotkeys = level?.showHotkeys ?? false;
   const scenarios = level?.scenarios ?? EMPTY_SCENARIOS;
@@ -168,6 +174,29 @@ export const ArtBoards = (): React.ReactNode => {
   const gameActiveStepId = !isCreatorContext && selectedScenarioSequence.length > 0
     ? selectedScenarioSequence[normalizedActiveStepIndex]?.id ?? null
     : null;
+  const selectedScenarioDrawingPixelsSerial = useSyncExternalStore(
+    useCallback(
+      (listener) => (
+        selectedScenario
+          ? subscribeDrawboardPixelsForScenario(selectedScenario.scenarioId, listener)
+          : () => {}
+      ),
+      [selectedScenario],
+    ),
+    useCallback(
+      () => (selectedScenario ? getDrawboardPixelsSideSerials(selectedScenario.scenarioId).drawing : 0),
+      [selectedScenario],
+    ),
+    useCallback(
+      () => (selectedScenario ? getDrawboardPixelsSideSerials(selectedScenario.scenarioId).drawing : 0),
+      [selectedScenario],
+    ),
+  );
+  const autoReplayMountReady =
+    drawboardCaptureMode !== "browser"
+    || isCreatorContext
+    || !selectedScenario
+    || selectedScenarioDrawingPixelsSerial > 0;
 
   useEffect(() => {
     setSelectedScenarioIdForLevel(currentLevel, selectedScenario?.scenarioId ?? null);
@@ -188,12 +217,20 @@ export const ArtBoards = (): React.ReactNode => {
       && selectedScenarioSequence.length > 0
       && !hasAutoReplayMountedRun(currentLevel, selectedScenario.scenarioId)
       && !sequenceRuntime.autoReplay?.running
+      && autoReplayMountReady
     ) {
       markAutoReplayMountedRun(currentLevel, selectedScenario.scenarioId);
       requestAutoReplay(selectedRuntimeKey, selectedScenarioSequence.length + 1);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoReplayOnMount, currentLevel, selectedRuntimeKey, selectedScenario, selectedScenarioSequence.length]);
+  }, [
+    autoReplayMountReady,
+    autoReplayOnMount,
+    currentLevel,
+    selectedRuntimeKey,
+    selectedScenario,
+    selectedScenarioSequence.length,
+    sequenceRuntime.autoReplay?.running,
+  ]);
 
   useAutoReplaySequence({
     runtimeKey: selectedRuntimeKey,
@@ -403,7 +440,7 @@ export const ArtBoards = (): React.ReactNode => {
                   scenario={selectedScenario}
                   creatorMode={isCreatorContext}
                   creatorPreviewInteractive={creatorPreviewInteractive}
-                  selectedEventSequenceStepId={effectiveSelectedSequenceStepId ?? gameActiveStepId}
+                  selectedEventSequenceStepId={effectiveSelectedSequenceStepId}
                   gameplaySolutionStepId={gameActiveStepId}
                   eventSequenceScopedTriggers={selectedScenarioSequence.length > 0}
                   registerForNavbarCapture
@@ -413,7 +450,7 @@ export const ArtBoards = (): React.ReactNode => {
                   scenario={selectedScenario}
                   creatorMode={isCreatorContext}
                   creatorPreviewInteractive={creatorPreviewInteractive}
-                  selectedEventSequenceStepId={effectiveSelectedSequenceStepId ?? gameActiveStepId}
+                  selectedEventSequenceStepId={effectiveSelectedSequenceStepId}
                   gameplaySolutionStepId={gameActiveStepId}
                   eventSequenceScopedTriggers={selectedScenarioSequence.length > 0}
                   registerForNavbarCapture
