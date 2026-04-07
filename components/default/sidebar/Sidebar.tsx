@@ -6,7 +6,6 @@ import type React from "react";
 import { useEffect, createContext, useContext } from "react";
 import { Drawer, DrawerContentLeft } from "@/components/tailwind/ui/drawer";
 import { useSidebarCollapse } from "./context/SidebarCollapseContext";
-import { ExpandButton } from "./SidebarExpandButton";
 import { SidebarLink } from "./SidebarLink";
 import { UserProfileMenu } from "./UserProfileMenu";
 import { useGameStore } from "../games";
@@ -149,7 +148,6 @@ export const Sidebar: React.FC<LeftSidebarProps> = ({ isUserAdmin, sidebarHeader
           {children}
 
           <div className="mt-auto">
-            {!forceExpanded && <ExpandButton />}
             <UserProfileMenu />
           </div>
         </div>
