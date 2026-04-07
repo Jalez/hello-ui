@@ -37,7 +37,9 @@ import {
 import { aggregateEventSequenceAccuracy } from "@/lib/drawboard/aggregateEventSequenceAccuracy";
 import {
   getDrawboardPixelsPair,
+  getDrawboardReplaySignatures,
   getDrawboardPixelsSerial,
+  getDrawboardPixelsSideSerials,
   subscribeDrawboardPixelsForScenario,
 } from "@/lib/drawboard/drawboardPixelsStore";
 import {
@@ -146,6 +148,7 @@ export const ScenarioDrawing = ({
   gameplaySolutionStepId = null,
   eventSequenceScopedTriggers = false,
 }: ScenarioDrawingProps): React.ReactNode => {
+  const shouldDebugEventSequenceCompare = process.env.NODE_ENV !== "production";
   const { currentLevel } = useAppSelector((state) => state.currentLevel);
   const level = useAppSelector((state) => state.levels[currentLevel - 1]);
   const solutionUrls = useAppSelector((state) => state.solutionUrls as Record<string, string | undefined>);
@@ -162,7 +165,16 @@ export const ScenarioDrawing = ({
   const drawingFrameRef = useRef<FrameHandle | null>(null);
   /** Last timeline step id we showed a loading sentinel for; avoids -1 on every effect dep churn. */
   const prevCompareStepSelectionRef = useRef<string | null>(null);
+  /** Last replay signature we armed the compare gate for. */
+  const prevCompareReplaySignatureRef = useRef<string>("");
   const prevCompareRuntimeKeyRef = useRef<string | null>(null);
+  const compareInvocationRef = useRef(0);
+  const replayPixelGateRef = useRef<{
+    stepId: string;
+    expectedReplaySignature: string;
+    drawingSerial: number;
+    solutionSerial: number;
+  } | null>(null);
   const captureNav = useOptionalDrawboardNavbarCapture();
   const { drawboardCaptureMode, manualDrawboardCapture } = useGameRuntimeConfig();
   const platformBucket = useMemo(
@@ -241,29 +253,6 @@ export const ScenarioDrawing = ({
     [css, html, js, resolvedSolutionCss, resolvedSolutionHtml, scenario.js, scenarioSequence],
   );
   const usePerStepSolutionKeys = !isCreator && scenarioSequence.length > 0;
-  const solutionStepIdForCapture = useMemo(() => {
-    // Timeline scrub / auto-replay step takes priority — each step needs its own solution capture.
-    // gameplaySolutionStepId is only the fallback when no step is explicitly selected.
-    if (!isCreator && scenarioSequence.length > 0) {
-      const scrubbed = selectedEventSequenceStepId?.trim();
-      if (scrubbed) {
-        return defaultTimelineStepIdForSolutionCapture(scrubbed);
-      }
-      if (gameplaySolutionStepId != null) {
-        return defaultTimelineStepIdForSolutionCapture(gameplaySolutionStepId);
-      }
-    }
-    return defaultTimelineStepIdForSolutionCapture(selectedEventSequenceStepId);
-  }, [gameplaySolutionStepId, isCreator, scenarioSequence.length, selectedEventSequenceStepId]);
-  const solutionUrl = useMemo(
-    () =>
-      resolveEventSequenceSolutionUrl(solutionUrls, scenario.scenarioId, {
-        usePerStepKeys: usePerStepSolutionKeys,
-        stepId: solutionStepIdForCapture,
-        allowLegacyFallback: !usePerStepSolutionKeys,
-      }),
-    [solutionStepIdForCapture, scenario.scenarioId, solutionUrls, usePerStepSolutionKeys],
-  );
   const drawingFingerprint = useMemo(
     () =>
       drawingArtifactFingerprint({
@@ -283,20 +272,6 @@ export const ScenarioDrawing = ({
         scenario,
       }),
     [resolvedSolutionCss, resolvedSolutionHtml, resolvedSolutionJs, scenario],
-  );
-  const selectedSolutionStep = useMemo(
-    () => scenarioSequence.find((step) => step.id === solutionStepIdForCapture) ?? null,
-    [scenarioSequence, solutionStepIdForCapture],
-  );
-  const activeSolutionFingerprint = useMemo(
-    () =>
-      usePerStepSolutionKeys && selectedSolutionStep
-        ? solutionStepArtifactFingerprint({
-            solutionFingerprint,
-            step: selectedSolutionStep,
-          })
-        : solutionFingerprint,
-    [selectedSolutionStep, solutionFingerprint, usePerStepSolutionKeys],
   );
   const drawingArtifactDescriptor = useMemo<DrawboardArtifactDescriptor>(
     () => ({
@@ -323,35 +298,6 @@ export const ScenarioDrawing = ({
       scenario.dimensions.height,
       scenario.dimensions.width,
       scenario.scenarioId,
-    ],
-  );
-  const solutionArtifactDescriptor = useMemo<DrawboardArtifactDescriptor>(
-    () => ({
-      version: "v1",
-      captureMode: drawboardCaptureMode,
-      artifactType: usePerStepSolutionKeys ? "solution-step" : "solution",
-      fingerprint: activeSolutionFingerprint,
-      gameId: currentGameId,
-      levelIdentifier: level?.identifier ?? null,
-      levelName: level?.name ?? null,
-      scenarioId: scenario.scenarioId,
-      stepId: usePerStepSolutionKeys ? solutionStepIdForCapture : null,
-      platformBucket,
-      width: scenario.dimensions.width,
-      height: scenario.dimensions.height,
-    }),
-    [
-      activeSolutionFingerprint,
-      currentGameId,
-      drawboardCaptureMode,
-      level?.identifier,
-      level?.name,
-      platformBucket,
-      scenario.dimensions.height,
-      scenario.dimensions.width,
-      scenario.scenarioId,
-      solutionStepIdForCapture,
-      usePerStepSolutionKeys,
     ],
   );
   /**
@@ -388,47 +334,6 @@ export const ScenarioDrawing = ({
       cancelled = true;
     };
   }, [dispatch, drawingArtifactDescriptor, drawingUrl, scenario.scenarioId]);
-
-  useEffect(() => {
-    if (solutionUrl?.trim()) {
-      return;
-    }
-    let cancelled = false;
-    const hydrate = async () => {
-      const local = readLocalArtifact(solutionArtifactDescriptor);
-      if (local?.dataUrl) {
-        dispatch(addSolutionUrl({
-          solutionUrl: local.dataUrl,
-          scenarioId: scenario.scenarioId,
-          eventSequenceStepId: usePerStepSolutionKeys ? solutionStepIdForCapture ?? undefined : undefined,
-        }));
-        return;
-      }
-      try {
-        const remote = await fetchRemoteArtifact(solutionArtifactDescriptor);
-        if (!cancelled && remote?.dataUrl) {
-          dispatch(addSolutionUrl({
-            solutionUrl: remote.dataUrl,
-            scenarioId: scenario.scenarioId,
-            eventSequenceStepId: usePerStepSolutionKeys ? solutionStepIdForCapture ?? undefined : undefined,
-          }));
-        }
-      } catch {
-        // Ignore cache misses/network failures; live capture or Playwright mode can populate.
-      }
-    };
-    void hydrate();
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    dispatch,
-    scenario.scenarioId,
-    solutionArtifactDescriptor,
-    solutionStepIdForCapture,
-    solutionUrl,
-    usePerStepSolutionKeys,
-  ]);
 
   const prevFingerprintRuntimeKeyRef = useRef<string | null>(null);
   const prevCompareSourcesFingerprintRef = useRef<string | undefined>(undefined);
@@ -477,6 +382,113 @@ export const ScenarioDrawing = ({
     hasCapture: Boolean(drawingUrl),
     fallbackEvents,
   });
+  const solutionStepIdForCapture = useMemo(() => {
+    // Timeline scrub / auto-replay step takes priority — each step needs its own solution capture.
+    // gameplaySolutionStepId is only the fallback when no step is explicitly selected.
+    if (!isCreator && scenarioSequence.length > 0) {
+      const scrubbed = selectedEventSequenceStepId?.trim();
+      if (scrubbed) {
+        return defaultTimelineStepIdForSolutionCapture(scrubbed);
+      }
+      if (gameplaySolutionStepId != null) {
+        return defaultTimelineStepIdForSolutionCapture(gameplaySolutionStepId);
+      }
+    }
+    return defaultTimelineStepIdForSolutionCapture(selectedEventSequenceStepId);
+  }, [gameplaySolutionStepId, isCreator, scenarioSequence.length, selectedEventSequenceStepId]);
+  const solutionUrl = useMemo(
+    () =>
+      resolveEventSequenceSolutionUrl(solutionUrls, scenario.scenarioId, {
+        usePerStepKeys: usePerStepSolutionKeys,
+        stepId: solutionStepIdForCapture,
+        allowLegacyFallback: !usePerStepSolutionKeys,
+      }),
+    [solutionStepIdForCapture, scenario.scenarioId, solutionUrls, usePerStepSolutionKeys],
+  );
+  const selectedSolutionStep = useMemo(
+    () => scenarioSequence.find((step) => step.id === solutionStepIdForCapture) ?? null,
+    [scenarioSequence, solutionStepIdForCapture],
+  );
+  const activeSolutionFingerprint = useMemo(
+    () =>
+      usePerStepSolutionKeys && selectedSolutionStep
+        ? solutionStepArtifactFingerprint({
+            solutionFingerprint,
+            step: selectedSolutionStep,
+          })
+        : solutionFingerprint,
+    [selectedSolutionStep, solutionFingerprint, usePerStepSolutionKeys],
+  );
+  const solutionArtifactDescriptor = useMemo<DrawboardArtifactDescriptor>(
+    () => ({
+      version: "v1",
+      captureMode: drawboardCaptureMode,
+      artifactType: usePerStepSolutionKeys ? "solution-step" : "solution",
+      fingerprint: activeSolutionFingerprint,
+      gameId: currentGameId,
+      levelIdentifier: level?.identifier ?? null,
+      levelName: level?.name ?? null,
+      scenarioId: scenario.scenarioId,
+      stepId: usePerStepSolutionKeys ? solutionStepIdForCapture : null,
+      platformBucket,
+      width: scenario.dimensions.width,
+      height: scenario.dimensions.height,
+    }),
+    [
+      activeSolutionFingerprint,
+      currentGameId,
+      drawboardCaptureMode,
+      level?.identifier,
+      level?.name,
+      platformBucket,
+      scenario.dimensions.height,
+      scenario.dimensions.width,
+      scenario.scenarioId,
+      solutionStepIdForCapture,
+      usePerStepSolutionKeys,
+    ],
+  );
+
+  useEffect(() => {
+    if (solutionUrl?.trim()) {
+      return;
+    }
+    let cancelled = false;
+    const hydrate = async () => {
+      const local = readLocalArtifact(solutionArtifactDescriptor);
+      if (local?.dataUrl) {
+        dispatch(addSolutionUrl({
+          solutionUrl: local.dataUrl,
+          scenarioId: scenario.scenarioId,
+          eventSequenceStepId: usePerStepSolutionKeys ? solutionStepIdForCapture ?? undefined : undefined,
+        }));
+        return;
+      }
+      try {
+        const remote = await fetchRemoteArtifact(solutionArtifactDescriptor);
+        if (!cancelled && remote?.dataUrl) {
+          dispatch(addSolutionUrl({
+            solutionUrl: remote.dataUrl,
+            scenarioId: scenario.scenarioId,
+            eventSequenceStepId: usePerStepSolutionKeys ? solutionStepIdForCapture ?? undefined : undefined,
+          }));
+        }
+      } catch {
+        // Ignore cache misses/network failures; live capture or Playwright mode can populate.
+      }
+    };
+    void hydrate();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    dispatch,
+    scenario.scenarioId,
+    solutionArtifactDescriptor,
+    solutionStepIdForCapture,
+    solutionUrl,
+    usePerStepSolutionKeys,
+  ]);
 
   useEffect(() => {
     if (!level) {
@@ -788,8 +800,12 @@ export const ScenarioDrawing = ({
         ids.add(focus);
       }
 
-      const pendingId = getSequenceRuntimeState(runtimeKey).pendingStepId;
+      const runtimeState = getSequenceRuntimeState(runtimeKey);
+      const pendingId = runtimeState.pendingStepId;
+      const autoReplayRunning = Boolean(runtimeState.autoReplay?.running);
       if (
+        !autoReplayRunning
+        &&
         !isCreator
         && gameplayActiveSequenceStep
         && pendingId === gameplayActiveSequenceStep.id
@@ -802,9 +818,31 @@ export const ScenarioDrawing = ({
         return { accuracies: null, comparedViaIframePixelPair: false };
       }
 
-      if (drawboardCaptureMode === "browser") {
+      const targetIds = [...ids];
+      const currentTargetId = solutionStepIdForCapture;
+      if (shouldDebugEventSequenceCompare) {
+        const replaySignatures = getDrawboardReplaySignatures(scenario.scenarioId);
+        console.log("[event-sequence:compare:start]", {
+          scenarioId: scenario.scenarioId,
+          runtimeKey,
+          isCreator,
+          selectedEventSequenceStepId: selectedEventSequenceStepId?.trim() ?? null,
+          solutionStepIdForCapture,
+          targetIds,
+          pendingStepId: runtimeState.pendingStepId,
+          activeGameplayStepId: gameplayActiveSequenceStep?.id ?? null,
+          autoReplayRunning: Boolean(runtimeState.autoReplay?.running),
+          replaySequenceIds: replaySequence.map((step) => step.id),
+          replaySignatures,
+        });
+      }
+
+      if (drawboardCaptureMode === "browser" && isCreator) {
         const { drawing, solution } = getDrawboardPixelsPair(scenario.scenarioId);
         if (
+          targetIds.length === 1
+          && targetIds[0] === currentTargetId
+          &&
           drawing
           && solution
           && drawing.width === solution.width
@@ -814,15 +852,20 @@ export const ScenarioDrawing = ({
           if (cancelled) {
             return { accuracies: null, comparedViaIframePixelPair: true };
           }
-          const nextAccuracies: Record<string, number> = {};
-          [...ids].forEach((id) => {
-            nextAccuracies[id] = comparison;
-          });
-          return { accuracies: nextAccuracies, comparedViaIframePixelPair: true };
+          return {
+            accuracies: { [targetIds[0]]: comparison },
+            comparedViaIframePixelPair: true,
+          };
         }
         const w = scenario.dimensions.width;
         const h = scenario.dimensions.height;
-        if (solutionUrl?.trim() && w > 0 && h > 0) {
+        if (
+          targetIds.length === 1
+          && targetIds[0] === currentTargetId
+          && solutionUrl?.trim()
+          && w > 0
+          && h > 0
+        ) {
           try {
             const targetData = await loadImageDataForSnapshot(solutionUrl, w, h);
             const drawingData = await loadImageDataForSnapshot(drawingUrl, w, h);
@@ -837,11 +880,10 @@ export const ScenarioDrawing = ({
               if (cancelled) {
                 return { accuracies: null, comparedViaIframePixelPair: false };
               }
-              const nextAccuracies: Record<string, number> = {};
-              [...ids].forEach((id) => {
-                nextAccuracies[id] = comparison;
-              });
-              return { accuracies: nextAccuracies, comparedViaIframePixelPair: false };
+              return {
+                accuracies: { [targetIds[0]]: comparison },
+                comparedViaIframePixelPair: false,
+              };
             }
           } catch {
             /* fall through to server-render path */
@@ -850,6 +892,32 @@ export const ScenarioDrawing = ({
       }
 
       const compareOne = async (stepId: string): Promise<readonly [string, number | null]> => {
+        if (drawboardCaptureMode === "browser") {
+          const targetImageUrl = resolveEventSequenceSolutionUrl(solutionUrls, scenario.scenarioId, {
+            usePerStepKeys: usePerStepSolutionKeys,
+            stepId,
+            allowLegacyFallback: true,
+          })?.trim();
+          if (!targetImageUrl) {
+            return [stepId, null] as const;
+          }
+          const targetData = await loadImageDataForSnapshot(
+            targetImageUrl,
+            scenario.dimensions.width,
+            scenario.dimensions.height,
+          );
+          const drawingData = await loadImageDataForSnapshot(
+            drawingUrl,
+            scenario.dimensions.width,
+            scenario.dimensions.height,
+          );
+          if (!drawingData || !targetData || cancelled) {
+            return [stepId, null] as const;
+          }
+          const comparison = await runWorkerCompare(drawingData, targetData);
+          return [stepId, comparison] as const;
+        }
+
         if (stepId === INITIAL_EVENT_SEQUENCE_STEP_ID) {
           const targetPreview = stepPreviews[INITIAL_EVENT_SEQUENCE_STEP_ID];
           if (!targetPreview) {
@@ -934,11 +1002,12 @@ export const ScenarioDrawing = ({
     };
 
     const runCreatorComparisons = async () => {
+      const compareInvocationId = ++compareInvocationRef.current;
       const pixelsSerialAtCompareStart =
         drawboardCaptureMode === "browser" ? getDrawboardPixelsSerial(scenario.scenarioId) : null;
       const { accuracies: nextAccuracies, comparedViaIframePixelPair } =
         await compareFocusedStepsToDrawing();
-      if (cancelled) return;
+      if (cancelled || compareInvocationRef.current !== compareInvocationId) return;
       if (
         comparedViaIframePixelPair
         && pixelsSerialAtCompareStart !== null
@@ -947,6 +1016,14 @@ export const ScenarioDrawing = ({
         return;
       }
       if (!nextAccuracies) {
+        if (shouldDebugEventSequenceCompare) {
+          console.log("[event-sequence:compare:null-result]", {
+            scenarioId: scenario.scenarioId,
+            runtimeKey,
+            mode: "creator",
+            selectedEventSequenceStepId: selectedEventSequenceStepId?.trim() ?? null,
+          });
+        }
         if (!drawingUrl?.trim()) {
           return;
         }
@@ -967,6 +1044,16 @@ export const ScenarioDrawing = ({
       }
       let mergedSnapshot: Record<string, number> = {};
       updateSequenceRuntimeState(runtimeKey, (current) => {
+        if (shouldDebugEventSequenceCompare) {
+          console.log("[event-sequence:compare:merge]", {
+            scenarioId: scenario.scenarioId,
+            runtimeKey,
+            mode: "creator",
+            selectedEventSequenceStepId: selectedEventSequenceStepId?.trim() ?? null,
+            nextAccuracies,
+            before: current.stepAccuracies,
+          });
+        }
         mergedSnapshot = { ...current.stepAccuracies, ...nextAccuracies };
         const mergedVersions = { ...current.stepAccuracyVersions };
         for (const id of Object.keys(nextAccuracies)) {
@@ -985,11 +1072,12 @@ export const ScenarioDrawing = ({
       if (!scenarioSequence.length) {
         return;
       }
+      const compareInvocationId = ++compareInvocationRef.current;
       const pixelsSerialAtCompareStart =
         drawboardCaptureMode === "browser" ? getDrawboardPixelsSerial(scenario.scenarioId) : null;
       const { accuracies: nextAccuracies, comparedViaIframePixelPair } =
         await compareFocusedStepsToDrawing();
-      if (cancelled) return;
+      if (cancelled || compareInvocationRef.current !== compareInvocationId) return;
       if (
         comparedViaIframePixelPair
         && pixelsSerialAtCompareStart !== null
@@ -998,6 +1086,15 @@ export const ScenarioDrawing = ({
         return;
       }
       if (!nextAccuracies) {
+        if (shouldDebugEventSequenceCompare) {
+          console.log("[event-sequence:compare:null-result]", {
+            scenarioId: scenario.scenarioId,
+            runtimeKey,
+            mode: "game",
+            selectedEventSequenceStepId: selectedEventSequenceStepId?.trim() ?? null,
+            pendingStepId: getSequenceRuntimeState(runtimeKey).pendingStepId,
+          });
+        }
         if (!drawingUrl?.trim()) {
           return;
         }
@@ -1018,13 +1115,26 @@ export const ScenarioDrawing = ({
       }
       let mergedSnapshot: Record<string, number> = {};
       updateSequenceRuntimeState(runtimeKey, (current) => {
+        if (shouldDebugEventSequenceCompare) {
+          console.log("[event-sequence:compare:merge]", {
+            scenarioId: scenario.scenarioId,
+            runtimeKey,
+            mode: "game",
+            selectedEventSequenceStepId: selectedEventSequenceStepId?.trim() ?? null,
+            pendingStepId: current.pendingStepId,
+            activeGameplayStepId: gameplayActiveSequenceStep?.id ?? null,
+            autoReplayRunning: Boolean(current.autoReplay?.running),
+            nextAccuracies,
+            before: current.stepAccuracies,
+          });
+        }
         mergedSnapshot = { ...current.stepAccuracies, ...nextAccuracies };
         const mergedVersions = { ...current.stepAccuracyVersions };
         for (const id of Object.keys(nextAccuracies)) {
           mergedVersions[id] = current.drawingVersion;
         }
         const step = gameplayActiveSequenceStep;
-        if (step && current.pendingStepId === step.id) {
+        if (!current.autoReplay?.running && step && current.pendingStepId === step.id) {
           const comparison = nextAccuracies[step.id] ?? 0;
           if (comparison >= 99.5) {
             return {
@@ -1062,6 +1172,7 @@ export const ScenarioDrawing = ({
     // Loading (-1) only when the user selects a different timeline step — not on every effect
     // re-run (drawingUrl / solutionUrl churn caused constant flicker).
     const focusedId = selectedEventSequenceStepId?.trim() ?? null;
+    const replaySequenceSignature = replaySequence.map((step) => step.id).join("|");
     const prevSel = prevCompareStepSelectionRef.current;
     if (focusedId !== prevSel) {
       prevCompareStepSelectionRef.current = focusedId;
@@ -1070,7 +1181,77 @@ export const ScenarioDrawing = ({
           ...current,
           stepAccuracies: { ...current.stepAccuracies, [focusedId]: -1 },
         }));
+      } else {
+        replayPixelGateRef.current = null;
       }
+    }
+
+    const shouldArmReplayGate =
+      Boolean(focusedId)
+      && drawboardCaptureMode === "browser"
+      && scenarioSequence.length > 0;
+    const prevReplaySignature = prevCompareReplaySignatureRef.current;
+    if (focusedId) {
+      if (shouldArmReplayGate && (focusedId !== prevSel || replaySequenceSignature !== prevReplaySignature)) {
+        const sideSerials = getDrawboardPixelsSideSerials(scenario.scenarioId);
+        replayPixelGateRef.current = {
+          stepId: focusedId,
+          expectedReplaySignature: replaySequenceSignature,
+          drawingSerial: sideSerials.drawing,
+          solutionSerial: sideSerials.solution,
+        };
+      } else if (!shouldArmReplayGate) {
+        replayPixelGateRef.current = null;
+      }
+      prevCompareReplaySignatureRef.current = replaySequenceSignature;
+    } else {
+      prevCompareReplaySignatureRef.current = "";
+    }
+
+    const replayPixelGate = replayPixelGateRef.current;
+    if (replayPixelGate && replayPixelGate.stepId === focusedId) {
+      const sideSerials = getDrawboardPixelsSideSerials(scenario.scenarioId);
+      const replaySignatures = getDrawboardReplaySignatures(scenario.scenarioId);
+      const requireSolutionReplayFresh = isCreator;
+      const drawingReady = sideSerials.drawing > replayPixelGate.drawingSerial;
+      const solutionReady = !requireSolutionReplayFresh || sideSerials.solution > replayPixelGate.solutionSerial;
+      const drawingSignatureReady = replaySignatures.drawing === replayPixelGate.expectedReplaySignature;
+      const solutionSignatureReady =
+        !requireSolutionReplayFresh || replaySignatures.solution === replayPixelGate.expectedReplaySignature;
+      if (shouldDebugEventSequenceCompare) {
+        console.log("[event-sequence:compare:gate]", {
+          scenarioId: scenario.scenarioId,
+          runtimeKey,
+          focusedId,
+          expectedReplaySignature: replayPixelGate.expectedReplaySignature,
+          replaySignatures,
+          sideSerials,
+          baselineSerials: {
+            drawing: replayPixelGate.drawingSerial,
+            solution: replayPixelGate.solutionSerial,
+          },
+          requireSolutionReplayFresh,
+          drawingReady,
+          solutionReady,
+          drawingSignatureReady,
+          solutionSignatureReady,
+        });
+      }
+      if (!drawingReady || !solutionReady || !drawingSignatureReady || !solutionSignatureReady) {
+        const unsubIframePixels =
+          drawboardCaptureMode === "browser"
+            ? subscribeDrawboardPixelsForScenario(scenario.scenarioId, () => {
+                if (!cancelled) {
+                  runComparisons();
+                }
+              })
+            : null;
+        return () => {
+          cancelled = true;
+          unsubIframePixels?.();
+        };
+      }
+      replayPixelGateRef.current = null;
     }
 
     // Always run once when deps change. Stale async results are skipped when the drawboard
@@ -1102,11 +1283,15 @@ export const ScenarioDrawing = ({
     scenario.dimensions.width,
     scenario.scenarioId,
     scenarioSequence,
+    replaySequence,
     selectedEventSequenceStepId,
     sequenceRuntime.pendingStepId,
     solutionUrl,
+    solutionStepIdForCapture,
     stepPreviews,
     suppressSequenceMetrics,
+    usePerStepSolutionKeys,
+    solutionUrls,
   ]);
 
   const handleVerifiedInteraction = useCallback((interaction: VerifiedInteraction) => {

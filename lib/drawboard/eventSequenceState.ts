@@ -265,7 +265,7 @@ export function waitForStepAccuracy(
     const check = () => {
       const state = getSequenceRuntimeState(runtimeKey);
       const value = state.stepAccuracies[stepId];
-      if (value !== undefined && value !== -1) {
+      if (typeof value === "number" && value >= 0) {
         clearTimeout(timer);
         unsub();
         resolve(value);
