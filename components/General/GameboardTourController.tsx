@@ -29,6 +29,10 @@ const SPOT_ORDER: TourSpotKey[] = [
   "navbar.creator_workbench_tools",
   "navbar.creator_levels",
   "creator.workbench_sidebar",
+  "creator.level_tools",
+  "creator.events",
+  "creator.variants",
+  "creator.game_tools",
   "gameboard.events_strip",
   "gameboard.scenario_run_controls",
   "gameboard.artboard_actions",
@@ -96,6 +100,80 @@ const STEP_CONTENT: Record<
     description: "Compact tools next to the canvas.",
     content:
       "Each section matches a panel: event-sequence controls, level authoring, and game tools (lobby, resets, finish, map).",
+  },
+  "creator.level_tools": {
+    title: "Level tools",
+    description: "Core authoring actions for the current level.",
+    content: (
+      <div className="space-y-2">
+        <div>
+          <strong>Create:</strong> Add a new level to this game.
+        </div>
+        <div>
+          <strong>Remove:</strong> Delete the current level from the game.
+        </div>
+        <div>
+          <strong>Save / Auto:</strong> Persist your current level changes manually or keep them saved automatically.
+        </div>
+      </div>
+    ),
+  },
+  "creator.events": {
+    title: "Events",
+    description: "Record and manage interaction sequences for the selected scenario.",
+    content: (
+      <div className="space-y-2">
+        <div>
+          <strong>Live mode:</strong> Turn on interactive preview when you want to record real clicks, inputs, or other actions.
+        </div>
+        <div>
+          <strong>Add / Set events:</strong> Capture one event at a time or record a full sequence in order.
+        </div>
+        <div>
+          <strong>Clear / Remove:</strong> Clean up the current sequence when the scenario behavior changes.
+        </div>
+      </div>
+    ),
+  },
+  "creator.variants": {
+    title: "Variants",
+    description: "Alternate versions of the current level.",
+    content: (
+      <div className="space-y-2">
+        <div>
+          <strong>What they are:</strong> Variants are alternate versions of one level.
+        </div>
+        <div>
+          <strong>Base vs numbered:</strong> `Base` is the default version. Numbered entries are alternate versions of that same level.
+        </div>
+        <div>
+          <strong>For creators:</strong> Add a new variant from the version you are currently viewing, switch between Base and numbered variants, and remove a non-base variant when you no longer need it.
+        </div>
+        <div>
+          <strong>For players:</strong> Each saved game instance is assigned one version of the level and keeps it on refreshes and resets.
+        </div>
+        <div>
+          <strong>Single vs group:</strong> Single-player instances get their own assignment. Group players share the same assignment inside their shared group instance.
+        </div>
+      </div>
+    ),
+  },
+  "creator.game_tools": {
+    title: "Game tools",
+    description: "Creator controls for previewing and managing the game experience.",
+    content: (
+      <div className="space-y-2">
+        <div>
+          <strong>Preview & lobby:</strong> Jump into the game view or back to the lobby when testing group flow.
+        </div>
+        <div>
+          <strong>Reset:</strong> Reset the current level or the whole game instance while testing.
+        </div>
+        <div>
+          <strong>Map & stats:</strong> Open level management and creator-facing game statistics from the game menu.
+        </div>
+      </div>
+    ),
   },
   "gameboard.events_strip": {
     title: "Events",
@@ -180,8 +258,9 @@ function buildStepsForSpots(spots: TourSpotKey[]): Step[] {
       target: `[data-tour-spot="${spot}"]`,
       title: copy.title,
       content: copy.content,
-      // Footer sits at the bottom of the viewport; open the tooltip above the target.
-      placement: (spot.startsWith("footer.") ? "top" : "bottom") as "top" | "bottom",
+      // Let Joyride/Floater pick a side with room instead of forcing only top/bottom.
+      placement: "auto",
+      placementBeacon: spot.startsWith("footer.") ? "top" : "bottom",
       skipBeacon: true,
       data: { spot, description: copy.description },
     };

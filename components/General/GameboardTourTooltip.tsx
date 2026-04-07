@@ -66,7 +66,7 @@ export function GameboardTourTooltip(props: TooltipRenderProps) {
   return (
     <div
       className={cn(
-        "react-joyride__tooltip max-w-[min(22rem,calc(100vw-2rem))]",
+        "react-joyride__tooltip w-[min(22rem,calc(100vw-1rem))] max-w-[min(22rem,calc(100vw-1rem))]",
         "animate-in fade-in-0 zoom-in-95 duration-150"
       )}
       data-joyride-step={index}
@@ -74,7 +74,7 @@ export function GameboardTourTooltip(props: TooltipRenderProps) {
       {...tooltipProps}
       {...ariaProps}
     >
-      <Card className="relative gap-0 border-border bg-card py-0 shadow-lg">
+      <Card className="relative max-h-[min(80vh,40rem)] gap-0 overflow-hidden border-border bg-card py-0 shadow-lg">
         {buttons.includes("close") ? (
           <Button
             type="button"
@@ -97,14 +97,14 @@ export function GameboardTourTooltip(props: TooltipRenderProps) {
           <CardHeader className="space-y-1.5 pb-2 pr-12 pt-4">
             <CardTitle
               id="joyride-tooltip-title"
-              className="text-base font-semibold leading-snug"
+              className="break-words text-base font-semibold leading-snug [overflow-wrap:anywhere]"
             >
               {title}
             </CardTitle>
             {description ? (
               <CardDescription
                 id="joyride-tooltip-description"
-                className="text-xs leading-snug"
+                className="break-words text-xs leading-snug [overflow-wrap:anywhere]"
               >
                 {description}
               </CardDescription>
@@ -115,16 +115,18 @@ export function GameboardTourTooltip(props: TooltipRenderProps) {
         <CardContent
           id="joyride-tooltip-content"
           className={cn(
-            "text-sm leading-relaxed text-muted-foreground",
+            "max-h-[min(50vh,24rem)] overflow-y-auto break-words text-sm leading-relaxed text-muted-foreground [overflow-wrap:anywhere]",
             title ? "pb-3" : "pb-3 pt-4 pr-12",
           )}
         >
           {!title && description ? (
-            <p id="joyride-tooltip-description" className="mb-2 text-xs leading-snug text-muted-foreground">
+            <p id="joyride-tooltip-description" className="mb-2 break-words text-xs leading-snug text-muted-foreground [overflow-wrap:anywhere]">
               {description}
             </p>
           ) : null}
-          {content}
+          <div className="break-words [overflow-wrap:anywhere] [&_*]:max-w-full">
+            {content}
+          </div>
         </CardContent>
 
         {showFooter ? (
