@@ -18,6 +18,7 @@ import type { ClientGroupMember } from "@/lib/group-details-client";
 import { toast } from "sonner";
 import { CollaborationNotice } from "@/components/collaboration/CollaborationNotice";
 import { getCurrentUserFinishState } from "@/lib/gameFinishState";
+import { evaluateAccessWindows } from "@/lib/gameAccessWindows";
 
 interface GamePageProps {
   params: Promise<{
@@ -339,20 +340,22 @@ export default function GamePage({ params }: GamePageProps) {
           persistAccessKey(gameId, submittedAccessKey.trim());
         }
 
-        const now = Date.now();
-        const accessStartsAtMs = game?.accessStartsAt ? new Date(game.accessStartsAt).getTime() : null;
-        const accessEndsAtMs = game?.accessEndsAt ? new Date(game.accessEndsAt).getTime() : null;
-        if (game?.accessWindowEnabled) {
-          if (typeof accessStartsAtMs === "number" && !Number.isNaN(accessStartsAtMs) && now < accessStartsAtMs) {
-            setError("Game is not open yet");
-            setIsLoading(false);
-            return;
-          }
-          if (typeof accessEndsAtMs === "number" && !Number.isNaN(accessEndsAtMs) && now > accessEndsAtMs) {
-            setError("Game access window has ended");
-            setIsLoading(false);
-            return;
-          }
+        const accessWindowState = evaluateAccessWindows({
+          enabled: Boolean(game?.accessWindowEnabled),
+          timeZone: game?.accessWindowTimezone,
+          windows: game?.accessWindows,
+          legacyStartsAt: game?.accessStartsAt,
+          legacyEndsAt: game?.accessEndsAt,
+        });
+        if (accessWindowState === "not_started") {
+          setError("Game is not open yet");
+          setIsLoading(false);
+          return;
+        }
+        if (accessWindowState === "expired") {
+          setError("Game access windows have ended");
+          setIsLoading(false);
+          return;
         }
 
         if (game?.accessKeyRequired && !submittedAccessKey) {

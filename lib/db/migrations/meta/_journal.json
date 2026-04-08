@@ -29,6 +29,27 @@
       "when": 1775150400000,
       "tag": "0003_user_tour_spot_ack",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1775641855529,
+      "tag": "0004_whole_trauma",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1775642859738,
+      "tag": "0005_wooden_kabuki",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1775646870836,
+      "tag": "0006_amused_enchantress",
+      "breakpoints": true
     }
   ]
 }

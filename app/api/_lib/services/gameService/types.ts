@@ -1,3 +1,5 @@
+import type { GameAccessWindow } from "@/lib/gameAccessWindows";
+
 export interface Game {
   id: string;
   user_id: string;
@@ -12,6 +14,8 @@ export interface Game {
   access_window_enabled: boolean;
   access_starts_at: Date | null;
   access_ends_at: Date | null;
+  access_window_timezone: string | null;
+  access_windows: GameAccessWindow[];
   access_key_required: boolean;
   access_key: string | null;
   collaboration_mode: "individual" | "group";
@@ -22,6 +26,13 @@ export interface Game {
   manual_drawboard_capture: boolean;
   remote_sync_debounce_ms: number;
   drawboard_reload_debounce_ms: number;
+  instance_purge_cadence: "daily" | "weekly" | "monthly" | null;
+  instance_purge_timezone: string | null;
+  instance_purge_hour: number | null;
+  instance_purge_minute: number | null;
+  instance_purge_weekday: number | null;
+  instance_purge_day_of_month: number | null;
+  instance_purge_last_executed_at: Date | null;
   is_owner?: boolean;
   is_collaborator?: boolean;
   can_edit?: boolean;
@@ -49,6 +60,8 @@ export interface UpdateGameOptions {
   accessWindowEnabled?: boolean;
   accessStartsAt?: Date | null;
   accessEndsAt?: Date | null;
+  accessWindowTimezone?: string | null;
+  accessWindows?: GameAccessWindow[];
   accessKeyRequired?: boolean;
   accessKey?: string | null;
   collaborationMode?: "individual" | "group";
@@ -57,6 +70,13 @@ export interface UpdateGameOptions {
   manualDrawboardCapture?: boolean;
   remoteSyncDebounceMs?: number;
   drawboardReloadDebounceMs?: number;
+  instancePurgeCadence?: "daily" | "weekly" | "monthly" | null;
+  instancePurgeTimezone?: string | null;
+  instancePurgeHour?: number | null;
+  instancePurgeMinute?: number | null;
+  instancePurgeWeekday?: number | null;
+  instancePurgeDayOfMonth?: number | null;
+  instancePurgeLastExecutedAt?: Date | null;
 }
 
 export interface GameCollaborator {

@@ -1,3 +1,5 @@
+import type { GameAccessWindow } from "@/lib/gameAccessWindows";
+
 export interface Game {
   id: string;
   userId: string;
@@ -12,6 +14,8 @@ export interface Game {
   accessWindowEnabled: boolean;
   accessStartsAt: string | null;
   accessEndsAt: string | null;
+  accessWindowTimezone?: string | null;
+  accessWindows?: GameAccessWindow[];
   accessKeyRequired: boolean;
   collaborationMode: "individual" | "group";
   allowDuplicateUsers: boolean;
@@ -19,6 +23,13 @@ export interface Game {
   manualDrawboardCapture?: boolean;
   remoteSyncDebounceMs?: number;
   drawboardReloadDebounceMs?: number;
+  instancePurgeCadence?: "daily" | "weekly" | "monthly" | null;
+  instancePurgeTimezone?: string | null;
+  instancePurgeHour?: number | null;
+  instancePurgeMinute?: number | null;
+  instancePurgeWeekday?: number | null;
+  instancePurgeDayOfMonth?: number | null;
+  instancePurgeLastExecutedAt?: string | null;
   accessKey?: string | null;
   regenerateAccessKey?: boolean;
   regenerateShareToken?: boolean;

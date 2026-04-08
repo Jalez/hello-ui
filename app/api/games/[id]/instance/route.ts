@@ -36,7 +36,7 @@ export function accessDenied(reason: "not_started" | "expired" | "access_key_req
     return NextResponse.json({ error: "Game is not open yet", reason }, { status: 403 });
   }
   if (reason === "expired") {
-    return NextResponse.json({ error: "Game access window has ended", reason }, { status: 403 });
+    return NextResponse.json({ error: "Game access windows have ended", reason }, { status: 403 });
   }
   return NextResponse.json(
     {

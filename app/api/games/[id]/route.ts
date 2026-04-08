@@ -35,7 +35,7 @@ function accessDenied(reason: "not_started" | "expired" | "access_key_required" 
     return NextResponse.json({ error: "Game is not open yet", reason }, { status: 403 });
   }
   if (reason === "expired") {
-    return NextResponse.json({ error: "Game access window has ended", reason }, { status: 403 });
+    return NextResponse.json({ error: "Game access windows have ended", reason }, { status: 403 });
   }
   return NextResponse.json(
     {
@@ -71,6 +71,8 @@ function buildGamePayload(game: Game | null) {
     accessWindowEnabled: game.access_window_enabled,
     accessStartsAt: game.access_starts_at,
     accessEndsAt: game.access_ends_at,
+    accessWindowTimezone: game.access_window_timezone,
+    accessWindows: game.access_windows,
     accessKeyRequired: game.access_key_required,
     accessKey: game.access_key,
     hasAccessKey: Boolean(game.access_key),
@@ -81,6 +83,13 @@ function buildGamePayload(game: Game | null) {
     manualDrawboardCapture: game.manual_drawboard_capture,
     remoteSyncDebounceMs: game.remote_sync_debounce_ms,
     drawboardReloadDebounceMs: game.drawboard_reload_debounce_ms,
+    instancePurgeCadence: game.instance_purge_cadence,
+    instancePurgeTimezone: game.instance_purge_timezone,
+    instancePurgeHour: game.instance_purge_hour,
+    instancePurgeMinute: game.instance_purge_minute,
+    instancePurgeWeekday: game.instance_purge_weekday,
+    instancePurgeDayOfMonth: game.instance_purge_day_of_month,
+    instancePurgeLastExecutedAt: game.instance_purge_last_executed_at,
     isOwner: Boolean(game.is_owner),
     isCollaborator: Boolean(game.is_collaborator),
     canEdit: Boolean(game.can_edit),
@@ -205,6 +214,13 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       accessWindowEnabled: body.accessWindowEnabled,
       accessStartsAt: parseDate(body.accessStartsAt),
       accessEndsAt: parseDate(body.accessEndsAt),
+      accessWindowTimezone:
+        body.accessWindowTimezone === undefined
+          ? undefined
+          : body.accessWindowTimezone === null || body.accessWindowTimezone === ""
+            ? null
+            : String(body.accessWindowTimezone),
+      accessWindows: body.accessWindows === undefined ? undefined : body.accessWindows,
       accessKeyRequired: body.accessKeyRequired,
       accessKey,
       collaborationMode: body.collaborationMode,
@@ -215,6 +231,46 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         body.remoteSyncDebounceMs === undefined ? undefined : Number(body.remoteSyncDebounceMs),
       drawboardReloadDebounceMs:
         body.drawboardReloadDebounceMs === undefined ? undefined : Number(body.drawboardReloadDebounceMs),
+      instancePurgeCadence:
+        body.instancePurgeCadence === undefined
+          ? undefined
+          : body.instancePurgeCadence === null || body.instancePurgeCadence === ""
+            ? null
+            : body.instancePurgeCadence,
+      instancePurgeTimezone:
+        body.instancePurgeTimezone === undefined
+          ? undefined
+          : body.instancePurgeTimezone === null || body.instancePurgeTimezone === ""
+            ? null
+            : String(body.instancePurgeTimezone),
+      instancePurgeHour:
+        body.instancePurgeHour === undefined
+          ? undefined
+          : body.instancePurgeHour === null || body.instancePurgeHour === ""
+            ? null
+            : Number(body.instancePurgeHour),
+      instancePurgeMinute:
+        body.instancePurgeMinute === undefined
+          ? undefined
+          : body.instancePurgeMinute === null || body.instancePurgeMinute === ""
+            ? null
+            : Number(body.instancePurgeMinute),
+      instancePurgeWeekday:
+        body.instancePurgeWeekday === undefined
+          ? undefined
+          : body.instancePurgeWeekday === null || body.instancePurgeWeekday === ""
+            ? null
+            : Number(body.instancePurgeWeekday),
+      instancePurgeDayOfMonth:
+        body.instancePurgeDayOfMonth === undefined
+          ? undefined
+          : body.instancePurgeDayOfMonth === null || body.instancePurgeDayOfMonth === ""
+            ? null
+            : Number(body.instancePurgeDayOfMonth),
+      instancePurgeLastExecutedAt:
+        body.instancePurgeLastExecutedAt === undefined
+          ? undefined
+          : parseDate(body.instancePurgeLastExecutedAt),
     });
 
     if (!game) {
