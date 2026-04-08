@@ -4,11 +4,11 @@ const nextConfig: NextConfig = {
   // Produce a self-contained build for Docker deployment
   output: "standalone",
 
-  // Asset prefix for reverse proxy — Apache strips /css-artist before forwarding,
-  // but the browser needs /css-artist prefix on asset URLs so they route through Apache
+  // Asset prefix for reverse proxy — Apache strips /hello-ui before forwarding,
+  // but the browser needs /hello-ui prefix on asset URLs so they route through Apache
   assetPrefix: process.env.NEXT_PUBLIC_ASSET_PREFIX || "",
 
-  // Base path for routing and links when served under a prefix (e.g. /css-artist)
+  // Base path for routing and links when served under a prefix (e.g. /hello-ui)
   basePath: process.env.NEXT_PUBLIC_BASE_PATH || "",
 
   // NextAuth sometimes redirects to /error; our page is at /auth/error (redirect preserves query)

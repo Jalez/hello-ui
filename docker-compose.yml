@@ -59,8 +59,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.development
-      args:
-        NEXT_PUBLIC_DRAWBOARD_URL: ${NEXT_PUBLIC_DRAWBOARD_URL:-http://localhost:3500}
     ports:
       - "3000:3000"
     volumes:
@@ -70,11 +68,6 @@ services:
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/hello_ui
       DB_CLIENT: postgres
-      NEXT_PUBLIC_WEBSOCKET_URL: ${NEXT_PUBLIC_WEBSOCKET_URL:-ws://localhost:3100}
-      NEXT_PUBLIC_DRAWBOARD_URL: ${NEXT_PUBLIC_DRAWBOARD_URL:-http://localhost:3500}
-      COLLAB_ENGINE: ${COLLAB_ENGINE:-yjs}
-      NEXT_PUBLIC_COLLAB_ENGINE: ${NEXT_PUBLIC_COLLAB_ENGINE:-yjs}
-      WS_SERVICE_TOKEN: ${WS_SERVICE_TOKEN:-ws-service-secret}
       # Debug: logDebug() prints to stdout and writes to /app/logs when true. Set to false in .env.local to disable.
       DEBUG_LOGS: ${DEBUG_LOGS:-true}
       # Admin: show sidebar admin link for this email (case-insensitive). Set in .env.local or here.
@@ -101,7 +94,6 @@ services:
       PORT: 3100
       CORS_ORIGIN: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
       API_BASE_URL: http://app:3000
-      WS_SERVICE_TOKEN: ${WS_SERVICE_TOKEN:-ws-service-secret}
     depends_on:
       app:
         condition: service_started
