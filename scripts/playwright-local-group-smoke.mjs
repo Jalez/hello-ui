@@ -26,7 +26,7 @@ const concurrentEditors = Math.max(2, Number.parseInt(process.env.PLAYWRIGHT_CON
 const timeoutMultiplier = Math.max(1, Number.parseFloat(process.env.PLAYWRIGHT_TIMEOUT_MULTIPLIER || "1"));
 const verboseYjsLogs = process.env.PLAYWRIGHT_VERBOSE_YJS === "true";
 const verboseBrowserLogs = process.env.PLAYWRIGHT_VERBOSE_BROWSER === "true";
-const dbUrl = process.env.PLAYWRIGHT_DATABASE_URL || process.env.DATABASE_URL || "postgresql://postgres:postgres@localhost:5433/ui_designer";
+const dbUrl = process.env.PLAYWRIGHT_DATABASE_URL || process.env.DATABASE_URL || "postgresql://postgres:postgres@localhost:5433/hello_ui";
 let activeGameId = requestedGameId;
 const smokeViewport = {
   width: Number.parseInt(process.env.PLAYWRIGHT_VIEWPORT_WIDTH || "430", 10),

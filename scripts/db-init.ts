@@ -40,7 +40,7 @@ const DUPLICATE_USERS_MIGRATION = resolve(SCRIPT_DIR, "sql/duplicate-users-migra
 
 // Extract database name from DATABASE_URL for creation check
 const dbUrlMatch = DATABASE_URL.match(/\/([^/?]+)(\?|$)/);
-const targetDbName = dbUrlMatch ? dbUrlMatch[1] : "ui_designer";
+const targetDbName = dbUrlMatch ? dbUrlMatch[1] : "hello_ui";
 
 // Create connection to postgres database (default) for database creation
 const postgresUrl = DATABASE_URL.replace(/\/[^/?]+(\?|$)/, '/postgres$1');

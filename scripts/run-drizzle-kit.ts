@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
 /**
  * Runs drizzle-kit with DATABASE_URL adjusted when the path names a missing DB
- * but `ui_designer` or `ui_designer_dev` exists (matches Docker POSTGRES_DB).
+ * but `hello_ui`, `ui_designer`, or `ui_designer_dev` exists (matches Docker POSTGRES_DB).
  */
 
 import { spawn } from "node:child_process";

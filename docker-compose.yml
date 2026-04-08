@@ -16,13 +16,13 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: ui_designer
+      POSTGRES_DB: hello_ui
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
       - "5433:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d ui_designer"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d hello_ui"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -34,7 +34,7 @@ services:
       context: .
       dockerfile: Dockerfile.db-init.development
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/ui_designer
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/hello_ui
     depends_on:
       db:
         condition: service_healthy
@@ -68,7 +68,7 @@ services:
     env_file:
       - .env.local
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/ui_designer
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/hello_ui
       DB_CLIENT: postgres
       NEXT_PUBLIC_WEBSOCKET_URL: ${NEXT_PUBLIC_WEBSOCKET_URL:-ws://localhost:3100}
       NEXT_PUBLIC_DRAWBOARD_URL: ${NEXT_PUBLIC_DRAWBOARD_URL:-http://localhost:3500}

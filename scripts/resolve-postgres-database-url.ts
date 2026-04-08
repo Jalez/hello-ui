@@ -1,11 +1,11 @@
 /**
  * When DATABASE_URL points at a database that does not exist, try well-known names
- * from this repo (Docker POSTGRES_DB is `ui_designer`).
+ * from this repo (Docker POSTGRES_DB is `hello_ui`).
  */
 
 import { Pool } from "pg";
 
-const FALLBACK_DATABASES = ["ui_designer", "ui_designer_dev"] as const;
+const FALLBACK_DATABASES = ["hello_ui", "ui_designer", "ui_designer_dev"] as const;
 
 function replaceDatabaseName(connectionString: string, newDb: string): string {
   return connectionString.replace(/\/[^/?]+(\?|$)/, `/${newDb}$1`);
@@ -51,7 +51,7 @@ export async function resolvePostgresDatabaseUrl(connectionString: string): Prom
           `[db] Database "${requested}" does not exist on this server. Using "${candidate}" (${redactUrl(resolved)}).`,
         );
         console.warn(
-          `[db] Update DATABASE_URL in .env.local to match Docker: .../ui_designer (see docker-compose.yml POSTGRES_DB).`,
+          `[db] Update DATABASE_URL to match Docker: .../hello_ui (see docker-compose.yml POSTGRES_DB).`,
         );
         return resolved;
       }
