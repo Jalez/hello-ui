@@ -26,14 +26,14 @@ mkdir -p "${EXPORT_DIR}" "${DEBUG_LOG_DIR}"
   echo "compose_file=${COMPOSE_FILE}"
 } > "${EXPORT_DIR}/metadata.txt"
 
-docker compose -f "${COMPOSE_FILE}" ps > "${EXPORT_DIR}/compose-ps.txt" 2>&1 || true
+docker compose --env-file .env.production -f "${COMPOSE_FILE}" ps > "${EXPORT_DIR}/compose-ps.txt" 2>&1 || true
 docker ps -a > "${EXPORT_DIR}/docker-ps.txt" 2>&1 || true
 
 for service in "${SERVICES[@]}"; do
-  docker compose -f "${COMPOSE_FILE}" logs --no-color "${service}" > "${EXPORT_DIR}/${service}.log" 2>&1 || true
+  docker compose --env-file .env.production -f "${COMPOSE_FILE}" logs --no-color "${service}" > "${EXPORT_DIR}/${service}.log" 2>&1 || true
 done
 
-docker compose -f "${COMPOSE_FILE}" logs --no-color > "${EXPORT_DIR}/all-services.log" 2>&1 || true
+docker compose --env-file .env.production -f "${COMPOSE_FILE}" logs --no-color > "${EXPORT_DIR}/all-services.log" 2>&1 || true
 
 if compgen -G "logs/debug-*.jsonl" > /dev/null; then
   cp logs/debug-*.jsonl "${DEBUG_LOG_DIR}/"

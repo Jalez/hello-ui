@@ -10,11 +10,11 @@ services:
       retries: 10
     restart: always
     networks:
-      - ui-designer-net
+      - hello-ui-net
 
   db:
     image: postgres:16-alpine
-    container_name: ui-designer.db
+    container_name: hello-ui.db
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -28,14 +28,14 @@ services:
       retries: 10
     restart: always
     networks:
-      - ui-designer-net
+      - hello-ui-net
 
   db-init:
     build:
       context: .
       dockerfile: Dockerfile.db-init
-    container_name: ui-designer.db-init
-    image: ui-designer-db-init:latest
+    container_name: hello-ui.db-init
+    image: hello-ui-db-init:latest
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/hello_ui
     depends_on:
@@ -43,14 +43,14 @@ services:
         condition: service_healthy
     restart: "no"
     networks:
-      - ui-designer-net
+      - hello-ui-net
 
   drawboard:
     build:
       context: ./drawBoard
       dockerfile: Dockerfile
-    container_name: ui-designer.drawboard
-    image: ui-designer-drawboard:latest
+    container_name: hello-ui.drawboard
+    image: hello-ui-drawboard:latest
     ports:
       - "54320:3500"
     environment:
@@ -58,19 +58,19 @@ services:
       NODE_ENV: production
     restart: always
     networks:
-      - ui-designer-net
+      - hello-ui-net
 
   app:
     build:
       context: .
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL}
-        NEXT_PUBLIC_DRAWBOARD_URL: ${NEXT_PUBLIC_DRAWBOARD_URL}
-        NEXT_PUBLIC_WEBSOCKET_URL: ${NEXT_PUBLIC_WEBSOCKET_URL}
-        NEXT_PUBLIC_BASE_PATH: ${NEXT_PUBLIC_BASE_PATH}
-    container_name: ui-designer.app
-    image: ui-designer-app:latest
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+        NEXT_PUBLIC_DRAWBOARD_URL: ${NEXT_PUBLIC_DRAWBOARD_URL:-http://localhost:3500}
+        NEXT_PUBLIC_WEBSOCKET_URL: ${NEXT_PUBLIC_WEBSOCKET_URL:-ws://localhost:3100}
+        NEXT_PUBLIC_BASE_PATH: ${NEXT_PUBLIC_BASE_PATH:-}
+    container_name: hello-ui.app
+    image: hello-ui-app:latest
     ports:
       - "54322:3000"
     volumes:
@@ -93,14 +93,14 @@ services:
         condition: service_healthy
     restart: always
     networks:
-      - ui-designer-net
+      - hello-ui-net
 
   ws-server:
     build:
       context: ./ws-server
       dockerfile: Dockerfile
-    container_name: ui-designer.ws
-    image: ui-designer-ws:latest
+    container_name: hello-ui.ws
+    image: hello-ui-ws:latest
     ports:
       - "54323:8080"
     env_file:
@@ -109,7 +109,7 @@ services:
       PORT: 8080
       API_BASE_URL: http://app:3000
       DATABASE_URL: postgresql://postgres:postgres@db:5432/hello_ui
-      CORS_ORIGIN: ${NEXT_PUBLIC_APP_URL}
+      CORS_ORIGIN: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
       TZ: Europe/Helsinki
       NODE_ENV: production
       WS_SERVICE_TOKEN: ${WS_SERVICE_TOKEN:-ws-service-secret}
@@ -123,11 +123,11 @@ services:
       retries: 5
     restart: always
     networks:
-      - ui-designer-net
+      - hello-ui-net
 
 volumes:
   pgdata:
 
 networks:
-  ui-designer-net:
+  hello-ui-net:
     driver: bridge

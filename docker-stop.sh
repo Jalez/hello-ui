@@ -11,4 +11,8 @@ if [[ "$(hostname)" =~ tie-lukioplus.rd.tuni.fi ]]; then
   COMPOSE_YML="production.docker-compose.yml"
 fi
 
-docker compose --file "${COMPOSE_YML}" down
+if [[ "${COMPOSE_YML}" == "production.docker-compose.yml" && -f ".env.production" ]]; then
+  docker compose --env-file .env.production --file "${COMPOSE_YML}" down
+else
+  docker compose --file "${COMPOSE_YML}" down
+fi
