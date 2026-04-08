@@ -12,13 +12,6 @@ type GameRuntimeSlice = Pick<
   "drawboardCaptureMode" | "manualDrawboardCapture" | "remoteSyncDebounceMs" | "drawboardReloadDebounceMs"
 >;
 
-function envDrawboardCaptureMode(): DrawboardCaptureMode {
-  const v = (process.env.NEXT_PUBLIC_DRAWBOARD_CAPTURE_MODE ?? "").trim().toLowerCase();
-  if (v === "playwright") return "playwright";
-  if (v === "browser") return "browser";
-  return DEFAULT_DRAWBOARD_CAPTURE_MODE;
-}
-
 function envManualDrawboardCapture(): boolean {
   const v = (process.env.NEXT_PUBLIC_MANUAL_DRAWBOARD_CAPTURE ?? "").trim().toLowerCase();
   return v === "true" || v === "1";
@@ -40,7 +33,7 @@ export function resolveDrawboardCaptureMode(game: GameRuntimeSlice | null | unde
   if (game?.drawboardCaptureMode === "browser" || game?.drawboardCaptureMode === "playwright") {
     return game.drawboardCaptureMode;
   }
-  return envDrawboardCaptureMode();
+  return DEFAULT_DRAWBOARD_CAPTURE_MODE;
 }
 
 export function resolveManualDrawboardCapture(game: GameRuntimeSlice | null | undefined): boolean {

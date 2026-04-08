@@ -24,14 +24,6 @@ if [[ "$(hostname)" =~ tie-lukioplus.rd.tuni.fi ]]; then
   echo "Building images..."
   # NEXT_PUBLIC_* is baked in at build; .env.production at runtime does not change the client bundle.
   # If unset, try .env.production next to this script (same line as docker-compose env_file).
-  if [[ -z "${NEXT_PUBLIC_DRAWBOARD_CAPTURE_MODE:-}" ]] && [[ -f .env.production ]]; then
-    NEXT_PUBLIC_DRAWBOARD_CAPTURE_MODE="$(
-      grep -E '^[[:space:]]*NEXT_PUBLIC_DRAWBOARD_CAPTURE_MODE=' .env.production 2>/dev/null | tail -1 \
-        | sed -E 's/^[[:space:]]*NEXT_PUBLIC_DRAWBOARD_CAPTURE_MODE=//; s/\r$//; s/^"//; s/"$//; s/^'\''//; s/'\''$//'
-    )"
-  fi
-  NEXT_PUBLIC_DRAWBOARD_CAPTURE_MODE="${NEXT_PUBLIC_DRAWBOARD_CAPTURE_MODE:-browser}"
-  echo "NEXT_PUBLIC_DRAWBOARD_CAPTURE_MODE for app image build: ${NEXT_PUBLIC_DRAWBOARD_CAPTURE_MODE}"
   if [[ -z "${NEXT_PUBLIC_REMOTE_SYNC_DEBOUNCE_MS:-}" ]] && [[ -f .env.production ]]; then
     NEXT_PUBLIC_REMOTE_SYNC_DEBOUNCE_MS="$(
       grep -E '^[[:space:]]*NEXT_PUBLIC_REMOTE_SYNC_DEBOUNCE_MS=' .env.production 2>/dev/null | tail -1 \
@@ -53,7 +45,6 @@ if [[ "$(hostname)" =~ tie-lukioplus.rd.tuni.fi ]]; then
     --build-arg NEXT_PUBLIC_WEBSOCKET_URL=wss://tie-lukioplus.rd.tuni.fi/css-artist-ws \
     --build-arg NEXT_PUBLIC_ASSET_PREFIX=/css-artist \
     --build-arg NEXT_PUBLIC_BASE_PATH=/css-artist \
-    --build-arg NEXT_PUBLIC_DRAWBOARD_CAPTURE_MODE="${NEXT_PUBLIC_DRAWBOARD_CAPTURE_MODE}" \
     --build-arg NEXT_PUBLIC_REMOTE_SYNC_DEBOUNCE_MS="${NEXT_PUBLIC_REMOTE_SYNC_DEBOUNCE_MS}" \
     --build-arg NEXT_PUBLIC_MANUAL_DRAWBOARD_CAPTURE="${NEXT_PUBLIC_MANUAL_DRAWBOARD_CAPTURE:-}" \
     -f Dockerfile .

@@ -32,8 +32,6 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
     NEXT_PUBLIC_DRAWBOARD_URL: process.env.NEXT_PUBLIC_DRAWBOARD_URL || "http://localhost:3500",
     // Optional global fallbacks when game API omits fields; per-game values live in DB (creator → Game settings).
-    NEXT_PUBLIC_DRAWBOARD_CAPTURE_MODE:
-      process.env.NEXT_PUBLIC_DRAWBOARD_CAPTURE_MODE || "browser",
     NEXT_PUBLIC_REMOTE_SYNC_DEBOUNCE_MS:
       process.env.NEXT_PUBLIC_REMOTE_SYNC_DEBOUNCE_MS ?? "500",
     NEXT_PUBLIC_MANUAL_DRAWBOARD_CAPTURE:
