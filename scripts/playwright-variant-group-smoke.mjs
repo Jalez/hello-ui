@@ -375,6 +375,20 @@ function attachArtifactCollector(page, label) {
   return { fingerprintsSeen, allSolutionRequests };
 }
 
+/**
+ * Fetches the live instance for a group and returns the variantAssignments
+ * map from progressData, so we can confirm the server applied the right variant.
+ */
+async function fetchVariantAssignments(request, gameId, groupId) {
+  const res = await request.get(
+    `${BASE_URL}/api/games/${gameId}/instance?accessContext=game&groupId=${encodeURIComponent(groupId)}`,
+  );
+  if (!res.ok()) throw new Error(`Fetch instance failed: ${res.status()} ${await res.text()}`);
+  const payload = await res.json();
+  const assignments = payload?.instance?.progressData?.variantAssignments ?? {};
+  return assignments;
+}
+
 async function waitForSolutionRequest(page, collector, label, timeoutMs) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -495,6 +509,16 @@ async function main() {
     console.log(`[fingerprints] group-a (variant-a): ${fingerprintA}`);
     console.log(`[fingerprints] group-b (variant-b): ${fingerprintB}`);
 
+    // Confirm the server actually applied the intended variant to each instance
+    const [assignmentsA, assignmentsB] = await Promise.all([
+      fetchVariantAssignments(ctxA1.request, gameId, groupA.groupId),
+      fetchVariantAssignments(ctxB1.request, gameId, groupB.groupId),
+    ]);
+    const appliedVariantA = assignmentsA[levelIdentifier] ?? null;
+    const appliedVariantB = assignmentsB[levelIdentifier] ?? null;
+    console.log(`[variants] group-a applied: ${appliedVariantA} (expected: ${VARIANT_A_ID})`);
+    console.log(`[variants] group-b applied: ${appliedVariantB} (expected: ${VARIANT_B_ID})`);
+
     const fingerprintsAreDifferent =
       fingerprintA !== null && fingerprintB !== null && fingerprintA !== fingerprintB;
 
@@ -509,6 +533,8 @@ async function main() {
     const checks = {
       "group-a-got-solution-request": aGotRequest,
       "group-b-got-solution-request": bGotRequest,
+      "group-a-applied-correct-variant": appliedVariantA === VARIANT_A_ID,
+      "group-b-applied-correct-variant": appliedVariantB === VARIANT_B_ID,
       "fingerprints-are-different": fingerprintsAreDifferent,
       "no-cross-contamination-group-a": !aRequestedBFingerprint,
       "no-cross-contamination-group-b": !bRequestedAFingerprint,
