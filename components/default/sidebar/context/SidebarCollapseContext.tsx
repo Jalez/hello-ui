@@ -35,11 +35,13 @@ export const useSidebarCollapse = () => {
 interface SidebarCollapseProviderProps {
   children: React.ReactNode;
   initialCollapsed?: boolean;
+  initialVisible?: boolean;
 }
 
 export const SidebarCollapseProvider: React.FC<SidebarCollapseProviderProps> = ({
   children,
-  initialCollapsed = true
+  initialCollapsed = true,
+  initialVisible = true,
 }) => {
   const getIsMobileForWidth = useCallback((width: number, previousIsMobile?: boolean) => {
     if (typeof previousIsMobile === "boolean") {
@@ -62,8 +64,8 @@ export const SidebarCollapseProvider: React.FC<SidebarCollapseProviderProps> = (
     return getIsMobileForWidth(window.innerWidth);
   });
   const [isOverlayOpen, setIsOverlayOpen] = useState(false);
-  const [isVisible, setIsVisibleState] = useSidebarPersistence("sidebar-visible", true);
-  const [hasResolvedResponsiveState, setHasResolvedResponsiveState] = useState(false);
+  const [isVisible, setIsVisibleState] = useSidebarPersistence("sidebar-visible", initialVisible);
+  const [hasResolvedResponsiveState, setHasResolvedResponsiveState] = useState(() => typeof window === "undefined");
   const isMobileRef = useRef(isMobile);
   const isCollapsedRef = useRef(isCollapsed);
   const isOverlayOpenRef = useRef(isOverlayOpen);

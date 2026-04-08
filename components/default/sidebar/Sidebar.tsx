@@ -120,11 +120,11 @@ export const Sidebar: React.FC<LeftSidebarProps> = ({ isUserAdmin, sidebarHeader
     return items;
   };
 
-  if (!hasResolvedResponsiveState || !isVisible || shouldHideSidebar) {
+  const shouldDelaySidebarRender = !hasResolvedResponsiveState && isMobile;
+
+  if (shouldDelaySidebarRender || !isVisible || shouldHideSidebar) {
     return null;
   }
-
-  // Render immediately with default values, responsive state will update shortly
 
   const renderSidebarContent = (forceExpanded: boolean) => (
     <div className="flex h-full w-full min-h-0 flex-col">

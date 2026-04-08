@@ -77,6 +77,10 @@
     margin: 0;
     padding: 0;
   }
+  html {
+    overflow-y: scroll;
+    scrollbar-gutter: stable;
+  }
   #__next {
     height: 100%;
   }

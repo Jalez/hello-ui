@@ -9,6 +9,7 @@ import Providers from "./AppProviders";
 interface LayoutClientInnerProps {
   children: ReactNode;
   initialSidebarCollapsed: boolean;
+  initialSidebarVisible: boolean;
   isUserAdmin: boolean;
   session: Session | null;
 }
@@ -19,8 +20,8 @@ interface LayoutShellProps {
 }
 
 function LayoutShell({ children, isUserAdmin }: LayoutShellProps) {
-  const { isCollapsed, isMobile, isVisible, hasResolvedResponsiveState } = useSidebarCollapse();
-  const shouldReserveDesktopSidebarSpace = hasResolvedResponsiveState && isVisible && !isMobile;
+  const { isCollapsed, isMobile, isVisible } = useSidebarCollapse();
+  const shouldReserveDesktopSidebarSpace = isVisible && !isMobile;
   const desktopSidebarOffsetClass = shouldReserveDesktopSidebarSpace
     ? (isCollapsed ? "pl-16" : "pl-64")
     : "pl-0";
@@ -48,12 +49,13 @@ function LayoutShell({ children, isUserAdmin }: LayoutShellProps) {
 export function LayoutClientInner({ 
   children, 
   initialSidebarCollapsed, 
+  initialSidebarVisible,
   isUserAdmin,
   session 
 }: LayoutClientInnerProps) {
   return (
     <Providers session={session}>
-      <SidebarCollapseProvider initialCollapsed={initialSidebarCollapsed}>
+      <SidebarCollapseProvider initialCollapsed={initialSidebarCollapsed} initialVisible={initialSidebarVisible}>
         <LayoutShell isUserAdmin={isUserAdmin}>
           {children}
         </LayoutShell>

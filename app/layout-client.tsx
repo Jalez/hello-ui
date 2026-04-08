@@ -10,13 +10,12 @@ interface LayoutClientProps {
 }
 
 export async function LayoutClient({ children }: LayoutClientProps) {
-  // Read sidebar state from cookies on the server
-  const initialSidebarCollapsed = await (async () => {
+  const readSidebarCookie = async (key: string, fallback: boolean) => {
     try {
       const cookieStore = await cookies();
-      const sidebarCookie = cookieStore.get("sidebar-collapsed")?.value;
+      const sidebarCookie = cookieStore.get(key)?.value;
       if (!sidebarCookie) {
-        return true;
+        return fallback;
       }
 
       const decodedValue = decodeURIComponent(sidebarCookie);
@@ -27,16 +26,18 @@ export async function LayoutClient({ children }: LayoutClientProps) {
         return false;
       }
       if (decodedValue === "undefined") {
-        return true; // Default to collapsed if undefined
+        return fallback;
       }
 
-      // Fall back to JSON parsing for future extensibility
       return JSON.parse(decodedValue);
     } catch (error) {
-      console.error("Error reading sidebar cookie:", error);
-      return true;
+      console.error(`Error reading ${key} cookie:`, error);
+      return fallback;
     }
-  })();
+  };
+
+  const initialSidebarCollapsed = await readSidebarCookie("sidebar-collapsed", true);
+  const initialSidebarVisible = await readSidebarCookie("sidebar-visible", true);
 
   // Get session on server to pass to SessionProvider (eliminates initial /api/auth/session call)
   const session = (await getServerSession(authOptions)) as Session | null;
@@ -70,6 +71,7 @@ export async function LayoutClient({ children }: LayoutClientProps) {
   return (
     <LayoutClientInner 
       initialSidebarCollapsed={initialSidebarCollapsed} 
+      initialSidebarVisible={initialSidebarVisible}
       isUserAdmin={isUserAdmin}
       session={session}
     >
