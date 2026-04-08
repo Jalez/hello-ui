@@ -19,7 +19,7 @@ const ToasterProvider = () => {
   return <Toaster theme={theme} />;
 };
 
-const BROWSER_WARNING_SESSION_KEY = "css-artist-browser-warning-shown";
+const BROWSER_WARNING_SESSION_KEY = "hello-ui-browser-warning-shown";
 
 function isSupportedChromeBrowser(): boolean {
   if (typeof window === "undefined") {

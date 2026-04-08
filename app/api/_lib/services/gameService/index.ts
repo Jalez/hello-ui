@@ -4,6 +4,7 @@ import { projectCollaborators, projects } from "@/lib/db/schema";
 import { createMap } from "@/app/api/_lib/services/mapService";
 import { deleteMap } from "@/app/api/_lib/services/mapService/delete";
 import { purgeOrphanLevels } from "@/app/api/_lib/services/levelService/purgeOrphans";
+import { evaluateAccessWindows, normalizeAccessWindowTimeZone, normalizeGameAccessWindows } from "@/lib/gameAccessWindows";
 import type { CreateGameOptions, Game, GameCollaborator, UpdateGameOptions } from "./types";
 
 export * from "./types";
@@ -48,6 +49,8 @@ function mapGame(row: typeof projects.$inferSelect): Game {
     access_window_enabled: row.accessWindowEnabled ?? false,
     access_starts_at: row.accessStartsAt ?? null,
     access_ends_at: row.accessEndsAt ?? null,
+    access_window_timezone: normalizeAccessWindowTimeZone(row.accessWindowTimezone),
+    access_windows: normalizeGameAccessWindows(row.accessWindows),
     access_key_required: row.accessKeyRequired ?? false,
     access_key: row.accessKey ?? null,
     collaboration_mode: row.collaborationMode === "group" ? "group" : "individual",
@@ -57,6 +60,16 @@ function mapGame(row: typeof projects.$inferSelect): Game {
     manual_drawboard_capture: row.manualDrawboardCapture ?? false,
     remote_sync_debounce_ms: row.remoteSyncDebounceMs ?? 500,
     drawboard_reload_debounce_ms: row.drawboardReloadDebounceMs ?? 48,
+    instance_purge_cadence:
+      row.instancePurgeCadence === "daily" || row.instancePurgeCadence === "weekly" || row.instancePurgeCadence === "monthly"
+        ? row.instancePurgeCadence
+        : null,
+    instance_purge_timezone: row.instancePurgeTimezone ?? null,
+    instance_purge_hour: row.instancePurgeHour ?? null,
+    instance_purge_minute: row.instancePurgeMinute ?? null,
+    instance_purge_weekday: row.instancePurgeWeekday ?? null,
+    instance_purge_day_of_month: row.instancePurgeDayOfMonth ?? null,
+    instance_purge_last_executed_at: row.instancePurgeLastExecutedAt ?? null,
     created_at: row.createdAt,
     updated_at: row.updatedAt,
   };
@@ -79,20 +92,13 @@ function withPermissions(game: Game, actor: string | string[], collaboratorMatch
 }
 
 function evaluateWindowAccess(game: Game): ShareAccessError | undefined {
-  if (!game.access_window_enabled) {
-    return undefined;
-  }
-
-  const now = Date.now();
-  if (game.access_starts_at && now < game.access_starts_at.getTime()) {
-    return "not_started";
-  }
-
-  if (game.access_ends_at && now > game.access_ends_at.getTime()) {
-    return "expired";
-  }
-
-  return undefined;
+  return evaluateAccessWindows({
+    enabled: game.access_window_enabled,
+    timeZone: game.access_window_timezone,
+    windows: game.access_windows,
+    legacyStartsAt: game.access_starts_at,
+    legacyEndsAt: game.access_ends_at,
+  });
 }
 
 function evaluateShareAccess(game: Game, accessKey?: string | null): ShareAccessError | undefined {
@@ -373,6 +379,14 @@ export async function updateGame(id: string, options: UpdateGameOptions): Promis
     updateData.accessEndsAt = options.accessEndsAt;
   }
 
+  if (options.accessWindowTimezone !== undefined) {
+    updateData.accessWindowTimezone = options.accessWindowTimezone?.trim() || null;
+  }
+
+  if (options.accessWindows !== undefined) {
+    updateData.accessWindows = normalizeGameAccessWindows(options.accessWindows);
+  }
+
   if (options.accessKeyRequired !== undefined) {
     updateData.accessKeyRequired = options.accessKeyRequired;
   }
@@ -420,6 +434,89 @@ export async function updateGame(id: string, options: UpdateGameOptions): Promis
       throw new Error("Invalid drawboardReloadDebounceMs: must be a number");
     }
     updateData.drawboardReloadDebounceMs = Math.min(10_000, Math.max(0, n));
+  }
+
+  if (options.instancePurgeCadence !== undefined) {
+    if (
+      options.instancePurgeCadence !== null &&
+      options.instancePurgeCadence !== "daily" &&
+      options.instancePurgeCadence !== "weekly" &&
+      options.instancePurgeCadence !== "monthly"
+    ) {
+      throw new Error("Invalid instancePurgeCadence");
+    }
+    updateData.instancePurgeCadence = options.instancePurgeCadence;
+  }
+
+  if (options.instancePurgeTimezone !== undefined) {
+    if (options.instancePurgeTimezone !== null) {
+      if (typeof options.instancePurgeTimezone !== "string" || !options.instancePurgeTimezone.trim()) {
+        throw new Error("Invalid instancePurgeTimezone");
+      }
+      try {
+        new Intl.DateTimeFormat("en-US", { timeZone: options.instancePurgeTimezone.trim() });
+      } catch {
+        throw new Error("Invalid instancePurgeTimezone");
+      }
+      updateData.instancePurgeTimezone = options.instancePurgeTimezone.trim();
+    } else {
+      updateData.instancePurgeTimezone = null;
+    }
+  }
+
+  if (options.instancePurgeHour !== undefined) {
+    if (options.instancePurgeHour === null) {
+      updateData.instancePurgeHour = null;
+    } else {
+      const n = Math.round(Number(options.instancePurgeHour));
+      if (!Number.isFinite(n) || n < 0 || n > 23) {
+        throw new Error("Invalid instancePurgeHour");
+      }
+      updateData.instancePurgeHour = n;
+    }
+  }
+
+  if (options.instancePurgeMinute !== undefined) {
+    if (options.instancePurgeMinute === null) {
+      updateData.instancePurgeMinute = null;
+    } else {
+      const n = Math.round(Number(options.instancePurgeMinute));
+      if (!Number.isFinite(n) || n < 0 || n > 59) {
+        throw new Error("Invalid instancePurgeMinute");
+      }
+      updateData.instancePurgeMinute = n;
+    }
+  }
+
+  if (options.instancePurgeWeekday !== undefined) {
+    if (options.instancePurgeWeekday === null) {
+      updateData.instancePurgeWeekday = null;
+    } else {
+      const n = Math.round(Number(options.instancePurgeWeekday));
+      if (!Number.isFinite(n) || n < 0 || n > 6) {
+        throw new Error("Invalid instancePurgeWeekday");
+      }
+      updateData.instancePurgeWeekday = n;
+    }
+  }
+
+  if (options.instancePurgeDayOfMonth !== undefined) {
+    if (options.instancePurgeDayOfMonth === null) {
+      updateData.instancePurgeDayOfMonth = null;
+    } else {
+      const n = Math.round(Number(options.instancePurgeDayOfMonth));
+      if (!Number.isFinite(n) || n < 1 || n > 31) {
+        throw new Error("Invalid instancePurgeDayOfMonth");
+      }
+      updateData.instancePurgeDayOfMonth = n;
+    }
+  }
+
+  if (options.instancePurgeLastExecutedAt !== undefined) {
+    if (options.instancePurgeLastExecutedAt !== null && !(options.instancePurgeLastExecutedAt instanceof Date)) {
+      throw new Error("Invalid instancePurgeLastExecutedAt: must be a Date or null");
+    }
+    updateData.instancePurgeLastExecutedAt = options.instancePurgeLastExecutedAt;
   }
 
   if (Object.keys(updateData).length === 0) {

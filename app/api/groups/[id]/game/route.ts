@@ -30,6 +30,8 @@ function mapRow(row: Record<string, any>) {
     accessWindowEnabled: row.access_window_enabled ?? false,
     accessStartsAt: row.access_starts_at ?? null,
     accessEndsAt: row.access_ends_at ?? null,
+    accessWindowTimezone: row.access_window_timezone ?? null,
+    accessWindows: Array.isArray(row.access_windows) ? row.access_windows : [],
     accessKeyRequired: row.access_key_required ?? false,
     hasAccessKey: Boolean(row.access_key),
     collaborationMode: row.collaboration_mode ?? "individual",

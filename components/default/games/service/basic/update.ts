@@ -1,4 +1,5 @@
 import { apiUrl } from "@/lib/apiUrl";
+import type { GameAccessWindow } from "@/lib/gameAccessWindows";
 import type { Game } from "../../types";
 
 export interface UpdateGameOptions {
@@ -12,6 +13,8 @@ export interface UpdateGameOptions {
   accessWindowEnabled?: boolean;
   accessStartsAt?: string | null;
   accessEndsAt?: string | null;
+  accessWindowTimezone?: string | null;
+  accessWindows?: GameAccessWindow[];
   accessKeyRequired?: boolean;
   accessKey?: string | null;
   collaborationMode?: "individual" | "group";
@@ -20,6 +23,13 @@ export interface UpdateGameOptions {
   manualDrawboardCapture?: boolean;
   remoteSyncDebounceMs?: number;
   drawboardReloadDebounceMs?: number;
+  instancePurgeCadence?: "daily" | "weekly" | "monthly" | null;
+  instancePurgeTimezone?: string | null;
+  instancePurgeHour?: number | null;
+  instancePurgeMinute?: number | null;
+  instancePurgeWeekday?: number | null;
+  instancePurgeDayOfMonth?: number | null;
+  instancePurgeLastExecutedAt?: string | null;
   regenerateAccessKey?: boolean;
   regenerateShareToken?: boolean;
 }

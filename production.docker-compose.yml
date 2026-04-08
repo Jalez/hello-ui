@@ -1,30 +1,56 @@
-version: '3'
-
 services:
-  db:
-    image: postgres:latest
-    container_name: ui-designer.db
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: ui_designer
-    volumes:
-      - pgdata:/var/lib/postgresql/data
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d ui_designer"]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 5s
       retries: 10
     restart: always
     networks:
-      - ui-designer-net
+      - hello-ui-net
+
+  db:
+    image: postgres:16-alpine
+    container_name: hello-ui.db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: hello_ui
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d hello_ui"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: always
+    networks:
+      - hello-ui-net
+
+  db-init:
+    build:
+      context: .
+      dockerfile: Dockerfile.db-init
+    container_name: hello-ui.db-init
+    image: hello-ui-db-init:latest
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/hello_ui
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+    networks:
+      - hello-ui-net
 
   drawboard:
     build:
       context: ./drawBoard
       dockerfile: Dockerfile
-    container_name: ui-designer.drawboard
-    image: ui-designer-drawboard:latest
+    container_name: hello-ui.drawboard
+    image: hello-ui-drawboard:latest
     ports:
       - "54320:3500"
     environment:
@@ -32,19 +58,19 @@ services:
       NODE_ENV: production
     restart: always
     networks:
-      - ui-designer-net
+      - hello-ui-net
 
   app:
     build:
       context: .
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_APP_URL: https://tie-lukioplus.rd.tuni.fi/css-artist
-        NEXT_PUBLIC_DRAWBOARD_URL: https://tie-lukioplus.rd.tuni.fi/drawboard
-        NEXT_PUBLIC_WEBSOCKET_URL: wss://tie-lukioplus.rd.tuni.fi/css-artist-ws
-        NEXT_PUBLIC_BASE_PATH: /css-artist
-    container_name: ui-designer.app
-    image: ui-designer-app:latest
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+        NEXT_PUBLIC_DRAWBOARD_URL: ${NEXT_PUBLIC_DRAWBOARD_URL:-http://localhost:3500}
+        NEXT_PUBLIC_WEBSOCKET_URL: ${NEXT_PUBLIC_WEBSOCKET_URL:-ws://localhost:3100}
+        NEXT_PUBLIC_BASE_PATH: ${NEXT_PUBLIC_BASE_PATH:-}
+    container_name: hello-ui.app
+    image: hello-ui-app:latest
     ports:
       - "54322:3000"
     volumes:
@@ -52,35 +78,29 @@ services:
     env_file:
       - .env.production
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/ui_designer
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/hello_ui
       DB_CLIENT: postgres
       TZ: Europe/Helsinki
       NODE_ENV: production
       WS_SERVICE_TOKEN: ${WS_SERVICE_TOKEN:-ws-service-secret}
-      NEXT_PUBLIC_APP_URL: "https://tie-lukioplus.rd.tuni.fi/css-artist"
-      NEXT_PUBLIC_BASE_PATH: "/css-artist"
-      NEXT_PUBLIC_DRAWBOARD_URL: "https://tie-lukioplus.rd.tuni.fi/drawboard"
-      NEXT_PUBLIC_WEBSOCKET_URL: "wss://tie-lukioplus.rd.tuni.fi/css-artist-ws"
-      COLLAB_ENGINE: "${COLLAB_ENGINE:-yjs}"
-      NEXT_PUBLIC_COLLAB_ENGINE: "${NEXT_PUBLIC_COLLAB_ENGINE:-yjs}"
-      # Server-only: LTI redirect base (not inlined at build time, so prod always uses this)
-      APP_ROOT_URL: "https://tie-lukioplus.rd.tuni.fi/css-artist"
-      # Admin: grant sidebar admin link to this email (e.g. when DB admin_roles not seeded). Match is case-insensitive.
       ADMIN_EMAIL: "raitsu11@gmail.com"
-      # Optional: set to "true" to log [DEBUG] to console and write debug-*.jsonl to ./logs
-      # DEBUG_LOGS: "true"
     depends_on:
-      - db
+      db-init:
+        condition: service_completed_successfully
+      drawboard:
+        condition: service_started
+      redis:
+        condition: service_healthy
     restart: always
     networks:
-      - ui-designer-net
+      - hello-ui-net
 
   ws-server:
     build:
       context: ./ws-server
       dockerfile: Dockerfile
-    container_name: ui-designer.ws
-    image: ui-designer-ws:latest
+    container_name: hello-ui.ws
+    image: hello-ui-ws:latest
     ports:
       - "54323:8080"
     env_file:
@@ -88,11 +108,14 @@ services:
     environment:
       PORT: 8080
       API_BASE_URL: http://app:3000
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/ui_designer
-      CORS_ORIGIN: https://tie-lukioplus.rd.tuni.fi
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/hello_ui
+      CORS_ORIGIN: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
       TZ: Europe/Helsinki
       NODE_ENV: production
       WS_SERVICE_TOKEN: ${WS_SERVICE_TOKEN:-ws-service-secret}
+    depends_on:
+      app:
+        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
       interval: 10s
@@ -100,11 +123,11 @@ services:
       retries: 5
     restart: always
     networks:
-      - ui-designer-net
+      - hello-ui-net
 
 volumes:
   pgdata:
 
 networks:
-  ui-designer-net:
+  hello-ui-net:
     driver: bridge

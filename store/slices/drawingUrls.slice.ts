@@ -13,9 +13,15 @@ const drawingUrlsSlice = createSlice({
   initialState,
   reducers: {
     addDrawingUrl(state, action) {
-      const { drawingUrl, scenarioId } = action.payload;
-      if (state[scenarioId] === drawingUrl) return;
-      state[scenarioId] = drawingUrl;
+      const { drawingUrl, storageKey, scenarioId } = action.payload as {
+        drawingUrl: string;
+        storageKey?: string;
+        scenarioId?: string;
+      };
+      const key = (storageKey?.trim() || scenarioId?.trim() || "");
+      if (!key) return;
+      if (state[key] === drawingUrl) return;
+      state[key] = drawingUrl;
     },
     resetDrawingUrls() {
       return {};

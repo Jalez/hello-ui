@@ -31,7 +31,7 @@ drawBoard/dist
 .creator-ai-chats/
 *.pem
 exported-logs/
-css-artist-prod-logs.tar.gz
+hello-ui-prod-logs.tar.gz
 
 # debug
 npm-debug.log*

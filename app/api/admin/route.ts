@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 /**
  * GET /api/admin
- * Simple ping so admin API is reachable (e.g. with base path: /css-artist/api/admin).
+ * Simple ping so admin API is reachable (e.g. with base path: /hello-ui/api/admin).
  * For admin check use: GET /api/admin/check-status (auth required).
  */
 export async function GET() {

@@ -23,7 +23,7 @@ function AuthErrorContent() {
       switch (errorParam) {
         case "OAuthSignin":
           setError(
-            "Sign-in could not be started. If this app is served under a path (e.g. /css-artist), " +
+            "Sign-in could not be started. If this app is served under a path (e.g. /hello-ui), " +
               "ensure the Google OAuth redirect URI in Google Cloud Console is exactly: " +
               (typeof window !== "undefined"
                 ? `${window.location.origin}${apiUrl("/api/auth/callback/google")}`

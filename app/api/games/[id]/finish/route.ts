@@ -148,10 +148,29 @@ export async function POST(
   }
 
   const sql = await getSql();
-  const updatedResult = await sql.query(
-    "UPDATE game_instances SET progress_data = $2, updated_at = NOW() WHERE id = $1 RETURNING id, progress_data",
-    [resolved.instance.id, progressData]
-  );
+  // For group mode, atomically merge userFinishStates so that concurrent submissions
+  // from different group members do not overwrite each other (last-write-wins blind
+  // UPDATE would silently drop one member's entry).
+  const updatedResult = mode === "group"
+    ? await sql.query(
+        `UPDATE game_instances
+         SET progress_data = (
+           $2::jsonb
+           || jsonb_build_object(
+             'userFinishStates',
+             COALESCE(progress_data->'userFinishStates', '{}'::jsonb)
+             || ($2->'userFinishStates')
+           )
+         ),
+         updated_at = NOW()
+         WHERE id = $1
+         RETURNING id, progress_data`,
+        [resolved.instance.id, progressData],
+      )
+    : await sql.query(
+        "UPDATE game_instances SET progress_data = $2, updated_at = NOW() WHERE id = $1 RETURNING id, progress_data",
+        [resolved.instance.id, progressData],
+      );
   const updatedRows = getRows(updatedResult);
   const persistedProgressData =
     (updatedRows[0] as { progress_data?: Record<string, unknown> })?.progress_data ?? progressData;

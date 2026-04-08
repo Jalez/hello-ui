@@ -3,7 +3,7 @@
 
 import { useState, useRef, useEffect, type ReactNode } from "react";
 
-const POSITION_STORAGE_PREFIX = "css-artist:draggable-float:";
+const POSITION_STORAGE_PREFIX = "hello-ui:draggable-float:";
 
 function loadStoredPosition(
   key: string | undefined,

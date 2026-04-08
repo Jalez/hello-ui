@@ -73,6 +73,8 @@ export async function GET() {
         accessWindowEnabled: game.access_window_enabled,
         accessStartsAt: game.access_starts_at,
         accessEndsAt: game.access_ends_at,
+        accessWindowTimezone: game.access_window_timezone,
+        accessWindows: game.access_windows,
         accessKeyRequired: game.access_key_required,
         collaborationMode: game.collaboration_mode,
         groupId: game.group_id,

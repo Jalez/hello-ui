@@ -13,6 +13,7 @@ import {
 } from "@/app/api/_lib/services/gameService/accessCookie";
 import { getLtiSession, hasOutcomeService } from "@/lib/lti";
 import { BASE_LEVEL_VARIANT_ID, getLevelVariantAssignmentKey } from "@/lib/levels/variants";
+import { ensureGameRetentionWindow } from "@/app/api/_lib/services/gameRetentionService";
 
 export function getRows(result: { rows?: unknown[] } | unknown[] | null | undefined): Record<string, unknown>[] {
   if (!result) {
@@ -35,7 +36,7 @@ export function accessDenied(reason: "not_started" | "expired" | "access_key_req
     return NextResponse.json({ error: "Game is not open yet", reason }, { status: 403 });
   }
   if (reason === "expired") {
-    return NextResponse.json({ error: "Game access window has ended", reason }, { status: 403 });
+    return NextResponse.json({ error: "Game access windows have ended", reason }, { status: 403 });
   }
   return NextResponse.json(
     {
@@ -246,18 +247,7 @@ async function ensureVariantAssignmentsForInstance(
     }
   }
 
-  const nextProgressData = {
-    ...existingProgressData,
-    variantAssignments: nextAssignments,
-  };
-
-  const { persistedProgressData } = await updateInstanceProgressData(
-    instanceId,
-    existingProgressData,
-    nextProgressData,
-  );
-
-  return normalizeProgressData(persistedProgressData);
+  return atomicAssignVariants(instanceId, nextAssignments);
 }
 
 async function attachCurrentLtiOutcomeTarget(
@@ -329,6 +319,38 @@ async function updateInstanceProgressData(
     mergedProgressData,
     persistedProgressData: updatedRows[0]?.progress_data ?? mergedProgressData,
   };
+}
+
+/**
+ * Atomically assigns variant assignments in the DB so that concurrent GET /instance
+ * requests never overwrite each other's assignments. The SQL expression ensures that
+ * values already stored in the DB always win over the incoming candidates, so the
+ * first writer's random pick is preserved regardless of how many requests race.
+ *
+ * Returns the progress_data as it exists in the DB after the update.
+ */
+async function atomicAssignVariants(
+  instanceId: string,
+  candidateAssignments: Record<string, string>,
+): Promise<Record<string, unknown>> {
+  const sql = await getSql();
+  // The expression `$2::jsonb || COALESCE(progress_data->'variantAssignments', '{}')` means:
+  // start with our candidates, then overlay whatever is already in the DB.
+  // Because the DB values are on the right, they always win for any key that already exists.
+  const result = await sql.query(
+    `UPDATE game_instances
+     SET progress_data = jsonb_set(
+       progress_data,
+       '{variantAssignments}',
+       $2::jsonb || COALESCE(progress_data->'variantAssignments', '{}'::jsonb)
+     ),
+     updated_at = NOW()
+     WHERE id = $1
+     RETURNING progress_data`,
+    [instanceId, candidateAssignments],
+  );
+  const rows = getRows(result);
+  return normalizeProgressData(rows[0]?.progress_data);
 }
 
 
@@ -503,7 +525,13 @@ async function resolveServiceTokenAuth(request: NextRequest, gameId: string) {
 
   // Look up the game directly (no actor-based access check for service calls)
   const gameResult = await sql.query(
-    "SELECT id, collaboration_mode, map_name FROM projects WHERE id = $1 LIMIT 1",
+    `SELECT id, collaboration_mode, map_name,
+            instance_purge_cadence, instance_purge_timezone, instance_purge_hour,
+            instance_purge_minute, instance_purge_weekday, instance_purge_day_of_month,
+            instance_purge_last_executed_at
+     FROM projects
+     WHERE id = $1
+     LIMIT 1`,
     [gameId],
   );
   const gameRows = getRows(gameResult);
@@ -512,41 +540,64 @@ async function resolveServiceTokenAuth(request: NextRequest, gameId: string) {
   }
 
   const mode = gameRows[0].collaboration_mode === "group" ? "group" : "individual";
+  await ensureGameRetentionWindow({
+    gameId,
+    instancePurgeCadence: (gameRows[0].instance_purge_cadence as "daily" | "weekly" | "monthly" | null | undefined) ?? null,
+    instancePurgeTimezone: (gameRows[0].instance_purge_timezone as string | null | undefined) ?? null,
+    instancePurgeHour:
+      typeof gameRows[0].instance_purge_hour === "number"
+        ? gameRows[0].instance_purge_hour
+        : Number(gameRows[0].instance_purge_hour ?? 0),
+    instancePurgeMinute:
+      typeof gameRows[0].instance_purge_minute === "number"
+        ? gameRows[0].instance_purge_minute
+        : Number(gameRows[0].instance_purge_minute ?? 0),
+    instancePurgeWeekday:
+      typeof gameRows[0].instance_purge_weekday === "number"
+        ? gameRows[0].instance_purge_weekday
+        : Number(gameRows[0].instance_purge_weekday ?? 1),
+    instancePurgeDayOfMonth:
+      typeof gameRows[0].instance_purge_day_of_month === "number"
+        ? gameRows[0].instance_purge_day_of_month
+        : Number(gameRows[0].instance_purge_day_of_month ?? 1),
+    instancePurgeLastExecutedAt:
+      (gameRows[0].instance_purge_last_executed_at as Date | string | null | undefined) ?? null,
+  });
 
-    if (mode === "group") {
-      if (!groupId) {
-        if (userId) {
-          const individualInstance = await resolveIndividualInstance(sql, gameId, userId);
-          const progressData = await ensureVariantAssignmentsForInstance(
-            String(individualInstance.instance.id),
-            (gameRows[0].map_name as string) || "",
-            normalizeProgressData(individualInstance.instance.progressData),
-          );
-          return {
-            instance: {
-              ...individualInstance.instance,
-              progressData,
-            },
-            collaborationMode: mode,
-            mapName: (gameRows[0].map_name as string) || "",
-          } as const;
-        }
-        return { error: "groupId is required for group mode", status: 400 } as const;
+  if (mode === "group") {
+    if (!groupId) {
+      if (userId) {
+        const individualInstance = await resolveIndividualInstance(sql, gameId, userId);
+        const progressData = await ensureVariantAssignmentsForInstance(
+          String(individualInstance.instance.id),
+          (gameRows[0].map_name as string) || "",
+          normalizeProgressData(individualInstance.instance.progressData),
+        );
+        return {
+          instance: {
+            ...individualInstance.instance,
+            progressData,
+          },
+          collaborationMode: mode,
+          mapName: (gameRows[0].map_name as string) || "",
+        } as const;
       }
-      const groupInstance = await resolveGroupInstance(sql, gameId, groupId);
-      const progressData = await ensureVariantAssignmentsForInstance(
-        String(groupInstance.instance.id),
-        (gameRows[0].map_name as string) || "",
-        normalizeProgressData(groupInstance.instance.progressData),
-      );
-      return {
-        instance: {
-          ...groupInstance.instance,
-          progressData,
-        },
-        collaborationMode: mode,
-        mapName: (gameRows[0].map_name as string) || "",
-      } as const;
+      return { error: "groupId is required for group mode", status: 400 } as const;
+    }
+    const groupInstance = await resolveGroupInstance(sql, gameId, groupId);
+    const progressData = await ensureVariantAssignmentsForInstance(
+      String(groupInstance.instance.id),
+      (gameRows[0].map_name as string) || "",
+      normalizeProgressData(groupInstance.instance.progressData),
+    );
+    return {
+      instance: {
+        ...groupInstance.instance,
+        progressData,
+      },
+      collaborationMode: mode,
+      mapName: (gameRows[0].map_name as string) || "",
+    } as const;
   }
 
   // Individual mode
@@ -628,6 +679,17 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: "Authentication required for group games" }, { status: 401 });
     }
 
+    await ensureGameRetentionWindow({
+      gameId: game.id,
+      instancePurgeCadence: game.instance_purge_cadence,
+      instancePurgeTimezone: game.instance_purge_timezone,
+      instancePurgeHour: game.instance_purge_hour,
+      instancePurgeMinute: game.instance_purge_minute,
+      instancePurgeWeekday: game.instance_purge_weekday,
+      instancePurgeDayOfMonth: game.instance_purge_day_of_month,
+      instancePurgeLastExecutedAt: game.instance_purge_last_executed_at,
+    });
+
     // Allow creators to view another user's individual instance via ?userId=
     const targetUserId = request.nextUrl.searchParams.get("userId");
     const actorUserId = (targetUserId && game.can_edit && mode === "individual") ? targetUserId : ownUserId;
@@ -670,6 +732,17 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   if (!session?.user?.email && game.collaboration_mode === "group") {
     return NextResponse.json({ error: "Authentication required for group games" }, { status: 401 });
   }
+
+  await ensureGameRetentionWindow({
+    gameId: game.id,
+    instancePurgeCadence: game.instance_purge_cadence,
+    instancePurgeTimezone: game.instance_purge_timezone,
+    instancePurgeHour: game.instance_purge_hour,
+    instancePurgeMinute: game.instance_purge_minute,
+    instancePurgeWeekday: game.instance_purge_weekday,
+    instancePurgeDayOfMonth: game.instance_purge_day_of_month,
+    instancePurgeLastExecutedAt: game.instance_purge_last_executed_at,
+  });
 
   const mode = game.collaboration_mode === "group" ? "group" : "individual";
   const ownUserId = session?.user?.email

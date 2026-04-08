@@ -1,5 +1,5 @@
 {
-  "name": "ui-designer",
+  "name": "hello-ui",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -8,6 +8,10 @@
     "start": "next start",
     "lint": "eslint",
     "pw:install": "playwright install chromium",
+    "pw:install-browsers": "playwright install chromium firefox",
+    "pw:cross-browser-group": "node scripts/playwright-cross-browser-group-smoke.mjs",
+    "pw:variant-group": "node scripts/playwright-variant-group-smoke.mjs",
+    "pw:concurrent-race": "node scripts/playwright-concurrent-race-smoke.mjs",
     "pw:local-group": "node scripts/playwright-local-group-smoke.mjs",
     "pw:classroom-churn": "PLAYWRIGHT_SCENARIO=classroom_churn node scripts/playwright-local-group-smoke.mjs",
     "pw:text-production": "PLAYWRIGHT_SCENARIO=classroom_text_production node scripts/playwright-local-group-smoke.mjs",

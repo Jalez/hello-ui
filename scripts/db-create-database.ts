@@ -18,7 +18,7 @@ if (!DATABASE_URL || !DATABASE_URL.startsWith("postgresql")) {
 }
 
 const dbUrlMatch = DATABASE_URL.match(/\/([^/?]+)(\?|$)/);
-const targetDbName = dbUrlMatch ? dbUrlMatch[1] : "ui_designer";
+const targetDbName = dbUrlMatch ? dbUrlMatch[1] : "hello_ui";
 const postgresUrl = DATABASE_URL.replace(/\/[^/?]+(\?|$)/, "/postgres$1");
 
 async function main() {

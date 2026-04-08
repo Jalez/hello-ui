@@ -74,7 +74,7 @@ function accessDenied(reason: "not_started" | "expired" | "access_key_required" 
     return NextResponse.json({ error: "Game is not open yet" }, { status: 403 });
   }
   if (reason === "expired") {
-    return NextResponse.json({ error: "Game access window has ended" }, { status: 403 });
+    return NextResponse.json({ error: "Game access windows have ended" }, { status: 403 });
   }
   return NextResponse.json(
     { error: reason === "access_key_invalid" ? "Invalid access key" : "Access key required" },

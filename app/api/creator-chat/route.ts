@@ -1,6 +1,7 @@
 import { createOpenAI } from "@ai-sdk/openai";
 import { convertToModelMessages, stepCountIs, streamText, tool, type UIMessage } from "ai";
 import { z } from "zod";
+import { resolvePublicSiteUrl } from "@/lib/env/urls";
 
 import { loadCreatorAiChat, updateCreatorAiChat } from "@/app/api/_lib/services/creatorAiChatStore";
 
@@ -73,9 +74,7 @@ export async function POST(request: Request) {
   }
 
   const isOpenRouter = baseURL.includes("openrouter.ai");
-  const siteUrl =
-    process.env.NEXT_PUBLIC_APP_URL ||
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined);
+  const siteUrl = resolvePublicSiteUrl();
 
   const provider = createOpenAI({
     apiKey: resolvedApiKey,

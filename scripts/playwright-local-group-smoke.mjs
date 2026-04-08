@@ -1,4 +1,5 @@
 import { chromium, expect, firefox, webkit } from "@playwright/test";
+import { TOUR_SPOT_ACKS } from "./playwright-tour-acks.mjs";
 import { Client } from "pg";
 import { readFileSync } from "fs";
 import dotenv from "dotenv";
@@ -25,7 +26,7 @@ const concurrentEditors = Math.max(2, Number.parseInt(process.env.PLAYWRIGHT_CON
 const timeoutMultiplier = Math.max(1, Number.parseFloat(process.env.PLAYWRIGHT_TIMEOUT_MULTIPLIER || "1"));
 const verboseYjsLogs = process.env.PLAYWRIGHT_VERBOSE_YJS === "true";
 const verboseBrowserLogs = process.env.PLAYWRIGHT_VERBOSE_BROWSER === "true";
-const dbUrl = process.env.PLAYWRIGHT_DATABASE_URL || process.env.DATABASE_URL || "postgresql://postgres:postgres@localhost:5433/ui_designer";
+const dbUrl = process.env.PLAYWRIGHT_DATABASE_URL || process.env.DATABASE_URL || "postgresql://postgres:postgres@localhost:5433/hello_ui";
 let activeGameId = requestedGameId;
 const smokeViewport = {
   width: Number.parseInt(process.env.PLAYWRIGHT_VIEWPORT_WIDTH || "430", 10),
@@ -459,7 +460,7 @@ function getPlaywrightWebSocketUrl() {
     return `ws://${resolvedBaseUrl.hostname}:3100`;
   }
 
-  return `${resolvedBaseUrl.protocol === "https:" ? "wss:" : "ws:"}//${resolvedBaseUrl.host}/css-artist-ws`;
+  return `${resolvedBaseUrl.protocol === "https:" ? "wss:" : "ws:"}//${resolvedBaseUrl.host}/hello-ui-ws`;
 }
 
 function getHealthUrlForWebSocket(wsUrl) {
@@ -994,9 +995,8 @@ async function runWsRecoveryScenario(browser) {
       );
       console.log(`ws-recovery stabilityReady=${stabilityReady}`);
       expect(stabilityReady).toBe(true);
-      startDroppingYjsUpdates(pages[0]);
       try {
-        const stabilityResult = await tryEditStability(pages[0], pages, "ws-recovery-post");
+        const stabilityResult = await tryEditStability(pages[0], pages, "ws-recovery-post", { droppingPage: pages[0] });
         console.log(
           `ws-recovery stability stable=${stabilityResult.stable} convergedToPeers=${stabilityResult.convergedToPeers} appearedAt=${stabilityResult.appearedAt} disappearedAt=${stabilityResult.disappearedAt}`
         );
@@ -1337,23 +1337,13 @@ async function signInDevUser(page, username) {
     .toBe(true);
 
   // Pre-acknowledge all tour spots so the Joyride overlay never blocks interactions.
-  await page.evaluate(async () => {
-    const acks = {
-      "navbar.game_route_score": 1, "navbar.game_route_mobile_game_menu": 1,
-      "navbar.game_route_levels": 1, "navbar.game_route_lobby": 1,
-      "navbar.game_route_finish": 1, "navbar.creator_game_menu": 1,
-      "navbar.creator_workbench_tools": 1, "navbar.creator_levels": 1,
-      "creator.workbench_sidebar": 1, "footer.help": 1,
-      "footer.level_menu": 1, "footer.time_menu": 1,
-      "footer.info": 1, "footer.collaboration": 1,
-      "gameboard.events_strip": 2, "gameboard.scenario_run_controls": 2,
-    };
+  await page.evaluate(async (acks) => {
     await fetch("/api/user/tour-spots", {
       method: "PATCH", credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ acks }),
     }).catch(() => {});
-  });
+  }, TOUR_SPOT_ACKS);
 }
 
 async function enableHttpLatency(context) {
@@ -1829,11 +1819,11 @@ async function setEditorSelection(page, placement = "end", offset = 0) {
         return false;
       }
       const cmEl = editableContent.closest(".cm-editor");
-      let view = null;
-      try { view = cmEl?.cmView?.view; } catch {}
+      const content = cmEl?.querySelector('.cm-content') ?? editableContent;
+      let tile = content?.cmTile ?? cmEl?.cmTile;
+      let view = tile?.root?.view ?? null;
       if (!view) {
-        try { view = editableContent.parentNode?.cmView?.view; } catch {}
-        if (!view) try { view = editableContent.cmView?.view; } catch {}
+        view = cmEl?.cmView?.view ?? content?.parentNode?.cmView?.view ?? content?.cmView?.view ?? null;
       }
       if (!view?.state?.doc) {
         return false;
@@ -1874,11 +1864,11 @@ async function setEditorSelection(page, placement = "end", offset = 0) {
       return false;
     }
     const cmEl = editableContent.closest(".cm-editor");
-    let view = null;
-    try { view = cmEl?.cmView?.view; } catch {}
+    const content = cmEl?.querySelector('.cm-content') ?? editableContent;
+    let tile = content?.cmTile ?? cmEl?.cmTile;
+    let view = tile?.root?.view ?? null;
     if (!view) {
-      try { view = editableContent.parentNode?.cmView?.view; } catch {}
-      if (!view) try { view = editableContent.cmView?.view; } catch {}
+      view = cmEl?.cmView?.view ?? content?.parentNode?.cmView?.view ?? content?.cmView?.view ?? null;
     }
     if (!view?.state?.selection?.main) {
       return true;
@@ -1894,22 +1884,40 @@ async function setEditorSelection(page, placement = "end", offset = 0) {
   }
 }
 
+/**
+ * Resolve a live EditorView from a .cm-editor or .cm-content DOM element.
+ * Modern @codemirror/view (6.x) stores a cmTile reference on DOM nodes;
+ * older bundled copies (e.g. inside y-codemirror.next) used cmView.
+ * We try both so the helper works regardless of which bundle rendered the editor.
+ */
+function findCmViewJS() {
+  return `(function findCmView(cmEditorEl) {
+    // Modern path: cmTile -> tile.root.view
+    const content = cmEditorEl.querySelector('.cm-content') ?? cmEditorEl;
+    let tile = content?.cmTile ?? cmEditorEl?.cmTile;
+    let view = tile?.root?.view ?? null;
+    if (view) return view;
+    // Legacy path: cmView.view (used in bundled copies of CM inside y-codemirror.next)
+    view = cmEditorEl?.cmView?.view ?? content?.parentNode?.cmView?.view ?? content?.cmView?.view ?? null;
+    return view;
+  })`;
+}
+
 async function insertEditorText(page, text) {
   const inserted = await page.evaluate((nextText) => {
     const editableContent = document.querySelector(".cm-content[contenteditable='true']");
-    if (!editableContent) {
-      return false;
-    }
-    const cmEl = editableContent.closest(".cm-editor");
-    let view = null;
-    try { view = cmEl?.cmView?.view; } catch {}
-    if (!view) {
-      try { view = editableContent.parentNode?.cmView?.view; } catch {}
-      if (!view) try { view = editableContent.cmView?.view; } catch {}
-    }
-    if (!view?.state) {
-      return false;
-    }
+    if (!editableContent) return false;
+    const cmEditorEl = editableContent.closest(".cm-editor");
+    if (!cmEditorEl) return false;
+    const findCmView = (function findCmView(el) {
+      const content = el.querySelector('.cm-content') ?? el;
+      let tile = content?.cmTile ?? el?.cmTile;
+      let view = tile?.root?.view ?? null;
+      if (view) return view;
+      return el?.cmView?.view ?? content?.parentNode?.cmView?.view ?? content?.cmView?.view ?? null;
+    });
+    const view = findCmView(cmEditorEl);
+    if (!view?.state) return false;
     const range = view.state.selection.main;
     const insertAt = range.from + nextText.length;
     view.dispatch({
@@ -1922,7 +1930,10 @@ async function insertEditorText(page, text) {
   }, text);
 
   if (!inserted) {
-    throw new Error("Failed to insert text into CodeMirror.");
+    // If CodeMirror API not accessible, fall back to keyboard typing.
+    const editorEl = page.locator(".cm-content[contenteditable='true']").first();
+    await editorEl.click();
+    await page.keyboard.type(text, { delay: 10 });
   }
 }
 
@@ -2274,11 +2285,14 @@ async function trySamePositionConcurrentEdit(pages, groupName) {
 async function tryEditStability(targetPage, allPages, groupName, opts = {}) {
   const stabilityWindowMs = opts.stabilityWindowMs ?? 10000;
   const pollIntervalMs = opts.pollIntervalMs ?? 400;
+  // droppingPage: if provided, drops are started AFTER the initial marker is confirmed,
+  // so that pending delayed WS messages don't race with the first edit.
+  const droppingPage = opts.droppingPage ?? null;
 
   const marker = `pw-stable-${Date.now().toString(36)}`;
   const otherPages = allPages.filter((p) => p !== targetPage);
 
-  // Type the marker on the target page
+  // Type the marker on the target page (drops must be off so the edit goes through cleanly)
   const editor = targetPage.locator(".cm-content[contenteditable='true']").first();
   await editor.click();
   await setEditorSelection(targetPage, "end");
@@ -2298,6 +2312,12 @@ async function tryEditStability(targetPage, allPages, groupName, opts = {}) {
   if (!appearedAt) {
     console.warn(`[stability:never-appeared] ${groupName} marker=${marker}`);
     return { stable: false, appearedAt: null, disappearedAt: null, convergedToPeers: false };
+  }
+
+  // Now that the initial marker is safely written, begin dropping so that background
+  // edits on peer pages create a divergence without racing with the first insert.
+  if (droppingPage) {
+    startDroppingYjsUpdates(droppingPage);
   }
 
   // Have ONE other page type a few edits to create divergence conditions.
@@ -2745,13 +2765,15 @@ async function runTextProductionForGroup(group, contexts) {
       if (!editableContent) return "no-editable-cm";
       const cmEl = editableContent.closest(".cm-editor");
       if (!cmEl) return "no-cm-editor";
-      let view = null;
-      try { view = cmEl.cmView?.view; } catch {}
+      const content = cmEl.querySelector('.cm-content') ?? editableContent;
+      let tile = content?.cmTile ?? cmEl?.cmTile;
+      let view = tile?.root?.view ?? null;
       if (!view) {
-        try { view = editableContent.parentNode?.cmView?.view; } catch {}
-        if (!view) try { view = editableContent.cmView?.view; } catch {}
+        view = cmEl?.cmView?.view ?? content?.parentNode?.cmView?.view ?? content?.cmView?.view ?? null;
       }
-      if (!view || !view.state) return "no-view-found";
+      if (!view || !view.state) {
+        return `no-view-found`;
+      }
       const doc = view.state.doc.toString();
       const pos = doc.indexOf(ph);
       if (pos === -1) return `slot-missing:${doc.substring(0, 200)}`;
@@ -2802,9 +2824,16 @@ async function runTextProductionForGroup(group, contexts) {
       try {
         const editor = currentPage.locator(".cm-content[contenteditable='true']").first();
         await editor.waitFor({ timeout: scaledTimeout(10000) });
-        await editor.click();
 
-        const slotSelected = await selectSlot(currentPage, slotPlaceholder);
+        // Retry selectSlot: if no-view-found, the editor is mid-remount (yjsDocGeneration
+        // incremented during recovery). Wait briefly for the new instance to attach cmView.
+        let slotSelected = "no-view-found";
+        for (let attempt = 0; attempt < 5; attempt++) {
+          await editor.click();
+          slotSelected = await selectSlot(currentPage, slotPlaceholder);
+          if (slotSelected !== "no-view-found") break;
+          await currentPage.waitForTimeout(300);
+        }
 
         if (slotSelected === "ok") {
           await currentPage.keyboard.type(`[${username}] ${fragment}`, { delay: 150 });
@@ -3880,8 +3909,7 @@ async function main() {
         const typingPage = contexts[typingIdx].page;
         // Start dropping on the typing user's page so they don't receive remote updates
         // This creates a genuine hash divergence from the server's perspective
-        startDroppingYjsUpdates(typingPage);
-        const stabilityResult = await tryEditStability(typingPage, memberPages, group.groupName);
+        const stabilityResult = await tryEditStability(typingPage, memberPages, group.groupName, { droppingPage: typingPage });
         stopDroppingYjsUpdates(typingPage);
         editStable = stabilityResult.stable;
       }

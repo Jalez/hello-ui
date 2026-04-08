@@ -6,6 +6,7 @@ import { getOrCreateUserByEmail, getUserByEmail, updateUserEmail, updateUserProf
 import { getSql } from "@/app/api/_lib/db";
 import { logDebug } from "@/lib/debug-logger";
 import { createOneTimeCode } from "@/lib/lti/one-time-code";
+import { resolveAppRootUrl } from "@/lib/env/urls";
 
 export async function POST(request: NextRequest) {
   try {
@@ -163,10 +164,7 @@ export async function POST(request: NextRequest) {
 
     // App root URL for redirects (browsers must hit this, not Docker-internal request.url).
     // Prefer APP_ROOT_URL (server-only, never inlined) so prod redirects stay correct behind a proxy.
-    const appRootUrl =
-      process.env.APP_ROOT_URL ||
-      process.env.NEXT_PUBLIC_APP_URL ||
-      (process.env.NEXTAUTH_URL?.replace(/\/api\/auth\/?$/, "") ?? `http://${request.headers.get("host") || "localhost:3000"}`);
+    const appRootUrl = resolveAppRootUrl(request);
     const isSecure = appRootUrl.startsWith("https");
 
     // Issue a short-lived signed JWT so the /auth/lti-login page can create
@@ -188,7 +186,7 @@ export async function POST(request: NextRequest) {
     // Redirect with a one-time code instead of the JWT in the URL (code is exchanged server-side for the token).
     const dest = "/";
     const code = createOneTimeCode(ltiSignInToken, dest);
-    // Use base path from app root URL so redirect stays under app root (e.g. /css-artist/auth/lti-login).
+    // Use base path from app root URL so redirect stays under app root (e.g. /hello-ui/auth/lti-login).
     // Derive from appRootUrl so it works even when NEXT_PUBLIC_BASE_PATH is not set at runtime (e.g. Docker).
     const appRootParsed = new URL(appRootUrl);
     const basePath = (appRootParsed.pathname || "/").replace(/\/+$/, "") || "";

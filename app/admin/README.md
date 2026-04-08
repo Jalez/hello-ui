@@ -3,10 +3,10 @@
 - **Maintenance (purge orphan levels/maps):** `/admin/maintenance`
 - **Check admin status (API):** `GET /api/admin/check-status` (auth required)
 
-When the app is served under a base path (e.g. Docker with `NEXT_PUBLIC_BASE_PATH=/css-artist`), use the full path:
+When the app is served under a base path (e.g. Docker with `NEXT_PUBLIC_BASE_PATH=/hello-ui`), use the full path:
 
-- Maintenance: `https://your-host/css-artist/admin/maintenance`
-- Check status: `https://your-host/css-artist/api/admin/check-status`
+- Maintenance: `https://your-host/hello-ui/admin/maintenance`
+- Check status: `https://your-host/hello-ui/api/admin/check-status`
 
 ## Env: show admin link without DB seed
 

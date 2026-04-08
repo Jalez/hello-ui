@@ -44,10 +44,10 @@ import {
 } from "@/lib/drawboard/drawboardPixelsStore";
 import {
   defaultTimelineStepIdForSolutionCapture,
-  resolveEventSequenceSolutionUrl,
 } from "@/lib/drawboard/eventSequenceSolutionUrls";
 import { useEventSequencePreview } from "@/lib/drawboard/useEventSequencePreview";
 import {
+  buildArtifactKey,
   fetchRemoteArtifact,
   hashArtifactFingerprint,
   readLocalArtifact,
@@ -153,7 +153,6 @@ export const ScenarioDrawing = ({
   const level = useAppSelector((state) => state.levels[currentLevel - 1]);
   const solutionUrls = useAppSelector((state) => state.solutionUrls as Record<string, string | undefined>);
   const drawingUrls = useAppSelector((state) => state.drawingUrls as Record<string, string>);
-  const drawingUrl = drawingUrls[scenario.scenarioId];
   const dispatch = useAppDispatch();
   const currentGameId = useGameStore((state) => state.currentGameId);
   const { syncLevelFields } = useLevelMetaSync();
@@ -300,6 +299,11 @@ export const ScenarioDrawing = ({
       scenario.scenarioId,
     ],
   );
+  const drawingArtifactKey = useMemo(
+    () => buildArtifactKey(drawingArtifactDescriptor),
+    [drawingArtifactDescriptor],
+  );
+  const drawingUrl = drawingUrls[drawingArtifactKey];
   /**
    * Solution preview fetch + step accuracy compare: skip probes and hidden carousel clones
    * (suppressHeavyLayoutEffects). Do not couple event-sequence progression to navbar
@@ -317,13 +321,21 @@ export const ScenarioDrawing = ({
     const hydrate = async () => {
       const local = readLocalArtifact(drawingArtifactDescriptor);
       if (local?.dataUrl) {
-        dispatch(addDrawingUrl({ drawingUrl: local.dataUrl, scenarioId: scenario.scenarioId }));
+        dispatch(addDrawingUrl({
+          drawingUrl: local.dataUrl,
+          scenarioId: scenario.scenarioId,
+          storageKey: drawingArtifactKey,
+        }));
         return;
       }
       try {
         const remote = await fetchRemoteArtifact(drawingArtifactDescriptor);
         if (!cancelled && remote?.dataUrl) {
-          dispatch(addDrawingUrl({ drawingUrl: remote.dataUrl, scenarioId: scenario.scenarioId }));
+          dispatch(addDrawingUrl({
+            drawingUrl: remote.dataUrl,
+            scenarioId: scenario.scenarioId,
+            storageKey: drawingArtifactKey,
+          }));
         }
       } catch {
         // Ignore cache misses/network failures; live capture will populate.
@@ -333,7 +345,7 @@ export const ScenarioDrawing = ({
     return () => {
       cancelled = true;
     };
-  }, [dispatch, drawingArtifactDescriptor, drawingUrl, scenario.scenarioId]);
+  }, [dispatch, drawingArtifactDescriptor, drawingArtifactKey, drawingUrl, scenario.scenarioId]);
 
   const prevFingerprintRuntimeKeyRef = useRef<string | null>(null);
   const prevCompareSourcesFingerprintRef = useRef<string | undefined>(undefined);
@@ -396,15 +408,6 @@ export const ScenarioDrawing = ({
     }
     return defaultTimelineStepIdForSolutionCapture(selectedEventSequenceStepId);
   }, [gameplaySolutionStepId, isCreator, scenarioSequence.length, selectedEventSequenceStepId]);
-  const solutionUrl = useMemo(
-    () =>
-      resolveEventSequenceSolutionUrl(solutionUrls, scenario.scenarioId, {
-        usePerStepKeys: usePerStepSolutionKeys,
-        stepId: solutionStepIdForCapture,
-        allowLegacyFallback: !usePerStepSolutionKeys,
-      }),
-    [solutionStepIdForCapture, scenario.scenarioId, solutionUrls, usePerStepSolutionKeys],
-  );
   const selectedSolutionStep = useMemo(
     () => scenarioSequence.find((step) => step.id === solutionStepIdForCapture) ?? null,
     [scenarioSequence, solutionStepIdForCapture],
@@ -448,6 +451,11 @@ export const ScenarioDrawing = ({
       usePerStepSolutionKeys,
     ],
   );
+  const solutionArtifactKey = useMemo(
+    () => buildArtifactKey(solutionArtifactDescriptor),
+    [solutionArtifactDescriptor],
+  );
+  const solutionUrl = solutionUrls[solutionArtifactKey] ?? "";
 
   useEffect(() => {
     if (solutionUrl?.trim()) {
@@ -460,6 +468,7 @@ export const ScenarioDrawing = ({
         dispatch(addSolutionUrl({
           solutionUrl: local.dataUrl,
           scenarioId: scenario.scenarioId,
+          storageKey: solutionArtifactKey,
           eventSequenceStepId: usePerStepSolutionKeys ? solutionStepIdForCapture ?? undefined : undefined,
         }));
         return;
@@ -470,6 +479,7 @@ export const ScenarioDrawing = ({
           dispatch(addSolutionUrl({
             solutionUrl: remote.dataUrl,
             scenarioId: scenario.scenarioId,
+            storageKey: solutionArtifactKey,
             eventSequenceStepId: usePerStepSolutionKeys ? solutionStepIdForCapture ?? undefined : undefined,
           }));
         }
@@ -485,6 +495,7 @@ export const ScenarioDrawing = ({
     dispatch,
     scenario.scenarioId,
     solutionArtifactDescriptor,
+    solutionArtifactKey,
     solutionStepIdForCapture,
     solutionUrl,
     usePerStepSolutionKeys,
@@ -893,11 +904,28 @@ export const ScenarioDrawing = ({
 
       const compareOne = async (stepId: string): Promise<readonly [string, number | null]> => {
         if (drawboardCaptureMode === "browser") {
-          const targetImageUrl = resolveEventSequenceSolutionUrl(solutionUrls, scenario.scenarioId, {
-            usePerStepKeys: usePerStepSolutionKeys,
-            stepId,
-            allowLegacyFallback: true,
-          })?.trim();
+          const comparisonStep = scenarioSequence.find((step) => step.id === stepId) ?? null;
+          const targetFingerprint =
+            usePerStepSolutionKeys && comparisonStep
+              ? solutionStepArtifactFingerprint({
+                  solutionFingerprint,
+                  step: comparisonStep,
+                })
+              : solutionFingerprint;
+          const targetImageUrl = solutionUrls[buildArtifactKey({
+            version: "v1",
+            captureMode: drawboardCaptureMode,
+            artifactType: usePerStepSolutionKeys ? "solution-step" : "solution",
+            fingerprint: targetFingerprint,
+            gameId: currentGameId,
+            levelIdentifier: level?.identifier ?? null,
+            levelName: level?.name ?? null,
+            scenarioId: scenario.scenarioId,
+            stepId: usePerStepSolutionKeys ? stepId : null,
+            platformBucket,
+            width: scenario.dimensions.width,
+            height: scenario.dimensions.height,
+          })]?.trim();
           if (!targetImageUrl) {
             return [stepId, null] as const;
           }
