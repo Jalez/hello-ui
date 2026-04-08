@@ -13,6 +13,7 @@ import { getSql } from "@/app/api/_lib/db";
 import { extractRows } from "@/app/api/_lib/db/shared";
 import { logDebug } from "@/lib/debug-logger";
 import { createOneTimeCode } from "@/lib/lti/one-time-code";
+import { resolveAppRootUrl } from "@/lib/env/urls";
 import { resolveAplusAppGroup } from "@/app/api/_lib/services/ltiGroupResolver";
 
 function sanitizeLtiLaunchBody(body: Record<string, string>) {
@@ -371,10 +372,7 @@ export async function POST(
     };
 
     // App root URL for redirects. Prefer APP_ROOT_URL (server-only) so prod redirects stay correct behind a proxy.
-    const appRootUrl =
-      process.env.APP_ROOT_URL ||
-      process.env.NEXT_PUBLIC_APP_URL ||
-      (process.env.NEXTAUTH_URL?.replace(/\/api\/auth\/?$/, "") ?? `http://${request.headers.get("host") || "localhost:3000"}`);
+    const appRootUrl = resolveAppRootUrl(request);
     const isSecure = appRootUrl.startsWith("https");
 
     // Issue a short-lived JWT so /auth/lti-login can create a real NextAuth session

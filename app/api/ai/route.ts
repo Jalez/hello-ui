@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import debug from 'debug';
+import { resolvePublicSiteUrl } from '@/lib/env/urls';
 
 const logger = debug('ui_designer:api:ai');
 
@@ -35,9 +36,7 @@ export async function POST(request: NextRequest) {
     }
 
     const isOpenRouter = baseURL.includes('openrouter.ai');
-    const siteUrl =
-      process.env.NEXT_PUBLIC_APP_URL ||
-      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined);
+    const siteUrl = resolvePublicSiteUrl();
 
     const openai = new OpenAI({
       apiKey: resolvedApiKey,
