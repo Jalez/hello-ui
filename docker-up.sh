@@ -6,20 +6,29 @@ SCRIPT_PATH=$(realpath "${BASH_SOURCE[0]}")
 SCRIPT_DIR=$(dirname "${SCRIPT_PATH}")
 cd "${SCRIPT_DIR}"
 
-APP_ENV="${APP_ENV:-}"
-if [[ -z "${APP_ENV}" ]]; then
-  if [[ -f ".env.local" ]]; then
-    APP_ENV="local"
-  elif [[ -f ".env.production" ]]; then
-    APP_ENV="production"
-  else
-    APP_ENV="local"
+MODE="${1:-}"
+if [[ "${MODE}" == "production" || "${MODE}" == "prod" ]]; then
+  shift
+  COMPOSE_FILE="production.docker-compose.yml"
+elif [[ "${MODE}" == "local" || "${MODE}" == "dev" ]]; then
+  shift
+  COMPOSE_FILE="docker-compose.yml"
+else
+  COMPOSE_FILE="docker-compose.yml"
+fi
+
+if [[ "${1:-}" == "-f" || "${1:-}" == "--file" ]]; then
+  if [[ $# -lt 2 ]]; then
+    echo "Missing compose file after ${1}." >&2
+    exit 1
   fi
+  COMPOSE_FILE="${2}"
+  shift 2
 fi
 
 CONTAINER_RUNTIME="${CONTAINER_RUNTIME:-}"
 if [[ -z "${CONTAINER_RUNTIME}" ]]; then
-  if [[ "${APP_ENV}" == "production" ]] && command -v podman >/dev/null 2>&1; then
+  if [[ "${COMPOSE_FILE}" == "production.docker-compose.yml" ]] && command -v podman >/dev/null 2>&1; then
     CONTAINER_RUNTIME="podman"
   elif command -v docker >/dev/null 2>&1; then
     CONTAINER_RUNTIME="docker"
@@ -31,12 +40,10 @@ if [[ -z "${CONTAINER_RUNTIME}" ]]; then
   fi
 fi
 
-COMPOSE_FILE="docker-compose.yml"
 ENV_ARGS=()
 UP_ARGS=(up --build)
 
-if [[ "${APP_ENV}" == "production" ]]; then
-  COMPOSE_FILE="production.docker-compose.yml"
+if [[ "${COMPOSE_FILE}" == "production.docker-compose.yml" ]]; then
   UP_ARGS+=(-d)
   if [[ -f ".env.production" ]]; then
     ENV_ARGS=(--env-file .env.production)
@@ -48,5 +55,8 @@ if (( ${#ENV_ARGS[@]} > 0 )); then
   COMPOSE_CMD+=("${ENV_ARGS[@]}")
 fi
 COMPOSE_CMD+=(--file "${COMPOSE_FILE}" "${UP_ARGS[@]}")
+if (( $# > 0 )); then
+  COMPOSE_CMD+=("$@")
+fi
 
 exec "${COMPOSE_CMD[@]}"
