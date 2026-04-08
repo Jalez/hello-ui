@@ -22,31 +22,12 @@ if [[ "$(hostname)" =~ tie-lukioplus.rd.tuni.fi ]]; then
 
   # 1. Build all images first (bypasses docker-compose Unicode crash)
   echo "Building images..."
-  # NEXT_PUBLIC_* is baked in at build; .env.production at runtime does not change the client bundle.
-  # If unset, try .env.production next to this script (same line as docker-compose env_file).
-  if [[ -z "${NEXT_PUBLIC_REMOTE_SYNC_DEBOUNCE_MS:-}" ]] && [[ -f .env.production ]]; then
-    NEXT_PUBLIC_REMOTE_SYNC_DEBOUNCE_MS="$(
-      grep -E '^[[:space:]]*NEXT_PUBLIC_REMOTE_SYNC_DEBOUNCE_MS=' .env.production 2>/dev/null | tail -1 \
-        | sed -E 's/^[[:space:]]*NEXT_PUBLIC_REMOTE_SYNC_DEBOUNCE_MS=//; s/\r$//; s/^"//; s/"$//; s/^'\''//; s/'\''$//'
-    )"
-  fi
-  NEXT_PUBLIC_REMOTE_SYNC_DEBOUNCE_MS="${NEXT_PUBLIC_REMOTE_SYNC_DEBOUNCE_MS:-500}"
-  echo "NEXT_PUBLIC_REMOTE_SYNC_DEBOUNCE_MS for app image build: ${NEXT_PUBLIC_REMOTE_SYNC_DEBOUNCE_MS}"
-  if [[ -z "${NEXT_PUBLIC_MANUAL_DRAWBOARD_CAPTURE:-}" ]] && [[ -f .env.production ]]; then
-    NEXT_PUBLIC_MANUAL_DRAWBOARD_CAPTURE="$(
-      grep -E '^[[:space:]]*NEXT_PUBLIC_MANUAL_DRAWBOARD_CAPTURE=' .env.production 2>/dev/null | tail -1 \
-        | sed -E 's/^[[:space:]]*NEXT_PUBLIC_MANUAL_DRAWBOARD_CAPTURE=//; s/\r$//; s/^"//; s/"$//; s/^'\''//; s/'\''$//'
-    )"
-  fi
-  echo "NEXT_PUBLIC_MANUAL_DRAWBOARD_CAPTURE for app image build: ${NEXT_PUBLIC_MANUAL_DRAWBOARD_CAPTURE:-}"
   docker build -t ui-designer-app:latest \
     --build-arg NEXT_PUBLIC_APP_URL=https://tie-lukioplus.rd.tuni.fi/css-artist \
     --build-arg NEXT_PUBLIC_DRAWBOARD_URL=https://tie-lukioplus.rd.tuni.fi/drawboard \
     --build-arg NEXT_PUBLIC_WEBSOCKET_URL=wss://tie-lukioplus.rd.tuni.fi/css-artist-ws \
     --build-arg NEXT_PUBLIC_ASSET_PREFIX=/css-artist \
     --build-arg NEXT_PUBLIC_BASE_PATH=/css-artist \
-    --build-arg NEXT_PUBLIC_REMOTE_SYNC_DEBOUNCE_MS="${NEXT_PUBLIC_REMOTE_SYNC_DEBOUNCE_MS}" \
-    --build-arg NEXT_PUBLIC_MANUAL_DRAWBOARD_CAPTURE="${NEXT_PUBLIC_MANUAL_DRAWBOARD_CAPTURE:-}" \
     -f Dockerfile .
   docker build -t ui-designer-ws:latest -f ws-server/Dockerfile ./ws-server
   docker build -t ui-designer-drawboard:latest -f drawBoard/Dockerfile ./drawBoard

@@ -12,23 +12,6 @@ type GameRuntimeSlice = Pick<
   "drawboardCaptureMode" | "manualDrawboardCapture" | "remoteSyncDebounceMs" | "drawboardReloadDebounceMs"
 >;
 
-function envManualDrawboardCapture(): boolean {
-  const v = (process.env.NEXT_PUBLIC_MANUAL_DRAWBOARD_CAPTURE ?? "").trim().toLowerCase();
-  return v === "true" || v === "1";
-}
-
-function envRemoteSyncDebounceMs(): number {
-  const raw = process.env.NEXT_PUBLIC_REMOTE_SYNC_DEBOUNCE_MS;
-  if (raw === undefined || raw === "") {
-    return DEFAULT_REMOTE_SYNC_DEBOUNCE_MS;
-  }
-  const n = Number(raw);
-  if (!Number.isFinite(n)) {
-    return DEFAULT_REMOTE_SYNC_DEBOUNCE_MS;
-  }
-  return Math.min(10_000, Math.max(0, Math.round(n)));
-}
-
 export function resolveDrawboardCaptureMode(game: GameRuntimeSlice | null | undefined): DrawboardCaptureMode {
   if (game?.drawboardCaptureMode === "browser" || game?.drawboardCaptureMode === "playwright") {
     return game.drawboardCaptureMode;
@@ -40,14 +23,14 @@ export function resolveManualDrawboardCapture(game: GameRuntimeSlice | null | un
   if (typeof game?.manualDrawboardCapture === "boolean") {
     return game.manualDrawboardCapture;
   }
-  return envManualDrawboardCapture();
+  return DEFAULT_MANUAL_DRAWBOARD_CAPTURE;
 }
 
 export function resolveRemoteSyncDebounceMs(game: GameRuntimeSlice | null | undefined): number {
   if (typeof game?.remoteSyncDebounceMs === "number" && Number.isFinite(game.remoteSyncDebounceMs)) {
     return Math.min(10_000, Math.max(0, Math.round(game.remoteSyncDebounceMs)));
   }
-  return envRemoteSyncDebounceMs();
+  return DEFAULT_REMOTE_SYNC_DEBOUNCE_MS;
 }
 
 function envDrawboardReloadDebounceMs(): number {
