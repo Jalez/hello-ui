@@ -460,7 +460,7 @@ function getPlaywrightWebSocketUrl() {
     return `ws://${resolvedBaseUrl.hostname}:3100`;
   }
 
-  return `${resolvedBaseUrl.protocol === "https:" ? "wss:" : "ws:"}//${resolvedBaseUrl.host}/css-artist-ws`;
+  return `${resolvedBaseUrl.protocol === "https:" ? "wss:" : "ws:"}//${resolvedBaseUrl.host}/hello-ui-ws`;
 }
 
 function getHealthUrlForWebSocket(wsUrl) {

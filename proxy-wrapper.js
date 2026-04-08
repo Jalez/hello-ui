@@ -1,6 +1,6 @@
 // Lightweight proxy wrapper for Next.js standalone server.
-// Apache strips the /css-artist prefix before forwarding requests.
-// This wrapper re-adds it so Next.js (with basePath: "/css-artist") can handle them.
+// Apache strips the /hello-ui prefix before forwarding requests.
+// This wrapper re-adds it so Next.js (with basePath: "/hello-ui") can handle them.
 // Redirect Location headers are passed through unchanged so the browser stays under the app path.
 //
 // Without BASE_PATH set, this simply starts Next.js normally.
@@ -57,8 +57,8 @@ if (!BASE_PATH) {
       (proxyRes) => {
         const headers = { ...proxyRes.headers };
 
-        // Leave Location (and Refresh) as-is so the browser stays under /css-artist.
-        // Next.js sends e.g. Location: /css-artist or /css-artist/account; we must
+        // Leave Location (and Refresh) as-is so the browser stays under /hello-ui.
+        // Next.js sends e.g. Location: /hello-ui or /hello-ui/account; we must
         // not strip the prefix or the browser would go to the site root.
 
         res.writeHead(proxyRes.statusCode, headers);

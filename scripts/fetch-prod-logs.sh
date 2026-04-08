@@ -7,7 +7,7 @@ cd "${ROOT_DIR}"
 
 REMOTE_USER="${REMOTE_USER:-a642905}"
 REMOTE_HOST="${REMOTE_HOST:-tie-lukioplus.rd.tuni.fi}"
-REMOTE_REPO_DIR="${REMOTE_REPO_DIR:-/plussa/grader/courses/css-artist}"
+REMOTE_REPO_DIR="${REMOTE_REPO_DIR:-/plussa/grader/courses/hello-ui}"
 REMOTE_EXPORT_GLOB="${REMOTE_EXPORT_GLOB:-${REMOTE_REPO_DIR}/exported-logs/prod-*.tar.gz}"
 LOCAL_ARCHIVE_DIR="${LOCAL_ARCHIVE_DIR:-${ROOT_DIR}}"
 LOCAL_EXTRACT_DIR="${LOCAL_EXTRACT_DIR:-${ROOT_DIR}/exported-logs}"

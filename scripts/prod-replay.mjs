@@ -11,7 +11,7 @@ if (!sha) {
 }
 
 const repoRoot = process.cwd();
-const targetDir = path.join(os.tmpdir(), `css-artist-prod-replay-${sha}`);
+const targetDir = path.join(os.tmpdir(), `hello-ui-prod-replay-${sha}`);
 
 if (!fs.existsSync(targetDir)) {
   execFileSync("git", ["worktree", "add", "--detach", targetDir, sha], {

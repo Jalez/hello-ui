@@ -87,7 +87,7 @@ export function getWebSocketUrl(): string {
       return normalizeSocketUrl(`${protocol}//${hostname}:3100`);
     }
 
-    return normalizeSocketUrl(`${origin}/css-artist-ws`);
+    return normalizeSocketUrl(`${origin}/hello-ui-ws`);
   }
 
   return "ws://localhost:3100";

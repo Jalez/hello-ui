@@ -255,7 +255,7 @@ export const authOptions = {
       return normalizeRedirectUrl(url, baseUrl);
     },
   },
-  // With basePath, NextAuth must get full paths so redirects go to /css-artist/auth/error not /css-artist/error
+  // With basePath, NextAuth must get full paths so redirects go to /hello-ui/auth/error not /hello-ui/error
   pages: {
     signIn: BASE_PATH
       ? `${BASE_PATH}/auth/signin`
@@ -264,7 +264,7 @@ export const authOptions = {
       ? `${BASE_PATH}/auth/error`
       : "/auth/error",
   },
-  // When app is served under a path prefix (e.g. /css-artist), auth API is at prefix/api/auth
+  // When app is served under a path prefix (e.g. /hello-ui), auth API is at prefix/api/auth
   basePath: BASE_PATH
     ? `${BASE_PATH}/api/auth`
     : undefined,
