@@ -6,11 +6,11 @@ SCRIPT_PATH=$(realpath "${BASH_SOURCE[0]}")
 SCRIPT_DIR=$(dirname "${SCRIPT_PATH}")
 cd "${SCRIPT_DIR}"
 
-HOSTNAME_FQDN="$(hostname -f 2>/dev/null || hostname)"
-
 APP_ENV="${APP_ENV:-}"
 if [[ -z "${APP_ENV}" ]]; then
-  if [[ "${HOSTNAME_FQDN}" =~ itc-games\.rd\.tuni\.fi|tie-lukioplus\.rd\.tuni\.fi ]]; then
+  if [[ -f ".env.local" ]]; then
+    APP_ENV="local"
+  elif [[ -f ".env.production" ]]; then
     APP_ENV="production"
   else
     APP_ENV="local"
@@ -43,4 +43,10 @@ if [[ "${APP_ENV}" == "production" ]]; then
   fi
 fi
 
-exec "${CONTAINER_RUNTIME}" compose "${ENV_ARGS[@]}" --file "${COMPOSE_FILE}" "${UP_ARGS[@]}"
+COMPOSE_CMD=("${CONTAINER_RUNTIME}" compose)
+if (( ${#ENV_ARGS[@]} > 0 )); then
+  COMPOSE_CMD+=("${ENV_ARGS[@]}")
+fi
+COMPOSE_CMD+=(--file "${COMPOSE_FILE}" "${UP_ARGS[@]}")
+
+exec "${COMPOSE_CMD[@]}"
